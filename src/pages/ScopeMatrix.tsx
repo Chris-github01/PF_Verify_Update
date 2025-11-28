@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, Filter, X, AlertCircle, Lightbulb, Info, ChevronDown, ChevronUp, CheckSquare, Square, ArrowLeft, FileSpreadsheet } from 'lucide-react';
+import { Download, Filter, X, AlertCircle, Lightbulb, Info, ChevronDown, ChevronUp, CheckSquare, Square, ArrowLeft, FileSpreadsheet, GitCompare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getModelRateProvider } from '../lib/modelRate/modelRateProvider';
 import { compareAgainstModelHybrid } from '../lib/comparison/hybridCompareAgainstModel';
@@ -58,10 +58,17 @@ function isScopeMatrixReady(quote: QuoteInfo): boolean {
          quote.items_count > 0;
 }
 
+interface SupplierDetail {
+  name: string;
+  revisionNumber: number;
+  quoteReference: string;
+}
+
 export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext, dashboardMode = 'original' }: ScopeMatrixProps) {
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [matrixRows, setMatrixRows] = useState<MatrixRow[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [supplierDetails, setSupplierDetails] = useState<Record<string, SupplierDetail>>({});
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [itemsWithMissingQty, setItemsWithMissingQty] = useState<Set<string>>(new Set());
@@ -77,6 +84,10 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
   const [hasGenerated, setHasGenerated] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(true);
   const [diagnostics, setDiagnostics] = useState<MatrixDiagnostics | null>(null);
+
+  const [originalQuotes, setOriginalQuotes] = useState<QuoteInfo[]>([]);
+  const [selectedOriginalQuoteIds, setSelectedOriginalQuoteIds] = useState<string[]>([]);
+  const [showOriginalSelector, setShowOriginalSelector] = useState(false);
 
   const [filters, setFilters] = useState<MatrixFilters>({});
   const [availableFilters, setAvailableFilters] = useState({
@@ -99,11 +110,58 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
 
   useEffect(() => {
     loadAvailableQuotes();
+    if (dashboardMode === 'revisions') {
+      loadOriginalQuotes();
+    }
   }, [projectId, dashboardMode]);
 
   useEffect(() => {
     buildMatrix();
   }, [comparisonData, filters]);
+
+  const loadOriginalQuotes = async () => {
+    try {
+      const { data: allQuotes } = await supabase
+        .from('quotes')
+        .select('id, supplier_name, quote_reference, total_amount, items_count, revision_number')
+        .eq('project_id', projectId)
+        .or('revision_number.is.null,revision_number.eq.1')
+        .order('supplier_name');
+
+      const quotesData = allQuotes || [];
+
+      if (quotesData.length > 0) {
+        const quotesWithStatus = await Promise.all(
+          quotesData.map(async (quote) => {
+            const { count: totalCount } = await supabase
+              .from('quote_items')
+              .select('*', { count: 'exact', head: true })
+              .eq('quote_id', quote.id);
+
+            const { count: mappedCount } = await supabase
+              .from('quote_items')
+              .select('*', { count: 'exact', head: true })
+              .eq('quote_id', quote.id)
+              .not('system_id', 'is', null);
+
+            return {
+              id: quote.id,
+              supplier_name: quote.supplier_name,
+              quote_reference: quote.quote_reference,
+              total_amount: quote.total_amount,
+              items_count: totalCount || 0,
+              mapped_items_count: mappedCount || 0,
+              parse_status: 'completed' as const,
+              has_failed_chunks: false,
+            };
+          })
+        );
+        setOriginalQuotes(quotesWithStatus.filter(q => q.items_count > 0));
+      }
+    } catch (err) {
+      console.error('Failed to load original quotes:', err);
+    }
+  };
 
   const loadAvailableQuotes = async () => {
     setQuotesLoading(true);
@@ -258,11 +316,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     setLoading(true);
 
     try {
-      const quoteIdsToLoad = selectedQuoteIds.length > 0 ? selectedQuoteIds : availableQuotes.map(q => q.id);
+      let quoteIdsToLoad = selectedQuoteIds.length > 0 ? selectedQuoteIds : availableQuotes.map(q => q.id);
+
+      if (dashboardMode === 'revisions' && selectedOriginalQuoteIds.length > 0) {
+        quoteIdsToLoad = [...quoteIdsToLoad, ...selectedOriginalQuoteIds];
+      }
 
       const { data: quotesData } = await supabase
         .from('quotes')
-        .select('id, supplier_name')
+        .select('id, supplier_name, revision_number, quote_reference')
         .in('id', quoteIdsToLoad)
         .order('supplier_name');
 
@@ -270,6 +332,16 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         setLoading(false);
         return;
       }
+
+      const details: Record<string, SupplierDetail> = {};
+      quotesData.forEach(q => {
+        details[q.supplier_name] = {
+          name: q.supplier_name,
+          revisionNumber: q.revision_number ?? 1,
+          quoteReference: q.quote_reference || ''
+        };
+      });
+      setSupplierDetails(details);
 
       const quoteIds = quotesData.map(q => q.id);
 
@@ -795,6 +867,20 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     }
   };
 
+  const handleToggleOriginalQuote = (quoteId: string) => {
+    setSelectedOriginalQuoteIds(prev => {
+      if (prev.includes(quoteId)) {
+        return prev.filter(id => id !== quoteId);
+      } else {
+        return [...prev, quoteId];
+      }
+    });
+  };
+
+  const handleClearOriginalSelection = () => {
+    setSelectedOriginalQuoteIds([]);
+  };
+
   const readyQuotes = availableQuotes.filter(isScopeMatrixReady);
 
   console.log('=== SCOPE MATRIX QUOTE FILTERING ===');
@@ -944,6 +1030,68 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                   </div>
                 );
               })()}
+            </div>
+          )}
+
+          {dashboardMode === 'revisions' && originalQuotes.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <button
+                onClick={() => setShowOriginalSelector(!showOriginalSelector)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium mb-3"
+              >
+                <GitCompare size={16} />
+                Compare with Original Quotes
+                {selectedOriginalQuoteIds.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 bg-blue-600 text-white rounded-full text-xs">
+                    {selectedOriginalQuoteIds.length}
+                  </span>
+                )}
+              </button>
+
+              {showOriginalSelector && (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Select Original Quotes to Compare</h3>
+                    {selectedOriginalQuoteIds.length > 0 && (
+                      <button
+                        onClick={handleClearOriginalSelection}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Clear Selection
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {originalQuotes.map(quote => (
+                      <label
+                        key={quote.id}
+                        className="flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedOriginalQuoteIds.includes(quote.id)}
+                          onChange={() => handleToggleOriginalQuote(quote.id)}
+                          className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                        />
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-900">{quote.supplier_name}</div>
+                          <div className="text-xs text-gray-500">
+                            {quote.items_count} items • {quote.mapped_items_count} mapped
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  {selectedOriginalQuoteIds.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-600">
+                      <p className="flex items-center gap-1">
+                        <AlertCircle size={14} />
+                        Matrix will include {selectedOriginalQuoteIds.length} original quote{selectedOriginalQuoteIds.length > 1 ? 's' : ''} for comparison
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1249,11 +1397,25 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                 <th className="px-3 py-2 text-left font-medium text-gray-700 border border-gray-200 sticky left-0 bg-gray-50 z-10">
                   System
                 </th>
-                {suppliers.map(supplier => (
-                  <th key={supplier} className="px-3 py-2 text-center font-medium text-gray-700 border border-gray-200 min-w-[120px]">
-                    {supplier}
-                  </th>
-                ))}
+                {suppliers.map(supplier => {
+                  const detail = supplierDetails[supplier];
+                  return (
+                    <th key={supplier} className="px-3 py-2 text-center border border-gray-200 min-w-[120px]">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="font-medium text-gray-900">{supplier}</span>
+                        {detail && (
+                          <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                            detail.revisionNumber > 1
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {detail.revisionNumber > 1 ? `Rev ${detail.revisionNumber}` : 'Original'}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>

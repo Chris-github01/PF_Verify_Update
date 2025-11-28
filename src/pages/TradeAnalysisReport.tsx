@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Filter, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
+import { Filter, ChevronDown, ChevronRight, AlertCircle, GitCompare } from 'lucide-react';
+import type { DashboardMode } from '../App';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { buildComparisonRows, buildMultiSupplierComparison, calculateSectionStats, calculateTotalsSummary, getVarianceColor } from '../lib/tradeAnalysis/varianceCalculator';
@@ -18,6 +19,7 @@ interface TradeAnalysisReportProps {
   projectId: string;
   onNavigateBack?: () => void;
   onNavigateNext?: () => void;
+  dashboardMode?: DashboardMode;
 }
 
 const AVAILABLE_SECTIONS = [
@@ -31,8 +33,11 @@ const AVAILABLE_SECTIONS = [
   'Optional Extras',
 ];
 
-export default function TradeAnalysisReport({ projectId, onNavigateBack, onNavigateNext }: TradeAnalysisReportProps) {
+export default function TradeAnalysisReport({ projectId, onNavigateBack, onNavigateNext, dashboardMode = 'original' }: TradeAnalysisReportProps) {
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [originalQuotes, setOriginalQuotes] = useState<SupplierOption[]>([]);
+  const [selectedOriginalQuoteIds, setSelectedOriginalQuoteIds] = useState<string[]>([]);
+  const [showOriginalSelector, setShowOriginalSelector] = useState(false);
   const [filters, setFilters] = useState<TradeAnalysisFilters>({
     supplier1Id: null,
     supplier2Id: null,
@@ -57,7 +62,10 @@ export default function TradeAnalysisReport({ projectId, onNavigateBack, onNavig
 
   useEffect(() => {
     loadSuppliers();
-  }, [projectId]);
+    if (dashboardMode === 'revisions') {
+      loadOriginalQuotes();
+    }
+  }, [projectId, dashboardMode]);
 
   useEffect(() => {
     if (filters.supplier1Id) {
@@ -99,14 +107,48 @@ export default function TradeAnalysisReport({ projectId, onNavigateBack, onNavig
     }
   }, [filters.supplier5Id]);
 
-  const loadSuppliers = async () => {
-    setLoading(true);
+  const loadOriginalQuotes = async () => {
     try {
       const { data, error } = await supabase
         .from('quotes')
-        .select('id, supplier_name, total_amount, items_count, created_at')
+        .select('id, supplier_name, total_amount, items_count, created_at, revision_number, quote_reference')
         .eq('project_id', projectId)
+        .or('revision_number.is.null,revision_number.eq.1')
         .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const supplierOptions: SupplierOption[] = data.map(q => ({
+          id: q.id,
+          name: q.supplier_name,
+          totalAmount: q.total_amount || 0,
+          itemsCount: q.items_count || 0,
+        }));
+        setOriginalQuotes(supplierOptions);
+      }
+    } catch (err) {
+      console.error('Failed to load original quotes:', err);
+    }
+  };
+
+  const loadSuppliers = async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('quotes')
+        .select('id, supplier_name, total_amount, items_count, created_at, revision_number, quote_reference')
+        .eq('project_id', projectId);
+
+      if (dashboardMode === 'original') {
+        query = query.or('revision_number.is.null,revision_number.eq.1');
+      } else if (dashboardMode === 'revisions') {
+        query = query.gt('revision_number', 1);
+      }
+
+      query = query.order('created_at', { ascending: true });
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
