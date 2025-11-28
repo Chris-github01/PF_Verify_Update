@@ -1006,11 +1006,14 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           {selectedQuoteIds.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="text-sm text-gray-900 font-medium mb-1">
-                {selectedQuoteIds.length === 1 ? (
+                {(selectedQuoteIds.length + selectedOriginalQuoteIds.length) < 2 ? (
                   'Select at least 2 suppliers to generate a scope matrix.'
                 ) : (
                   <>
                     Comparing: {readyQuotes.filter(q => selectedQuoteIds.includes(q.id)).map(q => q.supplier_name).join(' vs ')}
+                    {selectedOriginalQuoteIds.length > 0 && (
+                      <> vs {originalQuotes.filter(q => selectedOriginalQuoteIds.includes(q.id)).map(q => q.supplier_name).join(' vs ')}</>
+                    )}
                   </>
                 )}
               </div>
@@ -1099,7 +1102,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             <div className="text-right">
               <button
                 onClick={handleGenerateMatrix}
-                disabled={selectedQuoteIds.length < 2 || isGenerating}
+                disabled={(selectedQuoteIds.length + selectedOriginalQuoteIds.length) < 2 || isGenerating}
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
               >
                 {isGenerating ? 'Building Matrix...' : 'Generate Scope Matrix'}
