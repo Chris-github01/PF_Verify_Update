@@ -18,6 +18,7 @@ interface QuoteData {
   status: string;
   quoted_total: number | null;
   contingency_amount: number | null;
+  revision_number: number | null;
 }
 
 interface QuoteItemData {
@@ -38,37 +39,62 @@ interface QuoteItemData {
 export async function analyzeQuoteIntelligenceHybrid(
   projectId: string,
   dashboardMode: DashboardMode = 'original',
-  quoteIds?: string[]
+  originalQuoteIdsForComparison?: string[]
 ): Promise<QuoteIntelligenceAnalysis> {
-  let query = supabase
-    .from('quotes')
-    .select('*')
-    .eq('project_id', projectId);
+  let quotesData: QuoteData[] = [];
 
-  // Filter by dashboard mode
-  if (dashboardMode === 'original') {
-    // Original mode: only revision 1 quotes
-    query = query.eq('revision_number', 1);
+  // When in revisions mode with original quotes selected for comparison
+  if (dashboardMode === 'revisions' && originalQuoteIdsForComparison && originalQuoteIdsForComparison.length > 0) {
+    // Fetch BOTH revision quotes AND selected original quotes
+    const [revisionsResult, originalsResult] = await Promise.all([
+      supabase
+        .from('quotes')
+        .select('*')
+        .eq('project_id', projectId)
+        .gt('revision_number', 1),
+      supabase
+        .from('quotes')
+        .select('*')
+        .in('id', originalQuoteIdsForComparison)
+    ]);
+
+    if (revisionsResult.error) {
+      throw new Error(`Failed to fetch revision quotes: ${revisionsResult.error.message}`);
+    }
+    if (originalsResult.error) {
+      throw new Error(`Failed to fetch original quotes: ${originalsResult.error.message}`);
+    }
+
+    quotesData = [
+      ...(revisionsResult.data as QuoteData[] || []),
+      ...(originalsResult.data as QuoteData[] || [])
+    ];
   } else {
-    // Revisions mode: only revision 2+ quotes
-    query = query.gt('revision_number', 1);
+    // Standard mode: just filter by dashboard mode
+    let query = supabase
+      .from('quotes')
+      .select('*')
+      .eq('project_id', projectId);
+
+    if (dashboardMode === 'original') {
+      query = query.eq('revision_number', 1);
+    } else {
+      query = query.gt('revision_number', 1);
+    }
+
+    const { data: quotes, error: quotesError } = await query;
+
+    if (quotesError) {
+      throw new Error(`Failed to fetch quotes: ${quotesError.message}`);
+    }
+
+    quotesData = quotes as QuoteData[] || [];
   }
 
-  if (quoteIds && quoteIds.length > 0) {
-    query = query.in('id', quoteIds);
+  if (quotesData.length === 0) {
+    return createEmptyAnalysis(projectId, originalQuoteIdsForComparison);
   }
 
-  const { data: quotes, error: quotesError } = await query;
-
-  if (quotesError) {
-    throw new Error(`Failed to fetch quotes: ${quotesError.message}`);
-  }
-
-  if (!quotes || quotes.length === 0) {
-    return createEmptyAnalysis(projectId, quoteIds);
-  }
-
-  const quotesData = quotes as QuoteData[];
   const quoteIdList = quotesData.map(q => q.id);
 
   const { data: items, error: itemsError } = await supabase
@@ -85,7 +111,9 @@ export async function analyzeQuoteIntelligenceHybrid(
 
   const normalizedItems: NormalizedItem[] = quotesData.map(q => ({
     quoteId: q.id,
-    supplierName: q.supplier_name
+    supplierName: q.supplier_name,
+    revisionNumber: q.revision_number ?? 1,
+    quoteReference: q.quote_reference
   }));
 
   const redFlags = detectRedFlags(quotesData, itemsData);

@@ -61,4 +61,6 @@ export interface SupplierInsight {
 export interface NormalizedItem {
   quoteId: string;
   supplierName: string;
+  revisionNumber: number;
+  quoteReference: string;
 }

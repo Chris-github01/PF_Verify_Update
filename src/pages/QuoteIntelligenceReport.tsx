@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { FileDown, Printer, AlertTriangle, Target, TrendingUp, Shield, Loader2, Download, AlertCircle, Star, CheckCircle, ArrowRight } from 'lucide-react';
+import { FileDown, Printer, AlertTriangle, Target, TrendingUp, Shield, Loader2, Download, AlertCircle, Star, CheckCircle, ArrowRight, GitCompare } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 import { analyzeQuoteIntelligence } from '../lib/quoteIntelligence/analyzer';
 import type { QuoteIntelligenceAnalysis, RedFlag } from '../types/quoteIntelligence.types';
@@ -14,21 +15,59 @@ interface QuoteIntelligenceReportProps {
   dashboardMode?: DashboardMode;
 }
 
+interface OriginalQuote {
+  id: string;
+  supplier_name: string;
+  quote_reference: string;
+}
+
 export default function QuoteIntelligenceReport({ projectId, projectName, onNavigateBack, onNavigateNext, dashboardMode = 'original' }: QuoteIntelligenceReportProps) {
   const [analysis, setAnalysis] = useState<QuoteIntelligenceAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [originalQuotes, setOriginalQuotes] = useState<OriginalQuote[]>([]);
+  const [selectedOriginalQuotes, setSelectedOriginalQuotes] = useState<string[]>([]);
+  const [showOriginalSelector, setShowOriginalSelector] = useState(false);
 
   useEffect(() => {
     loadAnalysis();
+    if (dashboardMode === 'revisions') {
+      loadOriginalQuotes();
+    }
   }, [projectId, dashboardMode]);
+
+  useEffect(() => {
+    if (dashboardMode === 'revisions' && selectedOriginalQuotes.length > 0) {
+      loadAnalysis();
+    }
+  }, [selectedOriginalQuotes]);
+
+  const loadOriginalQuotes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('quotes')
+        .select('id, supplier_name, quote_reference')
+        .eq('project_id', projectId)
+        .or('revision_number.is.null,revision_number.eq.1')
+        .order('supplier_name', { ascending: true });
+
+      if (error) throw error;
+      setOriginalQuotes(data || []);
+    } catch (err) {
+      console.error('Failed to load original quotes:', err);
+    }
+  };
 
   const loadAnalysis = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const result = await analyzeQuoteIntelligence(projectId, dashboardMode);
+      const quoteIdsToAnalyze = dashboardMode === 'revisions' && selectedOriginalQuotes.length > 0
+        ? selectedOriginalQuotes
+        : undefined;
+
+      const result = await analyzeQuoteIntelligence(projectId, dashboardMode, quoteIdsToAnalyze);
       setAnalysis(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze quotes');
@@ -36,6 +75,20 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleToggleOriginalQuote = (quoteId: string) => {
+    setSelectedOriginalQuotes(prev => {
+      if (prev.includes(quoteId)) {
+        return prev.filter(id => id !== quoteId);
+      } else {
+        return [...prev, quoteId];
+      }
+    });
+  };
+
+  const handleClearOriginalSelection = () => {
+    setSelectedOriginalQuotes([]);
   };
 
   const handlePrint = () => {
@@ -150,7 +203,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
   const getSupplierQualityData = () => {
     if (!analysis) return [];
 
-    const supplierMap = new Map<string, { name: string; qualityScore: number; coverageScore: number; redFlags: number }>();
+    const supplierMap = new Map<string, { name: string; qualityScore: number; coverageScore: number; redFlags: number; revisionNumber: number; quoteReference: string }>();
 
     analysis.normalizedItems.forEach(item => {
       if (!supplierMap.has(item.quoteId)) {
@@ -159,6 +212,8 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           qualityScore: 0,
           coverageScore: 0,
           redFlags: 0,
+          revisionNumber: item.revisionNumber,
+          quoteReference: item.quoteReference,
         });
       }
     });
@@ -223,9 +278,69 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none">
         <div className="flex items-center justify-between mb-2">
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900">Quote Intelligence</h1>
             <p className="text-sm text-gray-600 mt-1">Automated analysis of supplier quotes</p>
+
+            {dashboardMode === 'revisions' && originalQuotes.length > 0 && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowOriginalSelector(!showOriginalSelector)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                >
+                  <GitCompare size={16} />
+                  Compare with Original Quotes
+                  {selectedOriginalQuotes.length > 0 && (
+                    <span className="ml-1 px-2 py-0.5 bg-blue-600 text-white rounded-full text-xs">
+                      {selectedOriginalQuotes.length}
+                    </span>
+                  )}
+                </button>
+
+                {showOriginalSelector && (
+                  <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Select Original Quotes to Compare</h3>
+                      {selectedOriginalQuotes.length > 0 && (
+                        <button
+                          onClick={handleClearOriginalSelection}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          Clear Selection
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {originalQuotes.map(quote => (
+                        <label
+                          key={quote.id}
+                          className="flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOriginalQuotes.includes(quote.id)}
+                            onChange={() => handleToggleOriginalQuote(quote.id)}
+                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                          />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-900">{quote.supplier_name}</div>
+                            <div className="text-xs text-gray-500">{quote.quote_reference}</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                    {selectedOriginalQuotes.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-600">
+                        <p className="flex items-center gap-1">
+                          <AlertCircle size={14} />
+                          Analysis will compare revision quotes with {selectedOriginalQuotes.length} selected original quote{selectedOriginalQuotes.length > 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex gap-2 print:hidden">
             <button
@@ -310,7 +425,21 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
               <tbody className="divide-y divide-gray-200">
                 {supplierQualityData.map((supplier, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{supplier.name}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">{supplier.name}</span>
+                        {supplier.revisionNumber > 1 ? (
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
+                            Rev {supplier.revisionNumber}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
+                            Original
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">{supplier.quoteReference}</div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
