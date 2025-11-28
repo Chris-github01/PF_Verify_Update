@@ -1,0 +1,60 @@
+version: "1.9"
+product: "BurnRatePro Verify+"
+owner: "P&R Consulting Ltd"
+
+modules:
+  - key: "project-dashboard"
+    required_ui_ids:
+      - "nav-${f.id}" # Dynamic: will be nav-project, nav-import, etc.
+    required_patterns:
+      - '"data-testid":`nav-'
+    required_routes:
+      - "project"
+
+  - key: "import-quotes"
+    required_patterns:
+      - '"data-testid":`tab-'
+      - 'id:"importquotes"'
+    required_routes:
+      - "import"
+
+  - key: "quote-intelligence"
+    required_patterns:
+      - 'id:"quoteintel"'
+    required_routes:
+      - "analysis"
+
+  - key: "trade-analysis"
+    required_patterns:
+      - 'id:"tradeanalysis"'
+    required_routes:
+      - "trade"
+
+  - key: "insights-dashboard"
+    required_patterns:
+      - 'id:"insights"'
+    required_routes:
+      - "insights"
+
+  - key: "base-tracker"
+    required_patterns:
+      - 'id:"basetracker"'
+    required_ui_ids:
+      - "btn-generate-base-tracker"
+    required_routes:
+      - "base_tracker"
+      - "generate_base_tracker"
+
+  - key: "approve-quote"
+    required_ui_ids:
+      - "btn-approve-quote"
+    required_routes:
+      - "approve_quote"
+
+non_functional:
+  - id: "brand-footer"
+    must_include_text: "BurnRatePro Verify+ v1.9 | P&R Consulting Ltd"
+
+  - id: "report-guard"
+    description: "Award report must check for project selection"
+    attribute: 'data-award-needs-project="true"'
