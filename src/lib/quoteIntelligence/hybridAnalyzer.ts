@@ -128,7 +128,7 @@ export async function analyzeQuoteIntelligenceHybrid(
 
   return {
     projectId,
-    quoteIds,
+    quoteIds: originalQuoteIdsForComparison,
     quotesAnalyzed: quotesData.length,
     analyzedAt: new Date().toISOString(),
     summary: {
