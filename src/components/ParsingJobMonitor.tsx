@@ -104,8 +104,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
         const filteredJobs = allJobs.filter(job => {
           if (!job.quote_id) return true; // Include jobs without quotes (pending/failed)
 
-          const revisionNumber = quoteRevisionMap.get(job.quote_id);
-          if (!revisionNumber) return true; // Include if we can't determine revision
+          const revisionNumber = quoteRevisionMap.get(job.quote_id) ?? 1; // Treat NULL as revision 1
 
           if (dashboardMode === 'original') {
             return revisionNumber === 1;

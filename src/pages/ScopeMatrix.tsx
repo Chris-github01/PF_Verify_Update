@@ -109,22 +109,23 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     setQuotesLoading(true);
     try {
       // Filter quotes based on dashboard mode
-      let query = supabase
+      const { data: allQuotes } = await supabase
         .from('quotes')
-        .select('id, supplier_name, quote_reference, total_amount, items_count')
-        .eq('project_id', projectId);
+        .select('id, supplier_name, quote_reference, total_amount, items_count, revision_number')
+        .eq('project_id', projectId)
+        .order('supplier_name');
 
-      if (dashboardMode === 'original') {
-        // Original mode: only revision 1 quotes
-        query = query.eq('revision_number', 1);
-      } else {
-        // Revisions mode: only revision 2+ quotes
-        query = query.gt('revision_number', 1);
-      }
+      // Filter quotes by revision number, treating NULL as revision 1
+      const quotesData = allQuotes?.filter(q => {
+        const revisionNumber = q.revision_number ?? 1;
+        if (dashboardMode === 'original') {
+          return revisionNumber === 1;
+        } else {
+          return revisionNumber > 1;
+        }
+      }) || [];
 
-      const { data: quotesData } = await query.order('supplier_name');
-
-      if (quotesData) {
+      if (quotesData.length > 0) {
         const quotesWithStatus = await Promise.all(
           quotesData.map(async (quote) => {
             const { data: jobData } = await supabase

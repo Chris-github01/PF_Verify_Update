@@ -48,7 +48,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
     } else {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, dashboardMode]);
 
   const loadProjectInfo = async () => {
     if (!projectId) return;
@@ -64,12 +64,22 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
       if (project) {
         setProjectInfo(project);
 
-        const { data: quotes, error } = await supabase
+        const { data: allQuotes, error } = await supabase
           .from('quotes')
-          .select('supplier_name')
+          .select('supplier_name, revision_number')
           .eq('project_id', projectId);
 
-        if (!error && quotes) {
+        if (!error && allQuotes) {
+          // Filter quotes by revision number, treating NULL as revision 1
+          const quotes = allQuotes.filter(q => {
+            const revisionNumber = q.revision_number ?? 1;
+            if (dashboardMode === 'original') {
+              return revisionNumber === 1;
+            } else {
+              return revisionNumber > 1;
+            }
+          });
+
           const uniqueSuppliers = new Set(quotes.map(q => q.supplier_name));
           setSupplierCount(uniqueSuppliers.size);
         }

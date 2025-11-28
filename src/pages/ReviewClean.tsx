@@ -239,23 +239,24 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
     setLoading(true);
 
     // Filter quotes based on dashboard mode
-    let query = supabase
+    const { data: allQuotes, error } = await supabase
       .from('quotes')
       .select('*')
-      .eq('project_id', projectId);
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
 
-    if (dashboardMode === 'original') {
-      // Original mode: only revision 1 quotes
-      query = query.eq('revision_number', 1);
-    } else {
-      // Revisions mode: only revision 2+ quotes (exclude revision 1)
-      query = query.gt('revision_number', 1);
-    }
+    if (!error && allQuotes) {
+      // Filter quotes by revision number, treating NULL as revision 1
+      const filteredQuotes = allQuotes.filter(q => {
+        const revisionNumber = q.revision_number ?? 1;
+        if (dashboardMode === 'original') {
+          return revisionNumber === 1;
+        } else {
+          return revisionNumber > 1;
+        }
+      });
 
-    const { data, error } = await query.order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setQuotes(data);
+      setQuotes(filteredQuotes);
 
       const { data: jobsData } = await supabase
         .from('parsing_jobs')

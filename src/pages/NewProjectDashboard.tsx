@@ -99,18 +99,26 @@ export default function NewProjectDashboard({
       // Filter quotes based on dashboard mode
       let quotesQuery = supabase
         .from('quotes')
-        .select('id, supplier_name')
+        .select('id, supplier_name, revision_number')
         .eq('project_id', projectId);
 
-      if (dashboardMode === 'original') {
-        // Original mode: only revision 1 quotes
-        quotesQuery = quotesQuery.eq('revision_number', 1);
-      } else {
-        // Revisions mode: only revision 2+ quotes
-        quotesQuery = quotesQuery.gt('revision_number', 1);
+      const { data: allQuotes, error: quotesError } = await quotesQuery;
+
+      if (quotesError) {
+        console.error('Error loading quotes:', quotesError);
       }
 
-      const { data: quotes } = await quotesQuery;
+      // Filter quotes by revision number, treating NULL as revision 1
+      const quotes = allQuotes?.filter(q => {
+        const revisionNumber = q.revision_number ?? 1; // Treat NULL as revision 1
+        if (dashboardMode === 'original') {
+          return revisionNumber === 1;
+        } else {
+          return revisionNumber > 1;
+        }
+      }) || [];
+
+      console.log(`Dashboard mode: ${dashboardMode}, Total quotes: ${allQuotes?.length || 0}, Filtered quotes: ${quotes.length}`);
 
       const quoteCount = quotes?.length || 0;
       const supplierCount = new Set(quotes?.map(q => q.supplier_name)).size;
