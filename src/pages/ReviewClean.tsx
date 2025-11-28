@@ -272,7 +272,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         });
       }
 
-      const filtered = data.filter(quote => {
+      const filtered = filteredQuotes.filter(quote => {
         const job = jobMap.get(quote.id);
         const itemCount = quote.items_count || 0;
 
