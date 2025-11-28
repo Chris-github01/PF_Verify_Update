@@ -356,6 +356,27 @@ Deno.serve(async (req: Request) => {
         console.log(`Updated quote ${quoteData.id} for supplier ${typedJob.supplier_name}`);
       } else {
         // Create new quote
+        // Determine revision number based on dashboard mode
+        const dashboardMode = (job.metadata as any)?.dashboard_mode || "original";
+        let revisionNumber = 1;
+
+        if (dashboardMode === "revisions") {
+          // Get the latest revision number for this supplier
+          const { data: latestQuote } = await supabase
+            .from("quotes")
+            .select("revision_number")
+            .eq("project_id", typedJob.project_id)
+            .eq("supplier_name", typedJob.supplier_name)
+            .order("revision_number", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          revisionNumber = latestQuote && latestQuote.revision_number
+            ? latestQuote.revision_number + 1
+            : 2;
+          console.log(`Setting revision number: ${revisionNumber} for supplier ${typedJob.supplier_name} in ${dashboardMode} mode`);
+        }
+
         const { data: newQuote, error: quoteError } = await supabase
           .from("quotes")
           .insert({
@@ -364,7 +385,8 @@ Deno.serve(async (req: Request) => {
             organisation_id: typedJob.organisation_id,
             status: 'pending',
             total_amount: parsedData.totals?.grandTotal || 0,
-            created_by: typedJob.user_id
+            created_by: typedJob.user_id,
+            revision_number: revisionNumber
           })
           .select()
           .single();
@@ -375,7 +397,7 @@ Deno.serve(async (req: Request) => {
         }
 
         quoteData = newQuote;
-        console.log(`Created quote ${quoteData.id} for supplier ${typedJob.supplier_name}`);
+        console.log(`Created quote ${quoteData.id} with revision ${revisionNumber} for supplier ${typedJob.supplier_name}`);
       }
 
       if (parsedData.items && parsedData.items.length > 0) {

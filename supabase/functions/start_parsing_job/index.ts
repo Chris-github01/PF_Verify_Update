@@ -41,6 +41,7 @@ Deno.serve(async (req: Request) => {
     const supplierName = formData.get("supplierName") as string;
     const organisationId = formData.get("organisationId") as string;
     const quoteId = formData.get("quoteId") as string | null; // Optional: for revisions
+    const dashboardMode = (formData.get("dashboardMode") as string) || "original";
 
     if (!projectId || !supplierName || !file || !organisationId) {
       return new Response(
@@ -122,7 +123,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log("Creating parsing job:", { projectId, supplierName, fileName, organisationId, userId: user.id, storagePath, quoteId });
+    console.log("Creating parsing job:", { projectId, supplierName, fileName, organisationId, userId: user.id, storagePath, quoteId, dashboardMode });
 
     const jobData: any = {
       project_id: projectId,
@@ -133,6 +134,7 @@ Deno.serve(async (req: Request) => {
       user_id: user.id,
       status: "pending",
       progress: 0,
+      metadata: { dashboard_mode: dashboardMode },
     };
 
     // If quoteId is provided (revision case), link the job to that quote
