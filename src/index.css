@@ -3,13 +3,14 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --pf-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Inter", "Segoe UI", sans-serif;
+
+  font-family: var(--pf-font-sans);
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light;
-  color: rgba(0, 0, 0, 0.87);
-  background-color: #ffffff;
+  color-scheme: dark;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -24,8 +25,36 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background-color: #020617;
+  color: #e5e7eb;
+  font-family: var(--pf-font-sans);
 }
 
 #root {
   min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.9);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.9);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(51, 65, 85, 0.9) transparent;
+  }
 }
