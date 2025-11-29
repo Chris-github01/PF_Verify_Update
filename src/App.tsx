@@ -62,6 +62,7 @@ function AppContent() {
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [showReportsHub, setShowReportsHub] = useState(false);
   const [orgLicensing, setOrgLicensing] = useState<{ licensed_trades: string[]; subscription_status: string } | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { currentOrganisation, organisations, loading: orgLoading, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
   const initializingRef = useRef(false);
@@ -784,7 +785,6 @@ function AppContent() {
 
   const isInAdminMode = isImpersonating();
   const impersonatedOrg = isInAdminMode ? currentOrganisation : null;
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <>
