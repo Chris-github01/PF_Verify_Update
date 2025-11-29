@@ -34,32 +34,55 @@ body {
   min-height: 100vh;
 }
 
-h1, h2, h3, h4, h5, h6 {
-  color: #f8fafc;
-}
-
-.text-gray-900 {
+.dark > div > div:not(.bg-white):not(.bg-gray-50):not(.bg-gray-100) h1,
+.dark > div > div:not(.bg-white):not(.bg-gray-50):not(.bg-gray-100) h2,
+.dark > div > div:not(.bg-white):not(.bg-gray-50):not(.bg-gray-100) h3,
+.dark > div > div:not(.bg-white):not(.bg-gray-50):not(.bg-gray-100) h4 {
   color: #f8fafc !important;
 }
 
-.text-gray-800 {
+.dark > div > div:not(.bg-white):not(.bg-gray-50):not(.bg-gray-100) .text-gray-900 {
+  color: #f8fafc !important;
+}
+
+.dark > div > div:not(.bg-white):not(.bg-gray-50):not(.bg-gray-100) .text-gray-800 {
   color: #f1f5f9 !important;
 }
 
-.text-gray-700 {
+.dark > div > div:not(.bg-white):not(.bg-gray-50):not(.bg-gray-100) .text-gray-700 {
   color: #e2e8f0 !important;
 }
 
-.text-gray-600 {
+.dark > div > div:not(.bg-white):not(.bg-gray-50):not(.bg-gray-100) .text-gray-600 {
   color: #cbd5e1 !important;
 }
 
-.text-gray-500 {
-  color: #94a3b8 !important;
+.bg-white .text-gray-900,
+.bg-gray-50 .text-gray-900,
+.bg-gray-100 .text-gray-900,
+table .text-gray-900 {
+  color: #111827 !important;
 }
 
-.text-gray-400 {
-  color: #64748b !important;
+.bg-white .text-gray-800,
+.bg-gray-50 .text-gray-800,
+.bg-gray-100 .text-gray-800,
+table .text-gray-800 {
+  color: #1f2937 !important;
+}
+
+.bg-white .text-gray-700,
+.bg-gray-50 .text-gray-700,
+.bg-gray-100 .text-gray-700,
+table .text-gray-700 {
+  color: #374151 !important;
+}
+
+.bg-white .text-gray-600,
+.bg-gray-50 .text-gray-600,
+.bg-gray-100 .text-gray-600,
+table .text-gray-600 {
+  color: #4b5563 !important;
 }
 
 ::-webkit-scrollbar {
