@@ -1233,7 +1233,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         <div className="flex items-center gap-4">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-900 rounded-md hover:bg-gray-200 transition-colors"
           >
             <Filter size={18} />
             Filters
@@ -1257,7 +1257,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           <button
             onClick={() => setShowSuggestedSystems(true)}
             disabled={suggestions.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
           >
             <Lightbulb size={18} />
             Suggested Systems
