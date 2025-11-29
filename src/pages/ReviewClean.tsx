@@ -1197,7 +1197,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                   <select
                                     value={item.system_id || ''}
                                     onChange={(e) => handleSystemOverride(item.id, e.target.value)}
-                                    className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                                    className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 [&>option]:text-gray-900 [&>option]:bg-white"
                                   >
                                     <option value="">-- Change System --</option>
                                     {availableSystems.map(sys => (
