@@ -1179,7 +1179,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                       <div className="text-xs font-medium text-gray-900 truncate" title={item.system_label}>
                                         {item.system_label}
                                       </div>
-                                      <div className="text-xs text-gray-500">{item.system_id}</div>
+                                      <div className="text-xs text-gray-300">{item.system_id}</div>
                                       {item.system_manual_override && (
                                         <div className="text-xs text-blue-600 mt-0.5">Manual override</div>
                                       )}
