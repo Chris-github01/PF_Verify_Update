@@ -331,7 +331,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={onSignIn}
-                className="group px-8 py-4 text-lg font-semibold text-gray-900 bg-white rounded-xl hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                className="group px-8 py-4 text-lg font-semibold text-black bg-white rounded-xl hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
               >
                 Audit Your First Quotes Free
                 <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
