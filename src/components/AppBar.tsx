@@ -1,6 +1,7 @@
-import { Folders, Upload, TrendingUp, FileText, Search, Bell, Settings as SettingsIcon, Menu, X, Sparkles, LogOut } from 'lucide-react';
+import { Search, Bell, Menu, X, Sparkles, LogOut, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
+import { useOrganisation } from '../lib/organisationContext';
 
 export type PrimaryTab = 'project' | 'import' | 'analysis' | 'reports';
 
@@ -19,143 +20,93 @@ interface AppBarProps {
   onCopilotOpen: () => void;
 }
 
-const primaryTabs = [
-  { id: 'project' as PrimaryTab, label: 'Project', icon: Folders },
-  { id: 'import' as PrimaryTab, label: 'Import', icon: Upload },
-  { id: 'analysis' as PrimaryTab, label: 'Analysis', icon: TrendingUp },
-  { id: 'reports' as PrimaryTab, label: 'Reports', icon: FileText },
-];
-
 export default function AppBar({
-  activeTab,
-  onTabChange,
   currentProjectId,
   currentProjectName,
-  onProjectChange,
-  onBackToDashboard,
   onSearchOpen,
   notificationCount = 0,
-  onSettingsOpen,
   mobileMenuOpen,
   onMobileMenuToggle,
   onCopilotOpen,
 }: AppBarProps) {
+  const { currentOrganisation } = useOrganisation();
+
   return (
-    <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onMobileMenuToggle}
-              className="lg:hidden p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+    <header className="sticky top-0 z-20 border-b border-slate-800/70 bg-slate-950/80 backdrop-blur">
+      <div className="flex items-center justify-between px-4 lg:px-8 h-14">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onMobileMenuToggle}
+            className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-sky-500 hover:text-sky-200"
+          >
+            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+
+          {currentOrganisation && (
+            <button className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 text-xs text-slate-200 shadow-sm hover:border-sky-500 hover:text-sky-200 transition-colors">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              {currentOrganisation.name}
             </button>
+          )}
 
-            <h1 className="text-lg font-bold text-gray-900 whitespace-nowrap">
-              PassiveFire Verify+
-            </h1>
+          {currentProjectId && currentProjectName && (
+            <button className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 text-xs text-slate-200 shadow-sm hover:border-sky-500 hover:text-sky-200 transition-colors">
+              {currentProjectName}
+              <span className="text-slate-500">▼</span>
+            </button>
+          )}
+        </div>
 
-            {currentProjectId && currentProjectName && (
-              <div className="text-xs text-gray-500 ml-4 hidden md:block">
-                {currentProjectName}
-              </div>
+        <div className="flex items-center gap-3">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onCopilotOpen}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-purple-500 hover:text-purple-200 transition-colors group"
+            title="Verify+ Copilot"
+          >
+            <Sparkles size={16} className="group-hover:text-purple-400 transition-colors" />
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onSearchOpen}
+            className="hidden sm:inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-sky-500 hover:text-sky-200 transition-colors"
+            title="Search (Ctrl+K)"
+          >
+            <Search size={16} />
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-sky-500 hover:text-sky-200 transition-colors"
+            title="Notifications"
+          >
+            <Bell size={16} />
+            {notificationCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
             )}
-          </div>
+          </motion.button>
 
-          <div className="hidden lg:flex items-center gap-1">
-            {primaryTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <motion.button
-                  key={tab.id}
-                  data-testid={`nav-${tab.id}`}
-                  onClick={() => onTabChange(tab.id)}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={`
-                    relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200
-                    ${
-                      isActive
-                        ? 'text-blue-600 bg-blue-50 border border-blue-200'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                    }
-                  `}
-                >
-                  <Icon size={18} />
-                  <span>{tab.label}</span>
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 bg-blue-50 rounded-lg -z-10"
-                      transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                </motion.button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onCopilotOpen}
-              className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors group"
-              title="Verify+ Copilot"
-            >
-              <Sparkles size={20} className="group-hover:text-blue-600 transition-colors" />
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onSearchOpen}
-              className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors group"
-              title="Search (Ctrl+K)"
-            >
-              <Search size={20} />
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="relative p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
-              title="Notifications"
-            >
-              <Bell size={20} />
-              {notificationCount > 0 && (
-                <span className="absolute top-0 right-0 flex items-center justify-center h-5 w-5 text-xs font-bold text-white bg-red-500 rounded-full">
-                  {notificationCount > 9 ? '9+' : notificationCount}
-                </span>
-              )}
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onSettingsOpen}
-              className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
-              title="Settings"
-            >
-              <SettingsIcon size={20} />
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={async () => {
-                await supabase.auth.signOut();
-              }}
-              className="p-2 text-gray-600 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-              title="Logout"
-            >
-              <LogOut size={20} />
-            </motion.button>
-          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={async () => {
+              await supabase.auth.signOut();
+            }}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-xs text-slate-200 hover:border-sky-500 hover:text-sky-200 transition-colors group"
+            title="Logout"
+          >
+            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-sky-400 to-blue-600 text-[11px] flex items-center justify-center flex-shrink-0">
+              <User size={14} className="text-white" />
+            </div>
+            <span className="hidden sm:inline">Account</span>
+            <LogOut size={14} className="hidden sm:inline text-slate-400 group-hover:text-rose-400 transition-colors" />
+          </motion.button>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

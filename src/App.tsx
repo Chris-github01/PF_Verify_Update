@@ -5,6 +5,8 @@ import { isImpersonating, stopImpersonation } from './lib/admin/adminApi';
 import TradeUpsellBanner from './components/TradeUpsellBanner';
 import Sidebar, { SidebarTab } from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
+import AppBar from './components/AppBar';
+import { AppShell } from './components/layout/AppShell';
 import NewProjectDashboard from './pages/NewProjectDashboard';
 import EnhancedImportQuotes from './pages/EnhancedImportQuotes';
 import ReviewClean from './pages/ReviewClean';
@@ -782,76 +784,71 @@ function AppContent() {
 
   const isInAdminMode = isImpersonating();
   const impersonatedOrg = isInAdminMode ? currentOrganisation : null;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex overflow-x-hidden">
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={(tab) => {
-          setShowReportsHub(false);
-          setActiveTab(tab);
-        }}
-        projectId={projectId}
-        dashboardMode={dashboardMode}
-        onDashboardModeChange={setDashboardMode}
-      />
-
-      <div className="flex-1 flex flex-col max-w-full overflow-x-hidden">
-        {isInAdminMode && impersonatedOrg && (
-          <div className="bg-red-600 text-white px-6 py-3 flex items-center justify-between shadow-lg">
-            <div className="flex items-center gap-3">
-              <AlertTriangle size={20} />
-              <div>
-                <div className="font-bold">ADMIN MODE - Impersonating Client</div>
-                <div className="text-sm text-red-100">
-                  Viewing as: {impersonatedOrg.name}
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => stopImpersonation()}
-              className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-800 rounded-md font-medium transition-colors"
-            >
-              <X size={16} />
-              Exit Admin Mode
-            </button>
-          </div>
-        )}
-
-        {!isInAdminMode && orgLicensing && orgLicensing.licensed_trades && (
-          <TradeUpsellBanner
-            currentTrades={orgLicensing.licensed_trades}
-            subscriptionStatus={orgLicensing.subscription_status}
+    <>
+      <AppShell
+        sidebar={
+          <Sidebar
+            activeTab={activeTab}
+            onTabChange={(tab) => {
+              setShowReportsHub(false);
+              setActiveTab(tab);
+              setMobileMenuOpen(false);
+            }}
+            projectId={projectId}
+            dashboardMode={dashboardMode}
+            onDashboardModeChange={setDashboardMode}
           />
-        )}
+        }
+        topBar={
+          <>
+            {isInAdminMode && impersonatedOrg && (
+              <div className="bg-red-600 text-white px-6 py-3 flex items-center justify-between shadow-lg border-b border-red-700">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle size={20} />
+                  <div>
+                    <div className="font-bold">ADMIN MODE - Impersonating Client</div>
+                    <div className="text-sm text-red-100">
+                      Viewing as: {impersonatedOrg.name}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => stopImpersonation()}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-800 rounded-md font-medium transition-colors"
+                >
+                  <X size={16} />
+                  Exit Admin Mode
+                </button>
+              </div>
+            )}
 
-        <DashboardHeader
-          currentProjectId={projectId || undefined}
-          currentProjectName={projectInfo?.name}
-          onProjectChange={handleProjectSelect}
-          onBackToDashboard={() => {
-            setProjectId(null);
-            setProjectInfo(null);
-            setActiveTab('dashboard');
-          }}
-          notificationCount={0}
-          onNavigateToAccount={() => setActiveTab('settings')}
-          onNavigateToBilling={() => setActiveTab('settings')}
-          onSwitchOrganisation={() => {
-            setCurrentOrganisation(null);
-            setProjectId(null);
-            setProjectInfo(null);
-            setAllProjects([]);
-            setActiveTab('dashboard');
-          }}
-        />
+            {!isInAdminMode && orgLicensing && orgLicensing.licensed_trades && (
+              <TradeUpsellBanner
+                currentTrades={orgLicensing.licensed_trades}
+                subscriptionStatus={orgLicensing.subscription_status}
+              />
+            )}
 
-        <main className="flex-1 overflow-auto">
-          {renderContent()}
-        </main>
-
-        <AppFooter />
-      </div>
+            <AppBar
+              activeTab={'project'}
+              onTabChange={() => {}}
+              currentProjectId={projectId || undefined}
+              currentProjectName={projectInfo?.name}
+              onSearchOpen={() => {}}
+              notificationCount={0}
+              onSettingsOpen={() => setActiveTab('settings')}
+              mobileMenuOpen={mobileMenuOpen}
+              onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
+              onCopilotOpen={() => setIsCopilotOpen(true)}
+            />
+          </>
+        }
+      >
+        {renderContent()}
+      </AppShell>
 
       <AnimatePresence>
         {toast && (
@@ -880,7 +877,7 @@ function AppContent() {
         allProjects={allProjects.map(p => ({ id: p.id, name: p.name }))}
         onNavigate={handleCopilotNavigate}
       />
-    </div>
+    </>
   );
 }
 
