@@ -479,17 +479,17 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none print:break-after-page">
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none print:break-after-page">
         <div className="flex items-center gap-3 mb-6">
           <AlertTriangle className="text-red-600" size={24} />
-          <h2 className="text-xl font-bold text-gray-900">Red Flags</h2>
+          <h2 className="text-xl font-bold text-slate-100">Red Flags</h2>
         </div>
 
         {analysis.redFlags.length === 0 ? (
           <div className="text-center py-8">
             <CheckCircle className="mx-auto text-green-600 mb-3" size={48} />
-            <p className="text-gray-900 font-medium">No red flags detected</p>
-            <p className="text-sm text-gray-600 mt-1">All quotes passed automated quality checks</p>
+            <p className="text-slate-100 font-medium">No red flags detected</p>
+            <p className="text-sm text-slate-400 mt-1">All quotes passed automated quality checks</p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -512,15 +512,15 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                               </span>
                               <span className="text-sm font-medium text-red-900">{flag.category}</span>
                             </div>
-                            <h4 className="font-semibold text-gray-900">{flag.title}</h4>
-                            <p className="text-sm text-gray-700 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
+                            <h4 className="font-semibold text-slate-900">{flag.title}</h4>
+                            <p className="text-sm text-slate-700 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-800 mb-2">{flag.description}</p>
+                        <p className="text-sm text-slate-100 mb-2">{flag.description}</p>
                         {flag.recommendation && (
                           <div className="mt-3 pt-3 border-t border-red-200">
-                            <p className="text-sm font-medium text-gray-900 mb-1">Recommendation:</p>
-                            <p className="text-sm text-gray-700">{flag.recommendation}</p>
+                            <p className="text-sm font-medium text-slate-100 mb-1">Recommendation:</p>
+                            <p className="text-sm text-slate-200">{flag.recommendation}</p>
                           </div>
                         )}
                       </div>
@@ -549,15 +549,15 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                               </span>
                               <span className="text-sm font-medium text-orange-900">{flag.category}</span>
                             </div>
-                            <h4 className="font-semibold text-gray-900">{flag.title}</h4>
-                            <p className="text-sm text-gray-700 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
+                            <h4 className="font-semibold text-slate-900">{flag.title}</h4>
+                            <p className="text-sm text-slate-700 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-800 mb-2">{flag.description}</p>
+                        <p className="text-sm text-slate-100 mb-2">{flag.description}</p>
                         {flag.recommendation && (
                           <div className="mt-3 pt-3 border-t border-orange-200">
-                            <p className="text-sm font-medium text-gray-900 mb-1">Recommendation:</p>
-                            <p className="text-sm text-gray-700">{flag.recommendation}</p>
+                            <p className="text-sm font-medium text-slate-100 mb-1">Recommendation:</p>
+                            <p className="text-sm text-slate-200">{flag.recommendation}</p>
                           </div>
                         )}
                       </div>
@@ -579,10 +579,10 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                           <span className="text-xs font-bold uppercase px-2 py-0.5 bg-yellow-600 text-white rounded">
                             {flag.severity}
                           </span>
-                          <span className="text-sm font-semibold text-gray-900">{flag.title}</span>
-                          <span className="text-sm text-gray-600">• {quote?.supplierName || 'Unknown'}</span>
+                          <span className="text-sm font-semibold text-slate-100">{flag.title}</span>
+                          <span className="text-sm text-slate-400">• {quote?.supplierName || 'Unknown'}</span>
                         </div>
-                        <p className="text-sm text-gray-700">{flag.description}</p>
+                        <p className="text-sm text-slate-200">{flag.description}</p>
                       </div>
                     );
                   })}
@@ -602,10 +602,10 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                           <span className="text-xs font-bold uppercase px-2 py-0.5 bg-blue-600 text-white rounded">
                             {flag.severity}
                           </span>
-                          <span className="text-sm font-semibold text-gray-900">{flag.title}</span>
-                          <span className="text-sm text-gray-600">• {quote?.supplierName || 'Unknown'}</span>
+                          <span className="text-sm font-semibold text-slate-100">{flag.title}</span>
+                          <span className="text-sm text-slate-400">• {quote?.supplierName || 'Unknown'}</span>
                         </div>
-                        <p className="text-sm text-gray-700">{flag.description}</p>
+                        <p className="text-sm text-slate-200">{flag.description}</p>
                       </div>
                     );
                   })}
@@ -617,10 +617,10 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
       </div>
 
       <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Recommended Actions</h2>
+        <h2 className="text-xl font-bold text-slate-100 mb-4">Recommended Actions</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all">
+          <div className="border border-slate-700 rounded-lg p-4 hover:border-blue-500 hover:shadow-md transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
                 <Target className="text-blue-600" size={20} />
