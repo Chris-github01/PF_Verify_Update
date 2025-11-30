@@ -202,7 +202,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
   const getSupplierQualityData = () => {
     if (!analysis) return [];
 
-    const supplierMap = new Map<string, { name: string; qualityScore: number; coverageScore: number; redFlags: number; revisionNumber: number; quoteReference: string }>();
+    const supplierMap = new Map<string, { name: string; qualityScore: number; coverageScore: number; redFlags: number; revisionNumber: number; quoteReference: string; itemCount: number }>();
 
     analysis.normalizedItems.forEach(item => {
       if (!supplierMap.has(item.quoteId)) {
@@ -213,7 +213,12 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           redFlags: 0,
           revisionNumber: item.revisionNumber,
           quoteReference: item.quoteReference,
+          itemCount: 0,
         });
+      }
+      const supplier = supplierMap.get(item.quoteId);
+      if (supplier) {
+        supplier.itemCount++;
       }
     });
 
@@ -224,10 +229,12 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
       }
     });
 
+    const totalItems = Math.max(...Array.from(supplierMap.values()).map(s => s.itemCount));
+
     const suppliers = Array.from(supplierMap.values());
     suppliers.forEach(s => {
       s.qualityScore = Math.max(0, 100 - (s.redFlags * 10));
-      s.coverageScore = analysis.summary.coverageScore;
+      s.coverageScore = totalItems > 0 ? Math.round((s.itemCount / totalItems) * 100) : 0;
     });
 
     return suppliers.sort((a, b) => b.qualityScore - a.qualityScore);
