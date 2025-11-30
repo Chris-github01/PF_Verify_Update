@@ -699,6 +699,10 @@ function AppContent() {
           setShowPricing(false);
           setShowLanding(false);
         }}
+        onBackToHome={() => {
+          setShowPricing(false);
+          setShowLanding(true);
+        }}
       />;
     }
     if (showLanding) {

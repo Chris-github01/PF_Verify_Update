@@ -4,9 +4,10 @@ import { useState } from 'react';
 interface PricingProps {
   onStartTrial?: () => void;
   onBookDemo?: () => void;
+  onBackToHome?: () => void;
 }
 
-export default function Pricing({ onStartTrial, onBookDemo }: PricingProps) {
+export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: PricingProps) {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('annual');
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
 
@@ -127,8 +128,45 @@ export default function Pricing({ onStartTrial, onBookDemo }: PricingProps) {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Navigation Bar */}
+      <nav className="fixed top-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <button onClick={onBackToHome} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
+                <Shield className="text-white" size={20} />
+              </div>
+              <span className="text-xl font-bold text-slate-50">PassiveFire Verify+</span>
+            </button>
+
+            <div className="hidden md:flex items-center gap-8">
+              <button onClick={onBackToHome} className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">How It Works</button>
+              <button className="text-sm text-slate-50 transition-colors font-medium">Pricing</button>
+              <button onClick={onBackToHome} className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">Customers</button>
+              <button onClick={onBackToHome} className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">Resources</button>
+              <button onClick={onBackToHome} className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">Support</button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onStartTrial}
+                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={onBookDemo}
+                className="hidden sm:block px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
+              >
+                Book Demo
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
       {/* Hero Section */}
-      <div className="bg-gradient-to-b from-gray-50 to-white py-20 px-4 sm:px-6 lg:px-8">
+      <div className="bg-gradient-to-b from-gray-50 to-white pt-32 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
             Simple, Transparent Pricing That<br />Pays for Itself on the First Project
