@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
 import { analyzeQuoteIntelligence } from '../lib/quoteIntelligence/analyzer';
 import type { QuoteIntelligenceAnalysis, RedFlag } from '../types/quoteIntelligence.types';
-import WorkflowNav from '../components/WorkflowNav';
 import type { DashboardMode } from '../App';
 
 interface QuoteIntelligenceReportProps {
@@ -270,11 +269,6 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
   return (
     <div className="space-y-8">
-      <WorkflowNav
-        currentStep="quoteintel"
-        onNavigateBack={onNavigateBack}
-        onNavigateNext={onNavigateNext}
-      />
 
       <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
         <div className="flex items-center justify-between mb-2">
