@@ -763,17 +763,17 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
         <div className="flex items-center gap-3 mb-6">
           <Sparkles className="text-cyan-600" size={24} />
-          <h2 className="text-xl font-semibold text-gray-900">User Experience</h2>
+          <h2 className="text-xl font-semibold text-slate-100">User Experience</h2>
         </div>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between p-4 bg-slate-800/40 rounded-lg border border-slate-700">
             <div>
-              <h3 className="text-sm font-medium text-gray-900">Show Splash Screen on Every Load</h3>
-              <p className="text-xs text-gray-500 mt-1">
+              <h3 className="text-sm font-medium text-slate-100">Show Splash Screen on Every Load</h3>
+              <p className="text-xs text-slate-400 mt-1">
                 Display the animated BurnRatePro splash screen each time the app loads
               </p>
             </div>
@@ -788,25 +788,25 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
             </label>
           </div>
 
-          <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="text-xs text-slate-300 bg-blue-900/20 border border-blue-700 rounded-lg p-3">
             <p><strong>Tip:</strong> Press <kbd className="px-2 py-1 bg-slate-900/50 border border-blue-500 rounded text-xs">Shift</kbd> + <kbd className="px-2 py-1 bg-slate-900/50 border border-blue-500 rounded text-xs">S</kbd> to replay the splash screen at any time</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-          <Activity size={20} className="text-gray-700" />
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
+        <h2 className="text-xl font-semibold text-slate-100 mb-6 flex items-center gap-2">
+          <Activity size={20} className="text-slate-300" />
           PDF Extractor API
         </h2>
 
         <div className="space-y-4">
           <div className="p-4 bg-slate-800/40 rounded-lg border border-slate-700">
-            <h3 className="text-sm font-medium text-gray-900 mb-2">External PDF Extraction Service</h3>
-            <p className="text-xs text-gray-600 mb-3">
+            <h3 className="text-sm font-medium text-slate-100 mb-2">External PDF Extraction Service</h3>
+            <p className="text-xs text-slate-300 mb-3">
               This service automatically extracts structured data from supplier quote PDFs.
             </p>
-            <div className="text-xs text-gray-500 space-y-1 mb-4">
+            <div className="text-xs text-slate-400 space-y-1 mb-4">
               <div><strong>Endpoint:</strong> https://verify-pdf-extractor.onrender.com</div>
               <div><strong>Status:</strong> {extractorHealthStatus || 'Not checked'}</div>
             </div>
@@ -829,19 +829,19 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
             </button>
           </div>
 
-          <div className="text-xs text-gray-500 bg-purple-50 border border-purple-200 rounded-lg p-3">
+          <div className="text-xs text-slate-300 bg-purple-900/20 border border-purple-700 rounded-lg p-3">
             <p><strong>Note:</strong> The PDF extractor is called automatically when you upload a PDF in the Import Quotes screen. This health check verifies the service is online and responding.</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Project Data</h2>
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
+        <h2 className="text-xl font-semibold text-slate-100 mb-6">Project Data</h2>
 
         <div className="space-y-6">
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Export Data</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="border-b border-slate-700 pb-6">
+            <h3 className="text-lg font-medium text-slate-100 mb-3">Export Data</h3>
+            <p className="text-sm text-slate-300 mb-4">
               Export all project data including quotes, items, and categories to a JSON file.
             </p>
             <button
@@ -854,9 +854,9 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
             </button>
           </div>
 
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Import Data</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="border-b border-slate-700 pb-6">
+            <h3 className="text-lg font-medium text-slate-100 mb-3">Import Data</h3>
+            <p className="text-sm text-slate-300 mb-4">
               Import quotes and items from a previously exported JSON file. This will add to existing data.
             </p>
             <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors cursor-pointer inline-flex">
@@ -874,12 +874,12 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
           </div>
 
           {hasLegacyData && (
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-medium text-yellow-900 mb-3 flex items-center gap-2">
-                <AlertTriangle size={20} className="text-yellow-600" />
+            <div className="border-t border-slate-700 pt-6">
+              <h3 className="text-lg font-medium text-yellow-400 mb-3 flex items-center gap-2">
+                <AlertTriangle size={20} className="text-yellow-500" />
                 Legacy Data Migration
               </h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-slate-300 mb-4">
                 Legacy data detected in localStorage. Click below to migrate it to a new project in the database.
               </p>
               <button
@@ -893,9 +893,9 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
             </div>
           )}
 
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-medium text-red-900 mb-3">Danger Zone</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="border-t border-slate-700 pt-6">
+            <h3 className="text-lg font-medium text-red-400 mb-3">Danger Zone</h3>
+            <p className="text-sm text-slate-300 mb-4">
               Permanently delete this project and all associated data. This action cannot be undone.
             </p>
             <button
@@ -909,21 +909,21 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
         <div className="flex items-center gap-2 mb-6">
-          <Database size={20} className="text-gray-700" />
-          <h2 className="text-xl font-semibold text-gray-900">Project Snapshots</h2>
+          <Database size={20} className="text-slate-300" />
+          <h2 className="text-xl font-semibold text-slate-100">Project Snapshots</h2>
         </div>
 
         <div className="space-y-6">
-          <div className="border-b border-gray-200 pb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Save Current Project</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="border-b border-slate-700 pb-6">
+            <h3 className="text-lg font-medium text-slate-100 mb-3">Save Current Project</h3>
+            <p className="text-sm text-slate-300 mb-4">
               Create a snapshot of the current project state including all quotes, mappings, comparisons, and settings.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div>
-                <label htmlFor="snapshotKey" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="snapshotKey" className="block text-sm font-medium text-slate-300 mb-2">
                   Snapshot Key *
                 </label>
                 <input
@@ -936,7 +936,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
                 />
               </div>
               <div>
-                <label htmlFor="snapshotName" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="snapshotName" className="block text-sm font-medium text-slate-300 mb-2">
                   Project Name *
                 </label>
                 <input
@@ -949,7 +949,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
                 />
               </div>
               <div>
-                <label htmlFor="snapshotClient" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="snapshotClient" className="block text-sm font-medium text-slate-300 mb-2">
                   Client
                 </label>
                 <input
@@ -974,11 +974,11 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
 
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium text-gray-900">Saved Snapshots</h3>
+              <h3 className="text-lg font-medium text-slate-100">Saved Snapshots</h3>
               <button
                 onClick={loadSnapshotList}
                 disabled={isLoadingSnapshots}
-                className="flex items-center gap-2 px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                className="flex items-center gap-2 px-3 py-1 text-sm bg-slate-700 text-slate-200 rounded-md hover:bg-slate-600 transition-colors"
               >
                 <RefreshCw size={16} />
                 Refresh
@@ -986,7 +986,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
             </div>
 
             {isLoadingSnapshots ? (
-              <div className="text-center py-8 text-gray-500">Loading snapshots...</div>
+              <div className="text-center py-8 text-slate-400">Loading snapshots...</div>
             ) : snapshots.length === 0 ? (
               <div className="text-center py-8 text-slate-400 bg-slate-800/40 rounded-md border border-slate-700">
                 No snapshots saved yet.
@@ -1001,12 +1001,12 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-semibold text-gray-900">{snapshot.projectMeta.name}</h4>
-                          <code className="px-2 py-0.5 text-xs bg-white rounded border border-gray-300 text-gray-700">
+                          <h4 className="font-semibold text-slate-100">{snapshot.projectMeta.name}</h4>
+                          <code className="px-2 py-0.5 text-xs bg-slate-900 rounded border border-slate-600 text-slate-300">
                             {snapshot.projectKey}
                           </code>
                         </div>
-                        <div className="text-sm text-gray-600 space-y-1">
+                        <div className="text-sm text-slate-300 space-y-1">
                           <p>
                             <strong>Client:</strong> {snapshot.projectMeta.client} |
                             <strong className="ml-2">Created:</strong> {snapshot.projectMeta.created}
@@ -1044,8 +1044,8 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Account</h3>
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
+        <h3 className="text-lg font-medium text-slate-100 mb-4">Account</h3>
         <div className="space-y-4">
           <button
             onClick={async () => {
@@ -1059,9 +1059,9 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">About PassiveFire Verify+</h3>
-        <div className="text-sm text-gray-600 space-y-2">
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
+        <h3 className="text-lg font-medium text-slate-100 mb-4">About PassiveFire Verify+</h3>
+        <div className="text-sm text-slate-300 space-y-2">
           <p>Version 1.0</p>
           <p>
             PassiveFire Verify+ helps you manage and analyze quotes for passive fire protection projects.
