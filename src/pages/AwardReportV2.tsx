@@ -601,18 +601,18 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
 
       <div className="no-print flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('report.title')}</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-2xl font-bold text-slate-100">{t('report.title')}</h1>
+          <p className="text-sm text-slate-400 mt-1">
             Professional board-level award recommendation
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-slate-300">
             <input
               type="checkbox"
               checked={aiNarrativeEnabled}
               onChange={(e) => setAiNarrativeEnabled(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-slate-600 bg-slate-700 text-blue-400 focus:ring-blue-500"
             />
             <Sparkles className="w-4 h-4" />
             AI Narrative

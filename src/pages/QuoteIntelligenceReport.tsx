@@ -273,8 +273,8 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
       <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
         <div className="flex items-center justify-between mb-2">
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900">Quote Intelligence</h1>
-            <p className="text-sm text-gray-600 mt-1">Automated analysis of supplier quotes</p>
+            <h1 className="text-2xl font-bold text-slate-100">Quote Intelligence</h1>
+            <p className="text-sm text-slate-400 mt-1">Automated analysis of supplier quotes</p>
 
             {dashboardMode === 'revisions' && originalQuotes.length > 0 && (
               <div className="mt-4">
@@ -365,23 +365,11 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 mb-1">Issues Found</div>
-                <div className="text-3xl font-bold text-gray-900">{analysis.summary.totalRedFlags}</div>
+                <div className="text-sm text-slate-400 mb-1">Issues Found</div>
+                <div className="text-3xl font-bold text-slate-100">{analysis.summary.totalRedFlags}</div>
               </div>
-              <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center">
-                <AlertTriangle className="text-orange-600" size={24} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-600 mb-1">Critical Risks</div>
-                <div className="text-3xl font-bold text-gray-900">{analysis.summary.criticalIssues}</div>
-              </div>
-              <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
-                <AlertCircle className="text-red-600" size={24} />
+              <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="text-orange-400" size={24} />
               </div>
             </div>
           </div>
@@ -389,11 +377,23 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 mb-1">Top Supplier</div>
-                <div className="text-xl font-bold text-gray-900 truncate">{analysis.summary.mostCompleteSupplier}</div>
+                <div className="text-sm text-slate-400 mb-1">Critical Risks</div>
+                <div className="text-3xl font-bold text-slate-100">{analysis.summary.criticalIssues}</div>
               </div>
-              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                <Star className="text-blue-600" size={24} />
+              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                <AlertCircle className="text-red-400" size={24} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-slate-400 mb-1">Top Supplier</div>
+                <div className="text-xl font-bold text-slate-100 truncate">{analysis.summary.mostCompleteSupplier}</div>
+              </div>
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <Star className="text-blue-400" size={24} />
               </div>
             </div>
           </div>
@@ -401,27 +401,27 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
       </div>
 
       <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Supplier Comparison</h2>
+        <h2 className="text-xl font-bold text-slate-100 mb-4">Supplier Comparison</h2>
 
         {supplierQualityData.length === 0 ? (
-          <p className="text-gray-600 py-4">No supplier data available.</p>
+          <p className="text-slate-400 py-4">No supplier data available.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-900/50 border-b border-slate-700">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Supplier</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Quality Score</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Coverage Score</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Red Flags</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">Supplier</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">Quality Score</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">Coverage Score</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">Red Flags</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-slate-700">
                 {supplierQualityData.map((supplier, idx) => (
                   <tr key={idx} className="hover:bg-slate-700/30">
                     <td className="px-4 py-3 text-sm">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{supplier.name}</span>
+                        <span className="font-medium text-slate-100">{supplier.name}</span>
                         {supplier.revisionNumber > 1 ? (
                           <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
                             Rev {supplier.revisionNumber}
@@ -432,20 +432,20 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 mt-0.5">{supplier.quoteReference}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">{supplier.quoteReference}</div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm text-slate-300">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
                           <div
-                            className="bg-blue-600 h-2 rounded-full"
+                            className="bg-blue-400 h-2 rounded-full"
                             style={{ width: `${supplier.qualityScore}%` }}
                           />
                         </div>
                         <span className="font-medium">{supplier.qualityScore}%</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm text-slate-300">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[120px]">
                           <div
@@ -475,13 +475,13 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
       <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none print:break-after-page">
         <div className="flex items-center gap-3 mb-6">
-          <AlertTriangle className="text-red-600" size={24} />
+          <AlertTriangle className="text-red-400" size={24} />
           <h2 className="text-xl font-bold text-slate-100">Red Flags</h2>
         </div>
 
         {analysis.redFlags.length === 0 ? (
           <div className="text-center py-8">
-            <CheckCircle className="mx-auto text-green-600 mb-3" size={48} />
+            <CheckCircle className="mx-auto text-green-400 mb-3" size={48} />
             <p className="text-slate-100 font-medium">No red flags detected</p>
             <p className="text-sm text-slate-400 mt-1">All quotes passed automated quality checks</p>
           </div>
@@ -674,10 +674,10 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
       </div>
 
       {analysis.coverageGaps && analysis.coverageGaps.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none print:break-after-page">
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none print:break-after-page">
           <div className="flex items-center gap-3 mb-4">
-            <Target className="text-orange-600" size={24} />
-            <h2 className="text-xl font-bold text-gray-900">Coverage Gaps</h2>
+            <Target className="text-orange-400" size={24} />
+            <h2 className="text-xl font-bold text-slate-100">Coverage Gaps</h2>
           </div>
 
           <div className="space-y-3">
@@ -690,14 +690,14 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                         {gap.gapType}
                       </span>
                     </div>
-                    <h4 className="font-semibold text-gray-900">{gap.title}</h4>
+                    <h4 className="font-semibold text-slate-100">{gap.title}</h4>
                   </div>
                 </div>
-                <p className="text-sm text-gray-700 mb-2">{gap.description}</p>
+                <p className="text-sm text-slate-300 mb-2">{gap.description}</p>
                 {gap.recommendation && (
-                  <div className="mt-2 pt-2 border-t border-gray-300">
-                    <p className="text-sm font-medium text-gray-900 mb-1">Recommendation:</p>
-                    <p className="text-sm text-gray-700">{gap.recommendation}</p>
+                  <div className="mt-2 pt-2 border-t border-slate-600">
+                    <p className="text-sm font-medium text-slate-100 mb-1">Recommendation:</p>
+                    <p className="text-sm text-slate-300">{gap.recommendation}</p>
                   </div>
                 )}
               </div>
