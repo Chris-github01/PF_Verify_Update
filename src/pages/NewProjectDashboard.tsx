@@ -265,7 +265,7 @@ export default function NewProjectDashboard({
 
         {!projectId ? (
           <div className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 rounded-xl border border-slate-700">
               <button
                 onClick={handleCreateClick}
                 className="p-6 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 hover:bg-slate-800/50 transition-colors"
