@@ -188,7 +188,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       </div>
 
       {!hasAward ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+        <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-12 text-center">
           <AlertCircle className="mx-auto text-gray-400 mb-4" size={48} />
           <h3 className="text-xl font-bold text-gray-900 mb-2">No award selected</h3>
           <p className="text-gray-600 mb-6">
@@ -225,7 +225,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-6">
             {activeTab === 'summary' && <ContractSummaryTab awardInfo={awardInfo} projectInfo={projectInfo} />}
             {activeTab === 'scope' && <ScopeSystemsTab projectId={projectId} />}
             {activeTab === 'inclusions' && <InclusionsExclusionsTab />}
@@ -297,7 +297,7 @@ function ScopeSystemsTab({ projectId }: { projectId: string }) {
 
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-slate-900/50 border-b border-slate-700">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">System</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rating</th>
@@ -401,7 +401,7 @@ function AllowancesTab() {
 
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-slate-900/50 border-b border-slate-700">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty / Basis</th>
@@ -428,7 +428,7 @@ function AllowancesTab() {
               <td className="px-4 py-3 text-sm text-gray-700 text-right">-</td>
               <td className="px-4 py-3 text-sm font-medium text-gray-900 text-right">$10,000.00</td>
             </tr>
-            <tr className="bg-gray-50">
+            <tr className="bg-slate-900/50">
               <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-gray-900">Total Allowances</td>
               <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">$23,500.00</td>
             </tr>

@@ -283,9 +283,9 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)]">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-slate-800/60 border-b border-slate-700 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
             <FileText className="w-6 h-6 text-white" />
@@ -300,7 +300,7 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Project List */}
-        <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
+        <div className="w-96 bg-slate-800/60 border-r border-slate-700 flex flex-col">
           {/* Search */}
           <div className="p-4 border-b border-gray-200">
             <div className="relative">
@@ -333,7 +333,7 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
                     <button
                       key={project.id}
                       onClick={() => setSelectedProject(project)}
-                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                      className={`w-full text-left px-4 py-3 hover:bg-slate-700/50 transition-colors ${
                         selectedProject?.id === project.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                       }`}
                     >
@@ -364,7 +364,7 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
                     <button
                       key={project.id}
                       onClick={() => setSelectedProject(project)}
-                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                      className={`w-full text-left px-4 py-3 hover:bg-slate-700/50 transition-colors ${
                         selectedProject?.id === project.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                       }`}
                     >
@@ -403,7 +403,7 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
           {selectedProject ? (
             <div className="p-8">
               {/* Project Header */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 mb-6">
                 <h2 className="text-2xl font-semibold text-gray-900 mb-4">
                   {selectedProject.name}
                 </h2>
@@ -437,7 +437,7 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
                     </div>
                   )}
 
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                  <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 mb-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Report Actions</h3>
 
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
@@ -494,7 +494,7 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
                   </div>
 
                   {/* Report Metadata */}
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Report Details</h3>
                     <div className="grid grid-cols-3 gap-6">
                       <div className="flex items-center gap-3">
@@ -548,7 +548,7 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
                     </div>
                   )}
 
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+                  <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-12 text-center">
                     <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <AlertCircle className="w-8 h-8 text-amber-600" />
                     </div>

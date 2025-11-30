@@ -893,9 +893,9 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
 
   if (quotes.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-        <p className="text-gray-500 text-lg">No quotes imported yet.</p>
-        <p className="text-gray-400 mt-2">Go to Import Quotes to add your first quote.</p>
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-12 text-center">
+        <p className="text-slate-400 text-lg">No quotes imported yet.</p>
+        <p className="text-slate-500 mt-2">Go to Import Quotes to add your first quote.</p>
       </div>
     );
   }
@@ -945,10 +945,10 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
       )}
 
       {cleanableQuotes.length === 0 && !loading ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <AlertCircle className="mx-auto text-gray-400 mb-4" size={48} />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">No quotes ready to clean</h3>
-          <p className="text-gray-600 mb-6">
+        <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-12 text-center">
+          <AlertCircle className="mx-auto text-slate-400 mb-4" size={48} />
+          <h3 className="text-xl font-bold text-slate-100 mb-2">No quotes ready to clean</h3>
+          <p className="text-slate-400 mb-6">
             Import supplier quotes or fix failed imports on the Import Quotes page before continuing.
           </p>
           <button
@@ -957,23 +957,23 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
           >
             Go to Import Quotes
           </button>
-          <p className="text-xs text-gray-500 mt-4">
+          <p className="text-xs text-slate-500 mt-4">
             Only successfully imported quotes with line items will appear here.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-12 gap-6">
         <div className="col-span-3">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">Quotes</h3>
+          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700">
+            <div className="p-4 border-b border-slate-700">
+              <h3 className="font-semibold text-slate-100">Quotes</h3>
             </div>
             <div className="divide-y divide-gray-200">
               {cleanableQuotes.map((quote) => (
                 <div
                   key={quote.id}
-                  className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    selectedQuote === quote.id ? 'bg-gray-50 border-l-4 border-blue-600' : ''
+                  className={`p-4 cursor-pointer hover:bg-slate-700/50 transition-colors ${
+                    selectedQuote === quote.id ? 'bg-slate-700/50 border-l-4 border-blue-600' : ''
                   }`}
                   onClick={() => setSelectedQuote(quote.id)}
                 >
@@ -1007,7 +1007,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         </div>
 
         <div className="col-span-9">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700">
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between mb-2">
                 <div>
@@ -1032,7 +1032,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                   <button
                     onClick={handleProcessAllPendingQuotes}
                     disabled={processingAllQuotes || normalising || mapping || smartCleaning || cleanableQuotes.length === 0}
-                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+                    className="flex items-center gap-2 px-3 py-2 border border-slate-600 text-slate-300 rounded-md hover:bg-slate-700 transition-colors disabled:bg-slate-800 disabled:cursor-not-allowed text-sm"
                     title="Process all pending/error quotes"
                   >
                     <Zap size={14} />
@@ -1043,7 +1043,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-slate-900/50 border-b border-slate-700">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
@@ -1061,7 +1061,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                   {items.map((item) => {
                     const issues = parseIssues(item.issues);
                     return (
-                      <tr key={item.id} className={item.is_excluded ? 'bg-gray-50 opacity-60' : ''}>
+                      <tr key={item.id} className={item.is_excluded ? 'bg-slate-800/30 opacity-60' : ''}>
                         {editingItem === item.id ? (
                           <>
                             <td className="px-4 py-3">
@@ -1197,7 +1197,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                   <select
                                     value={item.system_id || ''}
                                     onChange={(e) => handleSystemOverride(item.id, e.target.value)}
-                                    className="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 [&>option]:text-gray-900 [&>option]:bg-white"
+                                    className="w-full text-xs border border-slate-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-900/50 text-slate-100 [&>option]:text-slate-900 [&>option]:bg-white"
                                   >
                                     <option value="">-- Change System --</option>
                                     {availableSystems.map(sys => (
@@ -1214,7 +1214,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                     </button>
                                   )}
                                   {showMatchDetails === item.id && (
-                                    <div className="mt-1 p-2 bg-gray-50 rounded text-xs">
+                                    <div className="mt-1 p-2 bg-slate-800/40 rounded text-xs">
                                       {item.matched_factors && JSON.parse(item.matched_factors).length > 0 && (
                                         <div className="mb-2">
                                           <div className="font-medium text-green-700 mb-1">Matched:</div>

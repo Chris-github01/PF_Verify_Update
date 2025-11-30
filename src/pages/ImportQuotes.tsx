@@ -498,22 +498,22 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
   if (parsedLines.length > 0) {
     return (
       <div className="p-6 max-w-full">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-5 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
                 <FileUp className="text-brand-primary" size={20} />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Import Preview</h2>
-                <p className="text-sm text-gray-600">
+                <h2 className="text-lg font-bold text-slate-100">Import Preview</h2>
+                <p className="text-sm text-slate-400">
                   {supplierName || 'No supplier name provided'}
                 </p>
               </div>
             </div>
             <button
               onClick={handleCancel}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors"
               title="Cancel and start over"
             >
               <X size={20} />
@@ -561,10 +561,10 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
   if (!projectId || !projectInfo) {
     return (
       <div className="flex items-center justify-center min-h-96">
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center max-w-md">
+        <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-8 text-center max-w-md">
           <AlertCircle className="mx-auto mb-4 text-yellow-500" size={48} />
-          <h3 className="text-lg font-bold text-gray-900 mb-2">No Project Selected</h3>
-          <p className="text-gray-600 mb-6">
+          <h3 className="text-lg font-bold text-slate-100 mb-2">No Project Selected</h3>
+          <p className="text-slate-400 mb-6">
             You need to select or create a project before importing quotes.
           </p>
           <button
@@ -615,7 +615,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 mb-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
             <Upload className="text-brand-primary" size={20} />
@@ -636,7 +636,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
             value={supplierName}
             onChange={(e) => setSupplierName(e.target.value)}
             placeholder="Enter supplier name..."
-            className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] transition bg-white text-gray-900"
+            className="w-full max-w-md px-4 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] transition bg-slate-900/50 text-slate-100"
           />
           <p className="mt-1 text-xs text-gray-500">
             This name will be displayed throughout the analysis instead of the file name
@@ -652,7 +652,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
               ? 'border-brand-primary bg-orange-50'
               : files.length > 0
               ? 'border-green-300 bg-green-50'
-              : 'border-gray-300 bg-gray-50 hover:border-gray-400'
+              : 'border-slate-600 bg-slate-800/40 hover:border-slate-500'
           }`}
         >
           {files.length > 0 ? (
@@ -745,7 +745,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6">
         <h4 className="text-sm font-semibold text-gray-900 mb-3">Import Engine Features</h4>
         <ul className="text-sm text-gray-600 space-y-2">
           <li className="flex items-start gap-2">

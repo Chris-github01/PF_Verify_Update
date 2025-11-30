@@ -915,7 +915,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           <p className="text-base text-gray-600">Compare supplier quotes and generate your scope matrix.</p>
         </div>
 
-        <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm mb-6">
+        <div className="bg-slate-800/60 rounded-lg p-6 border border-slate-700 shadow-sm mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Supplier Quotes</h2>
             {readyQuotes.length > 0 && (
@@ -969,8 +969,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                     onClick={() => handleToggleQuote(quote.id)}
                     className={`w-full flex items-center gap-3 py-3 px-3 rounded-lg border transition-all text-left ${
                       isSelected
-                        ? 'border-gray-300 bg-gray-50'
-                        : 'border-gray-200 bg-white hover:bg-gray-50'
+                        ? 'border-slate-600 bg-slate-700/50'
+                        : 'border-slate-700 bg-slate-800/40 hover:bg-slate-700/50'
                     }`}
                   >
                     <div className="flex-shrink-0">
@@ -1052,7 +1052,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               </button>
 
               {showOriginalSelector && (
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="p-4 bg-slate-800/40 rounded-lg border border-slate-700">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-900">Select Original Quotes to Compare</h3>
                     {selectedOriginalQuoteIds.length > 0 && (
@@ -1068,7 +1068,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                     {originalQuotes.map(quote => (
                       <label
                         key={quote.id}
-                        className="flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors"
+                        className="flex items-center gap-3 p-3 bg-slate-800/60 rounded-md border border-slate-700 hover:border-blue-500 hover:bg-slate-700/50 cursor-pointer transition-colors"
                       >
                         <input
                           type="checkbox"
@@ -1115,14 +1115,14 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         </div>
 
         {!hasGenerated && !loading && selectedQuoteIds.length === 0 && (
-          <div className="bg-white rounded-lg p-8 border border-gray-200 text-center">
+          <div className="bg-slate-800/60 rounded-lg p-8 border border-slate-700 text-center">
             <p className="text-gray-600 mb-1">No scope matrix generated yet.</p>
             <p className="text-sm text-gray-500">Generate a matrix to continue.</p>
           </div>
         )}
 
         {loading && (
-          <div className="bg-white rounded-lg p-8 border border-gray-200 text-center">
+          <div className="bg-slate-800/60 rounded-lg p-8 border border-slate-700 text-center">
             <div className="text-gray-600">Building scope matrix...</div>
           </div>
         )}
@@ -1152,7 +1152,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           }
 
           return (
-            <div className="bg-white rounded-xl p-12 border border-gray-200 shadow-sm">
+            <div className="bg-slate-800/60 rounded-xl p-12 border border-slate-700 shadow-sm">
               <div className="text-center">
                 <AlertCircle className="mx-auto mb-4 text-amber-500" size={48} />
                 <p className="text-gray-900 text-lg font-semibold mb-2">{title}</p>
@@ -1161,7 +1161,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                 </p>
 
                 {d && (
-                  <div className="text-left max-w-2xl mx-auto bg-gray-50 rounded-lg p-4 text-sm mb-6">
+                  <div className="text-left max-w-2xl mx-auto bg-slate-800/40 rounded-lg p-4 text-sm mb-6">
                     <p className="font-semibold text-gray-900 mb-3">Diagnostics:</p>
                     <div className="space-y-2 text-gray-700">
                       <div className="flex justify-between">
@@ -1217,7 +1217,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                       console.log('═══════════════════════════════════════════════════');
                       alert('✅ Console cleared and diagnostic details logged!\n\nPress F12 or right-click > Inspect > Console to view the detailed information.');
                     }}
-                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    className="px-4 py-2 text-sm text-slate-400 hover:text-slate-100 border border-slate-600 rounded-md hover:bg-slate-700 transition-colors"
                   >
                     Show Console Details
                   </button>
@@ -1287,7 +1287,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       </div>
 
       {showFilters && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Section</label>
@@ -1396,8 +1396,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-gray-50">
-                <th className="px-3 py-2 text-left font-medium text-gray-700 border border-gray-200 sticky left-0 bg-gray-50 z-10">
+              <tr className="bg-slate-900/50">
+                <th className="px-3 py-2 text-left font-medium text-slate-300 border border-slate-700 sticky left-0 bg-slate-900/50 z-10">
                   System
                 </th>
                 {suppliers.map(supplier => {
@@ -1423,8 +1423,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             </thead>
             <tbody>
               {matrixRows.map((row, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 text-sm font-medium text-gray-900 border border-gray-200 sticky left-0 bg-white z-10">
+                <tr key={idx} className="hover:bg-slate-700/30">
+                  <td className="px-3 py-2 text-sm font-medium text-slate-100 border border-slate-700 sticky left-0 bg-slate-800/60 z-10">
                     <div className="flex flex-col">
                       <span className="font-semibold">{row.systemLabel}</span>
                       {row.systemId !== row.systemLabel && (
@@ -1515,7 +1515,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           </button>
 
           {showMoreInfo && (
-            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="mt-4 p-4 bg-slate-800/40 border border-slate-700 rounded-lg">
               <h3 className="text-sm font-semibold text-gray-900 mb-2">How to Read This Matrix</h3>
               <p className="text-sm text-gray-700 leading-relaxed">
                 This matrix compares each supplier's rates for the same passive fire systems so you can accurately assess scope and pricing differences. Every row is a system type, and each column shows how each supplier priced that system. Colour indicators highlight where prices vary, helping you quickly identify mismatches, missing items, and potential scope gaps.

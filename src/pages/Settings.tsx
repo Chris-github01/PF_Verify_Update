@@ -532,14 +532,14 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border-b border-gray-200">
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border-b border-slate-700">
         <div className="flex gap-1 p-2">
           <button
             onClick={() => setActiveTab('project')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'project'
                 ? 'bg-orange-50 text-brand-primary border border-brand-primary'
-                : 'text-gray-600 hover:bg-gray-50'
+                : 'text-slate-400 hover:bg-slate-700/50'
             }`}
           >
             <SettingsIcon size={18} />
@@ -550,7 +550,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'systemcheck'
                 ? 'bg-orange-50 text-brand-primary border border-brand-primary'
-                : 'text-gray-600 hover:bg-gray-50'
+                : 'text-slate-400 hover:bg-slate-700/50'
             }`}
           >
             <ShieldCheck size={18} />
@@ -561,7 +561,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'copilotaudit'
                 ? 'bg-orange-50 text-brand-primary border border-brand-primary'
-                : 'text-gray-600 hover:bg-gray-50'
+                : 'text-slate-400 hover:bg-slate-700/50'
             }`}
           >
             <Shield size={18} />
@@ -584,7 +584,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
         <CopilotAudit />
       ) : (
         <>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <SettingsIcon size={20} className="text-gray-700" />
@@ -676,9 +676,9 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
 
             <ThresholdsDropdowns projectId={projectId} />
 
-            <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+            <div className="bg-slate-800/40 p-4 rounded-md border border-slate-700">
               <p className="text-sm text-gray-700 mb-2">
-                <strong>Project ID:</strong> <code className="text-xs bg-white px-2 py-1 rounded border border-gray-300">{projectId}</code>
+                <strong>Project ID:</strong> <code className="text-xs bg-slate-900/50 px-2 py-1 rounded border border-slate-600">{projectId}</code>
               </p>
               <p className="text-xs text-gray-500">Used for storage keys and data isolation</p>
             </div>
@@ -714,7 +714,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
                   <div className="mt-4 border border-gray-200 rounded-md overflow-hidden">
                     <div className="max-h-64 overflow-y-auto">
                       <table className="w-full text-xs">
-                        <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                        <thead className="bg-slate-900/50 border-b border-slate-700 sticky top-0">
                           <tr>
                             <th className="px-3 py-2 text-left font-medium text-gray-700">System ID</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-700">Size Bucket</th>
@@ -727,7 +727,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                           {csvData.slice(0, 10).map((row, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50">
+                            <tr key={idx} className="hover:bg-slate-700/30">
                               <td className="px-3 py-2 text-gray-900">{row.systemId}</td>
                               <td className="px-3 py-2 text-gray-600">{row.sizeBucket}</td>
                               <td className="px-3 py-2 text-gray-600">{row.frr}</td>
@@ -741,7 +741,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
                       </table>
                     </div>
                     {csvData.length > 10 && (
-                      <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500">
+                      <div className="px-3 py-2 bg-slate-800/40 border-t border-slate-700 text-xs text-slate-500">
                         Showing 10 of {csvData.length} rows
                       </div>
                     )}
@@ -770,7 +770,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between p-4 bg-slate-800/40 rounded-lg border border-slate-700">
             <div>
               <h3 className="text-sm font-medium text-gray-900">Show Splash Screen on Every Load</h3>
               <p className="text-xs text-gray-500 mt-1">
@@ -784,12 +784,12 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
                 onChange={(e) => handleToggleSplashScreen(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+              <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-slate-100 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-slate-100 after:border-slate-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
             </label>
           </div>
 
           <div className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p><strong>Tip:</strong> Press <kbd className="px-2 py-1 bg-white border border-blue-300 rounded text-xs">Shift</kbd> + <kbd className="px-2 py-1 bg-white border border-blue-300 rounded text-xs">S</kbd> to replay the splash screen at any time</p>
+            <p><strong>Tip:</strong> Press <kbd className="px-2 py-1 bg-slate-900/50 border border-blue-500 rounded text-xs">Shift</kbd> + <kbd className="px-2 py-1 bg-slate-900/50 border border-blue-500 rounded text-xs">S</kbd> to replay the splash screen at any time</p>
           </div>
         </div>
       </div>
@@ -801,7 +801,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
         </h2>
 
         <div className="space-y-4">
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="p-4 bg-slate-800/40 rounded-lg border border-slate-700">
             <h3 className="text-sm font-medium text-gray-900 mb-2">External PDF Extraction Service</h3>
             <p className="text-xs text-gray-600 mb-3">
               This service automatically extracts structured data from supplier quote PDFs.
@@ -988,7 +988,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
             {isLoadingSnapshots ? (
               <div className="text-center py-8 text-gray-500">Loading snapshots...</div>
             ) : snapshots.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-md border border-gray-200">
+              <div className="text-center py-8 text-slate-400 bg-slate-800/40 rounded-md border border-slate-700">
                 No snapshots saved yet.
               </div>
             ) : (
@@ -996,7 +996,7 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
                 {snapshots.map((snapshot) => (
                   <div
                     key={snapshot.id}
-                    className="p-4 bg-gray-50 rounded-md border border-gray-200 hover:border-blue-300 transition-colors"
+                    className="p-4 bg-slate-800/40 rounded-md border border-slate-700 hover:border-blue-500 transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
