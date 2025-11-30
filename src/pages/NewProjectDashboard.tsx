@@ -386,77 +386,77 @@ export default function NewProjectDashboard({
               </div>
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-blue-50 rounded">
-                    <FileText className="text-blue-600" size={18} />
+                <div className="flex items-center gap-3 py-2 px-3 bg-slate-700/50 rounded-lg">
+                  <div className="p-2 bg-blue-500/20 rounded">
+                    <FileText className="text-blue-400" size={18} />
                   </div>
                   <div>
-                    <div className="text-[13px] text-gray-600 font-medium">Quotes Imported</div>
-                    <div className="text-2xl font-bold text-gray-900">{stats.quoteCount}</div>
-                    <div className="text-[11px] text-gray-500">
+                    <div className="text-[13px] text-slate-400 font-medium">Quotes Imported</div>
+                    <div className="text-2xl font-bold text-slate-100">{stats.quoteCount}</div>
+                    <div className="text-[11px] text-slate-400">
                       from {stats.supplierCount} {stats.supplierCount === 1 ? 'supplier' : 'suppliers'}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-violet-50 rounded">
-                    <Layers className="text-violet-600" size={18} />
+                <div className="flex items-center gap-3 py-2 px-3 bg-slate-700/50 rounded-lg">
+                  <div className="p-2 bg-violet-500/20 rounded">
+                    <Layers className="text-violet-400" size={18} />
                   </div>
                   <div>
-                    <div className="text-[13px] text-gray-600 font-medium">Systems Detected</div>
-                    <div className="text-2xl font-bold text-gray-900">{stats.systemsDetected}</div>
-                    <div className="text-[11px] text-gray-500">Unique systems in project</div>
+                    <div className="text-[13px] text-slate-400 font-medium">Systems Detected</div>
+                    <div className="text-2xl font-bold text-slate-100">{stats.systemsDetected}</div>
+                    <div className="text-[11px] text-slate-400">Unique systems in project</div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3 py-2 px-3 bg-slate-700/50 rounded-lg">
                   <div className={`p-2 rounded ${
-                    stats.coveragePercent >= 80 ? 'bg-green-50' :
-                    stats.coveragePercent >= 50 ? 'bg-amber-50' :
-                    'bg-red-50'
+                    stats.coveragePercent >= 80 ? 'bg-green-500/20' :
+                    stats.coveragePercent >= 50 ? 'bg-amber-500/20' :
+                    'bg-red-500/20'
                   }`}>
                     <Target className={
-                      stats.coveragePercent >= 80 ? 'text-green-600' :
-                      stats.coveragePercent >= 50 ? 'text-amber-600' :
-                      'text-red-600'
+                      stats.coveragePercent >= 80 ? 'text-green-400' :
+                      stats.coveragePercent >= 50 ? 'text-amber-400' :
+                      'text-red-400'
                     } size={18} />
                   </div>
                   <div>
-                    <div className="text-[13px] text-gray-600 font-medium">Coverage</div>
+                    <div className="text-[13px] text-slate-400 font-medium">Coverage</div>
                     <div className={`text-2xl font-bold ${
-                      stats.coveragePercent >= 80 ? 'text-green-600' :
-                      stats.coveragePercent >= 50 ? 'text-amber-600' :
-                      'text-red-600'
+                      stats.coveragePercent >= 80 ? 'text-green-400' :
+                      stats.coveragePercent >= 50 ? 'text-amber-400' :
+                      'text-red-400'
                     }`}>
                       {stats.coveragePercent}%
                     </div>
-                    <div className="text-[11px] text-gray-500">
+                    <div className="text-[11px] text-slate-400">
                       {stats.systemsCovered}/{stats.systemsDetected} systems covered
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-blue-50 rounded">
-                    <CheckCircle className="text-blue-600" size={18} />
+                <div className="flex items-center gap-3 py-2 px-3 bg-slate-700/50 rounded-lg">
+                  <div className="p-2 bg-blue-500/20 rounded">
+                    <CheckCircle className="text-blue-400" size={18} />
                   </div>
                   <div>
-                    <div className="text-[13px] text-gray-600 font-medium">Progress</div>
-                    <div className="text-2xl font-bold text-gray-900">
+                    <div className="text-[13px] text-slate-400 font-medium">Progress</div>
+                    <div className="text-2xl font-bold text-slate-100">
                       {stats.completedSteps}/{stats.totalSteps}
                     </div>
-                    <div className="text-[11px] text-gray-500">Steps completed</div>
+                    <div className="text-[11px] text-slate-400">Steps completed</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200">
-              <div className="px-4 py-3 border-b border-gray-200">
-                <h2 className="text-[20px] font-semibold text-gray-900">Project Workflow</h2>
+            <div className="bg-slate-800/60 rounded-lg border border-slate-700">
+              <div className="px-4 py-3 border-b border-slate-700">
+                <h2 className="text-[20px] font-semibold text-slate-100">Project Workflow</h2>
               </div>
               <div>
                 {steps.map((step, index) => {
@@ -467,30 +467,30 @@ export default function NewProjectDashboard({
                     <div
                       key={step.id}
                       onClick={isClickable ? () => handleNavigateToStep(step.route) : undefined}
-                      className={`w-full flex items-center gap-3 py-3 px-4 border-b border-gray-100 last:border-b-0 ${
-                        isClickable ? 'cursor-pointer hover:bg-gray-50 group' : 'cursor-default'
+                      className={`w-full flex items-center gap-3 py-3 px-4 border-b border-slate-700 last:border-b-0 ${
+                        isClickable ? 'cursor-pointer hover:bg-slate-700/50 group' : 'cursor-default'
                       } transition-colors`}
                     >
                       {isCompleted ? (
-                        <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
+                        <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
                       ) : (
-                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors flex-shrink-0">
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-700 text-[11px] font-semibold text-slate-300 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors flex-shrink-0">
                           {index + 1}
                         </div>
                       )}
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         {step.status === 'in_progress' ? (
-                          <Circle className="text-blue-600 fill-blue-100 flex-shrink-0" size={18} />
+                          <Circle className="text-blue-400 fill-blue-900/20 flex-shrink-0" size={18} />
                         ) : step.status === 'not_started' ? (
-                          <Circle className="text-gray-400 flex-shrink-0" size={18} />
+                          <Circle className="text-slate-500 flex-shrink-0" size={18} />
                         ) : null}
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-gray-900 text-[15px]">{step.name}</div>
-                          <div className="text-[11px] text-gray-500 capitalize">{step.status.replace('_', ' ')}</div>
+                          <div className="font-medium text-slate-100 text-[15px]">{step.name}</div>
+                          <div className="text-[11px] text-slate-400 capitalize">{step.status.replace('_', ' ')}</div>
                         </div>
                       </div>
                       {isClickable && (
-                        <ArrowRight className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0" size={14} />
+                        <ArrowRight className="text-slate-500 group-hover:text-blue-400 transition-colors flex-shrink-0" size={14} />
                       )}
                     </div>
                   );
