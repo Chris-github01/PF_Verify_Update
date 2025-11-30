@@ -237,53 +237,53 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
   return (
     <div className="space-y-6 mb-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+        <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-600 mb-1">Successfully Imported</div>
-              <div className="text-3xl font-bold text-gray-900">{successCount}</div>
+              <div className="text-sm text-slate-400 mb-1">Successfully Imported</div>
+              <div className="text-3xl font-bold text-slate-100">{successCount}</div>
             </div>
-            <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-              <CheckCircle className="text-green-600" size={24} />
+            <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+              <CheckCircle className="text-green-400" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+        <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-600 mb-1">Partial Imports</div>
-              <div className="text-3xl font-bold text-gray-900">{partialCount}</div>
+              <div className="text-sm text-slate-400 mb-1">Partial Imports</div>
+              <div className="text-3xl font-bold text-slate-100">{partialCount}</div>
             </div>
-            <div className="w-12 h-12 bg-yellow-50 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="text-yellow-600" size={24} />
+            <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+              <AlertTriangle className="text-yellow-400" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+        <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-600 mb-1">Failed Imports</div>
-              <div className="text-3xl font-bold text-gray-900">{failedCount}</div>
+              <div className="text-sm text-slate-400 mb-1">Failed Imports</div>
+              <div className="text-3xl font-bold text-slate-100">{failedCount}</div>
             </div>
-            <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center">
-              <XCircle className="text-red-600" size={24} />
+            <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+              <XCircle className="text-red-400" size={24} />
             </div>
           </div>
         </div>
       </div>
 
       {active.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Processing</h3>
+        <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-5">
+          <h3 className="text-lg font-semibold text-slate-100 mb-4">Processing</h3>
           <div className="space-y-2">
             {active.map(job => (
-              <div key={job.id} className="flex items-center gap-3 py-2 px-3 bg-blue-50 rounded-lg border border-blue-200">
-                <Loader2 className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
+              <div key={job.id} className="flex items-center gap-3 py-2 px-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
+                <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-900 text-sm">{job.supplier_name}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">File: {job.filename}</div>
+                  <div className="font-semibold text-slate-100 text-sm">{job.supplier_name}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">File: {job.filename}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-24 bg-gray-200 rounded-full h-2">
@@ -317,15 +317,15 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       )}
 
       {successful.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Successfully Imported Quotes</h3>
+        <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-5">
+          <h3 className="text-lg font-semibold text-slate-100 mb-4">Successfully Imported Quotes</h3>
           <div className="space-y-2">
             {successful.map(job => (
-              <div key={job.id} className="flex items-center gap-3 py-2 px-3 hover:bg-gray-50 rounded-lg transition-colors">
-                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+              <div key={job.id} className="flex items-center gap-3 py-2 px-3 hover:bg-slate-700/50 rounded-lg transition-colors">
+                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-900 text-sm">{job.supplier_name}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">
+                  <div className="font-semibold text-slate-100 text-sm">{job.supplier_name}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">
                     {job.result_data?.items?.length || 0} items • File: {job.filename} • Imported {formatTime(job.updated_at)}
                   </div>
                 </div>
@@ -336,12 +336,12 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       )}
 
       {(partial.length > 0 || failed.length > 0) && (
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quotes With Issues</h3>
+        <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-5">
+          <h3 className="text-lg font-semibold text-slate-100 mb-4">Quotes With Issues</h3>
 
           {partial.length > 0 && (
             <div className="mb-4">
-              <h4 className="text-sm font-semibold text-yellow-900 mb-2 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-yellow-300 mb-2 flex items-center gap-2">
                 <AlertTriangle size={16} />
                 Partial Imports ({partial.length})
               </h4>
@@ -351,17 +351,17 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                   const failedChunks = job.error_message?.match(/(\d+) chunks? failed/)?.[1] || '0';
 
                   return (
-                    <div key={job.id} className="border border-yellow-300 rounded-lg p-3 bg-yellow-50">
+                    <div key={job.id} className="border border-yellow-500/30 rounded-lg p-3 bg-yellow-900/20">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                            <span className="text-sm font-semibold text-gray-900">{job.supplier_name}</span>
+                            <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                            <span className="text-sm font-semibold text-slate-100">{job.supplier_name}</span>
                           </div>
-                          <div className="text-xs text-gray-700 mb-1">
+                          <div className="text-xs text-slate-300 mb-1">
                             {itemCount} items extracted, {failedChunks} chunks failed
                           </div>
-                          <div className="text-xs text-gray-500">File: {job.filename}</div>
+                          <div className="text-xs text-slate-400">File: {job.filename}</div>
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
@@ -385,7 +385,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
 
           {failed.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-red-900 mb-2 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-red-300 mb-2 flex items-center gap-2">
                 <XCircle size={16} />
                 Failed Imports ({failed.length})
               </h4>
@@ -397,17 +397,17 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                     : job.error_message || 'Could not extract tables';
 
                   return (
-                    <div key={job.id} className="border border-red-300 rounded-lg p-3 bg-red-50">
+                    <div key={job.id} className="border border-red-500/30 rounded-lg p-3 bg-red-900/20">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <XCircle className="w-4 h-4 text-red-600" />
-                            <span className="text-sm font-semibold text-gray-900">{job.supplier_name || 'Unknown Supplier'}</span>
+                            <XCircle className="w-4 h-4 text-red-400" />
+                            <span className="text-sm font-semibold text-slate-100">{job.supplier_name || 'Unknown Supplier'}</span>
                           </div>
-                          <div className="text-xs text-gray-700 mb-1">
+                          <div className="text-xs text-slate-300 mb-1">
                             Reason: {reason}
                           </div>
-                          <div className="text-xs text-gray-500">File: {job.filename}</div>
+                          <div className="text-xs text-slate-400">File: {job.filename}</div>
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
