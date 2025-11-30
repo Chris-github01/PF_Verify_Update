@@ -68,6 +68,7 @@ export default function NewProjectDashboard({
   const [newProjectReference, setNewProjectReference] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState<string | null>(null);
   const [stats, setStats] = useState<ProjectStats>({
     quoteCount: 0,
     supplierCount: 0,
@@ -84,12 +85,29 @@ export default function NewProjectDashboard({
   const [steps, setSteps] = useState<StepStatus[]>([]);
 
   useEffect(() => {
+    loadUserData();
     if (projectId) {
       loadProjectData();
     } else {
       setLoading(false);
     }
   }, [projectId, dashboardMode]);
+
+  const loadUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.user_metadata?.full_name) {
+        setUserName(user.user_metadata.full_name);
+      } else if (user?.email) {
+        // Extract first name from email if full_name is not available
+        const emailName = user.email.split('@')[0];
+        const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        setUserName(formattedName);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
 
   const loadProjectData = async () => {
     if (!projectId) return;
@@ -256,6 +274,13 @@ export default function NewProjectDashboard({
         {projectId && (
           <div className="mb-3">
             <div className="text-xs text-slate-400 mb-1">Projects &gt; {projectName}</div>
+          </div>
+        )}
+        {!projectId && userName && (
+          <div className="mb-4">
+            <h1 className="text-2xl font-semibold text-slate-100">
+              Welcome back, {userName}
+            </h1>
           </div>
         )}
         <PageHeader
