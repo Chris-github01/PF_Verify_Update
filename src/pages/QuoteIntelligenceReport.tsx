@@ -220,7 +220,16 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
   const getSupplierQualityData = () => {
     if (!analysis) return [];
 
-    const supplierMap = new Map<string, { name: string; qualityScore: number; coverageScore: number; redFlags: number; revisionNumber: number; quoteReference: string; itemCount: number }>();
+    const supplierMap = new Map<string, {
+      name: string;
+      qualityScore: number;
+      coverageScore: number;
+      redFlags: number;
+      revisionNumber: number;
+      quoteReference: string;
+      itemCount: number;
+      qualityDeductions: number;
+    }>();
 
     analysis.normalizedItems.forEach(item => {
       const itemCount = quoteItemCounts.get(item.quoteId) || 0;
@@ -233,14 +242,22 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           revisionNumber: item.revisionNumber,
           quoteReference: item.quoteReference,
           itemCount: itemCount,
+          qualityDeductions: 0,
         });
       }
     });
 
+    // Calculate quality deductions based on severity
     analysis.redFlags.forEach(flag => {
       const supplier = supplierMap.get(flag.quoteId);
       if (supplier) {
         supplier.redFlags++;
+        // Weight by severity: critical=25, high=15, medium=8, low=3
+        const deduction =
+          flag.severity === 'critical' ? 25 :
+          flag.severity === 'high' ? 15 :
+          flag.severity === 'medium' ? 8 : 3;
+        supplier.qualityDeductions += deduction;
       }
     });
 
@@ -248,7 +265,8 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
     const suppliers = Array.from(supplierMap.values());
     suppliers.forEach(s => {
-      s.qualityScore = Math.max(0, 100 - (s.redFlags * 10));
+      // Base quality score of 100, minus weighted deductions
+      s.qualityScore = Math.max(0, Math.min(100, 100 - s.qualityDeductions));
       s.coverageScore = maxItems > 0 ? Math.round((s.itemCount / maxItems) * 100) : 0;
     });
 
