@@ -451,9 +451,44 @@ export default function AwardReport({
               left: 0;
               top: 0;
               width: 100%;
+              padding: 20px;
             }
             .no-print {
               display: none !important;
+            }
+
+            @page {
+              margin: 0.75in;
+              size: letter;
+            }
+
+            .page-break-avoid {
+              page-break-inside: avoid;
+            }
+
+            .page-break-before {
+              page-break-before: always;
+            }
+
+            h2, h3, h4, h5 {
+              page-break-after: avoid;
+            }
+
+            table {
+              page-break-inside: auto;
+            }
+
+            tr {
+              page-break-inside: avoid;
+              page-break-after: auto;
+            }
+
+            thead {
+              display: table-header-group;
+            }
+
+            tfoot {
+              display: table-footer-group;
             }
           }
         `}
@@ -635,8 +670,137 @@ export default function AwardReport({
           </div>
         </div>
 
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-8 mb-6 page-break-avoid">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Report Overview & Methodology</h3>
+          <div className="prose prose-sm max-w-none text-gray-700 space-y-4">
+            <p className="leading-relaxed">
+              This report represents a comprehensive analysis of supplier quotes for your project,
+              processed through PassiveFire Verify+'s advanced workflow. Each quote has been systematically
+              evaluated across multiple dimensions to provide you with actionable recommendations.
+            </p>
+
+            <div className="mt-6">
+              <h4 className="text-lg font-semibold text-gray-900 mb-3">Analysis Workflow</h4>
+              <p className="mb-4 text-gray-600">
+                Your quotes have been processed through a five-stage workflow designed to ensure accuracy,
+                completeness, and fair comparison:
+              </p>
+
+              <div className="space-y-6 mt-4">
+                <div className="border-l-4 border-blue-500 pl-4 py-2">
+                  <h5 className="font-semibold text-gray-900 mb-2">1. Import Quotes</h5>
+                  <p className="text-sm text-gray-700 mb-2">
+                    <strong>What happened:</strong> Supplier quotes were imported from PDF and Excel files using
+                    advanced parsing technology including OCR (Optical Character Recognition) and intelligent
+                    data extraction.
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>What this means:</strong> Each line item, including descriptions, quantities, units,
+                    and prices, was automatically extracted and structured into a standardized format. This eliminates
+                    manual data entry errors and ensures all quotes are compared on an equal basis.
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-green-500 pl-4 py-2">
+                  <h5 className="font-semibold text-gray-900 mb-2">2. Review & Clean</h5>
+                  <p className="text-sm text-gray-700 mb-2">
+                    <strong>What happened:</strong> Each line item was normalized using AI-powered analysis to
+                    ensure consistent descriptions, units of measurement, and quantities across all suppliers.
+                    Items were validated for completeness and accuracy.
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>What this means:</strong> When one supplier quotes "fire-rated board per m²" and
+                    another quotes "FR board per square meter," the system recognizes these as the same item.
+                    Quantities are converted to common units (e.g., all areas in m², all lengths in linear meters)
+                    enabling accurate like-for-like comparisons.
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-purple-500 pl-4 py-2">
+                  <h5 className="font-semibold text-gray-900 mb-2">3. Scope Matrix Analysis</h5>
+                  <p className="text-sm text-gray-700 mb-2">
+                    <strong>What happened:</strong> A comprehensive scope matrix was built, mapping all line items
+                    to fire protection systems (e.g., "Penetration Seals," "Fire Doors," "Cavity Barriers").
+                    Coverage analysis identified which suppliers quoted for which systems.
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>What this means:</strong> The Coverage % in this report shows what proportion of your
+                    total project scope each supplier has addressed. A supplier with 85% coverage may have excellent
+                    pricing but is missing 15% of required systems, which creates risk and requires additional sourcing.
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-orange-500 pl-4 py-2">
+                  <h5 className="font-semibold text-gray-900 mb-2">4. Quote Intelligence</h5>
+                  <p className="text-sm text-gray-700 mb-2">
+                    <strong>What happened:</strong> AI analysis examined each quote for quality indicators, pricing
+                    patterns, specification compliance, and potential risks. This includes checking for outlier pricing,
+                    incomplete specifications, and non-standard terms.
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>What this means:</strong> The Risk Score reflects factors beyond just price and coverage.
+                    It considers specification quality, pricing consistency, completeness of information, and compliance
+                    with project requirements. A higher risk score indicates potential issues that may lead to variations
+                    or delays during construction.
+                  </p>
+                </div>
+
+                <div className="border-l-4 border-red-500 pl-4 py-2">
+                  <h5 className="font-semibold text-gray-900 mb-2">5. Award Report Generation</h5>
+                  <p className="text-sm text-gray-700 mb-2">
+                    <strong>What happened:</strong> All suppliers were ranked using multi-criteria analysis considering
+                    total price, scope coverage, risk factors, and specification quality. Three recommendation types
+                    were generated to suit different procurement strategies.
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>What this means:</strong> This final report synthesizes all analysis stages. The recommendations
+                    are not based solely on lowest price, but balance cost, risk, and completeness. The "Best Value"
+                    considers price-to-coverage ratio, "Lowest Risk" prioritizes completeness and quality, and "Balanced"
+                    finds the optimal middle ground.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="text-base font-semibold text-blue-900 mb-2">Understanding the Key Metrics</h4>
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <strong className="text-blue-900">Total Price:</strong> The sum of all line items quoted by each supplier.
+                  For suppliers with incomplete coverage, this represents only the systems they quoted for.
+                </p>
+                <p>
+                  <strong className="text-blue-900">Systems Covered:</strong> The number of distinct fire protection systems
+                  included in the supplier's quote out of {awardSummary.totalSystems} total systems in your project scope.
+                </p>
+                <p>
+                  <strong className="text-blue-900">Coverage %:</strong> The percentage of your total project scope addressed
+                  by this supplier. 100% means they quoted for everything; lower percentages indicate gaps requiring additional
+                  sourcing.
+                </p>
+                <p>
+                  <strong className="text-blue-900">Risk Score (0-10):</strong> A composite risk assessment where lower is better.
+                  Considers scope gaps, pricing anomalies, specification quality, and completeness. Scores below 3.0 are low risk,
+                  3.0-6.0 are moderate, above 6.0 are high risk.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <h4 className="text-base font-semibold text-amber-900 mb-2">How to Use This Report</h4>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
+                <li>Review the three recommendation types and consider which aligns with your procurement priorities.</li>
+                <li>Examine the Risk & Exceptions section carefully - these items require clarification or additional sourcing.</li>
+                <li>Check the Coverage % for your preferred supplier - gaps below 90% may indicate significant scope omissions.</li>
+                <li>Use the Itemized Comparison to identify specific areas of price variation and verify scope alignment.</li>
+                <li>Consider the Risk Score alongside price - a low-price quote with high risk may lead to costly variations later.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
         {reportView !== 'SIMPLE' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6 page-break-avoid">
             <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
@@ -768,7 +932,7 @@ export default function AwardReport({
         )}
 
         <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow border border-gray-200">
+          <div className="bg-white rounded-lg shadow border border-gray-200 page-break-avoid">
             <div className="border-b border-gray-200 px-6 py-4">
               <h3 className="text-lg font-semibold text-gray-900">Why this recommendation</h3>
             </div>
@@ -789,7 +953,7 @@ export default function AwardReport({
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow border border-gray-200">
+          <div className="bg-white rounded-lg shadow border border-gray-200 page-break-before">
             <div className="border-b border-gray-200 px-6 py-4">
               <h3 className="text-lg font-semibold text-gray-900">Supplier comparison summary</h3>
             </div>
