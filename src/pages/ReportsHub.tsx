@@ -220,7 +220,7 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
                   <td>${s.supplierName}</td>
                   <td>$${s.adjustedTotal.toLocaleString()}</td>
                   <td>${s.riskScore}</td>
-                  <td>${s.coveragePercent}%</td>
+                  <td>${Math.round(s.coveragePercent)}%</td>
                   <td>${s.itemsQuoted}</td>
                 </tr>
               `).join('')}

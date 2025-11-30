@@ -645,7 +645,7 @@ export default function AwardReport({
                     {bestValue?.supplier.supplierName || 'N/A'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {bestValue ? `${formatCurrency(bestValue.supplier.adjustedTotal)} " ${bestValue.supplier.coveragePercent}% coverage` : 'Best balance of price and coverage'}
+                    {bestValue ? `${formatCurrency(bestValue.supplier.adjustedTotal)} " ${Math.round(bestValue.supplier.coveragePercent)}% coverage` : 'Best balance of price and coverage'}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-green-50 text-green-700">
@@ -662,7 +662,7 @@ export default function AwardReport({
                     {lowestRisk?.supplier.supplierName || 'N/A'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {lowestRisk ? `Risk Score ${lowestRisk.supplier.riskScore.toFixed(1)} " ${lowestRisk.supplier.coveragePercent}% coverage` : 'Lowest risk profile'}
+                    {lowestRisk ? `Risk Score ${lowestRisk.supplier.riskScore.toFixed(1)} " ${Math.round(lowestRisk.supplier.coveragePercent)}% coverage` : 'Lowest risk profile'}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-blue-50 text-blue-700">
@@ -814,7 +814,7 @@ export default function AwardReport({
                         <td className="py-3 text-sm font-medium text-gray-900">{supplier.supplierName}</td>
                         <td className="py-3 text-sm text-right text-gray-900">{formatCurrency(supplier.adjustedTotal)}</td>
                         <td className="py-3 text-sm text-right text-gray-700">{supplier.itemsQuoted}</td>
-                        <td className="py-3 text-sm text-right text-gray-700">{supplier.coveragePercent}%</td>
+                        <td className="py-3 text-sm text-right text-gray-700">{Math.round(supplier.coveragePercent)}%</td>
                         <td className="py-3 text-sm text-right">
                           <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                             supplier.riskScore <= 2 ? 'bg-green-100 text-green-800' :
