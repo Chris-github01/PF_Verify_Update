@@ -27,6 +27,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
   const [originalQuotes, setOriginalQuotes] = useState<OriginalQuote[]>([]);
   const [selectedOriginalQuotes, setSelectedOriginalQuotes] = useState<string[]>([]);
   const [showOriginalSelector, setShowOriginalSelector] = useState(false);
+  const [quoteItemCounts, setQuoteItemCounts] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     loadAnalysis();
@@ -68,6 +69,23 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
       const result = await analyzeQuoteIntelligence(projectId, dashboardMode, quoteIdsToAnalyze);
       setAnalysis(result);
+
+      // Fetch actual item counts for each quote
+      const quoteIds = result.normalizedItems.map(item => item.quoteId);
+      if (quoteIds.length > 0) {
+        const { data: itemCounts } = await supabase
+          .from('quote_items')
+          .select('quote_id')
+          .in('quote_id', quoteIds)
+          .eq('is_excluded', false);
+
+        const countMap = new Map<string, number>();
+        itemCounts?.forEach(item => {
+          const current = countMap.get(item.quote_id) || 0;
+          countMap.set(item.quote_id, current + 1);
+        });
+        setQuoteItemCounts(countMap);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze quotes');
       console.error('Quote intelligence error:', err);
@@ -205,6 +223,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
     const supplierMap = new Map<string, { name: string; qualityScore: number; coverageScore: number; redFlags: number; revisionNumber: number; quoteReference: string; itemCount: number }>();
 
     analysis.normalizedItems.forEach(item => {
+      const itemCount = quoteItemCounts.get(item.quoteId) || 0;
       if (!supplierMap.has(item.quoteId)) {
         supplierMap.set(item.quoteId, {
           name: item.supplierName,
@@ -213,12 +232,8 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           redFlags: 0,
           revisionNumber: item.revisionNumber,
           quoteReference: item.quoteReference,
-          itemCount: 0,
+          itemCount: itemCount,
         });
-      }
-      const supplier = supplierMap.get(item.quoteId);
-      if (supplier) {
-        supplier.itemCount++;
       }
     });
 
@@ -229,12 +244,12 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
       }
     });
 
-    const totalItems = Math.max(...Array.from(supplierMap.values()).map(s => s.itemCount));
+    const maxItems = Math.max(...Array.from(supplierMap.values()).map(s => s.itemCount), 1);
 
     const suppliers = Array.from(supplierMap.values());
     suppliers.forEach(s => {
       s.qualityScore = Math.max(0, 100 - (s.redFlags * 10));
-      s.coverageScore = totalItems > 0 ? Math.round((s.itemCount / totalItems) * 100) : 0;
+      s.coverageScore = maxItems > 0 ? Math.round((s.itemCount / maxItems) * 100) : 0;
     });
 
     return suppliers.sort((a, b) => b.qualityScore - a.qualityScore);
