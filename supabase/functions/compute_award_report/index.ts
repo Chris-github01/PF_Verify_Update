@@ -207,7 +207,7 @@ Deno.serve(async (req: Request) => {
         adjustedTotal: total,
         itemsQuoted: quotedItems.length,
         totalItems: comparisonData.length,
-        coveragePercent: (quotedItems.length / comparisonData.length) * 100,
+        coveragePercent: Math.round((quotedItems.length / comparisonData.length) * 100),
         riskScore: missingItems,
         riskFactors: {
           redCells: 0,
