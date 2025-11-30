@@ -10,7 +10,9 @@ import {
   Circle,
   ArrowRight,
   Layers,
-  Target
+  Target,
+  Grid3x3,
+  List
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { supabase } from '../lib/supabase';
@@ -69,6 +71,7 @@ export default function NewProjectDashboard({
   const [isCreating, setIsCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [stats, setStats] = useState<ProjectStats>({
     quoteCount: 0,
     supplierCount: 0,
@@ -283,33 +286,97 @@ export default function NewProjectDashboard({
             </h1>
           </div>
         )}
-        <PageHeader
-          title={projectId ? projectName || 'Project Dashboard' : 'All Projects'}
-          subtitle={projectId ? 'Manage your quote analysis workflow' : 'Select or create a project'}
-        />
+        <div className="flex items-start justify-between gap-4">
+          <PageHeader
+            title={projectId ? projectName || 'Project Dashboard' : 'All Projects'}
+            subtitle={projectId ? 'Manage your quote analysis workflow' : 'Select or create a project'}
+          />
+          {!projectId && (
+            <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg border border-slate-700 p-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'
+                }`}
+                title="Grid view"
+              >
+                <Grid3x3 size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'
+                }`}
+                title="List view"
+              >
+                <List size={18} />
+              </button>
+            </div>
+          )}
+        </div>
 
         {!projectId ? (
           <div className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <button
-                onClick={handleCreateClick}
-                className="p-6 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 hover:bg-slate-800/50 transition-colors"
-              >
-                <Plus className="mx-auto mb-2 text-slate-400" size={32} />
-                <div className="font-medium text-slate-200">Create New Project</div>
-              </button>
+            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-3'}>
+              {viewMode === 'grid' ? (
+                <>
+                  <button
+                    onClick={handleCreateClick}
+                    className="p-6 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 hover:bg-slate-800/50 transition-colors"
+                  >
+                    <Plus className="mx-auto mb-2 text-slate-400" size={32} />
+                    <div className="font-medium text-slate-200">Create New Project</div>
+                  </button>
 
-              {allProjects.map((project) => (
-                <button
-                  key={project.id}
-                  onClick={() => onProjectSelect(project.id)}
-                  className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl hover:border-blue-500 hover:shadow-lg hover:bg-slate-800/80 transition-all text-left"
-                >
-                  <FolderOpen className="mb-2 text-blue-400" size={24} />
-                  <div className="font-semibold text-slate-100 mb-1">{project.name}</div>
-                  <div className="text-sm text-slate-400">{project.client_reference}</div>
-                </button>
-              ))}
+                  {allProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      onClick={() => onProjectSelect(project.id)}
+                      className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl hover:border-blue-500 hover:shadow-lg hover:bg-slate-800/80 transition-all text-left"
+                    >
+                      <FolderOpen className="mb-2 text-blue-400" size={24} />
+                      <div className="font-semibold text-slate-100 mb-1">{project.name}</div>
+                      <div className="text-sm text-slate-400">{project.client_reference}</div>
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleCreateClick}
+                    className="w-full flex items-center gap-4 p-4 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 hover:bg-slate-800/50 transition-colors"
+                  >
+                    <div className="w-12 h-12 flex items-center justify-center bg-slate-700/50 rounded-lg">
+                      <Plus className="text-slate-400" size={24} />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium text-slate-200">Create New Project</div>
+                      <div className="text-sm text-slate-400">Start a new quote analysis project</div>
+                    </div>
+                  </button>
+
+                  {allProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      onClick={() => onProjectSelect(project.id)}
+                      className="w-full flex items-center gap-4 p-4 bg-slate-800/60 border border-slate-700 rounded-xl hover:border-blue-500 hover:shadow-lg hover:bg-slate-800/80 transition-all text-left group"
+                    >
+                      <div className="w-12 h-12 flex items-center justify-center bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
+                        <FolderOpen className="text-blue-400" size={24} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-slate-100 mb-0.5">{project.name}</div>
+                        <div className="text-sm text-slate-400">{project.client_reference || 'No client reference'}</div>
+                      </div>
+                      <ArrowRight className="text-slate-500 group-hover:text-blue-400 transition-colors flex-shrink-0" size={20} />
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
 
             {showCreateModal && (
