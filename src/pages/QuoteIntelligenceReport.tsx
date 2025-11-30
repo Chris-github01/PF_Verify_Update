@@ -495,7 +495,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           <div className="space-y-6">
             {groupedFlags.critical.length > 0 && (
               <div>
-                <h3 className="text-lg font-semibold text-red-900 mb-3 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-red-400 mb-3 flex items-center gap-2">
                   <AlertCircle size={20} />
                   Critical ({groupedFlags.critical.length})
                 </h3>
@@ -503,22 +503,22 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                   {groupedFlags.critical.map((flag) => {
                     const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
                     return (
-                      <div key={flag.id} className="border border-red-300 rounded-lg p-4 bg-red-50">
+                      <div key={flag.id} className="border border-red-500/30 rounded-lg p-4 bg-slate-900/40">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-xs font-bold uppercase px-2 py-1 bg-red-600 text-white rounded">
                                 {flag.severity}
                               </span>
-                              <span className="text-sm font-medium text-red-900">{flag.category}</span>
+                              <span className="text-sm font-medium text-red-400">{flag.category}</span>
                             </div>
-                            <h4 className="font-semibold text-slate-900">{flag.title}</h4>
-                            <p className="text-sm text-slate-700 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
+                            <h4 className="font-semibold text-slate-100">{flag.title}</h4>
+                            <p className="text-sm text-slate-300 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
                           </div>
                         </div>
                         <p className="text-sm text-slate-100 mb-2">{flag.description}</p>
                         {flag.recommendation && (
-                          <div className="mt-3 pt-3 border-t border-red-200">
+                          <div className="mt-3 pt-3 border-t border-red-500/30">
                             <p className="text-sm font-medium text-slate-100 mb-1">Recommendation:</p>
                             <p className="text-sm text-slate-200">{flag.recommendation}</p>
                           </div>
@@ -532,7 +532,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
             {groupedFlags.high.length > 0 && (
               <div>
-                <h3 className="text-lg font-semibold text-orange-900 mb-3 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-orange-400 mb-3 flex items-center gap-2">
                   <AlertTriangle size={20} />
                   High ({groupedFlags.high.length})
                 </h3>
@@ -540,22 +540,22 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                   {groupedFlags.high.map((flag) => {
                     const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
                     return (
-                      <div key={flag.id} className="border border-orange-300 rounded-lg p-4 bg-orange-50">
+                      <div key={flag.id} className="border border-orange-500/30 rounded-lg p-4 bg-slate-900/40">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-xs font-bold uppercase px-2 py-1 bg-orange-600 text-white rounded">
                                 {flag.severity}
                               </span>
-                              <span className="text-sm font-medium text-orange-900">{flag.category}</span>
+                              <span className="text-sm font-medium text-orange-400">{flag.category}</span>
                             </div>
-                            <h4 className="font-semibold text-slate-900">{flag.title}</h4>
-                            <p className="text-sm text-slate-700 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
+                            <h4 className="font-semibold text-slate-100">{flag.title}</h4>
+                            <p className="text-sm text-slate-300 mt-1">{quote?.supplierName || 'Unknown Supplier'}</p>
                           </div>
                         </div>
                         <p className="text-sm text-slate-100 mb-2">{flag.description}</p>
                         {flag.recommendation && (
-                          <div className="mt-3 pt-3 border-t border-orange-200">
+                          <div className="mt-3 pt-3 border-t border-orange-500/30">
                             <p className="text-sm font-medium text-slate-100 mb-1">Recommendation:</p>
                             <p className="text-sm text-slate-200">{flag.recommendation}</p>
                           </div>
@@ -569,12 +569,12 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
             {groupedFlags.medium.length > 0 && (
               <div>
-                <h3 className="text-lg font-semibold text-yellow-900 mb-3">Medium ({groupedFlags.medium.length})</h3>
+                <h3 className="text-lg font-semibold text-yellow-400 mb-3">Medium ({groupedFlags.medium.length})</h3>
                 <div className="space-y-2">
                   {groupedFlags.medium.map((flag) => {
                     const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
                     return (
-                      <div key={flag.id} className="border border-yellow-300 rounded-lg p-3 bg-yellow-50">
+                      <div key={flag.id} className="border border-yellow-500/30 rounded-lg p-3 bg-slate-900/40">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-bold uppercase px-2 py-0.5 bg-yellow-600 text-white rounded">
                             {flag.severity}
@@ -592,12 +592,12 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
             {groupedFlags.low.length > 0 && (
               <div>
-                <h3 className="text-lg font-semibold text-blue-900 mb-3">Low ({groupedFlags.low.length})</h3>
+                <h3 className="text-lg font-semibold text-blue-400 mb-3">Low ({groupedFlags.low.length})</h3>
                 <div className="space-y-2">
                   {groupedFlags.low.map((flag) => {
                     const quote = analysis.normalizedItems.find(item => item.quoteId === flag.quoteId);
                     return (
-                      <div key={flag.id} className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                      <div key={flag.id} className="border border-blue-500/30 rounded-lg p-3 bg-slate-900/40">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-bold uppercase px-2 py-0.5 bg-blue-600 text-white rounded">
                             {flag.severity}
