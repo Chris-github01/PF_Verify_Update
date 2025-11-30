@@ -22,13 +22,13 @@ interface ScopeMatrixProps {
 const getFlagColor = (flag: string): string => {
   switch (flag) {
     case 'GREEN':
-      return 'bg-green-100 text-green-900 border-green-300';
+      return 'bg-green-500/20 text-green-300 border-green-500';
     case 'AMBER':
-      return 'bg-amber-100 text-amber-900 border-amber-300';
+      return 'bg-amber-500/20 text-amber-300 border-amber-500';
     case 'RED':
-      return 'bg-red-100 text-red-900 border-red-300';
+      return 'bg-red-500/20 text-red-300 border-red-500';
     default:
-      return 'bg-gray-100 text-gray-600 border-gray-300';
+      return 'bg-slate-700 text-slate-400 border-slate-600';
   }
 };
 
@@ -1358,37 +1358,37 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-slate-900/50 rounded-lg shadow-sm border border-slate-700 p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold text-gray-900">Scope Matrix</h2>
+            <h2 className="text-xl font-semibold text-slate-50">Scope Matrix</h2>
             <div className="relative group">
-              <Info size={18} className="text-gray-400 hover:text-gray-600 cursor-help" />
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-20 w-80 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg">
+              <Info size={18} className="text-slate-400 hover:text-slate-300 cursor-help" />
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-20 w-80 p-3 bg-slate-800 text-white text-sm rounded-lg shadow-lg border border-slate-600">
                 <div className="font-semibold mb-1">Scope Matrix</div>
-                <div className="text-gray-200">
+                <div className="text-slate-200">
                   Compare supplier rates for each passive fire system and quickly see pricing differences and missing items.
                 </div>
-                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800"></div>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-6 text-sm">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-100 border-2 border-green-300 rounded"></div>
-              <span className="text-gray-600">≤10%</span>
+              <div className="w-4 h-4 bg-green-500/20 border-2 border-green-500 rounded"></div>
+              <span className="text-slate-300">≤10%</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-amber-100 border-2 border-amber-300 rounded"></div>
-              <span className="text-gray-600">≤20%</span>
+              <div className="w-4 h-4 bg-amber-500/20 border-2 border-amber-500 rounded"></div>
+              <span className="text-slate-300">≤20%</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-100 border-2 border-red-300 rounded"></div>
-              <span className="text-gray-600">&gt;20%</span>
+              <div className="w-4 h-4 bg-red-500/20 border-2 border-red-500 rounded"></div>
+              <span className="text-slate-300">&gt;20%</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-gray-100 border-2 border-gray-300 rounded"></div>
-              <span className="text-gray-600">N/A</span>
+              <div className="w-4 h-4 bg-slate-700 border-2 border-slate-600 rounded"></div>
+              <span className="text-slate-300">N/A</span>
             </div>
           </div>
         </div>
@@ -1403,14 +1403,14 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                 {suppliers.map(supplier => {
                   const detail = supplierDetails[supplier];
                   return (
-                    <th key={supplier} className="px-3 py-2 text-center border border-gray-200 min-w-[120px]">
+                    <th key={supplier} className="px-3 py-2 text-center border border-slate-700 min-w-[120px]">
                       <div className="flex flex-col items-center gap-1">
-                        <span className="font-medium text-gray-900">{supplier}</span>
+                        <span className="font-medium text-slate-100">{supplier}</span>
                         {detail && (
                           <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                             detail.revisionNumber > 1
-                              ? 'bg-purple-100 text-purple-700'
-                              : 'bg-gray-100 text-gray-600'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500'
+                              : 'bg-slate-700 text-slate-300 border border-slate-600'
                           }`}>
                             {detail.revisionNumber > 1 ? `Rev ${detail.revisionNumber}` : 'Original'}
                           </span>
@@ -1428,7 +1428,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                     <div className="flex flex-col">
                       <span className="font-semibold">{row.systemLabel}</span>
                       {row.systemId !== row.systemLabel && (
-                        <span className="text-xs text-gray-500">{row.systemId}</span>
+                        <span className="text-xs text-slate-400">{row.systemId}</span>
                       )}
                     </div>
                   </td>
@@ -1436,8 +1436,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                     const cell = row.cells[supplier];
                     if (!cell) {
                       return (
-                        <td key={supplier} className="px-3 py-2 text-center border border-gray-200">
-                          <span className="text-gray-400">-</span>
+                        <td key={supplier} className="px-3 py-2 text-center border border-slate-700 bg-slate-800/40">
+                          <span className="text-slate-500">-</span>
                         </td>
                       );
                     }
@@ -1445,40 +1445,40 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                     const hasMissingQty = itemsWithMissingQty.has(cell.quoteItemId);
 
                     return (
-                      <td key={supplier} className="px-3 py-2 border border-gray-200">
+                      <td key={supplier} className="px-3 py-2 border border-slate-700 bg-slate-800/40">
                         <div className="relative group">
                           <div className={`px-2 py-1.5 rounded text-center font-medium border-2 ${getFlagColor(cell.flag)} flex items-center justify-center gap-1`}>
                             <span>{cell.unitRate !== null ? `$${cell.unitRate.toFixed(2)}` : 'N/A'}</span>
                             {hasMissingQty && (
-                              <AlertCircle size={14} className="text-yellow-600" />
+                              <AlertCircle size={14} className="text-yellow-400" />
                             )}
                           </div>
-                          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-20 w-48 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
+                          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block z-20 w-48 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-lg border border-slate-600">
                             <div className="space-y-1">
                               {hasMissingQty && (
-                                <div className="pb-2 mb-2 border-b border-gray-700 text-yellow-300 flex items-start gap-1">
+                                <div className="pb-2 mb-2 border-b border-slate-600 text-yellow-300 flex items-start gap-1">
                                   <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
                                   <span>Quantity missing in source quote. Please review before finalising.</span>
                                 </div>
                               )}
                               <div className="flex justify-between">
-                                <span className="text-gray-300">Unit Rate:</span>
+                                <span className="text-slate-300">Unit Rate:</span>
                                 <span className="font-semibold">{cell.unitRate !== null ? `$${cell.unitRate.toFixed(2)}` : 'N/A'}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-300">Model Rate:</span>
+                                <span className="text-slate-300">Model Rate:</span>
                                 <span className="font-semibold">{cell.modelRate !== null ? `$${cell.modelRate.toFixed(2)}` : 'N/A'}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-300">Variance:</span>
+                                <span className="text-slate-300">Variance:</span>
                                 <span className="font-semibold">{cell.variancePct !== null ? `${cell.variancePct > 0 ? '+' : ''}${cell.variancePct.toFixed(1)}%` : 'N/A'}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-300">Components:</span>
+                                <span className="text-slate-300">Components:</span>
                                 <span className="font-semibold">{cell.componentCount || 'N/A'}</span>
                               </div>
                             </div>
-                            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800"></div>
                           </div>
                         </div>
                       </td>
@@ -1491,15 +1491,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         </div>
 
         {matrixRows.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-slate-400">
             No data matches the selected filters.
           </div>
         )}
 
-        <div className="mt-6 pt-4 border-t border-gray-200">
+        <div className="mt-6 pt-4 border-t border-slate-700">
           <button
             onClick={() => setShowMoreInfo(!showMoreInfo)}
-            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
           >
             {showMoreInfo ? (
               <>
@@ -1516,8 +1516,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
 
           {showMoreInfo && (
             <div className="mt-4 p-4 bg-slate-800/40 border border-slate-700 rounded-lg">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">How to Read This Matrix</h3>
-              <p className="text-sm text-gray-700 leading-relaxed">
+              <h3 className="text-sm font-semibold text-slate-100 mb-2">How to Read This Matrix</h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
                 This matrix compares each supplier's rates for the same passive fire systems so you can accurately assess scope and pricing differences. Every row is a system type, and each column shows how each supplier priced that system. Colour indicators highlight where prices vary, helping you quickly identify mismatches, missing items, and potential scope gaps.
               </p>
             </div>
