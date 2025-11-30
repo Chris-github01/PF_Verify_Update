@@ -13,8 +13,8 @@ export default function PageHeader({ title, subtitle, metadata }: PageHeaderProp
   return (
     <div className="flex items-start justify-between mb-3">
       <div>
-        <h1 className="text-[30px] font-bold text-gray-900 mb-1">{title}</h1>
-        <p className="text-[14px] text-gray-600">{subtitle}</p>
+        <h1 className="text-[30px] font-bold text-slate-100 mb-1">{title}</h1>
+        <p className="text-[14px] text-slate-400">{subtitle}</p>
       </div>
 
       {metadata && metadata.length > 0 && (
@@ -22,10 +22,10 @@ export default function PageHeader({ title, subtitle, metadata }: PageHeaderProp
           {metadata.map((chip, index) => (
             <div
               key={index}
-              className="px-3 py-1.5 rounded-full bg-gray-100 border border-gray-200 text-xs"
+              className="px-3 py-1.5 rounded-full bg-slate-800/60 border border-slate-700 text-xs"
             >
-              <span className="text-gray-600">{chip.label}:</span>{' '}
-              <span className="font-medium text-gray-900">{chip.value}</span>
+              <span className="text-slate-400">{chip.label}:</span>{' '}
+              <span className="font-medium text-slate-100">{chip.value}</span>
             </div>
           ))}
         </div>

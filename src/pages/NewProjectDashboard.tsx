@@ -251,11 +251,11 @@ export default function NewProjectDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)]">
       <div className="max-w-7xl mx-auto px-6 py-6">
         {projectId && (
           <div className="mb-3">
-            <div className="text-xs text-gray-500 mb-1">Projects &gt; {projectName}</div>
+            <div className="text-xs text-slate-400 mb-1">Projects &gt; {projectName}</div>
           </div>
         )}
         <PageHeader
@@ -268,21 +268,21 @@ export default function NewProjectDashboard({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <button
                 onClick={handleCreateClick}
-                className="p-6 border-2 border-dashed border-gray-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                className="p-6 border-2 border-dashed border-slate-700 rounded-xl hover:border-blue-500 hover:bg-slate-800/50 transition-colors"
               >
-                <Plus className="mx-auto mb-2 text-gray-400" size={32} />
-                <div className="font-medium">Create New Project</div>
+                <Plus className="mx-auto mb-2 text-slate-400" size={32} />
+                <div className="font-medium text-slate-200">Create New Project</div>
               </button>
 
               {allProjects.map((project) => (
                 <button
                   key={project.id}
                   onClick={() => onProjectSelect(project.id)}
-                  className="p-6 bg-white border border-gray-200 rounded-xl hover:border-blue-500 hover:shadow-lg transition-all text-left"
+                  className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl hover:border-blue-500 hover:shadow-lg hover:bg-slate-800/80 transition-all text-left"
                 >
-                  <FolderOpen className="mb-2 text-blue-600" size={24} />
-                  <div className="font-semibold text-gray-900 mb-1">{project.name}</div>
-                  <div className="text-sm text-gray-500">{project.client_reference}</div>
+                  <FolderOpen className="mb-2 text-blue-400" size={24} />
+                  <div className="font-semibold text-slate-100 mb-1">{project.name}</div>
+                  <div className="text-sm text-slate-400">{project.client_reference}</div>
                 </button>
               ))}
             </div>
