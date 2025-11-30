@@ -127,7 +127,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
   ];
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)]">
       {/* Navigation Bar */}
       <nav className="fixed top-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -166,18 +166,18 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       </nav>
 
       {/* Hero Section */}
-      <div className="bg-gradient-to-b from-gray-50 to-white pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+      <div className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
+          <h1 className="text-5xl md:text-6xl font-bold text-slate-50 mb-6">
             Simple, Transparent Pricing That<br />Pays for Itself on the First Project
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-slate-300 max-w-3xl mx-auto">
             No hidden fees. No per-report surprises. Unlimited audits on every plan.
           </p>
 
           {/* Billing Toggle */}
           <div className="mt-12 flex items-center justify-center gap-4">
-            <span className={`text-sm font-medium ${billingPeriod === 'monthly' ? 'text-gray-900' : 'text-gray-500'}`}>
+            <span className={`text-sm font-medium ${billingPeriod === 'monthly' ? 'text-slate-50' : 'text-slate-400'}`}>
               Monthly
             </span>
             <button
@@ -190,8 +190,8 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
                 }`}
               />
             </button>
-            <span className={`text-sm font-medium ${billingPeriod === 'annual' ? 'text-gray-900' : 'text-gray-500'}`}>
-              Annual <span className="text-green-600 font-semibold">(Save 20%)</span>
+            <span className={`text-sm font-medium ${billingPeriod === 'annual' ? 'text-slate-50' : 'text-slate-400'}`}>
+              Annual <span className="text-green-400 font-semibold">(Save 20%)</span>
             </span>
           </div>
         </div>
@@ -203,8 +203,8 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
           {pricingTiers.map((tier, index) => (
             <div
               key={index}
-              className={`relative bg-white rounded-2xl shadow-xl border-2 ${
-                tier.popular ? 'border-orange-500' : 'border-gray-200'
+              className={`relative bg-slate-800/60 rounded-2xl shadow-xl border-2 ${
+                tier.popular ? 'border-orange-500' : 'border-slate-700'
               } p-8 flex flex-col`}
             >
               {tier.popular && (
@@ -214,34 +214,34 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
               )}
 
               <div className="mb-6">
-                <div className="text-sm font-medium text-gray-500 mb-2">{tier.badge}</div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">{tier.name}</h3>
+                <div className="text-sm font-medium text-slate-400 mb-2">{tier.badge}</div>
+                <h3 className="text-2xl font-bold text-slate-50 mb-4">{tier.name}</h3>
 
                 <div className="mb-4">
                   {tier.customPrice ? (
-                    <div className="text-3xl font-bold text-gray-900">{tier.customPrice}</div>
+                    <div className="text-3xl font-bold text-slate-50">{tier.customPrice}</div>
                   ) : (
                     <>
                       <div className="flex items-baseline gap-2">
-                        <span className="text-4xl font-bold text-gray-900">
+                        <span className="text-4xl font-bold text-slate-50">
                           ${billingPeriod === 'annual' && tier.annualPrice ? tier.annualPrice : tier.monthlyPrice}
                         </span>
-                        <span className="text-gray-600">NZD / month</span>
+                        <span className="text-slate-300">NZD / month</span>
                       </div>
                       {billingPeriod === 'annual' && tier.annualPrice && (
-                        <div className="text-sm text-gray-500 mt-1">billed annually</div>
+                        <div className="text-sm text-slate-400 mt-1">billed annually</div>
                       )}
                       {billingPeriod === 'monthly' && tier.monthlyPrice && tier.annualPrice && (
-                        <div className="text-sm text-gray-500 mt-1">or ${tier.annualPrice} annually</div>
+                        <div className="text-sm text-slate-400 mt-1">or ${tier.annualPrice} annually</div>
                       )}
                       {tier.savingsNote && billingPeriod === 'annual' && (
-                        <div className="text-sm font-semibold text-green-600 mt-2">{tier.savingsNote}</div>
+                        <div className="text-sm font-semibold text-green-400 mt-2">{tier.savingsNote}</div>
                       )}
                     </>
                   )}
                 </div>
 
-                <p className="text-sm text-gray-600">{tier.description}</p>
+                <p className="text-sm text-slate-300">{tier.description}</p>
               </div>
 
               <div className="flex-1 mb-8">
@@ -249,7 +249,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
                   {tier.features.map((feature, idx) => (
                     <li key={idx} className="flex items-start gap-3">
                       <Check className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-                      <span className={`text-sm ${feature.startsWith('Everything') ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                      <span className={`text-sm ${feature.startsWith('Everything') ? 'font-semibold text-slate-50' : 'text-slate-300'}`}>
                         {feature}
                       </span>
                     </li>
@@ -269,14 +269,14 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       </div>
 
       {/* Add-ons Section */}
-      <div className="bg-gray-50 py-16 px-4 sm:px-6 lg:px-8">
+      <div className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">Optional Add-ons</h2>
+          <h2 className="text-3xl font-bold text-slate-50 text-center mb-12">Optional Add-ons</h2>
           <div className="grid md:grid-cols-3 gap-6">
             {addOns.map((addOn, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                <div className="text-sm font-medium text-gray-600 mb-2">{addOn.name}</div>
-                <div className="text-2xl font-bold text-gray-900">{addOn.price}</div>
+              <div key={index} className="bg-slate-800/60 rounded-lg shadow-md p-6 border border-slate-700">
+                <div className="text-sm font-medium text-slate-300 mb-2">{addOn.name}</div>
+                <div className="text-2xl font-bold text-slate-50">{addOn.price}</div>
               </div>
             ))}
           </div>
@@ -284,27 +284,27 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       </div>
 
       {/* Trust & Social Proof */}
-      <div className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
+      <div className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
-          <h3 className="text-center text-sm font-semibold text-gray-500 uppercase tracking-wider mb-8">
+          <h3 className="text-center text-sm font-semibold text-slate-400 uppercase tracking-wider mb-8">
             Used by leading New Zealand main contractors & PQS firms
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 mb-12">
             {companyLogos.map((logo, index) => (
               <div key={index} className="flex items-center justify-center">
-                <div className="text-gray-400 font-semibold text-sm text-center">{logo}</div>
+                <div className="text-slate-400 font-semibold text-sm text-center">{logo}</div>
               </div>
             ))}
           </div>
 
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100">
+          <div className="bg-slate-800/40 rounded-2xl p-8 border border-slate-700">
             <div className="flex items-start gap-4">
-              <Award className="text-blue-600 flex-shrink-0" size={32} />
+              <Award className="text-blue-400 flex-shrink-0" size={32} />
               <div>
-                <p className="text-lg text-gray-900 italic mb-4">
+                <p className="text-lg text-slate-100 italic mb-4">
                   "Verify+ saved us $1.8M in rework risk on a single project."
                 </p>
-                <p className="text-sm font-semibold text-gray-700">
+                <p className="text-sm font-semibold text-slate-300">
                   — James Hargrove, Procurement Director
                 </p>
               </div>
@@ -314,45 +314,45 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       </div>
 
       {/* Comparison Table */}
-      <div className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      <div className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">What's Included</h2>
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <h2 className="text-3xl font-bold text-slate-50 text-center mb-12">What's Included</h2>
+          <div className="bg-slate-800/60 rounded-xl shadow-lg overflow-hidden border border-slate-700">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-slate-900/50 border-b border-slate-700">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Feature</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">Starter</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-orange-600 bg-orange-50">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-100">Feature</th>
+                  <th className="px-6 py-4 text-center text-sm font-semibold text-slate-100">Starter</th>
+                  <th className="px-6 py-4 text-center text-sm font-semibold text-orange-400 bg-orange-900/20">
                     Professional ★
                   </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">Enterprise</th>
+                  <th className="px-6 py-4 text-center text-sm font-semibold text-slate-100">Enterprise</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-slate-700">
                 {comparisonFeatures.map((feature, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{feature.name}</td>
+                  <tr key={index} className="hover:bg-slate-700/30">
+                    <td className="px-6 py-4 text-sm font-medium text-slate-100">{feature.name}</td>
                     <td className="px-6 py-4 text-center">
                       {typeof feature.starter === 'boolean' ? (
                         feature.starter ? (
                           <Check className="text-green-500 mx-auto" size={20} />
                         ) : (
-                          <X className="text-gray-300 mx-auto" size={20} />
+                          <X className="text-slate-600 mx-auto" size={20} />
                         )
                       ) : (
-                        <span className="text-sm text-gray-700">{feature.starter}</span>
+                        <span className="text-sm text-slate-300">{feature.starter}</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center bg-orange-50/30">
+                    <td className="px-6 py-4 text-center bg-orange-900/20">
                       {typeof feature.professional === 'boolean' ? (
                         feature.professional ? (
                           <Check className="text-green-500 mx-auto" size={20} />
                         ) : (
-                          <X className="text-gray-300 mx-auto" size={20} />
+                          <X className="text-slate-600 mx-auto" size={20} />
                         )
                       ) : (
-                        <span className="text-sm text-gray-700">{feature.professional}</span>
+                        <span className="text-sm text-slate-300">{feature.professional}</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -360,10 +360,10 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
                         feature.enterprise ? (
                           <Check className="text-green-500 mx-auto" size={20} />
                         ) : (
-                          <X className="text-gray-300 mx-auto" size={20} />
+                          <X className="text-slate-600 mx-auto" size={20} />
                         )
                       ) : (
-                        <span className="text-sm text-gray-700">{feature.enterprise}</span>
+                        <span className="text-sm text-slate-300">{feature.enterprise}</span>
                       )}
                     </td>
                   </tr>
@@ -375,27 +375,27 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       </div>
 
       {/* FAQ Section */}
-      <div className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
+      <div className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">Frequently Asked Questions</h2>
+          <h2 className="text-3xl font-bold text-slate-50 text-center mb-12">Frequently Asked Questions</h2>
           <div className="space-y-4">
             {faqs.map((faq, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
+              <div key={index} className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800/60">
                 <button
                   onClick={() => toggleFAQ(index)}
-                  className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-slate-700/30 transition-colors"
                 >
-                  <span className="font-semibold text-gray-900">{faq.question}</span>
+                  <span className="font-semibold text-slate-100">{faq.question}</span>
                   <ChevronDown
-                    className={`text-gray-500 transform transition-transform ${
+                    className={`text-slate-400 transform transition-transform ${
                       openFAQ === index ? 'rotate-180' : ''
                     }`}
                     size={20}
                   />
                 </button>
                 {openFAQ === index && (
-                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-                    <p className="text-gray-700">{faq.answer}</p>
+                  <div className="px-6 py-4 bg-slate-900/30 border-t border-slate-700">
+                    <p className="text-slate-300">{faq.answer}</p>
                   </div>
                 )}
               </div>
@@ -405,23 +405,23 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       </div>
 
       {/* Final CTA */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 py-20 px-4 sm:px-6 lg:px-8">
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 py-20 px-4 sm:px-6 lg:px-8 border-t border-slate-700">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold text-white mb-6">Start Auditing Smarter Today</h2>
-          <p className="text-xl text-blue-100 mb-10">
+          <p className="text-xl text-slate-300 mb-10">
             Join leading contractors who are saving millions with Verify+
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
               onClick={onStartTrial}
-              className="px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-all shadow-lg flex items-center justify-center gap-2"
+              className="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold text-lg hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"
             >
               Start Your Free 14-Day Trial
               <ArrowRight size={20} />
             </button>
             <button
               onClick={onBookDemo}
-              className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg font-semibold text-lg hover:bg-white/10 transition-all"
+              className="px-8 py-4 bg-transparent border-2 border-slate-500 text-slate-100 rounded-lg font-semibold text-lg hover:bg-slate-700/30 transition-all"
             >
               Book a 15-Min Demo
             </button>
@@ -430,8 +430,8 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       </div>
 
       {/* Footer Note */}
-      <div className="bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 border-t border-gray-200">
-        <p className="text-center text-sm text-gray-600">
+      <div className="py-8 px-4 sm:px-6 lg:px-8 border-t border-slate-700">
+        <p className="text-center text-sm text-slate-400">
           All prices exclude GST. Billed in NZD. Cancel anytime.
         </p>
       </div>
