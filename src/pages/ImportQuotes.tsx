@@ -596,20 +596,20 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
 
       {message && (
         <div className={`p-4 rounded-xl mb-6 ${
-          message.type === 'success' ? 'bg-green-50 border border-green-200' :
-          message.type === 'error' ? 'bg-red-50 border border-red-200' :
-          'bg-blue-50 border border-blue-200'
+          message.type === 'success' ? 'bg-green-900/20 border border-green-500/30' :
+          message.type === 'error' ? 'bg-red-900/20 border border-red-500/30' :
+          'bg-blue-900/20 border border-blue-500/30'
         }`}>
           <div className="flex items-start gap-2">
             {message.type === 'success' ? (
-              <CheckCircle size={18} className="mt-0.5 flex-shrink-0 text-green-600" />
+              <CheckCircle size={18} className="mt-0.5 flex-shrink-0 text-green-400" />
             ) : (
-              <AlertCircle size={18} className="mt-0.5 flex-shrink-0 text-blue-600" />
+              <AlertCircle size={18} className="mt-0.5 flex-shrink-0 text-blue-400" />
             )}
             <span className={
-              message.type === 'success' ? 'text-green-800' :
-              message.type === 'error' ? 'text-red-800' :
-              'text-blue-800'
+              message.type === 'success' ? 'text-green-300' :
+              message.type === 'error' ? 'text-red-300' :
+              'text-blue-300'
             }>{message.text}</span>
           </div>
         </div>
@@ -617,17 +617,17 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
 
       <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 mb-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
-            <Upload className="text-brand-primary" size={20} />
+          <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+            <Upload className="text-orange-400" size={20} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Import Quotes</h2>
-            <p className="text-sm text-gray-600">Upload PDF, Excel, or CSV files from suppliers.</p>
+            <h2 className="text-lg font-bold text-slate-100">Import Quotes</h2>
+            <p className="text-sm text-slate-400">Upload PDF, Excel, or CSV files from suppliers.</p>
           </div>
         </div>
 
         <div className="mb-6">
-          <label htmlFor="supplier-name-input" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="supplier-name-input" className="block text-sm font-medium text-slate-300 mb-2">
             Supplier Name
           </label>
           <input
@@ -638,7 +638,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
             placeholder="Enter supplier name..."
             className="w-full max-w-md px-4 py-2 border border-slate-600 rounded-lg focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] transition bg-slate-900/50 text-slate-100"
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-slate-400">
             This name will be displayed throughout the analysis instead of the file name
           </p>
         </div>
@@ -651,17 +651,17 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
             isDragging
               ? 'border-brand-primary bg-orange-50'
               : files.length > 0
-              ? 'border-green-300 bg-green-50'
+              ? 'border-green-500/50 bg-green-900/20'
               : 'border-slate-600 bg-slate-800/40 hover:border-slate-500'
           }`}
         >
           {files.length > 0 ? (
             <div>
-              <CheckCircle className="mx-auto mb-4 text-green-600" size={48} />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <CheckCircle className="mx-auto mb-4 text-green-400" size={48} />
+              <h3 className="text-lg font-semibold text-slate-100 mb-2">
                 File Attached
               </h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-slate-300 mb-4">
                 {files[0].name}
               </p>
               <div className="flex items-center justify-center gap-3">
@@ -670,7 +670,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
                     setFiles([]);
                     setMessage(null);
                   }}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                  className="px-4 py-2 bg-slate-700 text-slate-100 rounded-lg hover:bg-slate-600 transition-colors text-sm font-medium"
                 >
                   Remove File
                 </button>
@@ -696,13 +696,13 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
             </div>
           ) : (
             <>
-              <FileUp className={`mx-auto mb-4 ${isDragging ? 'text-brand-primary' : 'text-gray-400'}`} size={48} />
+              <FileUp className={`mx-auto mb-4 ${isDragging ? 'text-orange-400' : 'text-slate-400'}`} size={48} />
 
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-slate-100 mb-2">
                 {isDragging ? 'Drop file here' : 'Drag and drop file here'}
               </h3>
 
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-slate-300 mb-4">
                 or click to browse
               </p>
 
@@ -723,7 +723,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
                 Attach File
               </button>
 
-              <p className="text-xs text-gray-500 mt-4">
+              <p className="text-xs text-slate-400 mt-4">
                 Supported formats: PDF, Excel (.xlsx, .xls), CSV
               </p>
             </>
@@ -732,12 +732,12 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
       </div>
 
       {parsing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl mb-6 p-4">
+        <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl mb-6 p-4">
           <div className="flex items-center gap-3">
-            <Loader2 className="animate-spin text-blue-600 flex-shrink-0" size={20} />
+            <Loader2 className="animate-spin text-blue-400 flex-shrink-0" size={20} />
             <div>
-              <div className="font-medium text-blue-900">Processing Quote...</div>
-              <div className="text-sm text-blue-700 mt-0.5">
+              <div className="font-medium text-blue-300">Processing Quote...</div>
+              <div className="text-sm text-blue-200 mt-0.5">
                 Extracting and analyzing quote data. This may take a minute for complex documents.
               </div>
             </div>
