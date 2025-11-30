@@ -213,6 +213,30 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
     });
   };
 
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    if (isToday) {
+      return `Today at ${timeStr}`;
+    }
+
+    const dateStr = date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+    });
+
+    return `${dateStr} at ${timeStr}`;
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -320,13 +344,20 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
         <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-5">
           <h3 className="text-lg font-semibold text-slate-100 mb-4">Successfully Imported Quotes</h3>
           <div className="space-y-2">
-            {successful.map(job => (
+            {successful.map((job, index) => (
               <div key={job.id} className="flex items-center gap-3 py-2 px-3 hover:bg-slate-700/50 rounded-lg transition-colors">
                 <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-slate-100 text-sm">{job.supplier_name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-100 text-sm">{job.supplier_name}</span>
+                    {index === 0 && (
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">
+                        Latest
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-slate-400 mt-0.5">
-                    {job.result_data?.items?.length || 0} items • File: {job.filename} • Imported {formatTime(job.updated_at)}
+                    {job.result_data?.items?.length || 0} items • File: {job.filename} • Imported {formatDateTime(job.updated_at)}
                   </div>
                 </div>
               </div>
