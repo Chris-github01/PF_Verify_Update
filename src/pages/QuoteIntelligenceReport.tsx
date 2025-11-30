@@ -276,7 +276,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         onNavigateNext={onNavigateNext}
       />
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none">
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
         <div className="flex items-center justify-between mb-2">
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900">Quote Intelligence</h1>
@@ -298,7 +298,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                 </button>
 
                 {showOriginalSelector && (
-                  <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="mt-3 p-4 bg-slate-800/40 rounded-lg border border-slate-700">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-semibold text-gray-900">Select Original Quotes to Compare</h3>
                       {selectedOriginalQuotes.length > 0 && (
@@ -314,7 +314,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                       {originalQuotes.map(quote => (
                         <label
                           key={quote.id}
-                          className="flex items-center gap-3 p-3 bg-white rounded-md border border-gray-200 hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors"
+                          className="flex items-center gap-3 p-3 bg-slate-800/60 rounded-md border border-slate-700 hover:border-blue-500 hover:bg-slate-700/50 cursor-pointer transition-colors"
                         >
                           <input
                             type="checkbox"
@@ -345,21 +345,21 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           <div className="flex gap-2 print:hidden">
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
+              className="flex items-center gap-2 px-3 py-2 border border-slate-600 text-slate-300 rounded-md hover:bg-slate-700 transition-colors text-sm"
             >
               <Download size={16} />
               Export Excel
             </button>
             <button
               onClick={handleExportPDF}
-              className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
+              className="flex items-center gap-2 px-3 py-2 border border-slate-600 text-slate-300 rounded-md hover:bg-slate-700 transition-colors text-sm"
             >
               <FileDown size={16} />
               Export PDF
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
+              className="flex items-center gap-2 px-3 py-2 border border-slate-600 text-slate-300 rounded-md hover:bg-slate-700 transition-colors text-sm"
             >
               <Printer size={16} />
               Print
@@ -368,7 +368,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+          <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-gray-600 mb-1">Issues Found</div>
@@ -380,7 +380,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+          <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-gray-600 mb-1">Critical Risks</div>
@@ -392,7 +392,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+          <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-gray-600 mb-1">Top Supplier</div>
@@ -406,7 +406,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none">
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Supplier Comparison</h2>
 
         {supplierQualityData.length === 0 ? (
@@ -414,7 +414,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-slate-900/50 border-b border-slate-700">
                 <tr>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Supplier</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Quality Score</th>
@@ -424,7 +424,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {supplierQualityData.map((supplier, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
+                  <tr key={idx} className="hover:bg-slate-700/30">
                     <td className="px-4 py-3 text-sm">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-gray-900">{supplier.name}</span>
@@ -616,7 +616,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:shadow-none">
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Recommended Actions</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -688,7 +688,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
           <div className="space-y-3">
             {analysis.coverageGaps.map((gap) => (
-              <div key={gap.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <div key={gap.id} className="border border-slate-700 rounded-lg p-4 bg-slate-800/40">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
