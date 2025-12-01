@@ -96,7 +96,7 @@ Deno.serve(async (req: Request) => {
 
     const fileBuffer = await file.arrayBuffer();
     const fileExtension = fileName.split('.').pop();
-    const storagePath = `quotes/${organisationId}/${projectId}/${Date.now()}-${fileName}`;
+    const storagePath = `${projectId}/${Date.now()}-${fileName}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("quotes")
