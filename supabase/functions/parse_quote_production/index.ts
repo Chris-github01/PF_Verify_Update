@@ -206,7 +206,7 @@ async function getPdfBytes(supabase: any, jobId: string): Promise<string> {
   }
 
   const { data: fileData, error: downloadError } = await supabase.storage
-    .from("quote-uploads")
+    .from("quotes")
     .download(job.file_path);
 
   if (downloadError || !fileData) {

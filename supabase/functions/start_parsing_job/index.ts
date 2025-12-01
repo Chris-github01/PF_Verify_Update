@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
     const storagePath = `quotes/${organisationId}/${projectId}/${Date.now()}-${fileName}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from("quote-uploads")
+      .from("quotes")
       .upload(storagePath, fileBuffer, {
         contentType: file.type,
         upsert: false,

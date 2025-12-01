@@ -86,7 +86,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: fileData, error: downloadError } = await supabase
       .storage
-      .from("quote-uploads")
+      .from("quotes")
       .download(typedJob.file_url);
 
     if (downloadError || !fileData) {
