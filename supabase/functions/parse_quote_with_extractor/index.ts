@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
     const timestamp = new Date().getTime();
     const storagePath = `${projectId}/${timestamp}-${fileName}`;
 
-    const { error: uploadError } = await supabase
+    const { error: uploadError } = await supabaseAdmin
       .storage
       .from("quotes")
       .upload(storagePath, file, {
