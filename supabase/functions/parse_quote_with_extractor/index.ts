@@ -115,7 +115,15 @@ Deno.serve(async (req: Request) => {
     const timestamp = new Date().getTime();
     const storagePath = `${projectId}/${timestamp}-${fileName}`;
 
-    const { error: uploadError } = await supabaseAdmin
+    console.log("Attempting storage upload:", {
+      bucket: "quotes",
+      path: storagePath,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
+
+    const { data: uploadData, error: uploadError } = await supabaseAdmin
       .storage
       .from("quotes")
       .upload(storagePath, file, {
@@ -124,9 +132,16 @@ Deno.serve(async (req: Request) => {
       });
 
     if (uploadError) {
-      console.error("Storage upload error:", uploadError);
-      throw new Error("Failed to upload file");
+      console.error("Storage upload error details:", {
+        message: uploadError.message,
+        statusCode: uploadError.statusCode,
+        error: uploadError,
+        attemptedPath: storagePath
+      });
+      throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
+
+    console.log("Storage upload successful:", uploadData);
 
     const llmUrl = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback`;
     const llmHeaders = {
