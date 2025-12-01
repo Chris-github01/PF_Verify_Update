@@ -98,6 +98,8 @@ Deno.serve(async (req: Request) => {
     const fileExtension = fileName.split('.').pop();
     const storagePath = `${projectId}/${Date.now()}-${fileName}`;
 
+    console.log("DEPLOYMENT VERSION: 2024-12-01-v3 - Storage path:", storagePath);
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("quotes")
       .upload(storagePath, fileBuffer, {
