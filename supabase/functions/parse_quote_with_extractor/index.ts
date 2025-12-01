@@ -34,14 +34,12 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Create client for user operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
         headers: { Authorization: authHeader },
       },
     });
 
-    // Create separate client with service role for system_config access
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const formData = await req.formData();
@@ -107,7 +105,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const extractorData = await extractorResponse.json();
-    console.log("Extractor \u2192 Import Quotes:", extractorData);
+    console.log("Extractor → Import Quotes:", extractorData);
 
     if (!extractorData.text || extractorData.text.length === 0) {
       throw new Error("Extractor returned no text");
@@ -180,7 +178,6 @@ Deno.serve(async (req: Request) => {
       totalAmount
     });
 
-    // Determine revision number
     let revisionNumber = 1;
     if (dashboardMode === "revisions") {
       const { data: latestQuote } = await supabase

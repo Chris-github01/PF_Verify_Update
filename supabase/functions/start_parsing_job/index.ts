@@ -34,13 +34,12 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Handle FormData
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const projectId = formData.get("projectId") as string;
     const supplierName = formData.get("supplierName") as string;
     const organisationId = formData.get("organisationId") as string;
-    const quoteId = formData.get("quoteId") as string | null; // Optional: for revisions
+    const quoteId = formData.get("quoteId") as string | null;
     const dashboardMode = (formData.get("dashboardMode") as string) || "original";
 
     if (!projectId || !supplierName || !file || !organisationId) {
@@ -56,7 +55,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get user and organization from the auth token
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
@@ -73,7 +71,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Verify user belongs to the specified organisation
     const { data: membership, error: membershipError } = await supabase
       .from("organisation_members")
       .select("organisation_id")
@@ -97,7 +94,6 @@ Deno.serve(async (req: Request) => {
     }
     const fileName = file.name;
 
-    // Upload file to Supabase storage
     const fileBuffer = await file.arrayBuffer();
     const fileExtension = fileName.split('.').pop();
     const storagePath = `quotes/${organisationId}/${projectId}/${Date.now()}-${fileName}`;
@@ -137,7 +133,6 @@ Deno.serve(async (req: Request) => {
       metadata: { dashboard_mode: dashboardMode },
     };
 
-    // If quoteId is provided (revision case), link the job to that quote
     if (quoteId) {
       jobData.quote_id = quoteId;
     }
