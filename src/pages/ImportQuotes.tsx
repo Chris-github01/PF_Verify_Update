@@ -197,12 +197,12 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
             throw new Error('No organisation selected');
           }
 
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('projectId', projectId);
-          formData.append('supplierName', supplierName.trim());
-          formData.append('organisationId', currentOrganisation.id);
-          formData.append('dashboardMode', dashboardMode);
+          const extractorFormData = new FormData();
+          extractorFormData.append('file', file);
+          extractorFormData.append('projectId', projectId);
+          extractorFormData.append('supplierName', supplierName.trim());
+          extractorFormData.append('organisationId', currentOrganisation.id);
+          extractorFormData.append('dashboardMode', dashboardMode);
 
           const extractorUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse_quote_with_extractor`;
           const extractorHeaders = {
@@ -213,7 +213,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
             const extractorResponse = await fetch(extractorUrl, {
               method: 'POST',
               headers: extractorHeaders,
-              body: formData,
+              body: extractorFormData,
             });
 
             const extractorResult = await extractorResponse.json();
