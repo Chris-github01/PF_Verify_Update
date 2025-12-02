@@ -112,6 +112,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const fileName = file.name;
+    const fileBuffer = await file.arrayBuffer();
     const timestamp = new Date().getTime();
     const storagePath = `${projectId}/${timestamp}-${fileName}`;
 
@@ -126,7 +127,7 @@ Deno.serve(async (req: Request) => {
     const { data: uploadData, error: uploadError } = await supabaseAdmin
       .storage
       .from("quotes")
-      .upload(storagePath, file, {
+      .upload(storagePath, fileBuffer, {
         contentType: file.type,
         upsert: false,
       });
