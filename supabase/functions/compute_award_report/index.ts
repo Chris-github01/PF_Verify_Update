@@ -64,6 +64,7 @@ Deno.serve(async (req: Request) => {
       .from("quotes")
       .select("id, supplier_name")
       .eq("project_id", projectId)
+      .eq("is_latest", true)
       .order("created_at", { ascending: true });
 
     // Filter by specific quote IDs if provided

@@ -74,7 +74,8 @@ export async function analyzeQuoteIntelligenceHybrid(
     let query = supabase
       .from('quotes')
       .select('*')
-      .eq('project_id', projectId);
+      .eq('project_id', projectId)
+      .eq('is_latest', true);
 
     if (dashboardMode === 'original') {
       query = query.eq('revision_number', 1);
