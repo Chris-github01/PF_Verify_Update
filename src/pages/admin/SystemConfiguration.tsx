@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Key, Save, Eye, EyeOff, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Key, Save, Eye, EyeOff, CheckCircle, AlertTriangle, RefreshCw, TestTube } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 
@@ -37,6 +37,8 @@ export default function SystemConfiguration() {
   const [configs, setConfigs] = useState<ConfigItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
 
@@ -130,6 +132,53 @@ export default function SystemConfiguration() {
       return config.required ? 'missing' : 'optional';
     }
     return 'ok';
+  };
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    setMessage(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test_llm_parser`;
+      const headers = {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+      });
+
+      const result = await response.json();
+      setTestResult(result);
+
+      if (result.ok) {
+        setMessage({
+          type: 'success',
+          text: result.message || 'LLM Parser is configured and working!'
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: result.message || result.error || 'Test failed'
+        });
+      }
+    } catch (error) {
+      console.error('Test failed:', error);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to test connection'
+      });
+    } finally {
+      setTesting(false);
+    }
   };
 
   if (loading) {
@@ -236,26 +285,89 @@ export default function SystemConfiguration() {
             {configs.filter(c => getConfigStatus(c) === 'ok').length} of{' '}
             {configs.filter(c => c.required).length} required keys configured
           </div>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {saving ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            {saving ? 'Saving...' : 'Save Configuration'}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleTestConnection}
+              disabled={testing}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {testing ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <TestTube className="w-4 h-4" />
+              )}
+              {testing ? 'Testing...' : 'Test LLM Parser'}
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {saving ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {saving ? 'Saving...' : 'Save Configuration'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {testResult && (
+        <div className={`mt-6 p-6 rounded-lg border ${
+          testResult.ok
+            ? 'bg-green-50 border-green-200'
+            : 'bg-yellow-50 border-yellow-200'
+        }`}>
+          <div className="flex items-start gap-3 mb-4">
+            {testResult.ok ? (
+              <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
+            ) : (
+              <AlertTriangle className="w-6 h-6 text-yellow-600 flex-shrink-0" />
+            )}
+            <div>
+              <h3 className={`font-semibold ${testResult.ok ? 'text-green-900' : 'text-yellow-900'}`}>
+                {testResult.ok ? 'Connection Test Passed' : 'Configuration Issue Detected'}
+              </h3>
+              <p className={`text-sm mt-1 ${testResult.ok ? 'text-green-800' : 'text-yellow-800'}`}>
+                {testResult.message}
+              </p>
+            </div>
+          </div>
+
+          {testResult.ok && (
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="bg-white p-3 rounded border border-green-200">
+                <div className="text-gray-600 mb-1">Models Available</div>
+                <div className="font-semibold text-green-900">{testResult.modelCount || 'N/A'}</div>
+              </div>
+              <div className="bg-white p-3 rounded border border-green-200">
+                <div className="text-gray-600 mb-1">GPT-4 Available</div>
+                <div className="font-semibold text-green-900">{testResult.gpt4Available ? 'Yes' : 'No'}</div>
+              </div>
+            </div>
+          )}
+
+          {!testResult.configured && testResult.instructions && (
+            <div className="mt-4 p-4 bg-white rounded border border-yellow-300">
+              <h4 className="font-medium text-yellow-900 mb-2">Setup Instructions</h4>
+              <ol className="text-sm text-yellow-800 space-y-1 list-decimal list-inside">
+                {testResult.instructions.map((instruction: string, i: number) => (
+                  <li key={i}>{instruction}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <h3 className="font-medium text-blue-900 mb-2">Important Notes</h3>
         <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
           <li>API keys are stored securely in the database</li>
           <li>OPENAI_API_KEY is required for LLM-based quote parsing</li>
+          <li>Use the Test LLM Parser button to verify your configuration</li>
           <li>Changes take effect immediately for new parsing jobs</li>
           <li>Never share your API keys with unauthorized users</li>
         </ul>
