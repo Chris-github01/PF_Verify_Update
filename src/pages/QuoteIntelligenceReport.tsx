@@ -13,6 +13,7 @@ interface QuoteIntelligenceReportProps {
   onNavigateBack?: () => void;
   onNavigateNext?: () => void;
   dashboardMode?: DashboardMode;
+  onQuotesSelected?: (quoteIds: string[]) => void;
 }
 
 interface OriginalQuote {
@@ -21,7 +22,7 @@ interface OriginalQuote {
   quote_reference: string;
 }
 
-export default function QuoteIntelligenceReport({ projectId, projectName, onNavigateBack, onNavigateNext, dashboardMode = 'original' }: QuoteIntelligenceReportProps) {
+export default function QuoteIntelligenceReport({ projectId, projectName, onNavigateBack, onNavigateNext, dashboardMode = 'original', onQuotesSelected }: QuoteIntelligenceReportProps) {
   const [analysis, setAnalysis] = useState<QuoteIntelligenceAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +87,12 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           countMap.set(item.quote_id, current + 1);
         });
         setQuoteItemCounts(countMap);
+      }
+
+      // Get unique quote IDs from the analysis and pass to parent
+      const uniqueQuoteIds = [...new Set(result.normalizedItems.map(item => item.quoteId))];
+      if (onQuotesSelected && uniqueQuoteIds.length > 0) {
+        onQuotesSelected(uniqueQuoteIds);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze quotes');

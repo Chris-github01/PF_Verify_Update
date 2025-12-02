@@ -17,6 +17,7 @@ interface ScopeMatrixProps {
   onNavigateBack?: () => void;
   onNavigateNext?: () => void;
   dashboardMode?: DashboardMode;
+  preselectedQuoteIds?: string[];
 }
 
 const getFlagColor = (flag: string): string => {
@@ -64,7 +65,7 @@ interface SupplierDetail {
   quoteReference: string;
 }
 
-export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext, dashboardMode = 'original' }: ScopeMatrixProps) {
+export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext, dashboardMode = 'original', preselectedQuoteIds = [] }: ScopeMatrixProps) {
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [matrixRows, setMatrixRows] = useState<MatrixRow[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
@@ -118,6 +119,13 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
   useEffect(() => {
     buildMatrix();
   }, [comparisonData, filters]);
+
+  useEffect(() => {
+    if (preselectedQuoteIds.length > 0) {
+      console.log('🎯 Setting preselected quote IDs:', preselectedQuoteIds);
+      setSelectedQuoteIds(preselectedQuoteIds);
+    }
+  }, [preselectedQuoteIds]);
 
   const loadOriginalQuotes = async () => {
     try {

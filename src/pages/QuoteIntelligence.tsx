@@ -6,6 +6,7 @@ interface QuoteIntelligenceProps {
   onNavigateBack: () => void;
   onNavigateNext: () => void;
   dashboardMode?: DashboardMode;
+  onQuotesSelected?: (quoteIds: string[]) => void;
 }
 
 export default function QuoteIntelligence(props: QuoteIntelligenceProps) {
