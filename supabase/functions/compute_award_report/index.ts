@@ -52,17 +52,27 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { projectId, force } = await req.json();
+    const { projectId, force, quoteIds } = await req.json();
 
     if (!projectId) {
       throw new Error("projectId is required");
     }
 
-    const { data: quotes, error: quotesError } = await supabase
+    console.log("📊 compute_award_report: Generating report", { projectId, quoteIds });
+
+    let quotesQuery = supabase
       .from("quotes")
       .select("id, supplier_name")
       .eq("project_id", projectId)
       .order("created_at", { ascending: true });
+
+    // Filter by specific quote IDs if provided
+    if (quoteIds && Array.isArray(quoteIds) && quoteIds.length > 0) {
+      console.log("📊 Filtering to specific quotes:", quoteIds);
+      quotesQuery = quotesQuery.in("id", quoteIds);
+    }
+
+    const { data: quotes, error: quotesError } = await quotesQuery;
 
     if (quotesError) throw quotesError;
     if (!quotes || quotes.length < 2) {
