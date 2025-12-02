@@ -12,9 +12,10 @@ interface EqualisationProps {
   projectId: string;
   onNavigateBack?: () => void;
   onNavigateNext?: () => void;
+  preselectedQuoteIds?: string[];
 }
 
-export default function Equalisation({ projectId, onNavigateBack, onNavigateNext }: EqualisationProps) {
+export default function Equalisation({ projectId, onNavigateBack, onNavigateNext, preselectedQuoteIds = [] }: EqualisationProps) {
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [equalisationResult, setEqualisationResult] = useState<EqualisationResult | null>(null);
   const [mode, setMode] = useState<EqualisationMode>('MODEL');
@@ -25,11 +26,19 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
     setLoading(true);
 
     try {
-      const { data: quotesData } = await supabase
+      let quotesQuery = supabase
         .from('quotes')
         .select('id, supplier_name')
         .eq('project_id', projectId)
         .order('supplier_name');
+
+      // If preselected quotes are provided, filter to only those
+      if (preselectedQuoteIds.length > 0) {
+        console.log('📊 Equalisation: Loading preselected quotes:', preselectedQuoteIds);
+        quotesQuery = quotesQuery.in('id', preselectedQuoteIds);
+      }
+
+      const { data: quotesData } = await quotesQuery;
 
       if (!quotesData || quotesData.length === 0) {
         setLoading(false);
@@ -87,7 +96,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, preselectedQuoteIds]);
 
   const calculateEqualisation = useCallback(() => {
     if (comparisonData.length === 0) {

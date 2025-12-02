@@ -9,6 +9,7 @@ interface EnhancedReportsHubProps {
   onNavigateBackToScope: () => void;
   onNavigateBackToDashboard: () => void;
   dashboardMode?: DashboardMode;
+  preselectedQuoteIds?: string[];
 }
 
 export default function EnhancedReportsHub(props: EnhancedReportsHubProps) {
@@ -34,6 +35,7 @@ export default function EnhancedReportsHub(props: EnhancedReportsHubProps) {
         reportId={selectedReportId || undefined}
         onNavigate={handleBackToHub}
         dashboardMode={props.dashboardMode}
+        preselectedQuoteIds={props.preselectedQuoteIds}
       />
     );
   }
@@ -43,6 +45,7 @@ export default function EnhancedReportsHub(props: EnhancedReportsHubProps) {
       {...props}
       onNavigate={(path) => handleNavigate(path)}
       dashboardMode={props.dashboardMode}
+      preselectedQuoteIds={props.preselectedQuoteIds}
     />
   );
 }

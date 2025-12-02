@@ -21,9 +21,10 @@ interface ReportsHubProps {
   projectId?: string;
   onNavigate?: (path: 'award-report' | 'equalisation' | 'trade-analysis', reportId?: string) => void;
   dashboardMode?: DashboardMode;
+  preselectedQuoteIds?: string[];
 }
 
-export default function ReportsHub({ projects, projectId, onNavigate, dashboardMode = 'original' }: ReportsHubProps) {
+export default function ReportsHub({ projects, projectId, onNavigate, dashboardMode = 'original', preselectedQuoteIds = [] }: ReportsHubProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -67,13 +68,21 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
         'Content-Type': 'application/json',
       };
 
+      const payload: any = {
+        projectId: selectedProject.id,
+        force,
+      };
+
+      // Include preselected quotes if available
+      if (preselectedQuoteIds.length > 0) {
+        console.log('📊 ReportsHub: Generating report with preselected quotes:', preselectedQuoteIds);
+        payload.quoteIds = preselectedQuoteIds;
+      }
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          projectId: selectedProject.id,
-          force,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {

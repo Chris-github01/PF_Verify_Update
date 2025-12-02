@@ -552,6 +552,7 @@ function AppContent() {
           projectId={projectId}
           onNavigateBack={() => setActiveTab('scope')}
           onNavigateNext={() => setActiveTab('reports')}
+          preselectedQuoteIds={selectedQuoteIds}
         />;
 
       case 'contract':
@@ -603,6 +604,7 @@ function AppContent() {
             onNavigateBackToScope={() => setActiveTab('scope')}
             onNavigateBackToDashboard={() => setActiveTab('dashboard')}
             dashboardMode={dashboardMode}
+            preselectedQuoteIds={selectedQuoteIds}
           />;
         }
         return <ProjectReportPage

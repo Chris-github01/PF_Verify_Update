@@ -20,6 +20,7 @@ interface AwardReportProps {
   onToast?: (message: string, type: 'success' | 'error') => void;
   onNavigate?: (page: string) => void;
   dashboardMode?: DashboardMode;
+  preselectedQuoteIds?: string[];
 }
 
 type ReportView = 'MODEL' | 'PEER_MEDIAN' | 'SIMPLE';
@@ -29,7 +30,8 @@ export default function AwardReport({
   reportId,
   onToast,
   onNavigate,
-  dashboardMode = 'original'
+  dashboardMode = 'original',
+  preselectedQuoteIds = []
 }: AwardReportProps) {
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [awardSummary, setAwardSummary] = useState<AwardSummary | null>(null);
