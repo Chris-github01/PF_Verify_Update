@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { analyzeQuoteIntelligence } from '../lib/quoteIntelligence/analyzer';
 import type { QuoteIntelligenceAnalysis, RedFlag } from '../types/quoteIntelligence.types';
 import type { DashboardMode } from '../App';
+import WorkflowNav from '../components/WorkflowNav';
 
 interface QuoteIntelligenceReportProps {
   projectId: string;
@@ -364,11 +365,22 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                       ))}
                     </div>
                     {selectedOriginalQuotes.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-600">
-                        <p className="flex items-center gap-1">
-                          <AlertCircle size={14} />
-                          Analysis will compare revision quotes with {selectedOriginalQuotes.length} selected original quote{selectedOriginalQuotes.length > 1 ? 's' : ''}
-                        </p>
+                      <div className="mt-3 pt-3 border-t border-slate-600">
+                        <div className="flex items-center justify-between">
+                          <p className="flex items-center gap-1 text-xs text-slate-400">
+                            <AlertCircle size={14} />
+                            Analysis will compare revision quotes with {selectedOriginalQuotes.length} selected original quote{selectedOriginalQuotes.length > 1 ? 's' : ''}
+                          </p>
+                          <button
+                            onClick={() => {
+                              setShowOriginalSelector(false);
+                              loadAnalysis();
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                          >
+                            Apply Comparison
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -745,6 +757,15 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           </div>
         </div>
       )}
+
+      <WorkflowNav
+        currentStep={3}
+        totalSteps={6}
+        onBack={onNavigateBack}
+        onNext={onNavigateNext}
+        backLabel="Back: Review & Clean"
+        nextLabel="Next: Scope Matrix"
+      />
     </div>
   );
 }
