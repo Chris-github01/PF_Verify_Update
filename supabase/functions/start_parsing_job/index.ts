@@ -93,12 +93,13 @@ Deno.serve(async (req: Request) => {
       );
     }
     const fileName = file.name;
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
 
     const fileBuffer = await file.arrayBuffer();
     const fileExtension = fileName.split('.').pop();
-    const storagePath = `${projectId}/${Date.now()}-${fileName}`;
+    const storagePath = `${projectId}/${Date.now()}-${sanitizedFileName}`;
 
-    console.log("DEPLOYMENT VERSION: 2024-12-01-v3 - Storage path:", storagePath);
+    console.log("DEPLOYMENT VERSION: 2024-12-01-v4 - Original:", fileName, "Sanitized:", sanitizedFileName, "Path:", storagePath);
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("quotes")

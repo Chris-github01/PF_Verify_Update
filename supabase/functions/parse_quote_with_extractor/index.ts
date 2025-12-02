@@ -112,14 +112,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const fileName = file.name;
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileBuffer = await file.arrayBuffer();
     const timestamp = new Date().getTime();
-    const storagePath = `${projectId}/${timestamp}-${fileName}`;
+    const storagePath = `${projectId}/${timestamp}-${sanitizedFileName}`;
 
     console.log("Attempting storage upload:", {
       bucket: "quotes",
       path: storagePath,
-      fileName: file.name,
+      originalFileName: file.name,
+      sanitizedFileName: sanitizedFileName,
       fileSize: file.size,
       fileType: file.type
     });
