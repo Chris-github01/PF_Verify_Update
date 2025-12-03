@@ -79,13 +79,14 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
     try {
       const { data } = await supabase
         .from('user_preferences')
-        .select('show_splash_on_load')
+        .select('preferences')
         .eq('id', '00000000-0000-0000-0000-000000000001')
         .maybeSingle();
 
-      if (data) {
-        setShowSplashOnLoad(data.show_splash_on_load);
-        localStorage.setItem('showSplashOnLoad', String(data.show_splash_on_load));
+      if (data && data.preferences) {
+        const showSplash = data.preferences.show_splash_on_load ?? true;
+        setShowSplashOnLoad(showSplash);
+        localStorage.setItem('showSplashOnLoad', String(showSplash));
       }
     } catch (error) {
       console.error('Error loading user preferences:', error);
@@ -111,9 +112,20 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
 
   const handleToggleSplashScreen = async (enabled: boolean) => {
     try {
+      const { data: existingData } = await supabase
+        .from('user_preferences')
+        .select('preferences')
+        .eq('id', '00000000-0000-0000-0000-000000000001')
+        .maybeSingle();
+
+      const updatedPreferences = {
+        ...(existingData?.preferences || {}),
+        show_splash_on_load: enabled
+      };
+
       const { error } = await supabase
         .from('user_preferences')
-        .update({ show_splash_on_load: enabled })
+        .update({ preferences: updatedPreferences })
         .eq('id', '00000000-0000-0000-0000-000000000001');
 
       if (error) throw error;
