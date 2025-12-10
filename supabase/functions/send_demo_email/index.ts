@@ -15,7 +15,7 @@ interface EmailRequest {
   type: 'welcome' | 'reactivation';
 }
 
-function generateWelcomeEmail(name: string, company: string, token: string, password: string): string {
+function generateWelcomeEmail(name: string, company: string, token: string, password: string, email: string): string {
   const appUrl = Deno.env.get("APP_URL") || "https://app.passivefireverify.com";
   const accessUrl = `${appUrl}/demo-login?token=${token}`;
 
@@ -59,7 +59,7 @@ function generateWelcomeEmail(name: string, company: string, token: string, pass
     
     <div class="credentials">
       <strong>🔐 Alternative Login (if magic link expires):</strong><br>
-      Email: ${name.split(' ')[0].toLowerCase()}@example.com<br>
+      Email: <code>${email}</code><br>
       Password: <code>${password}</code><br>
       <em>You can change your password after first login</em>
     </div>
@@ -92,7 +92,7 @@ function generateWelcomeEmail(name: string, company: string, token: string, pass
   
   <div class="footer">
     <p>© 2025 PassiveFire Verify+ | Precision Procurement Tools</p>
-    <p>This email was sent to ${name.split(' ')[0].toLowerCase()}@example.com because you requested a demo.</p>
+    <p>This email was sent to ${email} because you requested a demo.</p>
   </div>
 </body>
 </html>
@@ -144,50 +144,71 @@ Deno.serve(async (req: Request) => {
     const { email, name, company, token, password, type }: EmailRequest = await req.json();
 
     const htmlContent = type === 'welcome' 
-      ? generateWelcomeEmail(name, company, token, password || '')
+      ? generateWelcomeEmail(name, company, token, password || '', email)
       : generateReactivationEmail(name, company, token);
 
     const subject = type === 'welcome'
       ? '🔥 Your PassiveFire Verify+ Demo Access is Ready!'
       : '🔥 Your PassiveFire Verify+ Demo Has Been Reactivated';
 
-    // For now, log the email content
-    // In production, integrate with SendGrid, AWS SES, or similar
-    console.log('===== EMAIL TO SEND =====');
-    console.log('To:', email);
-    console.log('Subject:', subject);
-    console.log('HTML:', htmlContent);
-    console.log('========================');
-
-    // TODO: Replace with actual email service
-    // Example SendGrid integration:
-    /*
+    // Send email via SendGrid
     const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
-    if (SENDGRID_API_KEY) {
-      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SENDGRID_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email }] }],
-          from: { email: 'no-reply@passivefireverify.com', name: 'PassiveFire Verify+' },
-          subject,
-          content: [{ type: 'text/html', value: htmlContent }]
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to send email via SendGrid');
-      }
+
+    if (!SENDGRID_API_KEY) {
+      console.warn('⚠️ SENDGRID_API_KEY not configured - logging email instead');
+      console.log('===== EMAIL TO SEND =====');
+      console.log('To:', email);
+      console.log('Subject:', subject);
+      console.log('HTML:', htmlContent);
+      console.log('========================');
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Email logged (SendGrid not configured)',
+          recipient: email
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
-    */
+
+    const sendGridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SENDGRID_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        personalizations: [{
+          to: [{ email }],
+          subject
+        }],
+        from: {
+          email: 'noreply@passivefireverify.com',
+          name: 'PassiveFire Verify+'
+        },
+        content: [{
+          type: 'text/html',
+          value: htmlContent
+        }]
+      })
+    });
+
+    if (!sendGridResponse.ok) {
+      const errorText = await sendGridResponse.text();
+      console.error('SendGrid error:', errorText);
+      throw new Error(`Failed to send email via SendGrid: ${sendGridResponse.status} - ${errorText}`);
+    }
+
+    console.log('✅ Email sent successfully to:', email);
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
-        message: 'Email queued for delivery',
+        message: 'Email sent successfully',
         recipient: email
       }),
       {
