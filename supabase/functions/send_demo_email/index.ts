@@ -151,11 +151,14 @@ Deno.serve(async (req: Request) => {
       ? '🔥 Your PassiveFire Verify+ Demo Access is Ready!'
       : '🔥 Your PassiveFire Verify+ Demo Has Been Reactivated';
 
-    // Send email via SendGrid
-    const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
+    // Send email via EmailJS
+    const EMAILJS_SERVICE_ID = Deno.env.get('EMAILJS_SERVICE_ID');
+    const EMAILJS_TEMPLATE_ID = Deno.env.get('EMAILJS_TEMPLATE_ID');
+    const EMAILJS_PUBLIC_KEY = Deno.env.get('EMAILJS_PUBLIC_KEY');
+    const EMAILJS_PRIVATE_KEY = Deno.env.get('EMAILJS_PRIVATE_KEY');
 
-    if (!SENDGRID_API_KEY) {
-      console.warn('⚠️ SENDGRID_API_KEY not configured - logging email instead');
+    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
+      console.warn('⚠️ EmailJS not configured - logging email instead');
       console.log('===== EMAIL TO SEND =====');
       console.log('To:', email);
       console.log('Subject:', subject);
@@ -165,7 +168,7 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'Email logged (SendGrid not configured)',
+          message: 'Email logged (EmailJS not configured)',
           recipient: email
         }),
         {
@@ -175,32 +178,33 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const sendGridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    const emailJSPayload = {
+      service_id: EMAILJS_SERVICE_ID,
+      template_id: EMAILJS_TEMPLATE_ID,
+      user_id: EMAILJS_PUBLIC_KEY,
+      accessToken: EMAILJS_PRIVATE_KEY,
+      template_params: {
+        to_email: email,
+        to_name: name,
+        subject: subject,
+        html_content: htmlContent,
+        company: company,
+        reply_to: 'support@passivefireverify.com'
+      }
+    };
+
+    const emailJSResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${SENDGRID_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        personalizations: [{
-          to: [{ email }],
-          subject
-        }],
-        from: {
-          email: 'noreply@passivefireverify.com',
-          name: 'PassiveFire Verify+'
-        },
-        content: [{
-          type: 'text/html',
-          value: htmlContent
-        }]
-      })
+      body: JSON.stringify(emailJSPayload)
     });
 
-    if (!sendGridResponse.ok) {
-      const errorText = await sendGridResponse.text();
-      console.error('SendGrid error:', errorText);
-      throw new Error(`Failed to send email via SendGrid: ${sendGridResponse.status} - ${errorText}`);
+    if (!emailJSResponse.ok) {
+      const errorText = await emailJSResponse.text();
+      console.error('EmailJS error:', errorText);
+      throw new Error(`Failed to send email via EmailJS: ${emailJSResponse.status} - ${errorText}`);
     }
 
     console.log('✅ Email sent successfully to:', email);
