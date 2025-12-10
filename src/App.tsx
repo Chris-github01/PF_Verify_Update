@@ -31,6 +31,7 @@ import ModeSelector from './pages/ModeSelector';
 import OrganisationPicker from './pages/OrganisationPicker';
 import OrganisationSettings from './pages/OrganisationSettings';
 import AdminApp from './pages/AdminApp';
+import DemoLogin from './pages/DemoLogin';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -691,6 +692,10 @@ function AppContent() {
         </div>
       </div>
     );
+  }
+
+  if (window.location.pathname === '/demo-login') {
+    return <DemoLogin />;
   }
 
   if (!session) {
