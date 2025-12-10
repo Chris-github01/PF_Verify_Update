@@ -1,5 +1,6 @@
 import { Shield, Upload, Cpu, Layers, Zap, FileText, BarChart3, Download, CheckCircle, ArrowRight, Target, AlertTriangle, Award, Users } from 'lucide-react';
 import { useState } from 'react';
+import DemoBookingModal from '../components/DemoBookingModal';
 
 interface LandingPageProps {
   onSignIn: () => void;
@@ -414,55 +415,10 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         </div>
       </footer>
 
-      {showDemoModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <h3 className="text-2xl font-bold text-slate-50 mb-4">Book a Live Demo</h3>
-            <p className="text-slate-400 mb-6">
-              See exactly how PassiveFire Verify+ audits quotes, catches scope gaps, and generates award recommendations in a 20-minute walkthrough.
-            </p>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Your name"
-                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="email"
-                placeholder="Work email"
-                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="tel"
-                placeholder="Phone number"
-                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="Company name"
-                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <select className="w-full px-4 py-3 bg-slate-800 border border-slate-700 text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="" className="bg-slate-800">Your role...</option>
-                <option value="main-contractor" className="bg-slate-800">Main Contractor</option>
-                <option value="pqs" className="bg-slate-800">Quantity Surveyor / PQS</option>
-                <option value="fire-engineer" className="bg-slate-800">Fire Engineer</option>
-                <option value="compliance" className="bg-slate-800">Compliance / Audit</option>
-                <option value="other" className="bg-slate-800">Other</option>
-              </select>
-              <button className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold">
-                Request Demo
-              </button>
-              <button
-                onClick={() => setShowDemoModal(false)}
-                className="w-full px-6 py-3 bg-slate-800 text-slate-100 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DemoBookingModal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+      />
 
       <style>{`
         @keyframes scroll {

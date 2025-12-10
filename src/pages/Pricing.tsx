@@ -1,5 +1,6 @@
 import { Check, X, ChevronDown, Shield, Zap, Award, ArrowRight } from 'lucide-react';
 import { useState } from 'react';
+import DemoBookingModal from '../components/DemoBookingModal';
 
 interface PricingProps {
   onStartTrial?: () => void;
@@ -10,9 +11,15 @@ interface PricingProps {
 export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: PricingProps) {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('annual');
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
+  const [showDemoModal, setShowDemoModal] = useState(false);
 
   const toggleFAQ = (index: number) => {
     setOpenFAQ(openFAQ === index ? null : index);
+  };
+
+  const handleBookDemo = () => {
+    setShowDemoModal(true);
+    if (onBookDemo) onBookDemo();
   };
 
   const companyLogos = [
@@ -155,7 +162,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
                 Sign In
               </button>
               <button
-                onClick={onBookDemo}
+                onClick={handleBookDemo}
                 className="hidden sm:block px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
               >
                 Book Demo
@@ -258,7 +265,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
               </div>
 
               <button
-                onClick={tier.isEnterprise ? onBookDemo : onStartTrial}
+                onClick={tier.isEnterprise ? handleBookDemo : onStartTrial}
                 className={`w-full py-4 px-6 rounded-lg font-semibold text-white transition-all shadow-md hover:shadow-lg ${tier.ctaColor}`}
               >
                 {tier.cta}
@@ -420,7 +427,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
               <ArrowRight size={20} />
             </button>
             <button
-              onClick={onBookDemo}
+              onClick={handleBookDemo}
               className="px-8 py-4 bg-transparent border-2 border-slate-500 text-slate-100 rounded-lg font-semibold text-lg hover:bg-slate-700/30 transition-all"
             >
               Book a 15-Min Demo
@@ -435,6 +442,11 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
           All prices exclude GST. Billed in NZD. Cancel anytime.
         </p>
       </div>
+
+      <DemoBookingModal
+        isOpen={showDemoModal}
+        onClose={() => setShowDemoModal(false)}
+      />
     </div>
   );
 }
