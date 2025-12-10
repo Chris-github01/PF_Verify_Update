@@ -133,7 +133,7 @@ Deno.serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: "An account with this email already exists. Please check your email for access details or contact support."
         }),
         {
@@ -141,6 +141,16 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Check if auth user exists (orphaned from previous registration)
+    // This handles cleanup of incomplete registrations
+    const { data: { users: existingAuthUsers } } = await supabase.auth.admin.listUsers();
+    const existingAuthUser = existingAuthUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+    if (existingAuthUser) {
+      console.log('Cleaning up orphaned auth user:', existingAuthUser.id);
+      await supabase.auth.admin.deleteUser(existingAuthUser.id);
     }
 
     // Generate credentials
