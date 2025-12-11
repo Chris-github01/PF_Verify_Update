@@ -182,7 +182,6 @@ Deno.serve(async (req: Request) => {
       service_id: EMAILJS_SERVICE_ID,
       template_id: EMAILJS_TEMPLATE_ID,
       user_id: EMAILJS_PUBLIC_KEY,
-      accessToken: EMAILJS_PRIVATE_KEY,
       template_params: {
         to_email: email,
         to_name: name,
@@ -193,6 +192,17 @@ Deno.serve(async (req: Request) => {
       }
     };
 
+    // If private key is available, add it for server-side authentication
+    if (EMAILJS_PRIVATE_KEY) {
+      (emailJSPayload as any).accessToken = EMAILJS_PRIVATE_KEY;
+    }
+
+    console.log('📧 Sending email via EmailJS...');
+    console.log('To:', email);
+    console.log('Service ID:', EMAILJS_SERVICE_ID);
+    console.log('Template ID:', EMAILJS_TEMPLATE_ID);
+    console.log('Has Private Key:', !!EMAILJS_PRIVATE_KEY);
+
     const emailJSResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: {
@@ -201,10 +211,13 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify(emailJSPayload)
     });
 
+    const responseText = await emailJSResponse.text();
+    console.log('EmailJS Response Status:', emailJSResponse.status);
+    console.log('EmailJS Response:', responseText);
+
     if (!emailJSResponse.ok) {
-      const errorText = await emailJSResponse.text();
-      console.error('EmailJS error:', errorText);
-      throw new Error(`Failed to send email via EmailJS: ${emailJSResponse.status} - ${errorText}`);
+      console.error('EmailJS error:', responseText);
+      throw new Error(`Failed to send email via EmailJS: ${emailJSResponse.status} - ${responseText}`);
     }
 
     console.log('✅ Email sent successfully to:', email);
