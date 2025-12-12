@@ -42,49 +42,67 @@ export default function OrganisationsList() {
 
       const orgsWithDetails = await Promise.all(
         (orgs || []).map(async (org) => {
-          const { data: members } = await supabase
-            .from('organisation_members')
-            .select('user_id, role, status')
-            .eq('organisation_id', org.id);
+          try {
+            const { data: members } = await supabase
+              .from('organisation_members')
+              .select('user_id, role, status')
+              .eq('organisation_id', org.id);
 
-          const owner = members?.find(m => m.role === 'owner');
-          const seatsUsed = members?.filter(
-            m => m.status === 'active' && ['owner', 'admin', 'member'].includes(m.role)
-          ).length || 0;
+            const owner = members?.find(m => m.role === 'owner');
+            const seatsUsed = members?.filter(
+              m => m.status === 'active' && ['owner', 'admin', 'member'].includes(m.role)
+            ).length || 0;
 
-          let ownerEmail = '';
-          if (owner) {
-            const { data: profile } = await supabase
-              .rpc('get_user_details', { p_user_id: owner.user_id })
+            let ownerEmail = '';
+            if (owner) {
+              try {
+                const { data: profile } = await supabase
+                  .rpc('get_user_details', { p_user_id: owner.user_id })
+                  .maybeSingle();
+                ownerEmail = profile?.email || '';
+              } catch (err) {
+                console.warn('Could not fetch owner email:', err);
+              }
+            }
+
+            const subscription = {
+              plan_name: org.pricing_tier || 'standard'
+            };
+
+            const { count: projectCount } = await supabase
+              .from('projects')
+              .select('*', { count: 'exact', head: true })
+              .eq('organisation_id', org.id);
+
+            const { data: lastProject } = await supabase
+              .from('projects')
+              .select('updated_at')
+              .eq('organisation_id', org.id)
+              .order('updated_at', { ascending: false })
+              .limit(1)
               .maybeSingle();
-            ownerEmail = profile?.email || '';
+
+            return {
+              ...org,
+              status: org.status || 'active',
+              owner_email: ownerEmail,
+              plan_name: subscription?.plan_name || 'Trial',
+              seats_used: seatsUsed,
+              project_count: projectCount || 0,
+              last_active: lastProject?.updated_at || org.created_at,
+            };
+          } catch (orgError) {
+            console.warn(`Error loading details for org ${org.id}:`, orgError);
+            return {
+              ...org,
+              status: org.status || 'active',
+              owner_email: '',
+              plan_name: org.pricing_tier || 'Trial',
+              seats_used: 0,
+              project_count: 0,
+              last_active: org.created_at,
+            };
           }
-
-          const subscription = {
-            plan_name: org.pricing_tier || 'standard'
-          };
-
-          const { count: projectCount } = await supabase
-            .from('projects')
-            .select('*', { count: 'exact', head: true })
-            .eq('organisation_id', org.id);
-
-          const { data: lastProject } = await supabase
-            .from('projects')
-            .select('updated_at')
-            .eq('organisation_id', org.id)
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          return {
-            ...org,
-            owner_email: ownerEmail,
-            plan_name: subscription?.plan_name || 'Trial',
-            seats_used: seatsUsed,
-            project_count: projectCount || 0,
-            last_active: lastProject?.updated_at || org.created_at,
-          };
         })
       );
 
@@ -222,7 +240,7 @@ export default function OrganisationsList() {
                     <td className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-slate-100">{org.name}</span>
-                        {org.status !== 'active' && (
+                        {org.status && org.status !== 'active' && (
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadge(
                               org.status
@@ -236,20 +254,20 @@ export default function OrganisationsList() {
                     <td className="px-4 py-3 align-middle text-sm text-slate-300">
                       {org.owner_email || '—'}
                     </td>
-                    <td className="px-4 py-3 align-middle text-sm text-slate-200">{org.plan_name}</td>
+                    <td className="px-4 py-3 align-middle text-sm text-slate-200">{org.plan_name || 'Standard'}</td>
                     <td className="px-4 py-3 align-middle text-sm text-slate-200">
-                      <span className={org.seats_used! > org.seat_limit ? 'text-rose-400 font-medium' : ''}>
-                        {org.seats_used} / {org.seat_limit}
+                      <span className={(org.seats_used || 0) > org.seat_limit ? 'text-rose-400 font-medium' : ''}>
+                        {org.seats_used || 0} / {org.seat_limit || 0}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-middle text-sm text-slate-200">{org.project_count}</td>
+                    <td className="px-4 py-3 align-middle text-sm text-slate-200">{org.project_count || 0}</td>
                     <td className="px-4 py-3 align-middle">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusBadge(
-                          org.status
+                          org.status || 'active'
                         )}`}
                       >
-                        {org.status.charAt(0).toUpperCase() + org.status.slice(1)}
+                        {(org.status || 'active').charAt(0).toUpperCase() + (org.status || 'active').slice(1)}
                       </span>
                     </td>
                     <td className="px-4 py-3 align-middle text-sm text-slate-300">
