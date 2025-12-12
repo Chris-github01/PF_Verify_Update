@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck, Settings } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck, Settings, ShieldAlert, Flame } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { isSuperAdmin } from '../lib/admin/superAdminGuard';
 import AdminDashboard from './admin/AdminDashboard';
@@ -91,113 +91,194 @@ export default function AdminApp() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      <div className="w-64 bg-white border-r border-slate-200 flex flex-col">
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-              <Building2 className="text-white" size={20} />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">Admin Console</div>
-              <div className="text-xs text-slate-500">Master Admin</div>
-            </div>
+    <div className="min-h-screen bg-slate-950 flex">
+      <aside className="w-64 border-r border-slate-800 bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex flex-col">
+        {/* Brand Header */}
+        <div className="flex items-center gap-2 px-5 pt-5 pb-4">
+          <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30 flex-shrink-0">
+            <Flame className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold tracking-wide text-slate-50">
+              Admin Console
+            </span>
+            <span className="text-[11px] text-slate-400">
+              Master Admin
+            </span>
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
-          {isSuperAdminUser && (
-            <>
+        {/* Super Admin Section */}
+        {isSuperAdminUser && (
+          <div className="px-3 pb-4 border-b border-slate-800/80">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 px-3 mb-2">
+              Super Admin
+            </div>
+            <div className="space-y-1">
               <button
                 onClick={() => (window.location.href = '/admin/dashboard')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  activeView === 'super-dashboard'
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'super-dashboard'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
               >
-                <Users size={18} />
-                Clients & Trials
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <Users size={16} />
+                </span>
+                <span className="flex-1 text-left">Clients & Trials</span>
+                {activeView === 'super-dashboard' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.8)]" />
+                )}
               </button>
               <button
                 onClick={() => (window.location.href = '/admin/pdfs')}
-                className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  activeView === 'pdf-vault'
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'pdf-vault'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
               >
-                <FileText size={18} />
-                PDF Vault
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <FileText size={16} />
+                </span>
+                <span className="flex-1 text-left">PDF Vault</span>
+                {activeView === 'pdf-vault' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.8)]" />
+                )}
               </button>
-              <div className="h-px bg-slate-200 my-2"></div>
-            </>
-          )}
-          <button
-            onClick={() => (window.location.href = '/admin')}
-            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
-              activeView === 'dashboard'
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <LayoutDashboard size={18} />
-            Dashboard
-          </button>
-          <button
-            onClick={() => (window.location.href = '/admin/organisations')}
-            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
-              activeView === 'organisations' || activeView === 'organisation-detail' || activeView === 'create-organisation'
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Building2 size={18} />
-            Organisations
-          </button>
-          <button
-            onClick={() => (window.location.href = '/admin/platform-admins')}
-            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
-              activeView === 'platform-admins'
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <ShieldCheck size={18} />
-            Platform Admins
-          </button>
-          <button
-            onClick={() => (window.location.href = '/admin/system-config')}
-            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition ${
-              activeView === 'system-config'
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Settings size={18} />
-            System Config
-          </button>
+            </div>
+          </div>
+        )}
+
+        {/* Main Navigation */}
+        <nav className="flex-1 px-3 pb-4 pt-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 px-3 mb-2">
+            Platform Administration
+          </div>
+          <ul className="space-y-1">
+            <li>
+              <button
+                onClick={() => (window.location.href = '/admin')}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'dashboard'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <LayoutDashboard size={16} />
+                </span>
+                <span className="flex-1 text-left">Dashboard</span>
+                {activeView === 'dashboard' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                )}
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => (window.location.href = '/admin/organisations')}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'organisations' || activeView === 'organisation-detail' || activeView === 'create-organisation'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <Building2 size={16} />
+                </span>
+                <span className="flex-1 text-left">Organisations</span>
+                {(activeView === 'organisations' || activeView === 'organisation-detail' || activeView === 'create-organisation') && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                )}
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => (window.location.href = '/admin/platform-admins')}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'platform-admins'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <ShieldCheck size={16} />
+                </span>
+                <span className="flex-1 text-left">Platform Admins</span>
+                {activeView === 'platform-admins' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                )}
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => (window.location.href = '/admin/system-config')}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'system-config'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <Settings size={16} />
+                </span>
+                <span className="flex-1 text-left">System Config</span>
+                {activeView === 'system-config' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                )}
+              </button>
+            </li>
+          </ul>
         </nav>
 
-        <div className="p-4 border-t border-slate-200 space-y-2">
+        {/* Footer Actions */}
+        <div className="px-3 pb-3 border-t border-slate-800/80 pt-3 space-y-2">
           <button
             onClick={() => (window.location.href = '/')}
-            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+            className="group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all text-slate-400 hover:text-slate-50 hover:bg-slate-900/60"
           >
-            <LayoutDashboard size={18} />
-            Main App
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+              <LayoutDashboard size={16} />
+            </span>
+            <span className="flex-1 text-left">Main App</span>
           </button>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium text-rose-600 hover:bg-rose-50 transition"
+            className="group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
           >
-            <LogOut size={18} />
-            Logout
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-rose-500/20 flex-shrink-0">
+              <LogOut size={16} />
+            </span>
+            <span className="flex-1 text-left">Logout</span>
           </button>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-auto">
+        {/* Version Footer */}
+        <div className="border-t border-slate-800/80 px-4 py-3 text-[11px] text-slate-500">
+          v1.9 • © 2025 PassiveFire
+        </div>
+      </aside>
+
+      <div className="flex-1 overflow-auto bg-slate-950">
         {renderContent()}
       </div>
     </div>
