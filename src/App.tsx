@@ -677,7 +677,7 @@ function AppContent() {
     }
   };
 
-  if (authLoading || orgLoading || adminLoading) {
+  if (authLoading || orgLoading) {
     console.log('🔄 [App] Loading states:', { authLoading, orgLoading, adminLoading });
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
