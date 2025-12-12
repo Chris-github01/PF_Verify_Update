@@ -37,7 +37,7 @@ export default function AdminApp() {
     const path = window.location.pathname;
 
     if (path === '/admin' || path === '/admin/') {
-      setActiveView(isSuperAdminUser ? 'super-dashboard' : 'dashboard');
+      setActiveView('dashboard');
     } else if (path === '/admin/dashboard') {
       setActiveView('super-dashboard');
     } else if (path === '/admin/clients/new') {
@@ -87,7 +87,7 @@ export default function AdminApp() {
       case 'create-organisation':
         return <CreateOrganisation />;
       default:
-        return isSuperAdminUser ? <SuperAdminDashboard /> : <AdminDashboard />;
+        return <AdminDashboard />;
     }
   };
 
