@@ -126,11 +126,11 @@ export default function OrganisationsList() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'trial':
-        return 'bg-amber-50 text-amber-700';
+        return 'bg-amber-500/10 text-amber-300 border border-amber-500/30';
       case 'suspended':
-        return 'bg-rose-50 text-rose-700';
+        return 'bg-rose-500/10 text-rose-300 border border-rose-500/30';
       default:
-        return 'bg-emerald-50 text-emerald-700';
+        return 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30';
     }
   };
 
@@ -138,14 +138,14 @@ export default function OrganisationsList() {
     <div className="px-6 py-6 max-w-7xl mx-auto">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Organisations</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-slate-50">Organisations</h1>
+          <p className="mt-1 text-sm text-slate-400">
             Manage client organisations, seat limits, and subscription status.
           </p>
         </div>
         <button
           onClick={() => (window.location.href = '/admin/organisations/new')}
-          className="inline-flex items-center rounded-lg bg-[#0A66C2] px-4 py-2 text-sm font-semibold text-white shadow hover:bg-[#0952A0] transition"
+          className="inline-flex items-center rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-sky-600 transition"
         >
           Create organisation
         </button>
@@ -159,13 +159,13 @@ export default function OrganisationsList() {
             placeholder="Search by organisation name or owner email…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-slate-50 pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+            className="w-full rounded-xl border border-slate-700 bg-slate-900/60 pl-9 pr-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+          className="rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
         >
           <option value="all">All</option>
           <option value="active">Active</option>
@@ -174,40 +174,40 @@ export default function OrganisationsList() {
         </select>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)] overflow-hidden">
+      <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg overflow-hidden">
         {loading ? (
-          <div className="text-center py-12 text-slate-500">Loading organisations...</div>
+          <div className="text-center py-12 text-slate-400">Loading organisations...</div>
         ) : filteredOrgs.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
+          <div className="text-center py-12 text-slate-400">
             {searchQuery || statusFilter !== 'all' ? 'No organisations found' : 'No organisations yet'}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full table-auto text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-slate-700/60">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Organisation
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Owner
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Plan
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Seats
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Projects
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Last active
                   </th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Actions
                   </th>
                 </tr>
@@ -216,12 +216,12 @@ export default function OrganisationsList() {
                 {filteredOrgs.map((org) => (
                   <tr
                     key={org.id}
-                    className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
+                    className="border-b border-slate-700/40 hover:bg-slate-800/40 cursor-pointer transition-colors"
                     onClick={() => (window.location.href = `/admin/organisations/${org.id}`)}
                   >
                     <td className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900">{org.name}</span>
+                        <span className="font-medium text-slate-100">{org.name}</span>
                         {org.status !== 'active' && (
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadge(
@@ -233,16 +233,16 @@ export default function OrganisationsList() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 align-middle text-sm text-slate-600">
+                    <td className="px-4 py-3 align-middle text-sm text-slate-300">
                       {org.owner_email || '—'}
                     </td>
-                    <td className="px-4 py-3 align-middle text-sm text-slate-800">{org.plan_name}</td>
-                    <td className="px-4 py-3 align-middle text-sm text-slate-800">
-                      <span className={org.seats_used! > org.seat_limit ? 'text-rose-600 font-medium' : ''}>
+                    <td className="px-4 py-3 align-middle text-sm text-slate-200">{org.plan_name}</td>
+                    <td className="px-4 py-3 align-middle text-sm text-slate-200">
+                      <span className={org.seats_used! > org.seat_limit ? 'text-rose-400 font-medium' : ''}>
                         {org.seats_used} / {org.seat_limit}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-middle text-sm text-slate-800">{org.project_count}</td>
+                    <td className="px-4 py-3 align-middle text-sm text-slate-200">{org.project_count}</td>
                     <td className="px-4 py-3 align-middle">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusBadge(
@@ -252,7 +252,7 @@ export default function OrganisationsList() {
                         {org.status.charAt(0).toUpperCase() + org.status.slice(1)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-middle text-sm text-slate-600">
+                    <td className="px-4 py-3 align-middle text-sm text-slate-300">
                       {formatDate(org.last_active!)}
                     </td>
                     <td className="px-4 py-3 align-middle">
@@ -261,7 +261,7 @@ export default function OrganisationsList() {
                           e.stopPropagation();
                           window.location.href = `/admin/organisations/${org.id}`;
                         }}
-                        className="text-xs font-medium text-[#0A66C2] hover:underline"
+                        className="text-xs font-medium text-sky-400 hover:text-sky-300 hover:underline transition"
                       >
                         Open
                       </button>
