@@ -65,8 +65,12 @@ function AppContent() {
   const [orgLicensing, setOrgLicensing] = useState<{ licensed_trades: string[]; subscription_status: string } | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
-  const { currentOrganisation, organisations, loading: orgLoading, setCurrentOrganisation } = useOrganisation();
+  const { currentOrganisation, organisations, loading: orgLoading, isGodMode, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
+
+  // Use god-mode status from organisation context as master admin indicator
+  const effectiveIsMasterAdmin = isGodMode || isMasterAdmin;
+  console.log('🎯 [App] Admin Status:', { isGodMode, isMasterAdmin, effectiveIsMasterAdmin, orgLoading, adminLoading });
   const initializingRef = useRef(false);
 
   useEffect(() => {
@@ -726,7 +730,7 @@ function AppContent() {
 
   if (window.location.pathname.startsWith('/admin')) {
     // Wait for admin check to complete before denying access
-    if (adminLoading) {
+    if (orgLoading || adminLoading) {
       return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center">
           <div className="text-center">
@@ -737,7 +741,7 @@ function AppContent() {
       );
     }
 
-    if (!isMasterAdmin) {
+    if (!effectiveIsMasterAdmin) {
       toastStore.show({
         type: 'warning',
         title: 'Access denied',
@@ -765,12 +769,12 @@ function AppContent() {
   }
 
   if (!selectedMode) {
-    return <ModeSelector onSelectMode={setSelectedMode} isMasterAdmin={isMasterAdmin} adminLoading={adminLoading} />;
+    return <ModeSelector onSelectMode={setSelectedMode} isMasterAdmin={effectiveIsMasterAdmin} adminLoading={orgLoading || adminLoading} />;
   }
 
   if (selectedMode === 'admin') {
     // Wait for admin check to complete before denying access
-    if (adminLoading) {
+    if (orgLoading || adminLoading) {
       return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center">
           <div className="text-center">
@@ -781,7 +785,7 @@ function AppContent() {
       );
     }
 
-    if (!isMasterAdmin) {
+    if (!effectiveIsMasterAdmin) {
       toastStore.show({
         type: 'warning',
         title: 'Access denied',

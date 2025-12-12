@@ -17,6 +17,7 @@ interface OrganisationContextType {
   organisations: Organisation[];
   loading: boolean;
   isAdminView: boolean;
+  isGodMode: boolean;
   setCurrentOrganisation: (org: Organisation | null) => void;
   refreshOrganisations: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
@@ -30,6 +31,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdminView, setIsAdminView] = useState(false);
+  const [isGodMode, setIsGodMode] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [sessionReady, setSessionReady] = useState(false);
 
@@ -65,6 +67,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         setSessionReady(false);
         setOrganisations([]);
         setCurrentOrganisation(null);
+        setIsGodMode(false);
         setLoading(false);
       }
     });
@@ -102,6 +105,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     if (isGodMode) {
       console.log('👑👑👑 [OrganisationContext] GOD-MODE OWNER DETECTED:', user.email);
       console.log('👑 [OrganisationContext] Ensuring God-Mode access to ALL organisations...');
+      setIsGodMode(true);
 
       // Call the function to ensure God-Mode owner has access to all orgs
       const { error: ensureError } = await supabase.rpc('ensure_god_mode_access');
@@ -340,6 +344,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         organisations,
         loading,
         isAdminView,
+        isGodMode,
         setCurrentOrganisation: handleSetCurrentOrganisation,
         refreshOrganisations,
         hasPermission,
