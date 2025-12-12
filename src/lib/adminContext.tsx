@@ -24,9 +24,17 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkAdminStatus = async () => {
+    let isAdmin = false;
     try {
       console.log('🔐 [AdminContext] Checking admin status...');
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+      if (userError) {
+        console.error('❌ [AdminContext] Error getting user:', userError);
+        setIsMasterAdmin(false);
+        setLoading(false);
+        return;
+      }
 
       if (!user) {
         console.log('🔐 [AdminContext] No user found');
@@ -35,20 +43,35 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log('🔐 [AdminContext] User found, checking platform_admins...');
-      const { data: adminCheck } = await supabase
+      console.log('🔐 [AdminContext] User found:', { id: user.id, email: user.email });
+      console.log('🔐 [AdminContext] Querying platform_admins...');
+
+      const { data: adminCheck, error: adminError } = await supabase
         .from('platform_admins')
         .select('is_active')
         .eq('user_id', user.id)
         .eq('is_active', true)
         .maybeSingle();
 
-      console.log('🔐 [AdminContext] Admin check result:', !!adminCheck);
-      setIsMasterAdmin(!!adminCheck);
+      if (adminError) {
+        console.error('❌ [AdminContext] Error querying platform_admins:', adminError);
+        setIsMasterAdmin(false);
+        setLoading(false);
+        return;
+      }
+
+      isAdmin = !!adminCheck;
+      console.log('🔐 [AdminContext] Admin check result:', {
+        hasData: !!adminCheck,
+        isActive: adminCheck?.is_active,
+        finalResult: isAdmin
+      });
+      setIsMasterAdmin(isAdmin);
     } catch (error) {
-      console.error('❌ [AdminContext] Error checking admin status:', error);
+      console.error('❌ [AdminContext] Unexpected error checking admin status:', error);
       setIsMasterAdmin(false);
     } finally {
+      console.log('🔐 [AdminContext] Setting loading to false, isMasterAdmin:', isAdmin);
       setLoading(false);
     }
   };

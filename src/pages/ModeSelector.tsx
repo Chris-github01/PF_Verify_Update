@@ -7,8 +7,11 @@ interface ModeSelectorProps {
 }
 
 export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading }: ModeSelectorProps) {
+  console.log('🎯 [ModeSelector] Render:', { isMasterAdmin, adminLoading });
+
   // Wait for admin check to complete before auto-selecting
   if (adminLoading) {
+    console.log('🎯 [ModeSelector] Still loading admin status, showing spinner');
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex items-center justify-center">
         <div className="text-center">
@@ -20,9 +23,12 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
   }
 
   if (!isMasterAdmin) {
+    console.log('🎯 [ModeSelector] Not a master admin, auto-selecting app mode');
     onSelectMode('app');
     return null;
   }
+
+  console.log('🎯 [ModeSelector] Master admin confirmed, showing Welcome Back page');
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex items-center justify-center p-6">
