@@ -39,9 +39,7 @@ export interface GlobalQuote {
 
 export async function getAllOrganisations(): Promise<OrganisationDashboard[]> {
   const { data, error } = await supabase
-    .from('admin_organisations_dashboard')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .rpc('get_admin_organisations_dashboard');
 
   if (error) throw error;
   return data || [];
