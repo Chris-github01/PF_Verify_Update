@@ -60,7 +60,7 @@ export default function AdminDashboard() {
         supabase
           .from('organisations')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'active'),
+          .eq('subscription_status', 'active'),
         supabase
           .from('organisations')
           .select('id, name, created_at')
