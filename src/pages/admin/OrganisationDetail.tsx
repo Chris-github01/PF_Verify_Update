@@ -62,7 +62,13 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
         .single();
 
       if (error) throw error;
-      setOrganisation(org);
+
+      const orgWithDefaults = {
+        ...org,
+        status: org.status || 'active'
+      };
+
+      setOrganisation(orgWithDefaults);
       setSeatLimit(org.seat_limit);
       setCreatedDate(new Date(org.created_at).toLocaleDateString('en-GB', {
         day: 'numeric',
@@ -87,19 +93,28 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
       const membersWithDetails = await Promise.all(
         (memberData || []).map(async (member) => {
-          const { data: profile } = await supabase
-            .rpc('get_user_details', { p_user_id: member.user_id })
-            .maybeSingle();
+          try {
+            const { data: profile } = await supabase
+              .rpc('get_user_details', { p_user_id: member.user_id })
+              .maybeSingle();
 
-          if (member.role === 'owner') {
-            setOwnerEmail(profile?.email || 'Unknown');
+            if (member.role === 'owner') {
+              setOwnerEmail(profile?.email || 'Unknown');
+            }
+
+            return {
+              ...member,
+              email: profile?.email || 'Unknown',
+              full_name: profile?.full_name,
+            };
+          } catch (err) {
+            console.warn('Could not fetch user details:', err);
+            return {
+              ...member,
+              email: 'Unknown',
+              full_name: undefined,
+            };
           }
-
-          return {
-            ...member,
-            email: profile?.email || 'Unknown',
-            full_name: profile?.full_name,
-          };
         })
       );
 
@@ -113,20 +128,29 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
       const projectsWithDetails = await Promise.all(
         (projectData || []).map(async (project) => {
-          const { count: quoteCount } = await supabase
-            .from('quotes')
-            .select('*', { count: 'exact', head: true })
-            .eq('project_id', project.id);
+          try {
+            const { count: quoteCount } = await supabase
+              .from('quotes')
+              .select('*', { count: 'exact', head: true })
+              .eq('project_id', project.id);
 
-          const { data: owner } = await supabase
-            .rpc('get_user_details', { p_user_id: project.user_id })
-            .maybeSingle();
+            const { data: owner } = await supabase
+              .rpc('get_user_details', { p_user_id: project.user_id })
+              .maybeSingle();
 
-          return {
-            ...project,
-            quote_count: quoteCount || 0,
-            owner_email: owner?.email,
-          };
+            return {
+              ...project,
+              quote_count: quoteCount || 0,
+              owner_email: owner?.email,
+            };
+          } catch (err) {
+            console.warn('Could not fetch project details:', err);
+            return {
+              ...project,
+              quote_count: 0,
+              owner_email: undefined,
+            };
+          }
         })
       );
 
@@ -328,11 +352,11 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'trial':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
+        return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
       case 'suspended':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
+        return 'bg-rose-500/10 text-rose-300 border-rose-500/30';
       default:
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30';
     }
   };
 
@@ -343,7 +367,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
   if (loading) {
     return (
       <div className="px-6 py-6 max-w-7xl mx-auto">
-        <div className="text-center py-12 text-slate-500">Loading organisation...</div>
+        <div className="text-center py-12 text-slate-400">Loading organisation...</div>
       </div>
     );
   }
@@ -351,7 +375,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
   if (!organisation) {
     return (
       <div className="px-6 py-6 max-w-7xl mx-auto">
-        <div className="text-center py-12 text-slate-500">Organisation not found</div>
+        <div className="text-center py-12 text-slate-400">Organisation not found</div>
       </div>
     );
   }
@@ -362,13 +386,13 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
         <div
           className={`fixed top-4 right-4 z-50 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3 ${
             toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border border-rose-200'
+              ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+              : 'bg-rose-500/10 text-rose-300 border border-rose-500/30'
           }`}
         >
           {toast.type === 'error' && <AlertCircle size={18} />}
           <span className="text-sm font-medium">{toast.message}</span>
-          <button onClick={() => setToast(null)} className="ml-2">
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-300 hover:text-slate-100">
             <X size={16} />
           </button>
         </div>
@@ -376,7 +400,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
       <button
         onClick={() => (window.location.href = '/admin/organisations')}
-        className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-4"
+        className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 mb-4 transition"
       >
         <ArrowLeft size={16} />
         Back to organisations
@@ -384,8 +408,8 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{organisation.name}</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-slate-50">{organisation.name}</h1>
+          <p className="mt-1 text-sm text-slate-400">
             Created {createdDate} · Owner: {ownerEmail}
           </p>
         </div>
@@ -395,19 +419,19 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
               organisation.status
             )}`}
           >
-            {organisation.status.charAt(0).toUpperCase() + organisation.status.slice(1)}
+            {(organisation.status || 'active').charAt(0).toUpperCase() + (organisation.status || 'active').slice(1)}
           </span>
           {organisation.status === 'suspended' ? (
             <button
               onClick={handleActivate}
-              className="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition"
+              className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-emerald-700 transition"
             >
               Activate
             </button>
           ) : (
             <button
               onClick={handleSuspend}
-              className="inline-flex items-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-rose-700 transition"
+              className="inline-flex items-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-rose-700 transition"
             >
               Suspend
             </button>
@@ -417,13 +441,13 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)] p-4">
+          <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-slate-900">Plan & seats</h2>
+              <h2 className="text-sm font-semibold text-slate-100">Plan & seats</h2>
               {!editMode ? (
                 <button
                   onClick={() => setEditMode(true)}
-                  className="text-xs font-medium text-[#0A66C2] hover:underline"
+                  className="text-xs font-medium text-sky-400 hover:text-sky-300 hover:underline transition"
                 >
                   Edit
                 </button>
@@ -432,12 +456,12 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Plan</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Plan</label>
                 <select
                   value={planName}
                   onChange={(e) => setPlanName(e.target.value)}
                   disabled={!editMode}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:opacity-50"
                 >
                   <option value="Trial">Trial (14 days)</option>
                   <option value="Starter">Starter</option>
@@ -447,19 +471,19 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Seat limit</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Seat limit</label>
                 <input
                   type="number"
                   value={seatLimit}
                   onChange={(e) => setSeatLimit(parseInt(e.target.value) || 0)}
                   disabled={!editMode}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:opacity-50"
                 />
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-slate-400">
                   Currently using {seatsUsed} seats. Owners, admins, and members use a seat. Viewers are free.
                 </p>
                 {seatLimit < seatsUsed && (
-                  <p className="mt-1 text-xs text-rose-600">
+                  <p className="mt-1 text-xs text-rose-400">
                     Warning: This organisation uses {seatsUsed} seats. Reducing to {seatLimit} will place them over
                     their limit.
                   </p>
@@ -471,7 +495,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                   <button
                     onClick={handleSaveChanges}
                     disabled={saving}
-                    className="px-4 py-2 rounded-lg bg-[#0A66C2] text-sm font-semibold text-white hover:bg-[#0952A0] disabled:opacity-50 transition"
+                    className="px-4 py-2 rounded-xl bg-sky-500 text-sm font-semibold text-white hover:bg-sky-600 disabled:opacity-50 transition"
                   >
                     {saving ? 'Saving...' : 'Save changes'}
                   </button>
@@ -481,7 +505,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                       setSeatLimit(organisation.seat_limit);
                       setPlanName(subscription?.plan_name || 'Trial');
                     }}
-                    className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                    className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 transition"
                   >
                     Cancel
                   </button>
@@ -490,49 +514,49 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)] p-4">
+          <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-900">Members</h2>
+              <h2 className="text-sm font-semibold text-slate-100">Members</h2>
               <button
                 onClick={() => setShowInviteModal(true)}
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl transition shadow-lg"
               >
                 <UserPlus size={14} />
                 Add member
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-slate-400 mb-4">
               Manage organisation members, their roles, and access rights. Seat-consuming roles are highlighted.
             </p>
 
             <div className="overflow-x-auto">
               <table className="w-full table-auto text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Member</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Email</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Role</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr className="border-b border-slate-700/60">
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Member</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Email</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Role</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Last active
                     </th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {members.map((member) => (
-                    <tr key={member.id} className="border-b border-slate-50">
-                      <td className="px-2 py-2 text-sm text-slate-900">
+                    <tr key={member.id} className="border-b border-slate-700/40">
+                      <td className="px-2 py-2 text-sm text-slate-100">
                         {member.full_name || member.email.split('@')[0]}
                       </td>
-                      <td className="px-2 py-2 text-sm text-slate-600">{member.email}</td>
+                      <td className="px-2 py-2 text-sm text-slate-300">{member.email}</td>
                       <td className="px-2 py-2">
                         {editingMember === member.id ? (
                           <div className="flex items-center gap-2">
                             <select
                               value={editRole}
                               onChange={(e) => setEditRole(e.target.value)}
-                              className="text-xs px-2 py-1 border border-slate-300 rounded"
+                              className="text-xs px-2 py-1 border border-slate-700 rounded bg-slate-900/60 text-slate-200"
                             >
                               <option value="owner">Owner</option>
                               <option value="admin">Admin</option>
@@ -541,13 +565,13 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                             </select>
                             <button
                               onClick={() => handleUpdateMemberRole(member.id, editRole)}
-                              className="text-xs text-blue-600 hover:text-blue-800"
+                              className="text-xs text-sky-400 hover:text-sky-300"
                             >
                               Save
                             </button>
                             <button
                               onClick={() => setEditingMember(null)}
-                              className="text-xs text-slate-600 hover:text-slate-800"
+                              className="text-xs text-slate-400 hover:text-slate-300"
                             >
                               Cancel
                             </button>
@@ -556,8 +580,8 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                               ['owner', 'admin', 'member'].includes(member.role)
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'bg-slate-50 text-slate-700'
+                                ? 'bg-sky-500/10 text-sky-300 border border-sky-500/30'
+                                : 'bg-slate-500/10 text-slate-300 border border-slate-500/30'
                             }`}
                           >
                             {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
@@ -568,16 +592,16 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                             member.status === 'active'
-                              ? 'bg-emerald-50 text-emerald-700'
+                              ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
                               : member.status === 'invited'
-                              ? 'bg-slate-50 text-slate-700'
-                              : 'bg-rose-50 text-rose-700'
+                              ? 'bg-slate-500/10 text-slate-300 border border-slate-500/30'
+                              : 'bg-rose-500/10 text-rose-300 border border-rose-500/30'
                           }`}
                         >
                           {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                         </span>
                       </td>
-                      <td className="px-2 py-2 text-sm text-slate-600">
+                      <td className="px-2 py-2 text-sm text-slate-300">
                         {member.activated_at ? formatDate(member.activated_at) : 'Never'}
                       </td>
                       <td className="px-2 py-2">
@@ -589,7 +613,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                                   setEditingMember(member.id);
                                   setEditRole(member.role);
                                 }}
-                                className="text-slate-600 hover:text-blue-600 transition"
+                                className="text-slate-400 hover:text-sky-400 transition"
                                 title="Edit role"
                               >
                                 <Edit2 size={14} />
@@ -597,7 +621,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                               {member.status === 'invited' && (
                                 <button
                                   onClick={() => handleResendInvite(member.email)}
-                                  className="text-slate-600 hover:text-blue-600 transition"
+                                  className="text-slate-400 hover:text-sky-400 transition"
                                   title="Resend invite"
                                 >
                                   <Mail size={14} />
@@ -605,7 +629,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                               )}
                               <button
                                 onClick={() => handleRemoveMember(member.id, member.email)}
-                                className="text-slate-600 hover:text-red-600 transition"
+                                className="text-slate-400 hover:text-red-400 transition"
                                 title="Remove member"
                               >
                                 <Trash2 size={14} />
@@ -621,47 +645,47 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)] p-4">
-            <h2 className="text-sm font-semibold text-slate-900 mb-4">Projects</h2>
+          <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
+            <h2 className="text-sm font-semibold text-slate-100 mb-4">Projects</h2>
 
             <div className="overflow-x-auto">
               <table className="w-full table-auto text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Project</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr className="border-b border-slate-700/60">
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Project</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Last updated
                     </th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Quotes</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Owner</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Quotes</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Owner</th>
                   </tr>
                 </thead>
                 <tbody>
                   {projects.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-2 py-4 text-center text-sm text-slate-500">
+                      <td colSpan={5} className="px-2 py-4 text-center text-sm text-slate-400">
                         No projects yet
                       </td>
                     </tr>
                   ) : (
                     projects.map((project) => (
-                      <tr key={project.id} className="border-b border-slate-50">
-                        <td className="px-2 py-2 font-medium text-sm text-slate-900">{project.name}</td>
+                      <tr key={project.id} className="border-b border-slate-700/40">
+                        <td className="px-2 py-2 font-medium text-sm text-slate-100">{project.name}</td>
                         <td className="px-2 py-2">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                               project.status === 'active'
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-slate-50 text-slate-700'
+                                ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-slate-500/10 text-slate-300 border border-slate-500/30'
                             }`}
                           >
                             {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
                           </span>
                         </td>
-                        <td className="px-2 py-2 text-sm text-slate-600">{formatDate(project.updated_at)}</td>
-                        <td className="px-2 py-2 text-sm text-slate-800">{project.quote_count}</td>
-                        <td className="px-2 py-2 text-sm text-slate-600">{project.owner_email || '—'}</td>
+                        <td className="px-2 py-2 text-sm text-slate-300">{formatDate(project.updated_at)}</td>
+                        <td className="px-2 py-2 text-sm text-slate-200">{project.quote_count}</td>
+                        <td className="px-2 py-2 text-sm text-slate-300">{project.owner_email || '—'}</td>
                       </tr>
                     ))
                   )}
@@ -672,12 +696,12 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
         </div>
 
         <div>
-          <div className="rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)] p-4">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Quick actions</h2>
+          <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
+            <h2 className="text-sm font-semibold text-slate-100 mb-3">Quick actions</h2>
             <div className="space-y-2">
               <button
                 onClick={() => navigator.clipboard.writeText(organisationId)}
-                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition"
+                className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/40 rounded-xl transition"
               >
                 Copy organisation ID
               </button>
@@ -687,51 +711,51 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
       </div>
 
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Add member to organisation</h3>
+              <h3 className="text-lg font-semibold text-slate-100">Add member to organisation</h3>
               <button
                 onClick={() => {
                   setShowInviteModal(false);
                   setInviteEmail('');
                   setInviteRole('member');
                 }}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-slate-400 hover:text-slate-200 transition"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <p className="text-sm text-slate-600 mb-4">
+            <p className="text-sm text-slate-400 mb-4">
               Add an existing user or invite a new one to join this organisation.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Email address <span className="text-rose-600">*</span>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Email address <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="email"
                   placeholder="user@example.com"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 placeholder:text-slate-500"
                 />
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-slate-400">
                   If the user exists, they'll be added immediately. Otherwise, we'll create an account and send an invite.
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Role <span className="text-rose-600">*</span>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Role <span className="text-rose-400">*</span>
                 </label>
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member' | 'viewer')}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                 >
                   <option value="admin">Admin (can manage settings and members)</option>
                   <option value="member">Member (standard access)</option>
@@ -739,11 +763,11 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                 </select>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-xs text-blue-800">
+              <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl p-3">
+                <p className="text-xs text-sky-300">
                   <strong>Note:</strong> Admin and Member roles consume a seat. Current usage: {seatsUsed}/{seatLimit} seats.
                   {seatsUsed >= seatLimit && inviteRole !== 'viewer' && (
-                    <span className="block mt-1 text-rose-600 font-semibold">
+                    <span className="block mt-1 text-rose-400 font-semibold">
                       Warning: This organisation is at its seat limit!
                     </span>
                   )}
@@ -758,7 +782,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                   setInviteEmail('');
                   setInviteRole('member');
                 }}
-                className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 transition"
                 disabled={inviting}
               >
                 Cancel
@@ -766,7 +790,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
               <button
                 onClick={handleInviteUser}
                 disabled={inviting || !inviteEmail}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-4 py-2 rounded-xl bg-sky-500 text-sm font-semibold text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg"
               >
                 {inviting ? 'Adding...' : 'Add member'}
               </button>
