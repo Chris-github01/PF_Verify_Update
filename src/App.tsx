@@ -765,7 +765,7 @@ function AppContent() {
   }
 
   if (!selectedMode) {
-    return <ModeSelector onSelectMode={setSelectedMode} isMasterAdmin={isMasterAdmin} />;
+    return <ModeSelector onSelectMode={setSelectedMode} isMasterAdmin={isMasterAdmin} adminLoading={adminLoading} />;
   }
 
   if (selectedMode === 'admin') {

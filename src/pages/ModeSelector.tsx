@@ -3,9 +3,22 @@ import { Building2, Flame, ShieldAlert } from 'lucide-react';
 interface ModeSelectorProps {
   onSelectMode: (mode: 'admin' | 'app') => void;
   isMasterAdmin: boolean;
+  adminLoading?: boolean;
 }
 
-export default function ModeSelector({ onSelectMode, isMasterAdmin }: ModeSelectorProps) {
+export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading }: ModeSelectorProps) {
+  // Wait for admin check to complete before auto-selecting
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+          <p className="text-slate-400">Checking access...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isMasterAdmin) {
     onSelectMode('app');
     return null;
