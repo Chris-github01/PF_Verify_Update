@@ -1,14 +1,25 @@
 import { supabase } from '../supabase';
 
-// SUPER ADMIN EMAIL LIST - Edit this to add/remove super admins
-const SUPER_ADMIN_EMAILS = [
-  'your-email@domain.com',
-  'backup@domain.com'
-];
-
-export function isSuperAdmin(email: string | undefined): boolean {
+// Check if user is a platform admin in the database
+export async function isSuperAdmin(email: string | undefined): Promise<boolean> {
   if (!email) return false;
-  return SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data: adminCheck } = await supabase
+      .from('platform_admins')
+      .select('is_active')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    return !!adminCheck;
+  } catch (error) {
+    console.error('Error checking super admin status:', error);
+    return false;
+  }
 }
 
 export async function requireSuperAdmin(): Promise<boolean> {
@@ -18,7 +29,8 @@ export async function requireSuperAdmin(): Promise<boolean> {
     throw new Error('Not authenticated');
   }
 
-  if (!isSuperAdmin(session.user.email)) {
+  const isAdmin = await isSuperAdmin(session.user.email);
+  if (!isAdmin) {
     throw new Error('Super admin access required');
   }
 
@@ -33,7 +45,13 @@ export async function logAdminAction(
 ): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
 
-  if (!session || !isSuperAdmin(session.user.email)) {
+  if (!session) {
+    console.warn('Attempted admin action without authentication');
+    return;
+  }
+
+  const isAdmin = await isSuperAdmin(session.user.email);
+  if (!isAdmin) {
     console.warn('Attempted admin action without super admin access');
     return;
   }

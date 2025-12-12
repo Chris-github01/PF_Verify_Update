@@ -28,7 +28,8 @@ export default function AdminApp() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user.email) {
       setUserEmail(session.user.email);
-      setIsSuperAdminUser(isSuperAdmin(session.user.email));
+      const isAdmin = await isSuperAdmin(session.user.email);
+      setIsSuperAdminUser(isAdmin);
     }
   };
 
