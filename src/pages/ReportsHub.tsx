@@ -114,6 +114,9 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
         report_coverage_percent: Math.round(coveragePercent),
       });
 
+      // Generate and download the report HTML
+      await generateAndDownloadReport(result.reportId, selectedProject.name);
+
       onNavigate?.('award-report', result.reportId);
     } catch (error: any) {
       console.error('Error computing award report:', error);
@@ -162,6 +165,102 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
       refreshProjectMetadata();
     }
   }, [selectedProject?.id]);
+
+  const generateAndDownloadReport = async (reportId: string, projectName: string) => {
+    try {
+      const { data: reportData, error } = await supabase
+        .from('award_reports')
+        .select('result_json, generated_at')
+        .eq('id', reportId)
+        .single();
+
+      if (error || !reportData) {
+        console.error('Error loading report:', error);
+        return;
+      }
+
+      const result = reportData.result_json;
+      const awardSummary = result.awardSummary;
+
+      const content = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Award Report - ${projectName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; color: #333; }
+            h1 { color: #1e40af; border-bottom: 3px solid #3b82f6; padding-bottom: 10px; margin-bottom: 30px; }
+            h2 { color: #1e40af; margin-top: 30px; margin-bottom: 15px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+            h3 { color: #374151; margin-top: 20px; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { padding: 12px; text-align: left; border: 1px solid #d1d5db; }
+            th { background-color: #3b82f6; color: white; font-weight: 600; }
+            tr:nth-child(even) { background-color: #f9fafb; }
+            .meta { color: #6b7280; font-size: 14px; margin-bottom: 30px; }
+            .supplier-section { margin: 30px 0; padding: 20px; background: #f9fafb; border-radius: 8px; }
+            .recommendation { background: #dbeafe; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>Award Recommendation Report</h1>
+          <div class="meta">
+            <p><strong>Project:</strong> ${projectName}</p>
+            <p><strong>Generated:</strong> ${new Date(reportData.generated_at).toLocaleString()}</p>
+            <p><strong>Equalisation Mode:</strong> ${awardSummary.equalisationMode}</p>
+          </div>
+
+          <h2>Supplier Rankings</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Supplier</th>
+                <th>Adjusted Total</th>
+                <th>Risk Score</th>
+                <th>Coverage %</th>
+                <th>Items Quoted</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${awardSummary.suppliers.map((s: any, idx: number) => `
+                <tr>
+                  <td>${idx + 1}</td>
+                  <td>${s.supplierName}</td>
+                  <td>$${s.adjustedTotal.toLocaleString()}</td>
+                  <td>${s.riskScore}</td>
+                  <td>${Math.round(s.coveragePercent)}%</td>
+                  <td>${s.itemsQuoted}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <h2>Recommendations</h2>
+          ${awardSummary.recommendations.map((rec: any) => `
+            <div class="recommendation">
+              <h3>${rec.type.replace('_', ' ')}</h3>
+              <p><strong>Supplier:</strong> ${rec.supplier.supplierName}</p>
+              <p><strong>Reason:</strong> ${rec.reason}</p>
+            </div>
+          `).join('')}
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob([content], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Award_Report_${projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error('Error generating report download:', error);
+    }
+  };
 
   const handleExportPDF = async () => {
     if (!selectedProject?.report_id) return;
