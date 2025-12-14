@@ -1,5 +1,6 @@
-import { Search, Bell, Menu, X, Sparkles, LogOut, User } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Search, Bell, Menu, X, Sparkles, LogOut, User, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
 
@@ -20,9 +21,17 @@ interface AppBarProps {
   onCopilotOpen: () => void;
 }
 
+interface Project {
+  id: string;
+  name: string;
+  client: string | null;
+  reference: string | null;
+}
+
 export default function AppBar({
   currentProjectId,
   currentProjectName,
+  onProjectChange,
   onSearchOpen,
   notificationCount = 0,
   mobileMenuOpen,
@@ -30,6 +39,49 @@ export default function AppBar({
   onCopilotOpen,
 }: AppBarProps) {
   const { currentOrganisation } = useOrganisation();
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (currentOrganisation) {
+      loadProjects();
+    }
+  }, [currentOrganisation]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowProjectDropdown(false);
+      }
+    }
+
+    if (showProjectDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showProjectDropdown]);
+
+  const loadProjects = async () => {
+    if (!currentOrganisation) return;
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, client, reference')
+      .eq('organisation_id', currentOrganisation.id)
+      .order('name', { ascending: true });
+
+    if (!error && data) {
+      setProjects(data);
+    }
+  };
+
+  const handleProjectSelect = (projectId: string) => {
+    setShowProjectDropdown(false);
+    if (onProjectChange) {
+      onProjectChange(projectId);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-800/70 bg-slate-950/80 backdrop-blur">
@@ -50,10 +102,57 @@ export default function AppBar({
           )}
 
           {currentProjectId && currentProjectName && (
-            <button className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 text-xs text-slate-200 shadow-sm hover:border-sky-500 hover:text-sky-200 transition-colors">
-              {currentProjectName}
-              <span className="text-slate-500">▼</span>
-            </button>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowProjectDropdown(!showProjectDropdown)}
+                className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 text-xs text-slate-200 shadow-sm hover:border-sky-500 hover:text-sky-200 transition-colors"
+              >
+                {currentProjectName}
+                <ChevronDown size={12} className={`text-slate-400 transition-transform ${showProjectDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {showProjectDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute left-0 top-full mt-2 w-72 rounded-lg border border-slate-700/80 bg-slate-900/95 backdrop-blur-sm shadow-xl overflow-hidden z-50"
+                  >
+                    <div className="py-2 max-h-80 overflow-y-auto">
+                      <div className="px-3 py-2 text-xs font-medium text-slate-400 border-b border-slate-800">
+                        Switch Project
+                      </div>
+                      {projects.length === 0 ? (
+                        <div className="px-3 py-4 text-xs text-slate-500 text-center">
+                          No projects available
+                        </div>
+                      ) : (
+                        projects.map((project) => (
+                          <button
+                            key={project.id}
+                            onClick={() => handleProjectSelect(project.id)}
+                            className={`w-full px-3 py-2 text-left text-xs hover:bg-slate-800/70 transition-colors ${
+                              project.id === currentProjectId
+                                ? 'bg-sky-900/30 text-sky-200 border-l-2 border-sky-500'
+                                : 'text-slate-300'
+                            }`}
+                          >
+                            <div className="font-medium">{project.name}</div>
+                            {(project.client || project.reference) && (
+                              <div className="text-slate-500 mt-0.5">
+                                {project.client || project.reference}
+                              </div>
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
         </div>
 

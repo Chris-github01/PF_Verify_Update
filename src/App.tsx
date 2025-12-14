@@ -879,6 +879,7 @@ function AppContent() {
               onTabChange={() => {}}
               currentProjectId={projectId || undefined}
               currentProjectName={projectInfo?.name}
+              onProjectChange={handleProjectSelect}
               onSearchOpen={() => {}}
               notificationCount={0}
               onSettingsOpen={() => setActiveTab('settings')}
