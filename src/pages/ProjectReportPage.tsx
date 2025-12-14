@@ -17,6 +17,7 @@ export default function ProjectReportPage({
   onToast
 }: ProjectReportPageProps) {
   const [hasReport, setHasReport] = useState<boolean | null>(null);
+  const [reportId, setReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
@@ -38,12 +39,15 @@ export default function ProjectReportPage({
       if (error) {
         console.error('Error checking for report:', error);
         setHasReport(false);
+        setReportId(null);
       } else {
         setHasReport(!!data);
+        setReportId(data?.id || null);
       }
     } catch (err) {
       console.error('Failed to check report:', err);
       setHasReport(false);
+      setReportId(null);
     } finally {
       setLoading(false);
     }
@@ -72,12 +76,13 @@ export default function ProjectReportPage({
       // Generate and download the report HTML
       if (result.reportId) {
         await generateAndDownloadReport(result.reportId);
+        // Store the report ID and show the report
+        setReportId(result.reportId);
+        setHasReport(true);
+        onToast?.('Report generated and downloaded successfully!', 'success');
+      } else {
+        throw new Error('No report ID returned from generation');
       }
-
-      onToast?.('Report generated and downloaded successfully!', 'success');
-
-      // Force hasReport to true and refresh
-      setHasReport(true);
     } catch (error: any) {
       console.error('Error generating report:', error);
       onToast?.(error.message || 'Failed to generate report', 'error');
@@ -294,6 +299,7 @@ export default function ProjectReportPage({
       <div className="flex-1 overflow-auto">
         <AwardReport
           projectId={projectId}
+          reportId={reportId || undefined}
           onToast={onToast}
           onNavigate={(page) => {
             console.log('Navigate to:', page);
