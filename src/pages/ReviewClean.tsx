@@ -102,10 +102,10 @@ function DescriptionCell({ rawDescription, normalizedDescription }: { rawDescrip
   const changed = normalizedDescription && normalizedDescription.trim() !== rawDescription.trim();
 
   return (
-    <div className="flex flex-col text-sm max-w-xs">
-      <span className="font-medium text-gray-900 truncate" title={finalDesc}>{finalDesc}</span>
+    <div className="flex flex-col text-sm">
+      <span className="font-medium text-gray-900">{finalDesc}</span>
       {changed && (
-        <span className="text-[11px] text-slate-500 truncate" title={rawDescription}>
+        <span className="text-[11px] text-slate-500">
           original: {rawDescription}
         </span>
       )}
@@ -1042,19 +1042,19 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full table-auto">
                 <thead className="bg-slate-900/50 border-b border-slate-700">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unit</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attributes</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Suggest System</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[250px]">Description</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-20">Qty</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-24">Unit</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Rate</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Total</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[180px]">Attributes</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Suggest System</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-32">Confidence</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Status</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -1135,7 +1135,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                           </>
                         ) : (
                           <>
-                            <td className="px-4 py-3 max-w-xs">
+                            <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <DescriptionCell
                                   rawDescription={item.raw_description || item.description}
@@ -1175,8 +1175,8 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                               {item.system_label ? (
                                 <div className="space-y-2">
                                   <div className="flex items-start gap-2">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="text-xs font-medium text-gray-900 truncate" title={item.system_label}>
+                                    <div className="flex-1">
+                                      <div className="text-xs font-medium text-gray-900">
                                         {item.system_label}
                                       </div>
                                       <div className="text-xs text-gray-300">{item.system_id}</div>
