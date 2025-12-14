@@ -137,6 +137,7 @@ export default function AwardReport({
   const loadSavedReport = async (reportId: string) => {
     try {
       setLoading(true);
+      console.log('🔍 Loading saved report:', reportId);
 
       const { data: reportData, error: reportError } = await supabase
         .from('award_reports')
@@ -144,8 +145,16 @@ export default function AwardReport({
         .eq('id', reportId)
         .maybeSingle();
 
-      if (reportError || !reportData) {
-        throw new Error('Report not found');
+      console.log('📊 Report query result:', { reportData, reportError });
+
+      if (reportError) {
+        console.error('❌ Report query error:', reportError);
+        throw new Error(`Report query failed: ${reportError.message || JSON.stringify(reportError)}`);
+      }
+
+      if (!reportData) {
+        console.error('❌ No report data returned for ID:', reportId);
+        throw new Error(`Report not found with ID: ${reportId}. It may have been deleted or you may not have permission to view it.`);
       }
 
       if (reportData.result_json) {

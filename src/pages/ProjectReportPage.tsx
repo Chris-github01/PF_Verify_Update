@@ -72,16 +72,20 @@ export default function ProjectReportPage({
       }
 
       const result = await response.json();
+      console.log('✅ Report generation response:', result);
 
       // Generate and download the report HTML
       if (result.reportId) {
+        console.log('📝 Setting reportId:', result.reportId);
         // Store the report ID first, THEN show the report
         setReportId(result.reportId);
 
         // Small delay to ensure state is updated before rendering AwardReport
         await new Promise(resolve => setTimeout(resolve, 100));
 
+        console.log('📥 Downloading report HTML...');
         await generateAndDownloadReport(result.reportId);
+        console.log('✅ Report ready, showing AwardReport component');
         setHasReport(true);
         onToast?.('Report generated and downloaded successfully!', 'success');
       } else {
@@ -97,6 +101,7 @@ export default function ProjectReportPage({
 
   const generateAndDownloadReport = async (reportId: string) => {
     try {
+      console.log('🔄 generateAndDownloadReport starting for reportId:', reportId);
       // Retry logic in case there's a brief delay before report is queryable
       let reportData = null;
       let error = null;
@@ -104,6 +109,7 @@ export default function ProjectReportPage({
       const maxAttempts = 3;
 
       while (attempts < maxAttempts && !reportData) {
+        console.log(`🔄 Attempt ${attempts + 1}/${maxAttempts} to fetch report...`);
         const result = await supabase
           .from('award_reports')
           .select('result_json, generated_at')
@@ -113,7 +119,10 @@ export default function ProjectReportPage({
         reportData = result.data;
         error = result.error;
 
+        console.log(`📊 Attempt ${attempts + 1} result:`, { hasData: !!reportData, error });
+
         if (!reportData && attempts < maxAttempts - 1) {
+          console.log('⏳ Waiting 500ms before retry...');
           await new Promise(resolve => setTimeout(resolve, 500));
           attempts++;
         } else {
@@ -122,8 +131,8 @@ export default function ProjectReportPage({
       }
 
       if (error || !reportData) {
-        console.error('Error loading report for download after retries:', error);
-        throw new Error('Failed to load report data for download. The report was created but cannot be accessed yet.');
+        console.error('❌ Error loading report for download after retries:', error);
+        throw new Error(`Failed to load report data for download. Error: ${error?.message || 'Report not found'}. The report was created but cannot be accessed yet.`);
       }
 
       const result = reportData.result_json;
