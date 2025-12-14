@@ -173,6 +173,10 @@ export default function NewProjectDashboard({
         .eq('project_id', projectId)
         .eq('status', 'ready');
 
+      // Better detection of completed steps
+      const hasLineItems = (lineItems?.length || 0) > 0;
+      const hasMappedItems = (lineItems?.filter(item => item.system_id).length || 0) > 0;
+
       const newStats: ProjectStats = {
         quoteCount,
         supplierCount,
@@ -182,8 +186,10 @@ export default function NewProjectDashboard({
         completedSteps: 0,
         totalSteps: TOTAL_WORKFLOW_STEPS,
         hasQuotes: quoteCount > 0,
-        hasReviewedItems: settings?.settings?.review_clean_completed || false,
-        hasScopeMatrix: settings?.settings?.scope_matrix_completed || false,
+        // Review & Clean is complete if there are line items with data
+        hasReviewedItems: hasLineItems || settings?.settings?.review_clean_completed || false,
+        // Scope Matrix is complete if items have been mapped to systems or coverage is 100%
+        hasScopeMatrix: hasMappedItems || coveragePercent === 100 || settings?.settings?.scope_matrix_completed || false,
         hasReports: (reportsList?.length || 0) > 0,
       };
 
@@ -202,19 +208,24 @@ export default function NewProjectDashboard({
 
       switch (step.id) {
         case 'import':
+          // Completed if quotes have been imported
           status = projectStats.hasQuotes ? 'completed' : 'not_started';
           break;
         case 'review':
+          // Completed if items have been reviewed/exist
           status = projectStats.hasReviewedItems ? 'completed' : projectStats.hasQuotes ? 'in_progress' : 'not_started';
           break;
         case 'matrix':
+          // Completed if systems have been mapped
           status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
           break;
         case 'intelligence':
-          status = projectStats.hasReviewedItems ? 'completed' : 'not_started';
+          // Completed if scope matrix is done (prerequisite for intelligence analysis)
+          status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
           break;
         case 'reports':
-          status = projectStats.hasReports ? 'completed' : 'not_started';
+          // Completed if reports have been generated
+          status = projectStats.hasReports ? 'completed' : projectStats.hasScopeMatrix ? 'in_progress' : 'not_started';
           break;
       }
 
