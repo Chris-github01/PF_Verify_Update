@@ -75,9 +75,13 @@ export default function ProjectReportPage({
 
       // Generate and download the report HTML
       if (result.reportId) {
-        await generateAndDownloadReport(result.reportId);
-        // Store the report ID and show the report
+        // Store the report ID first, THEN show the report
         setReportId(result.reportId);
+
+        // Small delay to ensure state is updated before rendering AwardReport
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        await generateAndDownloadReport(result.reportId);
         setHasReport(true);
         onToast?.('Report generated and downloaded successfully!', 'success');
       } else {
@@ -93,15 +97,33 @@ export default function ProjectReportPage({
 
   const generateAndDownloadReport = async (reportId: string) => {
     try {
-      const { data: reportData, error } = await supabase
-        .from('award_reports')
-        .select('result_json, generated_at')
-        .eq('id', reportId)
-        .single();
+      // Retry logic in case there's a brief delay before report is queryable
+      let reportData = null;
+      let error = null;
+      let attempts = 0;
+      const maxAttempts = 3;
+
+      while (attempts < maxAttempts && !reportData) {
+        const result = await supabase
+          .from('award_reports')
+          .select('result_json, generated_at')
+          .eq('id', reportId)
+          .single();
+
+        reportData = result.data;
+        error = result.error;
+
+        if (!reportData && attempts < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
+        } else {
+          break;
+        }
+      }
 
       if (error || !reportData) {
-        console.error('Error loading report:', error);
-        return;
+        console.error('Error loading report for download after retries:', error);
+        throw new Error('Failed to load report data for download. The report was created but cannot be accessed yet.');
       }
 
       const result = reportData.result_json;
@@ -298,6 +320,7 @@ export default function ProjectReportPage({
 
       <div className="flex-1 overflow-auto">
         <AwardReport
+          key={reportId || 'no-report'}
           projectId={projectId}
           reportId={reportId || undefined}
           onToast={onToast}
