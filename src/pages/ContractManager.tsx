@@ -117,7 +117,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      alert(`${mode === 'site' ? 'Site Scope Pack' : 'Commercial Handover Pack'} generated successfully! Open the HTML file and use your browser's Print to PDF function.`);
+      alert(`${mode === 'site' ? 'Site Manager Handover Report' : 'Project Manager Report'} generated successfully! Open the HTML file and use your browser's Print to PDF function to save as PDF.`);
     } catch (error) {
       console.error('Export error:', error);
       alert('Could not generate export. Please try again or contact support.');

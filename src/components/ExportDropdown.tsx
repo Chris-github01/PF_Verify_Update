@@ -46,21 +46,21 @@ export default function ExportDropdown({ disabled, onExport, loading }: ExportDr
       </button>
 
       {isOpen && !disabled && !loading && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+        <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
           <button
             onClick={() => handleExport('site')}
             className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
           >
-            <div className="font-medium text-gray-900 text-sm">Site Scope Pack</div>
-            <div className="text-xs text-gray-500 mt-0.5">No pricing or commercial terms</div>
+            <div className="font-medium text-gray-900 text-sm">Site Manager Handover Report</div>
+            <div className="text-xs text-gray-500 mt-0.5">Operational focus – No pricing or commercial terms</div>
           </button>
           <div className="border-t border-gray-100 my-1" />
           <button
             onClick={() => handleExport('commercial')}
             className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition-colors"
           >
-            <div className="font-medium text-gray-900 text-sm">Commercial Handover Pack</div>
-            <div className="text-xs text-gray-500 mt-0.5">Full contract details with pricing</div>
+            <div className="font-medium text-gray-900 text-sm">Project Manager Report</div>
+            <div className="text-xs text-gray-500 mt-0.5">Full commercial depth with risk analysis</div>
           </button>
         </div>
       )}
