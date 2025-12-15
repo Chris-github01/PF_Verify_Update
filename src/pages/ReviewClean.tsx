@@ -137,21 +137,21 @@ function AttributesCell({
   const hasNewMapping = mappedServiceType || mappedSystem || mappedPenetration;
 
   return (
-    <div className="text-xs space-y-1">
+    <div className="text-xs space-y-1 break-words">
       {hasNewMapping ? (
         <div className="flex flex-wrap gap-1">
           {mappedServiceType && (
-            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-semibold break-words">
               {mappedServiceType}
             </span>
           )}
           {mappedSystem && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-semibold break-words">
               {mappedSystem}
             </span>
           )}
           {mappedPenetration && (
-            <span className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-900 font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-900 font-semibold break-words">
               {mappedPenetration}
             </span>
           )}
@@ -163,11 +163,11 @@ function AttributesCell({
         </div>
       ) : (
         <>
-          {size && <div className="text-gray-900 font-medium">Size: <span className="font-semibold">{size}</span></div>}
-          {frr && <div className="text-gray-900 font-medium">FRR: <span className="font-semibold">{frr}</span></div>}
-          {service && <div className="text-blue-800 font-medium">Service: <span className="font-semibold">{service}</span></div>}
-          {subclass && <div className="text-gray-900 font-medium">Type: <span className="font-semibold">{subclass}</span></div>}
-          {material && <div className="text-gray-900 font-medium">Material: <span className="font-semibold">{material}</span></div>}
+          {size && <div className="text-gray-900 font-medium break-words">Size: <span className="font-semibold">{size}</span></div>}
+          {frr && <div className="text-gray-900 font-medium break-words">FRR: <span className="font-semibold">{frr}</span></div>}
+          {service && <div className="text-blue-800 font-medium break-words">Service: <span className="font-semibold">{service}</span></div>}
+          {subclass && <div className="text-gray-900 font-medium break-words">Type: <span className="font-semibold">{subclass}</span></div>}
+          {material && <div className="text-gray-900 font-medium break-words">Material: <span className="font-semibold">{material}</span></div>}
         </>
       )}
     </div>
@@ -1158,7 +1158,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900">${item.unit_price.toFixed(2)}</td>
                             <td className="px-4 py-3 text-sm text-gray-900">${item.total_price.toFixed(2)}</td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 max-w-[200px]">
                               <AttributesCell
                                 mappedServiceType={item.mapped_service_type}
                                 mappedSystem={item.mapped_system}
@@ -1171,15 +1171,15 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                 material={item.material}
                               />
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 max-w-[250px]">
                               {item.system_label ? (
                                 <div className="space-y-2">
                                   <div className="flex items-start gap-2">
                                     <div className="flex-1">
-                                      <div className="text-xs font-medium text-gray-900">
+                                      <div className="text-xs font-medium text-gray-900 break-words">
                                         {item.system_label}
                                       </div>
-                                      <div className="text-xs text-gray-300">{item.system_id}</div>
+                                      <div className="text-xs text-gray-300 break-all">{item.system_id}</div>
                                       {item.system_manual_override && (
                                         <div className="text-xs text-blue-600 mt-0.5">Manual override</div>
                                       )}
