@@ -320,7 +320,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
     .py-16 { padding-top: 64px; padding-bottom: 64px; }
     .w-20 { width: 80px; }
     .h-20 { height: 80px; }
-    .bg-blue-100 { background-color: #dbeafe; }
+    .bg-blue-600/20 { background-color: #dbeafe; }
     .rounded-full { border-radius: 9999px; }
     .flex { display: flex; }
     .items-center { align-items: center; }
@@ -347,20 +347,20 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
     .font-bold { font-weight: 700; }
     .font-semibold { font-weight: 600; }
     .font-medium { font-weight: 500; }
-    .text-gray-900 { color: #111827; }
+    .text-slate-100 { color: #111827; }
     .text-gray-800 { color: #1f2937; }
-    .text-gray-700 { color: #374151; }
-    .text-gray-600 { color: #4b5563; }
-    .text-gray-500 { color: #6b7280; }
-    .text-blue-900 { color: #1e3a8a; }
-    .text-blue-800 { color: #1e40af; }
-    .text-blue-700 { color: #1d4ed8; }
-    .text-blue-600 { color: #2563eb; }
+    .text-slate-300 { color: #374151; }
+    .text-slate-400 { color: #4b5563; }
+    .text-slate-400 { color: #6b7280; }
+    .text-blue-200 { color: #1e3a8a; }
+    .text-blue-300 { color: #1e40af; }
+    .text-blue-300 { color: #1d4ed8; }
+    .text-blue-400 { color: #2563eb; }
     .w-10 { width: 40px; }
     .h-10 { height: 40px; }
     .w-6 { width: 24px; }
     .h-6 { height: 24px; }
-    .bg-blue-50 { background-color: #eff6ff; }
+    .bg-blue-900/20 { background-color: #eff6ff; }
     .border-2 { border-width: 2px; }
     .border-blue-600 { border-color: #2563eb; }
     .rounded-lg { border-radius: 8px; }
@@ -376,16 +376,16 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
     .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .bg-gray-50 { background-color: #f9fafb; }
-    .bg-blue-50 { background-color: #eff6ff; }
-    .bg-green-50 { background-color: #f0fdf4; }
-    .bg-yellow-50 { background-color: #fefce8; }
-    .bg-red-50 { background-color: #fef2f2; }
+    .bg-slate-700/50 { background-color: #f9fafb; }
+    .bg-blue-900/20 { background-color: #eff6ff; }
+    .bg-green-900/20 { background-color: #f0fdf4; }
+    .bg-yellow-900/20 { background-color: #fefce8; }
+    .bg-red-900/20 { background-color: #fef2f2; }
     .border-l-4 { border-left-width: 4px; }
     .border-blue-600 { border-color: #2563eb; }
-    .border-green-600 { border-color: #16a34a; }
-    .border-yellow-600 { border-color: #ca8a04; }
-    .border-red-600 { border-color: #dc2626; }
+    .border-green-500 { border-color: #16a34a; }
+    .border-yellow-500 { border-color: #ca8a04; }
+    .border-red-500 { border-color: #dc2626; }
     .rounded-r-lg { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
     .space-y-4 > * + * { margin-top: 16px; }
     .space-y-6 > * + * { margin-top: 24px; }
@@ -541,7 +541,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
 
     return (
       <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-8 text-center max-w-2xl mx-auto mt-12">
-        <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 bg-blue-900/200/20 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertTriangle className="w-8 h-8 text-blue-400" />
         </div>
         <h3 className="text-xl font-bold text-slate-100 mb-2">
@@ -575,38 +575,6 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
     <div className="space-y-6 p-6">
       <style>
         {`
-          /* Screen view - dark theme */
-          #printable-report {
-            background: #1e293b !important;
-          }
-          #printable-report .card,
-          #printable-report .bg-white,
-          #printable-report .bg-gray-50,
-          #printable-report .bg-blue-50 {
-            background: #334155 !important;
-            border-color: #475569 !important;
-          }
-          #printable-report .text-gray-900,
-          #printable-report .text-gray-800,
-          #printable-report .text-gray-700 {
-            color: #f1f5f9 !important;
-          }
-          #printable-report .text-gray-600,
-          #printable-report .text-gray-500 {
-            color: #cbd5e1 !important;
-          }
-          #printable-report .border-gray-200 {
-            border-color: #475569 !important;
-          }
-          #printable-report table th {
-            background: #3b82f6 !important;
-            color: white !important;
-          }
-          #printable-report table tbody tr:nth-child(even) {
-            background: #475569 !important;
-          }
-
-          /* Print view - white theme */
           @media print {
             body * {
               visibility: hidden;
@@ -622,30 +590,32 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
               padding: 20mm;
               background: white !important;
             }
-            #printable-report .card,
-            #printable-report .bg-white,
-            #printable-report .bg-gray-50,
-            #printable-report .bg-blue-50 {
+            #printable-report * {
               background: white !important;
+              color: black !important;
               border-color: #e5e7eb !important;
             }
-            #printable-report .bg-gray-50 {
+            #printable-report .bg-slate-800\\/60,
+            #printable-report .bg-slate-800\\/40,
+            #printable-report .bg-slate-700,
+            #printable-report .bg-slate-600 {
+              background: white !important;
+            }
+            #printable-report .bg-red-900\\/20,
+            #printable-report .bg-yellow-900\\/20,
+            #printable-report .bg-green-900\\/20,
+            #printable-report .bg-blue-900\\/20 {
               background: #f9fafb !important;
             }
-            #printable-report .bg-blue-50 {
-              background: #eff6ff !important;
-            }
-            #printable-report .text-gray-900,
-            #printable-report .text-gray-800,
-            #printable-report .text-gray-700 {
+            #printable-report .text-slate-100,
+            #printable-report .text-slate-200,
+            #printable-report .text-slate-300,
+            #printable-report .text-slate-400 {
               color: #1f2937 !important;
             }
-            #printable-report .text-gray-600,
-            #printable-report .text-gray-500 {
-              color: #4b5563 !important;
-            }
-            #printable-report .border-gray-200 {
-              border-color: #e5e7eb !important;
+            #printable-report table th {
+              background: #3b82f6 !important;
+              color: white !important;
             }
             #printable-report table tbody tr:nth-child(even) {
               background: #f9fafb !important;
@@ -731,53 +701,53 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         </div>
       )}
 
-      <div id="printable-report" className="rounded-lg shadow-sm">
+      <div id="printable-report" className="space-y-6">
           {/* 1. Cover Page */}
-          <div className="card text-center page-break">
+          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-8 text-center page-break">
           <div className="py-16">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Award className="w-10 h-10 text-blue-600" />
+            <div className="w-20 h-20 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Award className="w-10 h-10 text-blue-400" />
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">{t('report.title')}</h1>
-            <div className="text-lg text-gray-700 mb-8">
+            <h1 className="text-4xl font-bold text-slate-100 mb-4">{t('report.title')}</h1>
+            <div className="text-lg text-slate-300 mb-8">
               <p className="font-semibold">{reportData.projectName}</p>
-              <p className="text-gray-600">{reportData.clientName}</p>
+              <p className="text-slate-400">{reportData.clientName}</p>
             </div>
-            <div className="inline-block bg-blue-50 border-2 border-blue-600 rounded-lg px-8 py-4 mb-8">
-              <p className="text-sm text-blue-800 font-medium mb-2">{t('report.recommended_supplier')}</p>
-              <p className="text-3xl font-bold text-blue-900">{reportData.recommendedSupplier.supplierName}</p>
-              <p className="text-lg text-blue-700 mt-2">
+            <div className="inline-block bg-blue-900/20 border-2 border-blue-500 rounded-lg px-8 py-4 mb-8">
+              <p className="text-sm text-blue-300 font-medium mb-2">{t('report.recommended_supplier')}</p>
+              <p className="text-3xl font-bold text-blue-200">{reportData.recommendedSupplier.supplierName}</p>
+              <p className="text-lg text-blue-300 mt-2">
                 Score: {reportData.recommendedSupplier.weightedScore.toFixed(2)}/10
               </p>
             </div>
-            <p className="text-sm text-gray-500 mt-12">
+            <p className="text-sm text-slate-400 mt-12">
               Generated: {new Date(reportData.generatedAt).toLocaleDateString()}
             </p>
           </div>
         </div>
 
         {/* 2. Executive Summary */}
-        <div className="card page-break">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-            <FileText className="w-6 h-6 text-blue-600" />
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+            <FileText className="w-6 h-6 text-blue-400" />
             {t('report.executive_summary')}
           </h2>
           <div className="prose max-w-none">
-            <p className="text-gray-700 leading-relaxed text-lg mb-4">
+            <p className="text-slate-300 leading-relaxed text-lg mb-4">
               {reportData.executiveSummary}
             </p>
-            <div className="grid grid-cols-3 gap-4 mt-6 p-6 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-3 gap-4 mt-6 p-6 bg-slate-700/50 rounded-lg border border-slate-600">
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">{reportData.suppliers.length}</div>
-                <div className="text-sm text-gray-600 mt-1">Suppliers Evaluated</div>
+                <div className="text-3xl font-bold text-blue-400">{reportData.suppliers.length}</div>
+                <div className="text-sm text-slate-300 mt-1">Suppliers Evaluated</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">${reportData.recommendedSupplier.price.toLocaleString()}</div>
-                <div className="text-sm text-gray-600 mt-1">Recommended Price</div>
+                <div className="text-3xl font-bold text-green-400">${reportData.recommendedSupplier.price.toLocaleString()}</div>
+                <div className="text-sm text-slate-300 mt-1">Recommended Price</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">{reportData.recommendedSupplier.coveragePercent.toFixed(0)}%</div>
-                <div className="text-sm text-gray-600 mt-1">Scope Coverage</div>
+                <div className="text-3xl font-bold text-blue-400">{reportData.recommendedSupplier.coveragePercent.toFixed(0)}%</div>
+                <div className="text-sm text-slate-300 mt-1">Scope Coverage</div>
               </div>
             </div>
           </div>
@@ -785,114 +755,114 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
 
         {/* 3. Quote Intelligence Summary */}
         {intelligenceData && (
-          <div className="card page-break">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-              <Brain className="w-6 h-6 text-blue-600" />
+          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+            <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+              <Brain className="w-6 h-6 text-blue-400" />
               Quote Intelligence Summary
             </h2>
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-sm text-slate-400 mb-6">
               This analysis identifies scope coverage, red flags, and potential risks across all supplier quotes to support informed decision-making.
             </p>
 
             {loadingIntelligence ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-slate-400">
                 Loading intelligence analysis...
               </div>
             ) : (
               <div className="space-y-6">
                 {/* Key Metrics */}
                 <div className="grid grid-cols-4 gap-4 mb-6">
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-red-600">{intelligenceData.summary.totalRedFlags}</div>
-                    <div className="text-xs text-red-700 mt-1">Red Flags</div>
+                  <div className="bg-red-900/20 border border-red-800/50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-red-400">{intelligenceData.summary.totalRedFlags}</div>
+                    <div className="text-xs text-red-300 mt-1">Red Flags</div>
                   </div>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-yellow-600">{intelligenceData.summary.criticalIssues}</div>
-                    <div className="text-xs text-yellow-700 mt-1">Critical Issues</div>
+                  <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-yellow-400">{intelligenceData.summary.criticalIssues}</div>
+                    <div className="text-xs text-yellow-300 mt-1">Critical Issues</div>
                   </div>
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-green-600">{Math.round(intelligenceData.summary.coverageScore)}%</div>
-                    <div className="text-xs text-green-700 mt-1">Coverage Score</div>
+                  <div className="bg-green-900/20 border border-green-800/50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-400">{Math.round(intelligenceData.summary.coverageScore)}%</div>
+                    <div className="text-xs text-green-300 mt-1">Coverage Score</div>
                   </div>
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-blue-600">{Math.round(intelligenceData.summary.averageQualityScore)}%</div>
-                    <div className="text-xs text-blue-700 mt-1">Quality Score</div>
+                  <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-400">{Math.round(intelligenceData.summary.averageQualityScore)}%</div>
+                    <div className="text-xs text-blue-300 mt-1">Quality Score</div>
                   </div>
                 </div>
 
                 {/* Red Flags */}
                 {intelligenceData.redFlags && intelligenceData.redFlags.length > 0 ? (
-                  <div className="bg-red-50 border-l-4 border-red-600 p-4 rounded-r-lg">
-                    <h3 className="font-semibold text-red-900 mb-3 flex items-center gap-2">
+                  <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded-r-lg">
+                    <h3 className="font-semibold text-red-200 mb-3 flex items-center gap-2">
                       <AlertTriangle className="w-5 h-5" />
                       Red Flags Overview ({intelligenceData.redFlags.length})
                     </h3>
                     <ul className="space-y-2">
                       {intelligenceData.redFlags.slice(0, 5).map((flag, idx) => (
-                        <li key={idx} className="text-sm text-red-800">
+                        <li key={idx} className="text-sm text-red-300">
                           <span className="font-medium">{flag.title}:</span> {flag.description}
-                          {flag.recommendation && <span className="block text-xs mt-1 text-red-700">→ {flag.recommendation}</span>}
+                          {flag.recommendation && <span className="block text-xs mt-1 text-red-400">→ {flag.recommendation}</span>}
                         </li>
                       ))}
                     </ul>
                     {intelligenceData.redFlags.length > 5 && (
-                      <p className="text-xs text-red-700 mt-2">+ {intelligenceData.redFlags.length - 5} more red flags identified</p>
+                      <p className="text-xs text-red-400 mt-2">+ {intelligenceData.redFlags.length - 5} more red flags identified</p>
                     )}
                   </div>
                 ) : (
-                  <div className="bg-green-50 border-l-4 border-green-600 p-4 rounded-r-lg">
-                    <h3 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                  <div className="bg-green-900/20 border-l-4 border-green-500 p-4 rounded-r-lg">
+                    <h3 className="font-semibold text-green-200 mb-2 flex items-center gap-2">
                       <CheckCircle className="w-5 h-5" />
                       No Red Flags Detected
                     </h3>
-                    <p className="text-sm text-green-800">All quotes appear to be in good order with no critical issues identified.</p>
+                    <p className="text-sm text-green-300">All quotes appear to be in good order with no critical issues identified.</p>
                   </div>
                 )}
 
                 {/* Coverage Gaps */}
                 {intelligenceData.coverageGaps && intelligenceData.coverageGaps.length > 0 ? (
-                  <div className="bg-yellow-50 border-l-4 border-yellow-600 p-4 rounded-r-lg">
-                    <h3 className="font-semibold text-yellow-900 mb-3 flex items-center gap-2">
+                  <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded-r-lg">
+                    <h3 className="font-semibold text-yellow-200 mb-3 flex items-center gap-2">
                       <AlertTriangle className="w-5 h-5" />
                       Coverage Gaps Between Suppliers ({intelligenceData.coverageGaps.length})
                     </h3>
                     <ul className="space-y-2">
                       {intelligenceData.coverageGaps.slice(0, 5).map((gap, idx) => (
-                        <li key={idx} className="text-sm text-yellow-800">
+                        <li key={idx} className="text-sm text-yellow-300">
                           <span className="font-medium">{gap.title}:</span> Missing from {gap.missingIn.join(', ')}
-                          {gap.estimatedImpact > 0 && <span className="block text-xs mt-1 text-yellow-700">Estimated impact: ${gap.estimatedImpact.toLocaleString()}</span>}
+                          {gap.estimatedImpact > 0 && <span className="block text-xs mt-1 text-yellow-400">Estimated impact: ${gap.estimatedImpact.toLocaleString()}</span>}
                         </li>
                       ))}
                     </ul>
                     {intelligenceData.coverageGaps.length > 5 && (
-                      <p className="text-xs text-yellow-700 mt-2">+ {intelligenceData.coverageGaps.length - 5} more gaps identified</p>
+                      <p className="text-xs text-yellow-400 mt-2">+ {intelligenceData.coverageGaps.length - 5} more gaps identified</p>
                     )}
                   </div>
                 ) : (
-                  <div className="bg-green-50 border-l-4 border-green-600 p-4 rounded-r-lg">
-                    <h3 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                  <div className="bg-green-900/20 border-l-4 border-green-500 p-4 rounded-r-lg">
+                    <h3 className="font-semibold text-green-200 mb-2 flex items-center gap-2">
                       <CheckCircle className="w-5 h-5" />
                       No Coverage Gaps Detected
                     </h3>
-                    <p className="text-sm text-green-800">All suppliers cover the required scope consistently.</p>
+                    <p className="text-sm text-green-300">All suppliers cover the required scope consistently.</p>
                   </div>
                 )}
 
                 {/* Best Value Supplier */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-blue-800 font-medium">Best Value Supplier</p>
-                      <p className="text-lg font-bold text-blue-900">{intelligenceData.summary.bestValueSupplier}</p>
+                      <p className="text-sm text-blue-300 font-medium">Best Value Supplier</p>
+                      <p className="text-lg font-bold text-blue-200">{intelligenceData.summary.bestValueSupplier}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-blue-800 font-medium">Most Complete Supplier</p>
-                      <p className="text-lg font-bold text-blue-900">{intelligenceData.summary.mostCompleteSupplier}</p>
+                      <p className="text-sm text-blue-300 font-medium">Most Complete Supplier</p>
+                      <p className="text-lg font-bold text-blue-200">{intelligenceData.summary.mostCompleteSupplier}</p>
                     </div>
                   </div>
                 </div>
 
-                <p className="text-xs text-gray-500 italic">
+                <p className="text-xs text-slate-400 italic">
                   For detailed intelligence analysis including all red flags, coverage gaps, and supplier insights, please see the full Quote Intelligence Report.
                 </p>
               </div>
@@ -901,52 +871,52 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         )}
 
         {/* 4. How to Interpret This Report */}
-        <div className="card page-break">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-            <Info className="w-6 h-6 text-blue-600" />
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+            <Info className="w-6 h-6 text-blue-400" />
             {t('report.interpretation_title')}
           </h2>
           <div className="space-y-6">
-            <div className="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-lg">
-              <h3 className="font-semibold text-gray-900 mb-2">{t('report.scoring_definitions')}</h3>
-              <p className="text-sm text-gray-700 mb-3">
+            <div className="bg-blue-900/20 border-l-4 border-blue-600 p-4 rounded-r-lg">
+              <h3 className="font-semibold text-slate-100 mb-2">{t('report.scoring_definitions')}</h3>
+              <p className="text-sm text-slate-300 mb-3">
                 Each supplier is evaluated across four key criteria, weighted according to project priorities:
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-gray-900">{t('report.price')}</h4>
-                  <span className="text-blue-600 font-bold">{reportData.weightings.price}%</span>
+                  <h4 className="font-semibold text-slate-100">{t('report.price')}</h4>
+                  <span className="text-blue-400 font-bold">{reportData.weightings.price}%</span>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-slate-400">
                   Competitive pricing relative to market and other submissions
                 </p>
               </div>
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-gray-900">{t('report.compliance')}</h4>
-                  <span className="text-blue-600 font-bold">{reportData.weightings.compliance}%</span>
+                  <h4 className="font-semibold text-slate-100">{t('report.compliance')}</h4>
+                  <span className="text-blue-400 font-bold">{reportData.weightings.compliance}%</span>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-slate-400">
                   Technical compliance with specifications and standards
                 </p>
               </div>
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-gray-900">{t('report.scope_coverage')}</h4>
-                  <span className="text-blue-600 font-bold">{reportData.weightings.scopeCoverage}%</span>
+                  <h4 className="font-semibold text-slate-100">{t('report.scope_coverage')}</h4>
+                  <span className="text-blue-400 font-bold">{reportData.weightings.scopeCoverage}%</span>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-slate-400">
                   Completeness of scope and items quoted
                 </p>
               </div>
               <div className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-gray-900">{t('report.risk')}</h4>
-                  <span className="text-blue-600 font-bold">{reportData.weightings.risk}%</span>
+                  <h4 className="font-semibold text-slate-100">{t('report.risk')}</h4>
+                  <span className="text-blue-400 font-bold">{reportData.weightings.risk}%</span>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-slate-400">
                   Commercial and delivery risk assessment
                 </p>
               </div>
@@ -955,8 +925,8 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         </div>
 
         {/* 4. Supplier Comparison Summary */}
-        <div className="card page-break">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('report.supplier_summary')}</h2>
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6">{t('report.supplier_summary')}</h2>
           <div className="overflow-x-auto">
             <table className="table-clean">
               <thead>
@@ -973,17 +943,17 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
               </thead>
               <tbody>
                 {reportData.suppliers.map((supplier, idx) => (
-                  <tr key={idx} className={supplier.rank === 1 ? 'bg-blue-50' : ''}>
+                  <tr key={idx} className={supplier.rank === 1 ? 'bg-blue-900/20' : ''}>
                     <td className="font-bold">
                       {supplier.rank === 1 ? (
-                        <span className="inline-flex items-center gap-1 text-blue-600">
+                        <span className="inline-flex items-center gap-1 text-blue-400">
                           <Award className="w-4 h-4" />
                           {supplier.rank}
                         </span>
                       ) : supplier.rank}
                     </td>
-                    <td className="font-semibold text-gray-900">{supplier.supplierName}</td>
-                    <td className="text-right font-bold text-blue-600">{supplier.weightedScore.toFixed(2)}</td>
+                    <td className="font-semibold text-slate-100">{supplier.supplierName}</td>
+                    <td className="text-right font-bold text-blue-400">{supplier.weightedScore.toFixed(2)}</td>
                     <td className="text-right">{supplier.priceScore.toFixed(1)}</td>
                     <td className="text-right">{supplier.complianceScore.toFixed(1)}</td>
                     <td className="text-right">{supplier.scopeCoverageScore.toFixed(1)}</td>
@@ -997,40 +967,40 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         </div>
 
         {/* 5. Detailed Supplier Commentary */}
-        <div className="card page-break">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('report.detailed_commentary')}</h2>
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6">{t('report.detailed_commentary')}</h2>
           <div className="space-y-6">
             {reportData.suppliers.map((supplier, idx) => (
               <div key={idx} className="border-l-4 border-gray-300 pl-4 pb-6">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                    {supplier.rank === 1 && <Award className="w-5 h-5 text-blue-600" />}
+                  <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                    {supplier.rank === 1 && <Award className="w-5 h-5 text-blue-400" />}
                     {supplier.supplierName}
                   </h3>
-                  <span className="px-3 py-1 bg-gray-100 rounded-full text-sm font-medium">
+                  <span className="px-3 py-1 bg-slate-700 rounded-full text-sm font-medium">
                     Rank #{supplier.rank}
                   </span>
                 </div>
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <div className="metric-tile-mini">
-                    <div className="text-xs text-gray-600">Price</div>
-                    <div className="text-lg font-bold text-gray-900">${supplier.price.toLocaleString()}</div>
+                    <div className="text-xs text-slate-400">Price</div>
+                    <div className="text-lg font-bold text-slate-100">${supplier.price.toLocaleString()}</div>
                   </div>
                   <div className="metric-tile-mini">
-                    <div className="text-xs text-gray-600">Coverage</div>
-                    <div className="text-lg font-bold text-gray-900">{supplier.coveragePercent.toFixed(0)}%</div>
+                    <div className="text-xs text-slate-400">Coverage</div>
+                    <div className="text-lg font-bold text-slate-100">{supplier.coveragePercent.toFixed(0)}%</div>
                   </div>
                   <div className="metric-tile-mini">
-                    <div className="text-xs text-gray-600">Items</div>
-                    <div className="text-lg font-bold text-gray-900">{supplier.itemsQuoted}/{supplier.totalItems}</div>
+                    <div className="text-xs text-slate-400">Items</div>
+                    <div className="text-lg font-bold text-slate-100">{supplier.itemsQuoted}/{supplier.totalItems}</div>
                   </div>
                   <div className="metric-tile-mini">
-                    <div className="text-xs text-gray-600">Score</div>
-                    <div className="text-lg font-bold text-blue-600">{supplier.weightedScore.toFixed(2)}</div>
+                    <div className="text-xs text-slate-400">Score</div>
+                    <div className="text-lg font-bold text-blue-400">{supplier.weightedScore.toFixed(2)}</div>
                   </div>
                 </div>
                 {supplier.notes.length > 0 && (
-                  <div className="text-sm text-gray-700">
+                  <div className="text-sm text-slate-300">
                     <p className="font-medium mb-2">Key Notes:</p>
                     <ul className="list-disc list-inside space-y-1">
                       {supplier.notes.slice(0, 3).map((note, i) => (
@@ -1045,8 +1015,8 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         </div>
 
         {/* 6. Identified Risks & Clarifications */}
-        <div className="card page-break">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-orange-500" />
             {t('report.risk_section')}
           </h2>
@@ -1054,14 +1024,14 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
             {reportData.suppliers.map((supplier, idx) => (
               (supplier.risks.length > 0 || supplier.clarifications.length > 0) && (
                 <div key={idx} className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-900 mb-3">{supplier.supplierName}</h3>
+                  <h3 className="font-semibold text-slate-100 mb-3">{supplier.supplierName}</h3>
                   {supplier.risks.length > 0 && (
                     <div className="mb-3">
                       <p className="text-sm font-medium text-orange-700 mb-2 flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4" />
                         Risks
                       </p>
-                      <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                      <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
                         {supplier.risks.map((risk, i) => (
                           <li key={i}>{risk}</li>
                         ))}
@@ -1070,11 +1040,11 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
                   )}
                   {supplier.clarifications.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-2">
+                      <p className="text-sm font-medium text-blue-300 mb-2 flex items-center gap-2">
                         <Info className="w-4 h-4" />
                         Clarifications Required
                       </p>
-                      <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                      <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
                         {supplier.clarifications.map((clarif, i) => (
                           <li key={i}>{clarif}</li>
                         ))}
@@ -1087,38 +1057,38 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
             {reportData.suppliers.every(s => s.risks.length === 0 && s.clarifications.length === 0) && (
               <div className="text-center py-8">
                 <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                <p className="text-gray-600">No significant risks or clarifications identified</p>
+                <p className="text-slate-400">No significant risks or clarifications identified</p>
               </div>
             )}
           </div>
         </div>
 
         {/* 7. Weighted Score Breakdown */}
-        <div className="card page-break">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-            <TrendingUp className="w-6 h-6 text-blue-600" />
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+            <TrendingUp className="w-6 h-6 text-blue-400" />
             {t('report.score_breakdown')}
           </h2>
           <div className="space-y-6">
             {reportData.suppliers.map((supplier, idx) => (
               <div key={idx} className="border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-900">{supplier.supplierName}</h3>
-                  <div className="text-2xl font-bold text-blue-600">{supplier.weightedScore.toFixed(2)}/10</div>
+                  <h3 className="text-lg font-bold text-slate-100">{supplier.supplierName}</h3>
+                  <div className="text-2xl font-bold text-blue-400">{supplier.weightedScore.toFixed(2)}/10</div>
                 </div>
                 <div className="space-y-3">
                   {[
-                    { label: 'Price', score: supplier.priceScore, weight: reportData.weightings.price, color: 'bg-blue-500' },
-                    { label: 'Compliance', score: supplier.complianceScore, weight: reportData.weightings.compliance, color: 'bg-green-500' },
+                    { label: 'Price', score: supplier.priceScore, weight: reportData.weightings.price, color: 'bg-blue-900/200' },
+                    { label: 'Compliance', score: supplier.complianceScore, weight: reportData.weightings.compliance, color: 'bg-green-900/200' },
                     { label: 'Scope Coverage', score: supplier.scopeCoverageScore, weight: reportData.weightings.scopeCoverage, color: 'bg-purple-500' },
                     { label: 'Risk', score: supplier.riskScore, weight: reportData.weightings.risk, color: 'bg-orange-500' },
                   ].map((item, i) => (
                     <div key={i}>
                       <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="font-medium text-gray-700">{item.label} ({item.weight}%)</span>
-                        <span className="text-gray-900">{item.score.toFixed(2)}/10</span>
+                        <span className="font-medium text-slate-300">{item.label} ({item.weight}%)</span>
+                        <span className="text-slate-100">{item.score.toFixed(2)}/10</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-slate-600 rounded-full h-2">
                         <div className={`${item.color} h-2 rounded-full`} style={{ width: `${(item.score / 10) * 100}%` }}></div>
                       </div>
                     </div>
@@ -1130,83 +1100,83 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         </div>
 
         {/* 8. Award Recommendation */}
-        <div className="card page-break">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-            <Award className="w-6 h-6 text-blue-600" />
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3">
+            <Award className="w-6 h-6 text-blue-400" />
             {t('report.award_recommendation')}
           </h2>
-          <div className="bg-blue-50 border-2 border-blue-600 rounded-lg p-6 mb-6">
+          <div className="bg-blue-900/20 border-2 border-blue-600 rounded-lg p-6 mb-6">
             <div className="flex items-center gap-4 mb-4">
-              <Award className="w-12 h-12 text-blue-600" />
+              <Award className="w-12 h-12 text-blue-400" />
               <div>
-                <p className="text-sm text-blue-700 font-medium">Recommended for Award</p>
-                <h3 className="text-3xl font-bold text-blue-900">{reportData.recommendedSupplier.supplierName}</h3>
+                <p className="text-sm text-blue-300 font-medium">Recommended for Award</p>
+                <h3 className="text-3xl font-bold text-blue-200">{reportData.recommendedSupplier.supplierName}</h3>
               </div>
             </div>
             <div className="grid grid-cols-4 gap-4 mb-4">
               <div>
-                <div className="text-sm text-blue-700">Total Price</div>
-                <div className="text-xl font-bold text-blue-900">${reportData.recommendedSupplier.price.toLocaleString()}</div>
+                <div className="text-sm text-blue-300">Total Price</div>
+                <div className="text-xl font-bold text-blue-200">${reportData.recommendedSupplier.price.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-sm text-blue-700">Weighted Score</div>
-                <div className="text-xl font-bold text-blue-900">{reportData.recommendedSupplier.weightedScore.toFixed(2)}/10</div>
+                <div className="text-sm text-blue-300">Weighted Score</div>
+                <div className="text-xl font-bold text-blue-200">{reportData.recommendedSupplier.weightedScore.toFixed(2)}/10</div>
               </div>
               <div>
-                <div className="text-sm text-blue-700">Coverage</div>
-                <div className="text-xl font-bold text-blue-900">{reportData.recommendedSupplier.coveragePercent.toFixed(0)}%</div>
+                <div className="text-sm text-blue-300">Coverage</div>
+                <div className="text-xl font-bold text-blue-200">{reportData.recommendedSupplier.coveragePercent.toFixed(0)}%</div>
               </div>
               <div>
-                <div className="text-sm text-blue-700">Items Quoted</div>
-                <div className="text-xl font-bold text-blue-900">{reportData.recommendedSupplier.itemsQuoted}/{reportData.recommendedSupplier.totalItems}</div>
+                <div className="text-sm text-blue-300">Items Quoted</div>
+                <div className="text-xl font-bold text-blue-200">{reportData.recommendedSupplier.itemsQuoted}/{reportData.recommendedSupplier.totalItems}</div>
               </div>
             </div>
           </div>
           <div className="prose max-w-none">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Rationale</h3>
-            <p className="text-gray-700 leading-relaxed">
+            <h3 className="text-lg font-semibold text-slate-100 mb-3">Rationale</h3>
+            <p className="text-slate-300 leading-relaxed">
               {reportData.awardRationale}
             </p>
           </div>
         </div>
 
         {/* 9. Conditions of Award */}
-        <div className="card page-break">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 page-break">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3">
             <CheckCircle className="w-6 h-6 text-green-600" />
             {t('report.conditions_of_award')}
           </h2>
           <div className="space-y-3">
             {reportData.conditionsOfAward.map((condition, idx) => (
               <div key={idx} className="flex items-start gap-3 p-4 border border-gray-200 rounded-lg">
-                <div className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-bold text-blue-600">{idx + 1}</span>
+                <div className="flex-shrink-0 w-6 h-6 bg-blue-600/20 rounded-full flex items-center justify-center">
+                  <span className="text-xs font-bold text-blue-400">{idx + 1}</span>
                 </div>
-                <p className="text-gray-700">{condition}</p>
+                <p className="text-slate-300">{condition}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* 10. Appendices */}
-        <div className="card">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('report.appendices')}</h2>
+        <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6">{t('report.appendices')}</h2>
           <div className="space-y-4">
             <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-2">Appendix A: Scoring Methodology</h3>
-              <p className="text-sm text-gray-700">
+              <h3 className="font-semibold text-slate-100 mb-2">Appendix A: Scoring Methodology</h3>
+              <p className="text-sm text-slate-300">
                 Detailed scoring methodology available in project documentation.
               </p>
             </div>
             <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-2">Appendix B: Supplier Submissions</h3>
-              <p className="text-sm text-gray-700">
+              <h3 className="font-semibold text-slate-100 mb-2">Appendix B: Supplier Submissions</h3>
+              <p className="text-sm text-slate-300">
                 Original supplier quote documents retained in project files.
               </p>
             </div>
             <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-2">Appendix C: Scope Matrix</h3>
-              <p className="text-sm text-gray-700">
+              <h3 className="font-semibold text-slate-100 mb-2">Appendix C: Scope Matrix</h3>
+              <p className="text-sm text-slate-300">
                 Complete scope comparison matrix available via Scope Matrix module.
               </p>
             </div>
