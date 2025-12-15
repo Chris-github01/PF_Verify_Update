@@ -1,5 +1,21 @@
 import { SYSTEM_TEMPLATES } from './systemTemplates';
 
+export interface FRRComponent {
+  structural: string;
+  integrity: string;
+  insulation: string;
+}
+
+export interface FRRBreakdown {
+  required: FRRComponent | null;
+  provided: FRRComponent | null;
+  structural_ok: boolean;
+  integrity_ok: boolean;
+  insulation_ok: boolean;
+  score: number;
+  maxScore: number;
+}
+
 export interface MatchResult {
   systemId: string | null;
   systemLabel: string | null;
@@ -7,6 +23,7 @@ export interface MatchResult {
   needsReview: boolean;
   matchedFactors: string[];
   missedFactors: string[];
+  frrBreakdown?: FRRBreakdown;
 }
 
 export interface LineItem {
@@ -16,6 +33,129 @@ export interface LineItem {
   service?: string;
   subclass?: string;
   material?: string;
+}
+
+/**
+ * Parse FRR string (e.g., "-/30/30", "-/120/90", "120/120/120") into components
+ */
+function parseFRR(frr: string): FRRComponent | null {
+  if (!frr) return null;
+
+  const parts = frr.trim().split('/');
+  if (parts.length !== 3) return null;
+
+  return {
+    structural: parts[0].trim(),
+    integrity: parts[1].trim(),
+    insulation: parts[2].trim(),
+  };
+}
+
+/**
+ * Convert FRR component to numeric value for comparison
+ * Returns -1 for "-", special handling for "sm", or numeric value
+ */
+function frrComponentToNumber(component: string): number {
+  if (component === '-') return -1;
+  if (component.toLowerCase() === 'sm') return 999; // Special marker for smoke-tight
+  const num = parseInt(component.replace(/[^\d]/g, ''));
+  return isNaN(num) ? -1 : num;
+}
+
+/**
+ * Check if provided FRR component meets or exceeds required component
+ */
+function frrComponentMeetsRequirement(required: string, provided: string): boolean {
+  if (required === '-') return true; // No requirement
+  if (required.toLowerCase() === 'sm') {
+    return provided.toLowerCase() === 'sm'; // Must match sm exactly
+  }
+
+  const reqNum = frrComponentToNumber(required);
+  const provNum = frrComponentToNumber(provided);
+
+  if (reqNum === -1) return true; // No requirement
+  if (provNum === -1) return false; // Required but not provided
+
+  return provNum >= reqNum; // Provided meets or exceeds required
+}
+
+/**
+ * Compare FRR values component-by-component (meets or exceeds logic)
+ */
+function compareFRR(requiredFRR: string | undefined, providedFRR: string | undefined): FRRBreakdown {
+  const maxScore = 20; // Total FRR points available
+  const pointsPerComponent = 7; // Points per component (7+7+6=20)
+
+  if (!requiredFRR && !providedFRR) {
+    return {
+      required: null,
+      provided: null,
+      structural_ok: true,
+      integrity_ok: true,
+      insulation_ok: true,
+      score: 0,
+      maxScore: 0,
+    };
+  }
+
+  const required = parseFRR(requiredFRR || '');
+  const provided = parseFRR(providedFRR || '');
+
+  if (!required && !provided) {
+    return {
+      required: null,
+      provided: null,
+      structural_ok: true,
+      integrity_ok: true,
+      insulation_ok: true,
+      score: 0,
+      maxScore: 0,
+    };
+  }
+
+  if (!provided) {
+    return {
+      required,
+      provided: null,
+      structural_ok: false,
+      integrity_ok: false,
+      insulation_ok: false,
+      score: 0,
+      maxScore,
+    };
+  }
+
+  if (!required) {
+    return {
+      required: null,
+      provided,
+      structural_ok: true,
+      integrity_ok: true,
+      insulation_ok: true,
+      score: maxScore,
+      maxScore,
+    };
+  }
+
+  const structural_ok = frrComponentMeetsRequirement(required.structural, provided.structural);
+  const integrity_ok = frrComponentMeetsRequirement(required.integrity, provided.integrity);
+  const insulation_ok = frrComponentMeetsRequirement(required.insulation, provided.insulation);
+
+  let score = 0;
+  if (structural_ok) score += pointsPerComponent;
+  if (integrity_ok) score += pointsPerComponent;
+  if (insulation_ok) score += (maxScore - pointsPerComponent * 2); // Remaining points
+
+  return {
+    required,
+    provided,
+    structural_ok,
+    integrity_ok,
+    insulation_ok,
+    score,
+    maxScore,
+  };
 }
 
 export function matchLineToSystem(item: LineItem): MatchResult {
@@ -33,12 +173,13 @@ export function matchLineToSystem(item: LineItem): MatchResult {
   const matchedFactors: string[] = [];
   const missedFactors: string[] = [];
 
-  let bestMatch: { template: any; score: number } | null = null;
+  let bestMatch: { template: any; score: number; frrBreakdown?: FRRBreakdown } | null = null;
   let maxScore = 0;
 
   for (const template of SYSTEM_TEMPLATES) {
     let score = 0;
     const factors: string[] = [];
+    let frrBreakdown: FRRBreakdown | undefined;
 
     if (item.service && template.service) {
       const serviceMatch = item.service.toLowerCase().includes(template.service.toLowerCase()) ||
@@ -57,11 +198,20 @@ export function matchLineToSystem(item: LineItem): MatchResult {
       }
     }
 
-    if (item.frr && template.frr) {
-      const frrNum = parseInt(item.frr.replace(/[^\d]/g, ''));
-      if (!isNaN(frrNum) && frrNum === template.frr) {
-        score += 20;
-        factors.push(`FRR: ${item.frr}`);
+    // New FRR component-based comparison
+    if (item.frr && template.frr_string) {
+      frrBreakdown = compareFRR(template.frr_string, item.frr);
+      score += frrBreakdown.score;
+
+      if (frrBreakdown.score > 0) {
+        const passingComponents: string[] = [];
+        if (frrBreakdown.structural_ok) passingComponents.push('Structural');
+        if (frrBreakdown.integrity_ok) passingComponents.push('Integrity');
+        if (frrBreakdown.insulation_ok) passingComponents.push('Insulation');
+
+        if (passingComponents.length > 0) {
+          factors.push(`FRR: ${passingComponents.join(', ')}`);
+        }
       }
     }
 
@@ -75,7 +225,7 @@ export function matchLineToSystem(item: LineItem): MatchResult {
 
     if (score > maxScore) {
       maxScore = score;
-      bestMatch = { template, score };
+      bestMatch = { template, score, frrBreakdown };
       matchedFactors.length = 0;
       matchedFactors.push(...factors);
     }
@@ -106,6 +256,7 @@ export function matchLineToSystem(item: LineItem): MatchResult {
     needsReview,
     matchedFactors,
     missedFactors,
+    frrBreakdown: bestMatch.frrBreakdown,
   };
 }
 

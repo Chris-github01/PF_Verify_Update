@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   FileText,
@@ -51,9 +51,16 @@ const menuItems = [
 ];
 
 export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMode, onDashboardModeChange }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved === 'true';
+  });
   const { hasPermission } = useOrganisation();
   const { isMasterAdmin } = useAdmin();
+
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', collapsed.toString());
+  }, [collapsed]);
 
   return (
     <aside
