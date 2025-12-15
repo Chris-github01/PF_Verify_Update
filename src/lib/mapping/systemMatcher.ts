@@ -53,31 +53,63 @@ function parseFRR(frr: string): FRRComponent | null {
 
 /**
  * Convert FRR component to numeric value for comparison
- * Returns -1 for "-", special handling for "sm", or numeric value
+ * Returns -1 for "-", 0 for "sm" (smoke-tight, less than 30min), or numeric value
  */
 function frrComponentToNumber(component: string): number {
   if (component === '-') return -1;
-  if (component.toLowerCase() === 'sm') return 999; // Special marker for smoke-tight
+  if (component.toLowerCase() === 'sm') return 0; // SM is less than 30min requirement
   const num = parseInt(component.replace(/[^\d]/g, ''));
   return isNaN(num) ? -1 : num;
 }
 
 /**
  * Check if provided FRR component meets or exceeds required component
+ * CRITICAL: SM (smoke-tight) is < 30min, so it fails any numeric requirement
  */
 function frrComponentMeetsRequirement(required: string, provided: string): boolean {
   if (required === '-') return true; // No requirement
-  if (required.toLowerCase() === 'sm') {
-    return provided.toLowerCase() === 'sm'; // Must match sm exactly
-  }
 
   const reqNum = frrComponentToNumber(required);
   const provNum = frrComponentToNumber(provided);
 
-  if (reqNum === -1) return true; // No requirement
-  if (provNum === -1) return false; // Required but not provided
+  // No requirement
+  if (reqNum === -1) return true;
 
-  return provNum >= reqNum; // Provided meets or exceeds required
+  // Required but not provided
+  if (provNum === -1) return false;
+
+  // SM requirement must match SM exactly
+  if (required.toLowerCase() === 'sm') {
+    return provided.toLowerCase() === 'sm';
+  }
+
+  // Numeric requirement: SM (0) will fail, numeric values must be >= requirement
+  return provNum >= reqNum;
+}
+
+/**
+ * Calculate FRR over-specification penalty (higher FRR = more expensive = lower score)
+ * Returns 0-5 bonus points for systems close to requirement, fewer points for over-spec
+ */
+function calculateFRRCostBonus(requiredFRR: string | undefined, providedFRR: string | undefined): number {
+  if (!requiredFRR || !providedFRR) return 0;
+
+  const required = parseFRR(requiredFRR);
+  const provided = parseFRR(providedFRR);
+  if (!required || !provided) return 0;
+
+  const reqIntegrity = frrComponentToNumber(required.integrity);
+  const provIntegrity = frrComponentToNumber(provided.integrity);
+
+  if (reqIntegrity === -1 || provIntegrity === -1) return 0;
+
+  // Over-specification penalty (higher FRR = more expensive = lower bonus)
+  const overSpec = provIntegrity - reqIntegrity;
+  if (overSpec < 0) return 0; // Doesn't meet requirement
+  if (overSpec === 0) return 5; // Perfect match - most cost-effective
+  if (overSpec <= 30) return 3; // Slightly over-spec
+  if (overSpec <= 60) return 1; // Moderately over-spec
+  return 0; // Significantly over-spec (expensive)
 }
 
 /**
@@ -147,6 +179,11 @@ function compareFRR(requiredFRR: string | undefined, providedFRR: string | undef
   if (integrity_ok) score += pointsPerComponent;
   if (insulation_ok) score += (maxScore - pointsPerComponent * 2); // Remaining points
 
+  // Add cost-optimization bonus for systems close to requirement
+  if (structural_ok && integrity_ok && insulation_ok) {
+    score += calculateFRRCostBonus(requiredFRR, providedFRR);
+  }
+
   return {
     required,
     provided,
@@ -154,7 +191,7 @@ function compareFRR(requiredFRR: string | undefined, providedFRR: string | undef
     integrity_ok,
     insulation_ok,
     score,
-    maxScore,
+    maxScore: maxScore + 5, // Include cost bonus in max score
   };
 }
 
