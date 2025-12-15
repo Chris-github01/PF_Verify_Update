@@ -575,6 +575,38 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
     <div className="space-y-6 p-6">
       <style>
         {`
+          /* Screen view - dark theme */
+          #printable-report {
+            background: #1e293b !important;
+          }
+          #printable-report .card,
+          #printable-report .bg-white,
+          #printable-report .bg-gray-50,
+          #printable-report .bg-blue-50 {
+            background: #334155 !important;
+            border-color: #475569 !important;
+          }
+          #printable-report .text-gray-900,
+          #printable-report .text-gray-800,
+          #printable-report .text-gray-700 {
+            color: #f1f5f9 !important;
+          }
+          #printable-report .text-gray-600,
+          #printable-report .text-gray-500 {
+            color: #cbd5e1 !important;
+          }
+          #printable-report .border-gray-200 {
+            border-color: #475569 !important;
+          }
+          #printable-report table th {
+            background: #3b82f6 !important;
+            color: white !important;
+          }
+          #printable-report table tbody tr:nth-child(even) {
+            background: #475569 !important;
+          }
+
+          /* Print view - white theme */
           @media print {
             body * {
               visibility: hidden;
@@ -589,6 +621,34 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
               width: 100%;
               padding: 20mm;
               background: white !important;
+            }
+            #printable-report .card,
+            #printable-report .bg-white,
+            #printable-report .bg-gray-50,
+            #printable-report .bg-blue-50 {
+              background: white !important;
+              border-color: #e5e7eb !important;
+            }
+            #printable-report .bg-gray-50 {
+              background: #f9fafb !important;
+            }
+            #printable-report .bg-blue-50 {
+              background: #eff6ff !important;
+            }
+            #printable-report .text-gray-900,
+            #printable-report .text-gray-800,
+            #printable-report .text-gray-700 {
+              color: #1f2937 !important;
+            }
+            #printable-report .text-gray-600,
+            #printable-report .text-gray-500 {
+              color: #4b5563 !important;
+            }
+            #printable-report .border-gray-200 {
+              border-color: #e5e7eb !important;
+            }
+            #printable-report table tbody tr:nth-child(even) {
+              background: #f9fafb !important;
             }
             .no-print {
               display: none !important;
@@ -671,9 +731,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         </div>
       )}
 
-      {/* Screen view container with dark theme */}
-      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
-        <div id="printable-report" className="bg-white print:bg-white">
+      <div id="printable-report" className="rounded-lg shadow-sm">
           {/* 1. Cover Page */}
           <div className="card text-center page-break">
           <div className="py-16">
@@ -1153,7 +1211,6 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
               </p>
             </div>
           </div>
-        </div>
         </div>
       </div>
     </div>
