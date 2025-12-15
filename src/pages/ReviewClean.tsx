@@ -962,51 +962,55 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-3">
+        <div className="space-y-6">
+          {/* Quotes Section - Horizontal Display */}
           <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700">
             <div className="p-4 border-b border-slate-700">
               <h3 className="font-semibold text-slate-100">Quotes</h3>
             </div>
-            <div className="divide-y divide-gray-200">
-              {cleanableQuotes.map((quote) => (
-                <div
-                  key={quote.id}
-                  className={`p-4 cursor-pointer hover:bg-slate-700/50 transition-colors ${
-                    selectedQuote === quote.id ? 'bg-slate-700/50 border-l-4 border-blue-600' : ''
-                  }`}
-                  onClick={() => setSelectedQuote(quote.id)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm truncate">{quote.supplier_name}</p>
-                      <p className="text-xs text-gray-500 truncate mt-0.5">{quote.quote_reference || 'No reference'}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          ${quote.total_amount.toLocaleString()}
-                        </span>
-                        <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-300">
-                          Ready to clean
-                        </span>
+            <div className="p-4">
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {cleanableQuotes.map((quote) => (
+                  <div
+                    key={quote.id}
+                    className={`flex-shrink-0 w-64 p-4 cursor-pointer rounded-lg border-2 transition-all ${
+                      selectedQuote === quote.id
+                        ? 'bg-slate-700/70 border-blue-500 shadow-lg shadow-blue-500/20'
+                        : 'bg-slate-800/40 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500'
+                    }`}
+                    onClick={() => setSelectedQuote(quote.id)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-100 text-sm truncate">{quote.supplier_name}</p>
+                        <p className="text-xs text-slate-400 truncate mt-0.5">{quote.quote_reference || 'No reference'}</p>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteQuote(quote.id);
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteQuote(quote.id);
-                      }}
-                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-bold text-slate-100">
+                        ${quote.total_amount.toLocaleString()}
+                      </span>
+                      <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-300">
+                        Ready
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="col-span-9">
+          {/* Main Table - Full Width */}
+          <div>
           <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700">
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between mb-2">
