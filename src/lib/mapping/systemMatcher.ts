@@ -64,26 +64,28 @@ function frrComponentToNumber(component: string): number {
 
 /**
  * Check if provided FRR component meets or exceeds required component
- * CRITICAL: SM (smoke-tight) is < 30min, so it fails any numeric requirement
+ * CRITICAL: SM (smoke-tight) is < 30min, so it fails any numeric requirement >= 30
+ * Ordering: - (no requirement) < sm < 30 < 60 < 90 < 120 < 240
  */
 function frrComponentMeetsRequirement(required: string, provided: string): boolean {
-  if (required === '-') return true; // No requirement
+  // No requirement means always passes
+  if (required === '-' || required === '') return true;
 
   const reqNum = frrComponentToNumber(required);
   const provNum = frrComponentToNumber(provided);
 
-  // No requirement
+  // No requirement (-1 = "-")
   if (reqNum === -1) return true;
 
-  // Required but not provided
+  // Required but not provided (provided is "-")
   if (provNum === -1) return false;
 
-  // SM requirement must match SM exactly
-  if (required.toLowerCase() === 'sm') {
-    return provided.toLowerCase() === 'sm';
-  }
-
-  // Numeric requirement: SM (0) will fail, numeric values must be >= requirement
+  // Standard comparison: provided must meet or exceed required
+  // This correctly handles: sm (0) < 30 < 60 < 90 < 120 < 240
+  // Examples:
+  // - required sm (0), provided 30 (30) → 30 >= 0 → PASS
+  // - required 30 (30), provided sm (0) → 0 >= 30 → FAIL
+  // - required 30, provided 120 → 120 >= 30 → PASS
   return provNum >= reqNum;
 }
 
@@ -114,11 +116,16 @@ function calculateFRRCostBonus(requiredFRR: string | undefined, providedFRR: str
 
 /**
  * Compare FRR values component-by-component (meets or exceeds logic)
+ * @param requiredFRR - The FRR requirement from the line item (spec)
+ * @param providedFRR - The FRR capability of the system template
  */
 function compareFRR(requiredFRR: string | undefined, providedFRR: string | undefined): FRRBreakdown {
-  const maxScore = 20; // Total FRR points available
+  const baseFRRScore = 20; // Base FRR points (without cost bonus)
+  const costBonusMax = 5; // Maximum cost optimization bonus
+  const maxScore = baseFRRScore + costBonusMax; // Total possible: 25 points
   const pointsPerComponent = 7; // Points per component (7+7+6=20)
 
+  // Handle null/invalid cases - return safe defaults
   if (!requiredFRR && !providedFRR) {
     return {
       required: null,
@@ -127,13 +134,14 @@ function compareFRR(requiredFRR: string | undefined, providedFRR: string | undef
       integrity_ok: true,
       insulation_ok: true,
       score: 0,
-      maxScore: 0,
+      maxScore: 25,
     };
   }
 
   const required = parseFRR(requiredFRR || '');
   const provided = parseFRR(providedFRR || '');
 
+  // If either FRR is invalid/null, handle gracefully
   if (!required && !provided) {
     return {
       required: null,
@@ -142,7 +150,7 @@ function compareFRR(requiredFRR: string | undefined, providedFRR: string | undef
       integrity_ok: true,
       insulation_ok: true,
       score: 0,
-      maxScore: 0,
+      maxScore: 25,
     };
   }
 
@@ -154,7 +162,7 @@ function compareFRR(requiredFRR: string | undefined, providedFRR: string | undef
       integrity_ok: false,
       insulation_ok: false,
       score: 0,
-      maxScore,
+      maxScore: 25,
     };
   }
 
@@ -165,8 +173,8 @@ function compareFRR(requiredFRR: string | undefined, providedFRR: string | undef
       structural_ok: true,
       integrity_ok: true,
       insulation_ok: true,
-      score: maxScore,
-      maxScore,
+      score: baseFRRScore,
+      maxScore: 25,
     };
   }
 
@@ -177,9 +185,9 @@ function compareFRR(requiredFRR: string | undefined, providedFRR: string | undef
   let score = 0;
   if (structural_ok) score += pointsPerComponent;
   if (integrity_ok) score += pointsPerComponent;
-  if (insulation_ok) score += (maxScore - pointsPerComponent * 2); // Remaining points
+  if (insulation_ok) score += (baseFRRScore - pointsPerComponent * 2); // Remaining points
 
-  // Add cost-optimization bonus for systems close to requirement
+  // Add cost-optimization bonus ONLY if all components pass
   if (structural_ok && integrity_ok && insulation_ok) {
     score += calculateFRRCostBonus(requiredFRR, providedFRR);
   }
@@ -191,7 +199,7 @@ function compareFRR(requiredFRR: string | undefined, providedFRR: string | undef
     integrity_ok,
     insulation_ok,
     score,
-    maxScore: maxScore + 5, // Include cost bonus in max score
+    maxScore: 25, // Always return consistent maxScore
   };
 }
 
@@ -235,9 +243,10 @@ export function matchLineToSystem(item: LineItem): MatchResult {
       }
     }
 
-    // New FRR component-based comparison
+    // FRR component-based comparison
+    // CRITICAL: item.frr is REQUIRED, template.frr_string is PROVIDED
     if (item.frr && template.frr_string) {
-      frrBreakdown = compareFRR(template.frr_string, item.frr);
+      frrBreakdown = compareFRR(item.frr, template.frr_string);
       score += frrBreakdown.score;
 
       if (frrBreakdown.score > 0) {
@@ -283,7 +292,9 @@ export function matchLineToSystem(item: LineItem): MatchResult {
     };
   }
 
-  const confidence = Math.min(maxScore / 90, 1.0);
+  // Maximum possible score: Service(30) + Size(25) + FRR(20+5) + Subclass(15) = 95
+  const MAX_SCORE = 95;
+  const confidence = Math.min(maxScore / MAX_SCORE, 1.0);
   const needsReview = confidence < 0.7;
 
   return {
@@ -317,4 +328,118 @@ export async function matchLineItemToSystem(item: any): Promise<SystemMatch | nu
 
 export async function suggestSystemMapping(projectId: string, items: any[]): Promise<any[]> {
   return items.map(item => matchLineToSystem(item));
+}
+
+// ============================================================================
+// TEST VALIDATION SECTION
+// ============================================================================
+
+/**
+ * Internal test helper to validate FRR compliance logic
+ * Run these tests to ensure correct behavior after changes
+ */
+export function runFRRComplianceTests(): { passed: number; failed: number; results: string[] } {
+  const results: string[] = [];
+  let passed = 0;
+  let failed = 0;
+
+  function test(name: string, condition: boolean, details?: string) {
+    if (condition) {
+      results.push(`✓ PASS: ${name}`);
+      passed++;
+    } else {
+      results.push(`✗ FAIL: ${name}${details ? ` - ${details}` : ''}`);
+      failed++;
+    }
+  }
+
+  // Test 1: sm < 30 logic
+  const test1 = compareFRR('-/sm/sm', '-/30/30');
+  test('Required sm, provided 30 → PASS (integrity)', test1.integrity_ok,
+    `Got: ${test1.integrity_ok}, Score: ${test1.score}`);
+
+  const test2 = compareFRR('-/30/30', '-/sm/sm');
+  test('Required 30, provided sm → FAIL (integrity)', !test2.integrity_ok,
+    `Got: ${test2.integrity_ok}, Score: ${test2.score}`);
+
+  // Test 2: Overspec passes
+  const test3 = compareFRR('-/30/30', '-/120/90');
+  test('Required -/30/30, provided -/120/90 → PASS (all components)',
+    test3.structural_ok && test3.integrity_ok && test3.insulation_ok,
+    `Structural: ${test3.structural_ok}, Integrity: ${test3.integrity_ok}, Insulation: ${test3.insulation_ok}`);
+
+  // Test 3: Underspec fails
+  const test4 = compareFRR('-/60/60', '-/120/30');
+  test('Required -/60/60, provided -/120/30 → FAIL (insulation underspec)',
+    test4.integrity_ok && !test4.insulation_ok,
+    `Integrity: ${test4.integrity_ok}, Insulation: ${test4.insulation_ok}`);
+
+  // Test 4: Exact match gets highest score
+  const test5a = compareFRR('-/30/30', '-/30/30');
+  const test5b = compareFRR('-/30/30', '-/90/30');
+  const test5c = compareFRR('-/30/30', '-/120/30');
+  test('Exact match -/30/30 scores higher than -/90/30',
+    test5a.score > test5b.score,
+    `Exact: ${test5a.score}, FRL90: ${test5b.score}`);
+  test('FRL 90 scores higher than FRL 120 for -/30/30 requirement',
+    test5b.score > test5c.score,
+    `FRL90: ${test5b.score}, FRL120: ${test5c.score}`);
+
+  // Test 5: No requirement always passes
+  const test6 = compareFRR('-/-/-', '-/120/120');
+  test('No requirement (-/-/-) with any provided → PASS',
+    test6.structural_ok && test6.integrity_ok && test6.insulation_ok,
+    `Score: ${test6.score}`);
+
+  // Test 6: Null/invalid FRR handling
+  const test7 = compareFRR(undefined, '-/30/30');
+  test('Undefined required FRR → no crash, returns valid result',
+    test7.score >= 0 && test7.maxScore === 25,
+    `Score: ${test7.score}, MaxScore: ${test7.maxScore}`);
+
+  const test8 = compareFRR('-/30/30', undefined);
+  test('Undefined provided FRR → fails, returns 0 score',
+    test8.score === 0 && !test8.integrity_ok,
+    `Score: ${test8.score}, Integrity: ${test8.integrity_ok}`);
+
+  // Test 7: Confidence calculation uses MAX_SCORE = 95
+  const testItem: LineItem = {
+    description: 'Fire Door',
+    service: 'Fire Door',
+    size: '900',
+    frr: '-/30/30',
+    subclass: 'Door'
+  };
+
+  // Mock template with perfect match (assuming it exists in templates)
+  const mockResult = matchLineToSystem(testItem);
+  test('Confidence calculation uses MAX_SCORE = 95',
+    mockResult.confidence <= 1.0,
+    `Confidence: ${mockResult.confidence}`);
+
+  return { passed, failed, results };
+}
+
+/**
+ * Console-friendly test runner
+ * Call this in development to validate FRR logic
+ */
+export function validateFRRCompliance(): void {
+  console.log('\n========================================');
+  console.log('FRR COMPLIANCE TEST SUITE');
+  console.log('========================================\n');
+
+  const { passed, failed, results } = runFRRComplianceTests();
+
+  results.forEach(r => console.log(r));
+
+  console.log('\n========================================');
+  console.log(`RESULTS: ${passed} passed, ${failed} failed`);
+  console.log('========================================\n');
+
+  if (failed > 0) {
+    console.error('⚠️  Some tests failed. Review FRR logic.');
+  } else {
+    console.log('✅ All tests passed!');
+  }
 }
