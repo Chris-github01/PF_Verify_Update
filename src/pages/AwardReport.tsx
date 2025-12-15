@@ -660,11 +660,11 @@ export default function AwardReport({
       </div>
 
       <div id="printable-report" className="max-w-7xl mx-auto px-6 py-8">
-        <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-lg border border-blue-100 p-8 mb-6">
+        <div className="bg-gradient-to-br from-slate-800 to-slate-700 rounded-lg border border-slate-600 p-8 mb-6">
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-3xl font-bold text-slate-100 mb-2">Award Recommendation Report</h2>
-              <p className="text-lg text-slate-400 mb-4">Project Analysis & Supplier Evaluation</p>
+              <p className="text-lg text-slate-300 mb-4">Project Analysis & Supplier Evaluation</p>
               <div className="flex items-center gap-6 text-sm text-slate-400">
                 <div>
                   <span className="font-medium">Project:</span> {currentProject?.name}
@@ -779,32 +779,32 @@ export default function AwardReport({
               </div>
             </div>
 
-            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="text-base font-semibold text-blue-900 mb-2">Understanding the Key Metrics</h4>
+            <div className="mt-6 bg-slate-800/80 border border-slate-600 rounded-lg p-4">
+              <h4 className="text-base font-semibold text-blue-300 mb-2">Understanding the Key Metrics</h4>
               <div className="space-y-2 text-sm text-slate-300">
                 <p>
-                  <strong className="text-blue-900">Total Price:</strong> The sum of all line items quoted by each supplier.
+                  <strong className="text-blue-300">Total Price:</strong> The sum of all line items quoted by each supplier.
                   For suppliers with incomplete coverage, this represents only the systems they quoted for.
                 </p>
                 <p>
-                  <strong className="text-blue-900">Systems Covered:</strong> The number of distinct fire protection systems
+                  <strong className="text-blue-300">Systems Covered:</strong> The number of distinct fire protection systems
                   included in the supplier's quote out of {awardSummary.totalSystems} total systems in your project scope.
                 </p>
                 <p>
-                  <strong className="text-blue-900">Coverage %:</strong> The percentage of your total project scope addressed
+                  <strong className="text-blue-300">Coverage %:</strong> The percentage of your total project scope addressed
                   by this supplier. 100% means they quoted for everything; lower percentages indicate gaps requiring additional
                   sourcing.
                 </p>
                 <p>
-                  <strong className="text-blue-900">Risk Score (0-10):</strong> A composite risk assessment where lower is better.
+                  <strong className="text-blue-300">Risk Score (0-10):</strong> A composite risk assessment where lower is better.
                   Considers scope gaps, pricing anomalies, specification quality, and completeness. Scores below 3.0 are low risk,
                   3.0-6.0 are moderate, above 6.0 are high risk.
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <h4 className="text-base font-semibold text-amber-900 mb-2">How to Use This Report</h4>
+            <div className="mt-6 bg-slate-800/80 border border-slate-600 rounded-lg p-4">
+              <h4 className="text-base font-semibold text-amber-300 mb-2">How to Use This Report</h4>
               <ol className="list-decimal list-inside space-y-2 text-sm text-slate-300">
                 <li>Review the three recommendation types and consider which aligns with your procurement priorities.</li>
                 <li>Examine the Risk & Exceptions section carefully - these items require clarification or additional sourcing.</li>
