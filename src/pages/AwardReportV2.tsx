@@ -486,8 +486,8 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-gray-600">Loading award report...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mb-4"></div>
+          <p className="text-slate-400">Loading award report...</p>
         </div>
       </div>
     );
@@ -540,14 +540,14 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
     const isNoReport = error?.includes('No report found');
 
     return (
-      <div className="card text-center max-w-2xl mx-auto mt-12">
-        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <AlertTriangle className="w-8 h-8 text-blue-600" />
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-8 text-center max-w-2xl mx-auto mt-12">
+        <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <AlertTriangle className="w-8 h-8 text-blue-400" />
         </div>
-        <h3 className="text-xl font-bold text-gray-900 mb-2">
+        <h3 className="text-xl font-bold text-slate-100 mb-2">
           {isEqualisationMissing ? 'Equalisation Required' : 'No Report Available'}
         </h3>
-        <p className="text-gray-600 mb-6">{error || 'Unable to load report data'}</p>
+        <p className="text-slate-400 mb-6">{error || 'Unable to load report data'}</p>
         {isEqualisationMissing && onNavigateToEqualisation && (
           <button
             type="button"
@@ -588,6 +588,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
               top: 0;
               width: 100%;
               padding: 20mm;
+              background: white !important;
             }
             .no-print {
               display: none !important;
@@ -599,13 +600,14 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         `}
       </style>
 
-      <div className="no-print flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100">{t('report.title')}</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Professional board-level award recommendation
-          </p>
-        </div>
+      <div className="no-print bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100">{t('report.title')}</h1>
+            <p className="text-sm text-slate-400 mt-1">
+              Professional board-level award recommendation
+            </p>
+          </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <input
@@ -625,6 +627,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
             }}
             availableTypes={['print', 'html', 'excel']}
           />
+        </div>
         </div>
       </div>
 
@@ -668,9 +671,11 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         </div>
       )}
 
-      <div id="printable-report" className="bg-white">
-        {/* 1. Cover Page */}
-        <div className="card text-center page-break">
+      {/* Screen view container with dark theme */}
+      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
+        <div id="printable-report" className="bg-white print:bg-white">
+          {/* 1. Cover Page */}
+          <div className="card text-center page-break">
           <div className="py-16">
             <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <Award className="w-10 h-10 text-blue-600" />
@@ -1148,6 +1153,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
               </p>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
