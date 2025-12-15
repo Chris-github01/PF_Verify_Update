@@ -404,10 +404,10 @@ export default function AwardReport({
   if (!awardSummary || awardSummary.suppliers.length === 0) {
     return (
       <div className="p-8">
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+        <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-12 text-center">
           <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-900 text-lg font-semibold mb-2">No Award Report Available</p>
-          <p className="text-gray-600">Generate a report from the Reports Hub to view analysis.</p>
+          <p className="text-slate-100 text-lg font-semibold mb-2">No Award Report Available</p>
+          <p className="text-slate-400">Generate a report from the Reports Hub to view analysis.</p>
         </div>
       </div>
     );
@@ -447,7 +447,7 @@ export default function AwardReport({
   const nonCriticalGaps = aiAnalysis?.gapsAndRisks?.filter((g: any) => g.severity !== 'HIGH') || [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-900">
       <style>
         {`
           @media print {
@@ -463,6 +463,12 @@ export default function AwardReport({
               top: 0;
               width: 100%;
               padding: 20px;
+              background: white !important;
+            }
+            #printable-report * {
+              background: white !important;
+              color: black !important;
+              border-color: #e5e7eb !important;
             }
             .no-print {
               display: none !important;
@@ -505,55 +511,55 @@ export default function AwardReport({
         `}
       </style>
 
-      <div className="bg-white border-b border-gray-200 no-print">
+      <div className="bg-slate-800/60 border-b border-slate-700 no-print">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => onNavigate?.('reports')}
-                className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-100 transition-colors"
               >
                 <ArrowLeft size={16} />
                 Back to Reports
               </button>
               <div className="h-4 w-px bg-gray-300"></div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">
+                <h1 className="text-xl font-bold text-slate-100">
                   {currentProject?.name || 'Project'}  Report
                 </h1>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5">
                   Generated {formatDate(reportTimestamp)} " Award Recommendation & Itemized Comparison
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="inline-flex rounded-lg border border-gray-300 bg-white shadow-sm overflow-hidden">
+              <div className="inline-flex rounded-lg border border-slate-600 bg-slate-800/60 shadow-sm overflow-hidden">
                 <button
                   className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                     reportView === 'MODEL'
                       ? 'bg-gray-900 text-white'
-                      : 'hover:bg-gray-50 text-gray-700'
+                      : 'hover:bg-slate-700/50 text-slate-300'
                   }`}
                   onClick={() => setReportView('MODEL')}
                 >
                   Model
                 </button>
                 <button
-                  className={`px-3 py-1.5 text-sm font-medium border-l border-gray-300 transition-colors ${
+                  className={`px-3 py-1.5 text-sm font-medium border-l border-slate-600 transition-colors ${
                     reportView === 'PEER_MEDIAN'
                       ? 'bg-gray-900 text-white'
-                      : 'hover:bg-gray-50 text-gray-700'
+                      : 'hover:bg-slate-700/50 text-slate-300'
                   }`}
                   onClick={() => setReportView('PEER_MEDIAN')}
                 >
                   Client
                 </button>
                 <button
-                  className={`px-3 py-1.5 text-sm font-medium border-l border-gray-300 transition-colors ${
+                  className={`px-3 py-1.5 text-sm font-medium border-l border-slate-600 transition-colors ${
                     reportView === 'SIMPLE'
                       ? 'bg-gray-900 text-white'
-                      : 'hover:bg-gray-50 text-gray-700'
+                      : 'hover:bg-slate-700/50 text-slate-300'
                   }`}
                   onClick={() => setReportView('SIMPLE')}
                 >
@@ -572,11 +578,11 @@ export default function AwardReport({
                 </button>
 
                 {showExportDropdown && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div className="absolute right-0 mt-2 w-56 bg-slate-800/60 rounded-lg shadow-lg border border-slate-700 z-50">
                     <div className="py-1">
                       <button
                         onClick={handlePrint}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
                       >
                         <Printer size={16} />
                         Export PDF
@@ -584,7 +590,7 @@ export default function AwardReport({
                       <button
                         onClick={exportItemizedComparisonToExcel}
                         disabled={comparisonData.length === 0}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <FileSpreadsheet size={16} />
                         Export items (Excel)
@@ -597,20 +603,20 @@ export default function AwardReport({
               <div className="relative" ref={moreDropdownRef}>
                 <button
                   onClick={() => setShowMoreDropdown(!showMoreDropdown)}
-                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
+                  className="flex items-center gap-2 px-3 py-2 border border-slate-600 bg-slate-800/60 text-slate-300 rounded-md hover:bg-slate-700/50 transition-colors text-sm"
                 >
                   <MoreHorizontal size={16} />
                   More actions
                 </button>
 
                 {showMoreDropdown && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-slate-800/60 rounded-lg shadow-lg border border-slate-700 z-50">
                     <div className="py-1">
                       <button
                         onClick={() => {
                           setShowMoreDropdown(false);
                         }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2"
                       >
                         <Edit3 size={16} />
                         Rename report
@@ -621,7 +627,7 @@ export default function AwardReport({
                           handleRecalculate();
                         }}
                         disabled={recalculating}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50"
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50"
                       >
                         <RefreshCw size={16} className={recalculating ? 'animate-spin' : ''} />
                         Regenerate report
@@ -643,7 +649,7 @@ export default function AwardReport({
               <button
                 onClick={handleRecalculate}
                 disabled={recalculating}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors text-sm"
+                className="flex items-center gap-2 px-3 py-2 border border-slate-600 bg-slate-800/60 text-slate-300 rounded-md hover:bg-slate-700/50 disabled:opacity-50 transition-colors text-sm"
               >
                 <RefreshCw size={16} className={recalculating ? 'animate-spin' : ''} />
                 Recalculate
@@ -657,9 +663,9 @@ export default function AwardReport({
         <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-lg border border-blue-100 p-8 mb-6">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Award Recommendation Report</h2>
-              <p className="text-lg text-gray-600 mb-4">Project Analysis & Supplier Evaluation</p>
-              <div className="flex items-center gap-6 text-sm text-gray-600">
+              <h2 className="text-3xl font-bold text-slate-100 mb-2">Award Recommendation Report</h2>
+              <p className="text-lg text-slate-400 mb-4">Project Analysis & Supplier Evaluation</p>
+              <div className="flex items-center gap-6 text-sm text-slate-400">
                 <div>
                   <span className="font-medium">Project:</span> {currentProject?.name}
                 </div>
@@ -674,16 +680,16 @@ export default function AwardReport({
                 </div>
               </div>
             </div>
-            <div className="text-right text-sm text-gray-500">
+            <div className="text-right text-sm text-slate-400">
               Generated by<br />
-              <span className="font-semibold text-gray-900">PassiveFire Verify+</span>
+              <span className="font-semibold text-slate-100">PassiveFire Verify+</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-8 mb-6 page-break-avoid">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Report Overview & Methodology</h3>
-          <div className="prose prose-sm max-w-none text-gray-700 space-y-4">
+        <div className="bg-slate-800/60 rounded-lg shadow border border-slate-700 p-8 mb-6 page-break-avoid">
+          <h3 className="text-xl font-bold text-slate-100 mb-4">Report Overview & Methodology</h3>
+          <div className="prose prose-sm max-w-none text-slate-300 space-y-4">
             <p className="leading-relaxed">
               This report represents a comprehensive analysis of supplier quotes for your project,
               processed through PassiveFire Verify+'s advanced workflow. Each quote has been systematically
@@ -691,21 +697,21 @@ export default function AwardReport({
             </p>
 
             <div className="mt-6">
-              <h4 className="text-lg font-semibold text-gray-900 mb-3">Analysis Workflow</h4>
-              <p className="mb-4 text-gray-600">
+              <h4 className="text-lg font-semibold text-slate-100 mb-3">Analysis Workflow</h4>
+              <p className="mb-4 text-slate-400">
                 Your quotes have been processed through a five-stage workflow designed to ensure accuracy,
                 completeness, and fair comparison:
               </p>
 
               <div className="space-y-6 mt-4">
                 <div className="border-l-4 border-blue-500 pl-4 py-2">
-                  <h5 className="font-semibold text-gray-900 mb-2">1. Import Quotes</h5>
-                  <p className="text-sm text-gray-700 mb-2">
+                  <h5 className="font-semibold text-slate-100 mb-2">1. Import Quotes</h5>
+                  <p className="text-sm text-slate-300 mb-2">
                     <strong>What happened:</strong> Supplier quotes were imported from PDF and Excel files using
                     advanced parsing technology including OCR (Optical Character Recognition) and intelligent
                     data extraction.
                   </p>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-slate-300">
                     <strong>What this means:</strong> Each line item, including descriptions, quantities, units,
                     and prices, was automatically extracted and structured into a standardized format. This eliminates
                     manual data entry errors and ensures all quotes are compared on an equal basis.
@@ -713,13 +719,13 @@ export default function AwardReport({
                 </div>
 
                 <div className="border-l-4 border-green-500 pl-4 py-2">
-                  <h5 className="font-semibold text-gray-900 mb-2">2. Review & Clean</h5>
-                  <p className="text-sm text-gray-700 mb-2">
+                  <h5 className="font-semibold text-slate-100 mb-2">2. Review & Clean</h5>
+                  <p className="text-sm text-slate-300 mb-2">
                     <strong>What happened:</strong> Each line item was normalized using AI-powered analysis to
                     ensure consistent descriptions, units of measurement, and quantities across all suppliers.
                     Items were validated for completeness and accuracy.
                   </p>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-slate-300">
                     <strong>What this means:</strong> When one supplier quotes "fire-rated board per m²" and
                     another quotes "FR board per square meter," the system recognizes these as the same item.
                     Quantities are converted to common units (e.g., all areas in m², all lengths in linear meters)
@@ -728,13 +734,13 @@ export default function AwardReport({
                 </div>
 
                 <div className="border-l-4 border-purple-500 pl-4 py-2">
-                  <h5 className="font-semibold text-gray-900 mb-2">3. Scope Matrix Analysis</h5>
-                  <p className="text-sm text-gray-700 mb-2">
+                  <h5 className="font-semibold text-slate-100 mb-2">3. Scope Matrix Analysis</h5>
+                  <p className="text-sm text-slate-300 mb-2">
                     <strong>What happened:</strong> A comprehensive scope matrix was built, mapping all line items
                     to fire protection systems (e.g., "Penetration Seals," "Fire Doors," "Cavity Barriers").
                     Coverage analysis identified which suppliers quoted for which systems.
                   </p>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-slate-300">
                     <strong>What this means:</strong> The Coverage % in this report shows what proportion of your
                     total project scope each supplier has addressed. A supplier with 85% coverage may have excellent
                     pricing but is missing 15% of required systems, which creates risk and requires additional sourcing.
@@ -742,13 +748,13 @@ export default function AwardReport({
                 </div>
 
                 <div className="border-l-4 border-orange-500 pl-4 py-2">
-                  <h5 className="font-semibold text-gray-900 mb-2">4. Quote Intelligence</h5>
-                  <p className="text-sm text-gray-700 mb-2">
+                  <h5 className="font-semibold text-slate-100 mb-2">4. Quote Intelligence</h5>
+                  <p className="text-sm text-slate-300 mb-2">
                     <strong>What happened:</strong> AI analysis examined each quote for quality indicators, pricing
                     patterns, specification compliance, and potential risks. This includes checking for outlier pricing,
                     incomplete specifications, and non-standard terms.
                   </p>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-slate-300">
                     <strong>What this means:</strong> The Risk Score reflects factors beyond just price and coverage.
                     It considers specification quality, pricing consistency, completeness of information, and compliance
                     with project requirements. A higher risk score indicates potential issues that may lead to variations
@@ -757,13 +763,13 @@ export default function AwardReport({
                 </div>
 
                 <div className="border-l-4 border-red-500 pl-4 py-2">
-                  <h5 className="font-semibold text-gray-900 mb-2">5. Award Report Generation</h5>
-                  <p className="text-sm text-gray-700 mb-2">
+                  <h5 className="font-semibold text-slate-100 mb-2">5. Award Report Generation</h5>
+                  <p className="text-sm text-slate-300 mb-2">
                     <strong>What happened:</strong> All suppliers were ranked using multi-criteria analysis considering
                     total price, scope coverage, risk factors, and specification quality. Three recommendation types
                     were generated to suit different procurement strategies.
                   </p>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-slate-300">
                     <strong>What this means:</strong> This final report synthesizes all analysis stages. The recommendations
                     are not based solely on lowest price, but balance cost, risk, and completeness. The "Best Value"
                     considers price-to-coverage ratio, "Lowest Risk" prioritizes completeness and quality, and "Balanced"
@@ -775,7 +781,7 @@ export default function AwardReport({
 
             <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="text-base font-semibold text-blue-900 mb-2">Understanding the Key Metrics</h4>
-              <div className="space-y-2 text-sm text-gray-700">
+              <div className="space-y-2 text-sm text-slate-300">
                 <p>
                   <strong className="text-blue-900">Total Price:</strong> The sum of all line items quoted by each supplier.
                   For suppliers with incomplete coverage, this represents only the systems they quoted for.
@@ -799,7 +805,7 @@ export default function AwardReport({
 
             <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
               <h4 className="text-base font-semibold text-amber-900 mb-2">How to Use This Report</h4>
-              <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
+              <ol className="list-decimal list-inside space-y-2 text-sm text-slate-300">
                 <li>Review the three recommendation types and consider which aligns with your procurement priorities.</li>
                 <li>Examine the Risk & Exceptions section carefully - these items require clarification or additional sourcing.</li>
                 <li>Check the Coverage % for your preferred supplier - gaps below 90% may indicate significant scope omissions.</li>
@@ -812,14 +818,14 @@ export default function AwardReport({
 
         {reportView !== 'SIMPLE' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6 page-break-avoid">
-            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+            <div className="bg-slate-800/60 rounded-lg shadow p-6 border border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600 mb-1">Best Value Supplier</p>
-                  <p className="text-xl font-bold text-gray-900 mb-1">
+                  <p className="text-sm font-medium text-slate-400 mb-1">Best Value Supplier</p>
+                  <p className="text-xl font-bold text-slate-100 mb-1">
                     {bestValue?.supplier.supplierName || 'N/A'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-400">
                     {bestValue ? `${formatCurrency(bestValue.supplier.adjustedTotal)} " ${Math.round(bestValue.supplier.coveragePercent)}% coverage` : 'Best balance of price and coverage'}
                   </p>
                 </div>
@@ -829,14 +835,14 @@ export default function AwardReport({
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+            <div className="bg-slate-800/60 rounded-lg shadow p-6 border border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600 mb-1">Lowest Risk</p>
-                  <p className="text-xl font-bold text-gray-900 mb-1">
+                  <p className="text-sm font-medium text-slate-400 mb-1">Lowest Risk</p>
+                  <p className="text-xl font-bold text-slate-100 mb-1">
                     {lowestRisk?.supplier.supplierName || 'N/A'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-400">
                     {lowestRisk ? `Risk Score ${lowestRisk.supplier.riskScore.toFixed(1)} " ${Math.round(lowestRisk.supplier.coveragePercent)}% coverage` : 'Lowest risk profile'}
                   </p>
                 </div>
@@ -846,14 +852,14 @@ export default function AwardReport({
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+            <div className="bg-slate-800/60 rounded-lg shadow p-6 border border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600 mb-1">Balanced Choice</p>
-                  <p className="text-xl font-bold text-gray-900 mb-1">
+                  <p className="text-sm font-medium text-slate-400 mb-1">Balanced Choice</p>
+                  <p className="text-xl font-bold text-slate-100 mb-1">
                     {balanced?.supplier.supplierName || 'N/A'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-400">
                     {balanced ? 'Optimal balance of all factors' : 'Best overall recommendation'}
                   </p>
                 </div>
@@ -863,18 +869,18 @@ export default function AwardReport({
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+            <div className="bg-slate-800/60 rounded-lg shadow p-6 border border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600 mb-1">Key Metrics</p>
+                  <p className="text-sm font-medium text-slate-400 mb-1">Key Metrics</p>
                   <div className="space-y-1 mt-2">
-                    <p className="text-sm text-gray-700">
+                    <p className="text-sm text-slate-300">
                       <span className="font-medium">Quotes:</span> {awardSummary.suppliers.length}
                     </p>
-                    <p className="text-sm text-gray-700">
+                    <p className="text-sm text-slate-300">
                       <span className="font-medium">Systems:</span> {awardSummary.totalSystems}
                     </p>
-                    <p className="text-sm text-gray-700">
+                    <p className="text-sm text-slate-300">
                       <span className="font-medium">Avg Coverage:</span> {
                         (awardSummary.suppliers.reduce((sum, s) => sum + s.coveragePercent, 0) / awardSummary.suppliers.length).toFixed(1)
                       }%
@@ -889,14 +895,14 @@ export default function AwardReport({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-6">
-            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+            <div className="bg-slate-800/60 rounded-lg shadow p-6 border border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600 mb-1">Best Value Supplier</p>
-                  <p className="text-xl font-bold text-gray-900 mb-1">
+                  <p className="text-sm font-medium text-slate-400 mb-1">Best Value Supplier</p>
+                  <p className="text-xl font-bold text-slate-100 mb-1">
                     {bestValue?.supplier.supplierName || 'N/A'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-400">
                     {bestValue ? `${formatCurrency(bestValue.supplier.adjustedTotal)}` : 'Best price'}
                   </p>
                 </div>
@@ -906,14 +912,14 @@ export default function AwardReport({
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+            <div className="bg-slate-800/60 rounded-lg shadow p-6 border border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600 mb-1">Lowest Risk</p>
-                  <p className="text-xl font-bold text-gray-900 mb-1">
+                  <p className="text-sm font-medium text-slate-400 mb-1">Lowest Risk</p>
+                  <p className="text-xl font-bold text-slate-100 mb-1">
                     {lowestRisk?.supplier.supplierName || 'N/A'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-400">
                     {lowestRisk ? 'Most complete coverage' : 'Lowest risk'}
                   </p>
                 </div>
@@ -923,14 +929,14 @@ export default function AwardReport({
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+            <div className="bg-slate-800/60 rounded-lg shadow p-6 border border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600 mb-1">Balanced Choice</p>
-                  <p className="text-xl font-bold text-gray-900 mb-1">
+                  <p className="text-sm font-medium text-slate-400 mb-1">Balanced Choice</p>
+                  <p className="text-xl font-bold text-slate-100 mb-1">
                     {balanced?.supplier.supplierName || 'N/A'}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-400">
                     Recommended choice
                   </p>
                 </div>
@@ -943,9 +949,9 @@ export default function AwardReport({
         )}
 
         <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow border border-gray-200 page-break-avoid">
-            <div className="border-b border-gray-200 px-6 py-4">
-              <h3 className="text-lg font-semibold text-gray-900">Why this recommendation</h3>
+          <div className="bg-slate-800/60 rounded-lg shadow border border-slate-700 page-break-avoid">
+            <div className="border-b border-slate-700 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-100">Why this recommendation</h3>
             </div>
             <div className="p-6">
               <ul className="space-y-3">
@@ -953,10 +959,10 @@ export default function AwardReport({
                   <li key={idx} className="flex items-start gap-3">
                     <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-slate-100">
                         {rec.supplier.supplierName} - {rec.type.replace('_', ' ')}
                       </p>
-                      <p className="text-sm text-gray-600 mt-0.5">{rec.reason}</p>
+                      <p className="text-sm text-slate-400 mt-0.5">{rec.reason}</p>
                     </div>
                   </li>
                 ))}
@@ -964,32 +970,32 @@ export default function AwardReport({
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow border border-gray-200 page-break-before">
-            <div className="border-b border-gray-200 px-6 py-4">
-              <h3 className="text-lg font-semibold text-gray-900">Supplier comparison summary</h3>
+          <div className="bg-slate-800/60 rounded-lg shadow border border-slate-700 page-break-before">
+            <div className="border-b border-slate-700 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-100">Supplier comparison summary</h3>
             </div>
             <div className="p-6">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left text-sm font-medium text-gray-600 pb-3">Supplier</th>
-                      <th className="text-right text-sm font-medium text-gray-600 pb-3">Total Price</th>
-                      <th className="text-right text-sm font-medium text-gray-600 pb-3">Systems Covered</th>
-                      <th className="text-right text-sm font-medium text-gray-600 pb-3">Coverage %</th>
-                      <th className="text-right text-sm font-medium text-gray-600 pb-3">Risk Score</th>
+                    <tr className="border-b border-slate-700">
+                      <th className="text-left text-sm font-medium text-slate-400 pb-3">Supplier</th>
+                      <th className="text-right text-sm font-medium text-slate-400 pb-3">Total Price</th>
+                      <th className="text-right text-sm font-medium text-slate-400 pb-3">Systems Covered</th>
+                      <th className="text-right text-sm font-medium text-slate-400 pb-3">Coverage %</th>
+                      <th className="text-right text-sm font-medium text-slate-400 pb-3">Risk Score</th>
                       {reportView !== 'SIMPLE' && (
-                        <th className="text-left text-sm font-medium text-gray-600 pb-3 pl-6">Actions</th>
+                        <th className="text-left text-sm font-medium text-slate-400 pb-3 pl-6">Actions</th>
                       )}
                     </tr>
                   </thead>
                   <tbody>
                     {awardSummary.suppliers.map((supplier, idx) => (
                       <tr key={idx} className="border-b border-gray-100 last:border-0">
-                        <td className="py-3 text-sm font-medium text-gray-900">{supplier.supplierName}</td>
-                        <td className="py-3 text-sm text-right text-gray-900">{formatCurrency(supplier.adjustedTotal)}</td>
-                        <td className="py-3 text-sm text-right text-gray-700">{supplier.itemsQuoted}</td>
-                        <td className="py-3 text-sm text-right text-gray-700">{Math.round(supplier.coveragePercent)}%</td>
+                        <td className="py-3 text-sm font-medium text-slate-100">{supplier.supplierName}</td>
+                        <td className="py-3 text-sm text-right text-slate-100">{formatCurrency(supplier.adjustedTotal)}</td>
+                        <td className="py-3 text-sm text-right text-slate-300">{supplier.itemsQuoted}</td>
+                        <td className="py-3 text-sm text-right text-slate-300">{Math.round(supplier.coveragePercent)}%</td>
                         <td className="py-3 text-sm text-right">
                           <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                             supplier.riskScore <= 2 ? 'bg-green-100 text-green-800' :
@@ -1019,9 +1025,9 @@ export default function AwardReport({
           </div>
 
           {reportView !== 'SIMPLE' && (criticalGaps.length > 0 || nonCriticalGaps.length > 0) && (
-            <div className="bg-white rounded-lg shadow border border-gray-200">
-              <div className="border-b border-gray-200 px-6 py-4">
-                <h3 className="text-lg font-semibold text-gray-900">Risk & exceptions</h3>
+            <div className="bg-slate-800/60 rounded-lg shadow border border-slate-700">
+              <div className="border-b border-slate-700 px-6 py-4">
+                <h3 className="text-lg font-semibold text-slate-100">Risk & exceptions</h3>
               </div>
               <div className="p-6 space-y-6">
                 {criticalGaps.length > 0 && (
@@ -1034,7 +1040,7 @@ export default function AwardReport({
                       {criticalGaps.map((gap: any, idx: number) => (
                         <li key={idx} className="flex items-start gap-2 text-sm">
                           <span className="w-1.5 h-1.5 bg-red-600 rounded-full mt-1.5 flex-shrink-0"></span>
-                          <span className="text-gray-700">{gap.description}</span>
+                          <span className="text-slate-300">{gap.description}</span>
                         </li>
                       ))}
                     </ul>
@@ -1051,7 +1057,7 @@ export default function AwardReport({
                       {nonCriticalGaps.map((gap: any, idx: number) => (
                         <li key={idx} className="flex items-start gap-2 text-sm">
                           <span className="w-1.5 h-1.5 bg-yellow-600 rounded-full mt-1.5 flex-shrink-0"></span>
-                          <span className="text-gray-700">{gap.description}</span>
+                          <span className="text-slate-300">{gap.description}</span>
                         </li>
                       ))}
                     </ul>
@@ -1062,9 +1068,9 @@ export default function AwardReport({
           )}
 
           {reportView !== 'SIMPLE' && comparisonData.length > 0 && (
-            <div className="bg-white rounded-lg shadow border border-gray-200">
-              <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Itemized comparison</h3>
+            <div className="bg-slate-800/60 rounded-lg shadow border border-slate-700">
+              <div className="border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-100">Itemized comparison</h3>
                 <button
                   onClick={() => setShowItemizedDetails(!showItemizedDetails)}
                   className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -1078,12 +1084,12 @@ export default function AwardReport({
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left font-medium text-gray-600 pb-3 pr-4">Description</th>
-                          <th className="text-right font-medium text-gray-600 pb-3 px-4">Qty</th>
-                          <th className="text-left font-medium text-gray-600 pb-3 px-4">Unit</th>
+                        <tr className="border-b border-slate-700">
+                          <th className="text-left font-medium text-slate-400 pb-3 pr-4">Description</th>
+                          <th className="text-right font-medium text-slate-400 pb-3 px-4">Qty</th>
+                          <th className="text-left font-medium text-slate-400 pb-3 px-4">Unit</th>
                           {awardSummary.suppliers.map((supplier, idx) => (
-                            <th key={idx} className="text-right font-medium text-gray-600 pb-3 px-4">
+                            <th key={idx} className="text-right font-medium text-slate-400 pb-3 px-4">
                               {supplier.supplierName}
                             </th>
                           ))}
@@ -1092,13 +1098,13 @@ export default function AwardReport({
                       <tbody>
                         {comparisonData.slice(0, 50).map((row, idx) => (
                           <tr key={idx} className="border-b border-gray-100">
-                            <td className="py-2 pr-4 text-gray-900">{row.description}</td>
-                            <td className="py-2 px-4 text-right text-gray-700">{row.quantity}</td>
-                            <td className="py-2 px-4 text-gray-700">{row.unit}</td>
+                            <td className="py-2 pr-4 text-slate-100">{row.description}</td>
+                            <td className="py-2 px-4 text-right text-slate-300">{row.quantity}</td>
+                            <td className="py-2 px-4 text-slate-300">{row.unit}</td>
                             {awardSummary.suppliers.map((supplier, sidx) => {
                               const supplierData = row.suppliers?.[supplier.supplierName];
                               return (
-                                <td key={sidx} className="py-2 px-4 text-right text-gray-700">
+                                <td key={sidx} className="py-2 px-4 text-right text-slate-300">
                                   {supplierData && supplierData.unitPrice !== null
                                     ? formatCurrency(supplierData.unitPrice)
                                     : 'N/A'}
@@ -1110,14 +1116,14 @@ export default function AwardReport({
                       </tbody>
                     </table>
                     {comparisonData.length > 50 && (
-                      <p className="text-sm text-gray-500 mt-4 text-center">
+                      <p className="text-sm text-slate-400 mt-4 text-center">
                         Showing first 50 of {comparisonData.length} items. Export to Excel for full data.
                       </p>
                     )}
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-gray-600 mb-4">
+                    <p className="text-slate-400 mb-4">
                       {comparisonData.length} line items available for detailed comparison
                     </p>
                     <div className="flex items-center justify-center gap-3">
@@ -1129,7 +1135,7 @@ export default function AwardReport({
                       </button>
                       <button
                         onClick={exportItemizedComparisonToExcel}
-                        className="px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm font-medium"
+                        className="px-4 py-2 border border-slate-600 bg-slate-800/60 text-slate-300 rounded-md hover:bg-slate-700/50 transition-colors text-sm font-medium"
                       >
                         <FileSpreadsheet size={16} className="inline mr-2" />
                         Export itemized Excel
