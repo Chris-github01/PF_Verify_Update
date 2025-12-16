@@ -48,10 +48,21 @@ export default function CreateOrganisation() {
   const [ownerPhone, setOwnerPhone] = useState('');
 
   // Section 4: Billing & Trial Controls
+  const [accountType, setAccountType] = useState<'trial' | 'subscription'>('trial');
   const [subscriptionPlan, setSubscriptionPlan] = useState('starter');
   const [trialDuration, setTrialDuration] = useState(14);
   const [seatLimit, setSeatLimit] = useState(5);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [billingContactEmail, setBillingContactEmail] = useState('');
+
+  // Update account type
+  const handleAccountTypeChange = (type: 'trial' | 'subscription') => {
+    setAccountType(type);
+    if (type === 'trial') {
+      setSeatLimit(5);
+      setPaymentConfirmed(false);
+    }
+  };
 
   // Update seat limit when subscription plan changes
   const handlePlanChange = (plan: string) => {
@@ -102,6 +113,12 @@ export default function CreateOrganisation() {
       return;
     }
 
+    // Additional validation for subscription accounts
+    if (accountType === 'subscription' && !paymentConfirmed) {
+      setToast({ type: 'error', message: 'Please confirm payment has been received before creating a paid subscription' });
+      return;
+    }
+
     setCreating(true);
     try {
       // Generate audit namespace
@@ -109,6 +126,13 @@ export default function CreateOrganisation() {
 
       // Get current admin user
       const { data: { user } } = await supabase.auth.getUser();
+
+      // Determine subscription status and trial end date
+      const subscriptionStatus = accountType === 'trial' ? 'trial' : 'active';
+      const trialEndDate = accountType === 'trial'
+        ? new Date(Date.now() + trialDuration * 24 * 60 * 60 * 1000).toISOString()
+        : null;
+      const pricingTier = accountType === 'trial' ? 'starter' : subscriptionPlan;
 
       // Create organisation
       const { data: org, error: orgError } = await supabase
@@ -127,15 +151,15 @@ export default function CreateOrganisation() {
           owner_role_title: ownerRoleTitle,
           owner_email: ownerEmail.toLowerCase().trim(),
           owner_phone: ownerPhone || null,
-          trial_type: `${trialDuration}_day`,
+          trial_type: accountType === 'trial' ? `${trialDuration}_day` : null,
           seat_limit: seatLimit,
           billing_contact_email: billingContactEmail || ownerEmail.toLowerCase().trim(),
           audit_namespace: auditNamespace,
           compliance_acceptance: complianceAcceptance,
           created_by_admin_id: user?.id || null,
-          subscription_status: 'trial',
-          pricing_tier: subscriptionPlan,
-          trial_end_date: new Date(Date.now() + trialDuration * 24 * 60 * 60 * 1000).toISOString(),
+          subscription_status: subscriptionStatus,
+          pricing_tier: pricingTier,
+          trial_end_date: trialEndDate,
           trade_type: primaryTradeFocus
         })
         .select()
@@ -147,9 +171,9 @@ export default function CreateOrganisation() {
       const { error: memberError } = await supabase
         .rpc('create_organisation_with_owner_by_email', {
           p_name: legalName,
-          p_status: 'trial',
+          p_status: subscriptionStatus,
           p_seat_limit: seatLimit,
-          p_pricing_tier: subscriptionPlan,
+          p_pricing_tier: pricingTier,
           p_owner_email: ownerEmail.toLowerCase().trim()
         });
 
@@ -438,75 +462,154 @@ export default function CreateOrganisation() {
             </button>
 
             {showAdvanced && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Subscription Plan <span className="text-rose-600">*</span>
-                      <Tooltip text="Select the pricing tier for this organisation" />
-                    </label>
-                    <select
-                      value={subscriptionPlan}
-                      onChange={(e) => handlePlanChange(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+              <div className="space-y-6">
+                {/* Account Type Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-3">
+                    Account Type <span className="text-rose-600">*</span>
+                    <Tooltip text="Choose between trial account or paid subscription" />
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => handleAccountTypeChange('trial')}
+                      className={`p-4 rounded-lg border-2 text-left transition ${
+                        accountType === 'trial'
+                          ? 'border-[#0A66C2] bg-blue-50'
+                          : 'border-slate-300 bg-white hover:border-slate-400'
+                      }`}
                     >
-                      <option value="starter">Starter - Up to 5 users ($11,988 NZD/year)</option>
-                      <option value="professional">Professional - Up to 15 users ($23,988 NZD/year)</option>
-                      <option value="enterprise">Enterprise - Unlimited users (From $33,600 NZD/year)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Trial Duration (Days) <span className="text-rose-600">*</span>
-                      <Tooltip text="Number of days for the trial period" />
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="90"
-                      value={trialDuration}
-                      onChange={(e) => setTrialDuration(parseInt(e.target.value) || 14)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
-                    />
+                      <div className="font-semibold text-slate-900 mb-1">Trial Account</div>
+                      <div className="text-xs text-slate-600">14-day free trial with limited features</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAccountTypeChange('subscription')}
+                      className={`p-4 rounded-lg border-2 text-left transition ${
+                        accountType === 'subscription'
+                          ? 'border-[#0A66C2] bg-blue-50'
+                          : 'border-slate-300 bg-white hover:border-slate-400'
+                      }`}
+                    >
+                      <div className="font-semibold text-slate-900 mb-1">Paid Subscription</div>
+                      <div className="text-xs text-slate-600">Full access with paid plan</div>
+                    </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      User Seat Limit <span className="text-rose-600">*</span>
-                      <Tooltip text="Auto-set based on subscription plan. Can be adjusted if needed." />
-                    </label>
-                    <input
-                      type="number"
-                      value={seatLimit}
-                      onChange={(e) => setSeatLimit(parseInt(e.target.value) || 0)}
-                      min="1"
-                      max="1000"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">
-                      {subscriptionPlan === 'starter' && 'Starter plan includes up to 5 users'}
-                      {subscriptionPlan === 'professional' && 'Professional plan includes up to 15 users'}
-                      {subscriptionPlan === 'enterprise' && 'Enterprise plan includes unlimited users'}
-                    </p>
+                {/* Trial Account Settings */}
+                {accountType === 'trial' && (
+                  <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 className="text-sm font-semibold text-slate-900">Trial Settings</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Trial Duration (Days) <span className="text-rose-600">*</span>
+                          <Tooltip text="Number of days for the trial period" />
+                        </label>
+                        <input
+                          type="number"
+                          min="7"
+                          max="90"
+                          value={trialDuration}
+                          onChange={(e) => setTrialDuration(parseInt(e.target.value) || 14)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          User Seat Limit
+                        </label>
+                        <input
+                          type="number"
+                          value={seatLimit}
+                          readOnly
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-slate-100 text-gray-600"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">Trial accounts limited to 5 users</p>
+                      </div>
+                    </div>
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Billing Contact Email
-                      <Tooltip text="Email for billing and invoicing (defaults to owner email if not provided)" />
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="billing@company.com (optional)"
-                      value={billingContactEmail}
-                      onChange={(e) => setBillingContactEmail(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
-                    />
+                {/* Subscription Settings */}
+                {accountType === 'subscription' && (
+                  <div className="space-y-4 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <h3 className="text-sm font-semibold text-slate-900">Subscription Settings</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Subscription Plan <span className="text-rose-600">*</span>
+                          <Tooltip text="Select the pricing tier for this organisation" />
+                        </label>
+                        <select
+                          value={subscriptionPlan}
+                          onChange={(e) => handlePlanChange(e.target.value)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                        >
+                          <option value="starter">Starter - Up to 5 users ($11,988 NZD/year)</option>
+                          <option value="professional">Professional - Up to 15 users ($23,988 NZD/year)</option>
+                          <option value="enterprise">Enterprise - Unlimited users (From $33,600 NZD/year)</option>
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            User Seat Limit <span className="text-rose-600">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            value={seatLimit}
+                            onChange={(e) => setSeatLimit(parseInt(e.target.value) || 0)}
+                            min="1"
+                            max="1000"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            {subscriptionPlan === 'starter' && 'Starter: up to 5 users'}
+                            {subscriptionPlan === 'professional' && 'Professional: up to 15 users'}
+                            {subscriptionPlan === 'enterprise' && 'Enterprise: unlimited users'}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Billing Contact Email
+                          </label>
+                          <input
+                            type="email"
+                            placeholder="billing@company.com"
+                            value={billingContactEmail}
+                            onChange={(e) => setBillingContactEmail(e.target.value)}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Payment Confirmation */}
+                      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={paymentConfirmed}
+                            onChange={(e) => setPaymentConfirmed(e.target.checked)}
+                            className="mt-1 w-4 h-4 text-[#0A66C2] border-slate-300 rounded focus:ring-[#0A66C2]"
+                          />
+                          <div>
+                            <div className="text-sm font-medium text-slate-900">
+                              Payment Received <span className="text-rose-600">*</span>
+                            </div>
+                            <div className="text-xs text-slate-600 mt-1">
+                              Confirm that payment has been received before activating this paid subscription.
+                              The account will be immediately active with full access.
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
