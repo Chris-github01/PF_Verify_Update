@@ -35,8 +35,9 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
     {
       name: 'Starter',
       badge: 'Perfect for smaller teams & consultants',
-      monthlyPrice: 1199,
+      monthlyPrice: 1249,
       annualPrice: 999,
+      savingsNote: 'Save $3,000/year',
       description: 'Essential tools to get started with passive fire auditing',
       features: [
         'Up to 5 users',
@@ -52,9 +53,9 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
     {
       name: 'Professional',
       badge: 'For growing main contractors & PQS firms',
-      monthlyPrice: null,
+      monthlyPrice: 2499,
       annualPrice: 1999,
-      savingsNote: 'Save $4,800/year',
+      savingsNote: 'Save $6,000/year',
       description: 'Everything you need to scale your passive fire compliance',
       features: [
         'Everything in Starter, plus:',
