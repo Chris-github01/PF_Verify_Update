@@ -35,14 +35,15 @@ export default function GlobalPDFVault() {
 
   const handleDownload = async (quote: GlobalQuote) => {
     try {
-      // Get signed URL from storage
-      const storagePath = quote.supplier_name ?
-        `${quote.organisation_id}/${quote.supplier_name.replace(/\s+/g, '_')}_${quote.quote_id}.pdf` :
-        `${quote.organisation_id}/quote_${quote.quote_id}.pdf`;
+      // Use the file_url from the database (stored in parsing_jobs)
+      if (!quote.file_url) {
+        alert('PDF file not found. The file may not have been uploaded correctly.');
+        return;
+      }
 
       const { data, error } = await supabase.storage
         .from('quotes')
-        .createSignedUrl(storagePath, 3600);
+        .createSignedUrl(quote.file_url, 3600);
 
       if (error) throw error;
 
@@ -240,13 +241,19 @@ export default function GlobalPDFVault() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleDownload(quote)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Download PDF"
-                      >
-                        <Download size={16} />
-                      </button>
+                      {quote.file_url ? (
+                        <button
+                          onClick={() => handleDownload(quote)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Download PDF"
+                        >
+                          <Download size={16} />
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400" title="PDF file not available">
+                          No file
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>

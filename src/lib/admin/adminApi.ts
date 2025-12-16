@@ -35,6 +35,8 @@ export interface GlobalQuote {
   uploaded_by_email: string | null;
   project_name: string;
   avg_confidence: number | null;
+  file_url: string | null;
+  filename: string | null;
 }
 
 export async function getAllOrganisations(): Promise<OrganisationDashboard[]> {
@@ -51,28 +53,29 @@ export async function getAllQuotes(filters?: {
   startDate?: string;
   endDate?: string;
 }): Promise<GlobalQuote[]> {
-  let query = supabase
-    .from('admin_global_quotes')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (filters?.organisationId) {
-    query = query.eq('organisation_id', filters.organisationId);
-  }
-  if (filters?.tradeType) {
-    query = query.eq('trade_type', filters.tradeType);
-  }
-  if (filters?.startDate) {
-    query = query.gte('created_at', filters.startDate);
-  }
-  if (filters?.endDate) {
-    query = query.lte('created_at', filters.endDate);
-  }
-
-  const { data, error } = await query.limit(1000);
+  // Call the RPC function directly instead of querying a view
+  const { data, error } = await supabase
+    .rpc('get_admin_global_quotes');
 
   if (error) throw error;
-  return data || [];
+
+  let quotes = data || [];
+
+  // Apply client-side filters if provided
+  if (filters?.organisationId) {
+    quotes = quotes.filter(q => q.organisation_id === filters.organisationId);
+  }
+  if (filters?.tradeType) {
+    quotes = quotes.filter(q => q.trade_type === filters.tradeType);
+  }
+  if (filters?.startDate) {
+    quotes = quotes.filter(q => q.created_at >= filters.startDate);
+  }
+  if (filters?.endDate) {
+    quotes = quotes.filter(q => q.created_at <= filters.endDate);
+  }
+
+  return quotes.slice(0, 1000);
 }
 
 export async function createOrganisation(params: {
