@@ -63,46 +63,28 @@ export async function calculateAuditKPIs(filters?: {
 }): Promise<AuditKPIs> {
   const config = await getSystemConfig();
 
-  // Build filter conditions
-  let quoteFilter = '';
-  let auditFilter = '';
-  const params: any = {};
-
-  if (filters?.organisationId) {
-    quoteFilter += ' AND q.organisation_id = $1';
-    auditFilter += ' AND a.organisation_id = $1';
-    params.orgId = filters.organisationId;
-  }
-
-  if (filters?.projectId) {
-    quoteFilter += ' AND q.project_id = $2';
-    auditFilter += ' AND a.project_id = $2';
-    params.projectId = filters.projectId;
-  }
-
-  if (filters?.module) {
-    quoteFilter += ' AND q.module = $3';
-    auditFilter += ' AND a.module = $3';
-    params.module = filters.module;
-  }
-
-  if (filters?.startDate) {
-    quoteFilter += ' AND q.created_at >= $4';
-    auditFilter += ' AND a.created_at >= $4';
-    params.startDate = filters.startDate;
-  }
-
-  if (filters?.endDate) {
-    quoteFilter += ' AND q.created_at <= $5';
-    auditFilter += ' AND a.created_at <= $5';
-    params.endDate = filters.endDate;
-  }
+  // Convert camelCase filters to snake_case RPC parameters
+  const rpcParams = {
+    p_organisation_id: filters?.organisationId || null,
+    p_project_id: filters?.projectId || null,
+    p_module: filters?.module || null,
+    p_start_date: filters?.startDate || null,
+    p_end_date: filters?.endDate || null,
+  };
 
   // Get quote statistics
-  const { data: quoteStats } = await supabase.rpc('calculate_quote_stats', filters || {});
+  const { data: quoteStats, error: quoteError } = await supabase.rpc('calculate_quote_stats', rpcParams);
+
+  if (quoteError) {
+    console.error('Error fetching quote stats:', quoteError);
+  }
 
   // Get audit statistics
-  const { data: auditStats } = await supabase.rpc('calculate_audit_stats', filters || {});
+  const { data: auditStats, error: auditError } = await supabase.rpc('calculate_audit_stats', rpcParams);
+
+  if (auditError) {
+    console.error('Error fetching audit stats:', auditError);
+  }
 
   // Calculate time savings
   const quotesCount = quoteStats?.total_quotes || 0;
