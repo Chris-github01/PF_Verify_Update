@@ -76,7 +76,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-sm font-semibold tracking-wide text-slate-50">
-              PassiveFire Verify+
+              VerifyTrade
             </span>
             <span className="text-[11px] text-slate-400">
               Quote Audit Engine
@@ -200,7 +200,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
       {/* Version Footer */}
       {!collapsed && (
         <div className="border-t border-slate-800/80 px-4 py-3 text-[11px] text-slate-500">
-          v1.9 • © 2025 PassiveFire
+          v1.9 • © 2025 VerifyTrade
         </div>
       )}
 

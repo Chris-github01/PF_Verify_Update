@@ -144,7 +144,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
               <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
                 <Shield className="text-white" size={20} />
               </div>
-              <span className="text-xl font-bold text-slate-50">PassiveFire Verify+</span>
+              <span className="text-xl font-bold text-slate-50">VerifyTrade</span>
             </button>
 
             <div className="hidden md:flex items-center gap-8">

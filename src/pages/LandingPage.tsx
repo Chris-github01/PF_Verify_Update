@@ -29,7 +29,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
                 <Shield className="text-white" size={20} />
               </div>
-              <span className="text-xl font-bold text-slate-50">PassiveFire Verify+</span>
+              <span className="text-xl font-bold text-slate-50">VerifyTrade</span>
             </div>
 
             <div className="hidden md:flex items-center gap-8">
@@ -375,7 +375,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
                   <Shield className="text-white" size={14} />
                 </div>
-                <span className="text-lg font-bold text-slate-50">PassiveFire Verify+</span>
+                <span className="text-lg font-bold text-slate-50">VerifyTrade</span>
               </div>
               <p className="text-sm">
                 The world's first AI audit engine for passive fire quotes
@@ -410,7 +410,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
             </div>
           </div>
           <div className="border-t border-slate-800 pt-8 text-center text-sm">
-            <p>&copy; {new Date().getFullYear()} PassiveFire Verify+. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} VerifyTrade. All rights reserved.</p>
           </div>
         </div>
       </footer>

@@ -172,7 +172,7 @@ export default function SplashScreen({ onComplete, isDataReady = true }: SplashS
             <span className="cyan-glow">BurnRatePro</span>
           </h1>
           <h2 className="text-2xl font-semibold text-gray-200 mb-8" style={{ fontWeight: 600 }}>
-            PassiveFire Verify+
+            VerifyTrade
           </h2>
 
           <motion.p

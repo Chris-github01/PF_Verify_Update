@@ -41,7 +41,7 @@ export default function Navigation({
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold text-white">
-              <span className="cyan-glow">PassiveFire Verify+</span>
+              <span className="cyan-glow">VerifyTrade</span>
               {currentProjectName && (
                 <span className="text-gray-300 font-normal text-sm ml-2">— {currentProjectName}</span>
               )}

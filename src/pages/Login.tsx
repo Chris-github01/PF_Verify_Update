@@ -61,10 +61,10 @@ export default function Login() {
             <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
               <Shield className="text-white" size={24} />
             </div>
-            <span className="text-2xl font-bold text-slate-50">PassiveFire Verify+</span>
+            <span className="text-2xl font-bold text-slate-50">VerifyTrade</span>
           </div>
           <h1 className="text-3xl font-bold text-slate-50 mb-2">
-            {isSignUp ? 'Create your account' : 'Sign in to PassiveFire Verify+'}
+            {isSignUp ? 'Create your account' : 'Sign in to VerifyTrade'}
           </h1>
           <p className="text-slate-400">
             {isSignUp ? 'Get started with your free trial' : 'Welcome back! Please enter your details'}
