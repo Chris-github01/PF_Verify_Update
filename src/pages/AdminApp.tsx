@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck, Settings, ShieldAlert, Flame } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck, Settings, ShieldAlert, Flame, BarChart3, Database } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { isSuperAdmin } from '../lib/admin/superAdminGuard';
 import AdminDashboard from './admin/AdminDashboard';
@@ -255,6 +255,54 @@ export default function AdminApp() {
                 <span className="flex-1 text-left">System Config</span>
                 {activeView === 'system-config' && (
                   <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                )}
+              </button>
+            </li>
+          </ul>
+
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 px-3 mb-2 mt-6">
+            Audit & Reporting
+          </div>
+          <ul className="space-y-1">
+            <li>
+              <button
+                onClick={() => (window.location.href = '/admin/executive-dashboard')}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'executive-dashboard'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <BarChart3 size={16} />
+                </span>
+                <span className="flex-1 text-left">Executive Dashboard</span>
+                {activeView === 'executive-dashboard' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
+                )}
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => (window.location.href = '/admin/audit-ledger')}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'audit-ledger'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <Database size={16} />
+                </span>
+                <span className="flex-1 text-left">Audit Ledger</span>
+                {activeView === 'audit-ledger' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)]" />
                 )}
               </button>
             </li>
