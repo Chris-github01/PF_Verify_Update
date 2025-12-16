@@ -29,6 +29,7 @@ import Login from './pages/Login';
 import LandingPage from './pages/LandingPage';
 import Pricing from './pages/Pricing';
 import TrialSignup from './pages/TrialSignup';
+import TrialExpired from './pages/TrialExpired';
 import ModeSelector from './pages/ModeSelector';
 import OrganisationPicker from './pages/OrganisationPicker';
 import OrganisationSettings from './pages/OrganisationSettings';
@@ -69,6 +70,8 @@ function AppContent() {
   const [orgLicensing, setOrgLicensing] = useState<{ licensed_trades: string[]; subscription_status: string } | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
+  const [isTrialExpired, setIsTrialExpired] = useState(false);
+  const [checkingTrial, setCheckingTrial] = useState(false);
   const { currentOrganisation, organisations, loading: orgLoading, isGodMode, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
 
@@ -172,6 +175,44 @@ function AppContent() {
       console.error('Failed to load org licensing:', err);
     }
   };
+
+  const checkTrialStatus = async () => {
+    if (!currentOrganisation) return;
+
+    // Skip trial check for god mode users and master admins
+    if (isGodMode || isMasterAdmin) {
+      setIsTrialExpired(false);
+      return;
+    }
+
+    setCheckingTrial(true);
+    try {
+      const { data, error } = await supabase.rpc('check_trial_status', {
+        p_organisation_id: currentOrganisation.id
+      });
+
+      if (error) {
+        console.error('Failed to check trial status:', error);
+        return;
+      }
+
+      if (data?.subscription_status === 'expired') {
+        setIsTrialExpired(true);
+      } else {
+        setIsTrialExpired(false);
+      }
+    } catch (err) {
+      console.error('Failed to check trial status:', err);
+    } finally {
+      setCheckingTrial(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentOrganisation && !orgLoading && !adminLoading) {
+      checkTrialStatus();
+    }
+  }, [currentOrganisation, isGodMode, isMasterAdmin, orgLoading, adminLoading]);
 
   useEffect(() => {
     if (projectId) {
@@ -832,6 +873,23 @@ function AppContent() {
     }
 
     return <OrganisationPicker onOrganisationSelected={() => {}} />;
+  }
+
+  // Check trial status for non-admin users
+  if (checkingTrial) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking account status...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to trial expired page if trial has expired (except for admins)
+  if (isTrialExpired && !isGodMode && !isMasterAdmin) {
+    return <TrialExpired />;
   }
 
   if (loading) {
