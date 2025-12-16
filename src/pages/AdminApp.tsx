@@ -11,8 +11,10 @@ import CreateClient from './admin/CreateClient';
 import GlobalPDFVault from './admin/GlobalPDFVault';
 import PlatformAdminUsers from './admin/PlatformAdminUsers';
 import SystemConfiguration from './admin/SystemConfiguration';
+import ExecutiveDashboard from './admin/ExecutiveDashboard';
+import AuditLedger from './admin/AuditLedger';
 
-type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault' | 'platform-admins' | 'system-config';
+type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault' | 'platform-admins' | 'system-config' | 'executive-dashboard' | 'audit-ledger';
 
 export default function AdminApp() {
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
@@ -48,6 +50,10 @@ export default function AdminApp() {
       setActiveView('platform-admins');
     } else if (path === '/admin/system-config') {
       setActiveView('system-config');
+    } else if (path === '/admin/executive-dashboard') {
+      setActiveView('executive-dashboard');
+    } else if (path === '/admin/audit-ledger') {
+      setActiveView('audit-ledger');
     } else if (path === '/admin/organisations') {
       setActiveView('organisations');
     } else if (path === '/admin/organisations/new') {
@@ -78,6 +84,10 @@ export default function AdminApp() {
         return <PlatformAdminUsers />;
       case 'system-config':
         return <SystemConfiguration />;
+      case 'executive-dashboard':
+        return <ExecutiveDashboard />;
+      case 'audit-ledger':
+        return <AuditLedger />;
       case 'dashboard':
         return <AdminDashboard />;
       case 'organisations':

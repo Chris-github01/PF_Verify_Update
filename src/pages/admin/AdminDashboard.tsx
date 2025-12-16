@@ -153,6 +153,27 @@ export default function AdminDashboard() {
       color: 'bg-emerald-500',
     },
     {
+      title: 'Executive Dashboard',
+      description: 'Audit intelligence and reporting',
+      icon: Activity,
+      link: '/admin/executive-dashboard',
+      color: 'bg-blue-500',
+    },
+    {
+      title: 'Audit Ledger',
+      description: 'Immutable event log and audit trail',
+      icon: Database,
+      link: '/admin/audit-ledger',
+      color: 'bg-amber-500',
+    },
+    {
+      title: 'PDF Vault',
+      description: 'Global PDF repository and analytics',
+      icon: FileText,
+      link: '/admin/pdfs',
+      color: 'bg-purple-500',
+    },
+    {
       title: 'System Configuration',
       description: 'Configure system-wide settings',
       icon: Server,
