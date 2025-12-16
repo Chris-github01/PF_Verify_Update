@@ -61,6 +61,14 @@ export async function calculateAuditKPIs(filters?: {
   startDate?: string;
   endDate?: string;
 }): Promise<AuditKPIs> {
+  // Check authentication
+  const { data: { session } } = await supabase.auth.getSession();
+  console.log('🔐 KPI Calculation - User:', session?.user?.email || 'Not logged in');
+
+  // Check if platform admin
+  const { data: adminCheck, error: adminError } = await supabase.rpc('is_platform_admin');
+  console.log('👤 Platform admin status:', adminCheck, adminError);
+
   const config = await getSystemConfig();
 
   // Convert camelCase filters to snake_case RPC parameters
@@ -72,11 +80,15 @@ export async function calculateAuditKPIs(filters?: {
     p_end_date: filters?.endDate || null,
   };
 
+  console.log('📊 Calling calculate_quote_stats with filters:', rpcParams);
+
   // Get quote statistics
   const { data: quoteStats, error: quoteError } = await supabase.rpc('calculate_quote_stats', rpcParams);
 
   if (quoteError) {
-    console.error('Error fetching quote stats:', quoteError);
+    console.error('❌ Error fetching quote stats:', quoteError);
+  } else {
+    console.log('✅ Quote stats loaded:', quoteStats);
   }
 
   // Get audit statistics

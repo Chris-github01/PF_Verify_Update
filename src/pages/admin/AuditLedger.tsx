@@ -31,6 +31,14 @@ export default function AuditLedger() {
   const loadEvents = async () => {
     setLoading(true);
     try {
+      // Check authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('🔐 Current session:', session?.user?.email || 'Not logged in');
+
+      // Check if platform admin
+      const { data: adminCheck, error: adminError } = await supabase.rpc('is_platform_admin');
+      console.log('👤 Platform admin check:', adminCheck, adminError);
+
       let query = supabase
         .from('audit_events')
         .select('*, actor:auth.users!audit_events_actor_user_id_fkey(email)', { count: 'exact' })
@@ -45,9 +53,15 @@ export default function AuditLedger() {
         query = query.eq('action', actionFilter);
       }
 
+      console.log('📊 Fetching audit events...');
       const { data, error, count } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ RLS Error:', error);
+        throw error;
+      }
+
+      console.log('✅ Loaded', data?.length || 0, 'events, total:', count);
 
       const eventsWithActor = data?.map(event => ({
         ...event,
@@ -57,7 +71,7 @@ export default function AuditLedger() {
       setEvents(eventsWithActor);
       setTotalEvents(count || 0);
     } catch (error) {
-      console.error('Failed to load audit events:', error);
+      console.error('❌ Failed to load audit events:', error);
     } finally {
       setLoading(false);
     }
