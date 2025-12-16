@@ -968,6 +968,11 @@ function AppContent() {
               mobileMenuOpen={mobileMenuOpen}
               onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
               onCopilotOpen={() => setIsCopilotOpen(true)}
+              onOrganisationClick={() => {
+                setProjectId(null);
+                setProjectInfo(null);
+                setActiveTab('dashboard');
+              }}
             />
           </>
         }

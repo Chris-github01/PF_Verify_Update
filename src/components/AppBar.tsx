@@ -19,6 +19,7 @@ interface AppBarProps {
   mobileMenuOpen: boolean;
   onMobileMenuToggle: () => void;
   onCopilotOpen: () => void;
+  onOrganisationClick?: () => void;
 }
 
 interface Project {
@@ -37,6 +38,7 @@ export default function AppBar({
   mobileMenuOpen,
   onMobileMenuToggle,
   onCopilotOpen,
+  onOrganisationClick,
 }: AppBarProps) {
   const { currentOrganisation } = useOrganisation();
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
@@ -95,7 +97,10 @@ export default function AppBar({
           </button>
 
           {currentOrganisation && (
-            <button className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 text-xs text-slate-200 shadow-sm hover:border-sky-500 hover:text-sky-200 transition-colors">
+            <button
+              onClick={onOrganisationClick}
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 text-xs text-slate-200 shadow-sm hover:border-sky-500 hover:text-sky-200 transition-colors"
+            >
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               {currentOrganisation.name}
               {currentOrganisation.subscription_status === 'trial' && (
