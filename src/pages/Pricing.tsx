@@ -3,7 +3,7 @@ import { useState } from 'react';
 import DemoBookingModal from '../components/DemoBookingModal';
 
 interface PricingProps {
-  onStartTrial?: () => void;
+  onStartTrial?: (tier?: 'starter' | 'professional') => void;
   onBookDemo?: () => void;
   onBackToHome?: () => void;
 }
@@ -279,7 +279,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
               </div>
 
               <button
-                onClick={tier.isEnterprise ? handleBookDemo : onStartTrial}
+                onClick={tier.isEnterprise ? handleBookDemo : () => onStartTrial?.(tier.name.toLowerCase() as 'starter' | 'professional')}
                 className={`w-full py-4 px-6 rounded-lg font-semibold text-white transition-all shadow-md hover:shadow-lg ${tier.ctaColor}`}
               >
                 {tier.cta}
@@ -434,7 +434,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={onStartTrial}
+              onClick={() => onStartTrial?.()}
               className="px-8 py-4 bg-blue-600 text-white rounded-lg font-semibold text-lg hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"
             >
               Start Your Free 14-Day Trial

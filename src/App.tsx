@@ -24,9 +24,11 @@ import Toast, { ToastType } from './components/Toast';
 import ToastContainer from './components/ToastContainer';
 import AppFooter from './components/AppFooter';
 import CopilotDrawer from './components/CopilotDrawer';
+import TrialStatusBanner from './components/TrialStatusBanner';
 import Login from './pages/Login';
 import LandingPage from './pages/LandingPage';
 import Pricing from './pages/Pricing';
+import TrialSignup from './pages/TrialSignup';
 import ModeSelector from './pages/ModeSelector';
 import OrganisationPicker from './pages/OrganisationPicker';
 import OrganisationSettings from './pages/OrganisationSettings';
@@ -52,6 +54,8 @@ function AppContent() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showLanding, setShowLanding] = useState(true);
   const [showPricing, setShowPricing] = useState(false);
+  const [showTrialSignup, setShowTrialSignup] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<'starter' | 'professional'>('starter');
   const [selectedMode, setSelectedMode] = useState<'admin' | 'app' | null>(null);
   const [activeTab, setActiveTab] = useState<SidebarTab>('dashboard');
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>('original');
@@ -703,11 +707,27 @@ function AppContent() {
   }
 
   if (!session) {
+    if (showTrialSignup) {
+      return <TrialSignup
+        preselectedTier={selectedTier}
+        onSuccess={() => {
+          setShowTrialSignup(false);
+          setShowLanding(false);
+          setShowPricing(false);
+        }}
+        onBackToHome={() => {
+          setShowTrialSignup(false);
+          setShowPricing(false);
+          setShowLanding(true);
+        }}
+      />;
+    }
     if (showPricing) {
       return <Pricing
-        onStartTrial={() => {
+        onStartTrial={(tier) => {
+          if (tier) setSelectedTier(tier);
           setShowPricing(false);
-          setShowLanding(false);
+          setShowTrialSignup(true);
         }}
         onBookDemo={() => {
           setShowPricing(false);
@@ -872,6 +892,10 @@ function AppContent() {
                 currentTrades={orgLicensing.licensed_trades}
                 subscriptionStatus={orgLicensing.subscription_status}
               />
+            )}
+
+            {!isInAdminMode && currentOrganisation?.id && (
+              <TrialStatusBanner organisationId={currentOrganisation.id} />
             )}
 
             <AppBar
