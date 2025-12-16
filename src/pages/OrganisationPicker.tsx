@@ -41,7 +41,7 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
         console.log('🧪 [DEBUG] Testing direct organisations query...');
         const { data: testOrgs, error: testError } = await supabase
           .from('organisations')
-          .select('id, name, created_at');
+          .select('id, name, created_at, subscription_status');
 
         console.log('🧪 [DEBUG] Direct query result:', {
           success: !testError,
@@ -275,9 +275,16 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
                     </div>
                   </div>
 
-                  <h3 className="text-lg font-semibold text-slate-50 mb-2 group-hover:text-orange-400 transition-colors">
-                    {org.name}
-                  </h3>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-lg font-semibold text-slate-50 group-hover:text-orange-400 transition-colors">
+                      {org.name}
+                    </h3>
+                    {org.subscription_status === 'trial' && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-orange-950/50 text-orange-400 border border-orange-700/50 rounded">
+                        Trial
+                      </span>
+                    )}
+                  </div>
 
                   <div className="flex items-center justify-end">
                     <ChevronRight className="text-slate-500 group-hover:text-orange-400 group-hover:translate-x-1 transition-all" size={20} />

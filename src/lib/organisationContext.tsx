@@ -10,6 +10,7 @@ interface Organisation {
   name: string;
   created_at: string;
   status?: string;
+  subscription_status?: string;
 }
 
 interface OrganisationContextType {
@@ -118,7 +119,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       // Load ALL organisations for God-Mode owners
       const { data: allOrgs, error: orgsError } = await supabase
         .from('organisations')
-        .select('id, name, created_at')
+        .select('id, name, created_at, subscription_status')
         .order('name', { ascending: true });
 
       if (orgsError) {
@@ -152,7 +153,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
           // Reload organisations after creation
           const { data: reloadedOrgs, error: reloadError } = await supabase
             .from('organisations')
-            .select('id, name, created_at')
+            .select('id, name, created_at, subscription_status')
             .order('name', { ascending: true });
 
           if (!reloadError && reloadedOrgs) {
@@ -248,7 +249,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         console.log('👑 [OrganisationContext] User is platform admin, loading all organisations');
         const result = await supabase
           .from('organisations')
-          .select('id, name, created_at')
+          .select('id, name, created_at, subscription_status')
           .order('created_at', { ascending: false });
 
         console.log('📦 [OrganisationContext] All orgs loaded:', result.data?.length || 0, 'organisations');
@@ -271,7 +272,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
       const result = await supabase
         .from('organisations')
-        .select('id, name, created_at')
+        .select('id, name, created_at, subscription_status')
         .in('id', orgIds)
         .order('name', { ascending: true });
 
