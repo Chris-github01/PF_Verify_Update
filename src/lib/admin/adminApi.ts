@@ -53,18 +53,10 @@ export async function getAllQuotes(filters?: {
   startDate?: string;
   endDate?: string;
 }): Promise<GlobalQuote[]> {
-  // Call the RPC function directly instead of querying a view
-  console.log('Calling get_admin_global_quotes RPC...');
-
   const { data, error } = await supabase
     .rpc('get_admin_global_quotes');
 
-  console.log('RPC response:', { data: data?.length, error });
-
-  if (error) {
-    console.error('RPC error:', error);
-    throw error;
-  }
+  if (error) throw error;
 
   let quotes = data || [];
 
