@@ -274,14 +274,14 @@ export default function ExecutiveDashboard() {
             <KPICard
               title="Audits Completed"
               value={formatNumber(kpis.totalAuditsCompleted)}
-              subtitle={`Avg ${Math.round(kpis.avgTimeToAudit / 60)}m per audit`}
+              subtitle={kpis.totalAuditsCompleted > 0 ? `Avg ${Math.round(kpis.avgTimeToAudit / 60)}m per audit` : 'No audits yet'}
               icon={<BarChart3 size={24} />}
               color="amber"
             />
 
             <KPICard
               title="Avg Confidence"
-              value={`${kpis.avgParseConfidence.toFixed(1)}%`}
+              value={kpis.avgParseConfidence > 0 ? `${kpis.avgParseConfidence.toFixed(1)}%` : 'N/A'}
               subtitle="Extraction accuracy"
               icon={<AlertTriangle size={24} />}
               color="slate"
@@ -341,51 +341,59 @@ export default function ExecutiveDashboard() {
           {/* Risk Distribution */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">Risk Score Distribution</h3>
-            <div className="grid grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="w-full h-32 bg-emerald-100 rounded-lg flex items-end justify-center pb-2 mb-2">
-                  <div
-                    className="w-16 bg-emerald-500 rounded-t transition-all"
-                    style={{ height: `${(kpis.riskDistribution.low / kpis.totalAuditsCompleted) * 100}%` }}
-                  />
+            {kpis.totalAuditsCompleted > 0 ? (
+              <div className="grid grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="w-full h-32 bg-emerald-100 rounded-lg flex items-end justify-center pb-2 mb-2">
+                    <div
+                      className="w-16 bg-emerald-500 rounded-t transition-all"
+                      style={{ height: `${Math.max((kpis.riskDistribution.low / kpis.totalAuditsCompleted) * 100, 5)}%` }}
+                    />
+                  </div>
+                  <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.low}</p>
+                  <p className="text-sm text-slate-600">Low Risk (&lt;40)</p>
                 </div>
-                <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.low}</p>
-                <p className="text-sm text-slate-600">Low Risk (&lt;40)</p>
-              </div>
 
-              <div className="text-center">
-                <div className="w-full h-32 bg-amber-100 rounded-lg flex items-end justify-center pb-2 mb-2">
-                  <div
-                    className="w-16 bg-amber-500 rounded-t transition-all"
-                    style={{ height: `${(kpis.riskDistribution.medium / kpis.totalAuditsCompleted) * 100}%` }}
-                  />
+                <div className="text-center">
+                  <div className="w-full h-32 bg-amber-100 rounded-lg flex items-end justify-center pb-2 mb-2">
+                    <div
+                      className="w-16 bg-amber-500 rounded-t transition-all"
+                      style={{ height: `${Math.max((kpis.riskDistribution.medium / kpis.totalAuditsCompleted) * 100, 5)}%` }}
+                    />
+                  </div>
+                  <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.medium}</p>
+                  <p className="text-sm text-slate-600">Medium (40-70)</p>
                 </div>
-                <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.medium}</p>
-                <p className="text-sm text-slate-600">Medium (40-70)</p>
-              </div>
 
-              <div className="text-center">
-                <div className="w-full h-32 bg-orange-100 rounded-lg flex items-end justify-center pb-2 mb-2">
-                  <div
-                    className="w-16 bg-orange-500 rounded-t transition-all"
-                    style={{ height: `${(kpis.riskDistribution.high / kpis.totalAuditsCompleted) * 100}%` }}
-                  />
+                <div className="text-center">
+                  <div className="w-full h-32 bg-orange-100 rounded-lg flex items-end justify-center pb-2 mb-2">
+                    <div
+                      className="w-16 bg-orange-500 rounded-t transition-all"
+                      style={{ height: `${Math.max((kpis.riskDistribution.high / kpis.totalAuditsCompleted) * 100, 5)}%` }}
+                    />
+                  </div>
+                  <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.high}</p>
+                  <p className="text-sm text-slate-600">High (70-90)</p>
                 </div>
-                <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.high}</p>
-                <p className="text-sm text-slate-600">High (70-90)</p>
-              </div>
 
-              <div className="text-center">
-                <div className="w-full h-32 bg-rose-100 rounded-lg flex items-end justify-center pb-2 mb-2">
-                  <div
-                    className="w-16 bg-rose-500 rounded-t transition-all"
-                    style={{ height: `${(kpis.riskDistribution.critical / kpis.totalAuditsCompleted) * 100}%` }}
-                  />
+                <div className="text-center">
+                  <div className="w-full h-32 bg-rose-100 rounded-lg flex items-end justify-center pb-2 mb-2">
+                    <div
+                      className="w-16 bg-rose-500 rounded-t transition-all"
+                      style={{ height: `${Math.max((kpis.riskDistribution.critical / kpis.totalAuditsCompleted) * 100, 5)}%` }}
+                    />
+                  </div>
+                  <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.critical}</p>
+                  <p className="text-sm text-slate-600">Critical (≥90)</p>
                 </div>
-                <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.critical}</p>
-                <p className="text-sm text-slate-600">Critical (≥90)</p>
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-8">
+                <AlertTriangle size={48} className="mx-auto text-slate-300 mb-3" />
+                <p className="text-sm text-slate-600">No audit risk data available yet</p>
+                <p className="text-xs text-slate-500 mt-1">Complete audits to see risk distribution</p>
+              </div>
+            )}
           </div>
 
           {/* Top Insights */}
