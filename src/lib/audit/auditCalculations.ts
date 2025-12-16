@@ -61,82 +61,113 @@ export async function calculateAuditKPIs(filters?: {
   startDate?: string;
   endDate?: string;
 }): Promise<AuditKPIs> {
-  // Check authentication
-  const { data: { session } } = await supabase.auth.getSession();
-  console.log('🔐 KPI Calculation - User:', session?.user?.email || 'Not logged in');
+  try {
+    // Check authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('🔐 KPI Calculation - User:', session?.user?.email || 'Not logged in');
 
-  // Check if platform admin
-  const { data: adminCheck, error: adminError } = await supabase.rpc('is_platform_admin');
-  console.log('👤 Platform admin status:', adminCheck, adminError);
+    // Check if platform admin
+    const { data: adminCheck, error: adminError } = await supabase.rpc('is_platform_admin');
+    console.log('👤 Platform admin status:', adminCheck, adminError);
 
-  const config = await getSystemConfig();
+    // Get system config
+    let config: SystemConfig;
+    try {
+      config = await getSystemConfig();
+      console.log('✅ System config loaded:', config);
+    } catch (configError) {
+      console.error('❌ Error loading system config:', configError);
+      // Use default values if config fails
+      config = {
+        manual_review_hours_per_quote: 2.5,
+        manual_scope_matrix_hours_per_audit: 4.0,
+        labour_rate_per_hour_nzd: 150,
+        risk_avoidance_percent_low: 0.25,
+        risk_avoidance_percent_med: 0.75,
+        risk_avoidance_percent_high: 1.5,
+        scenario_multiplier_conservative: 0.5,
+        scenario_multiplier_expected: 1.0,
+        scenario_multiplier_aggressive: 1.5,
+      };
+    }
 
-  // Convert camelCase filters to snake_case RPC parameters
-  const rpcParams = {
-    p_organisation_id: filters?.organisationId || null,
-    p_project_id: filters?.projectId || null,
-    p_module: filters?.module || null,
-    p_start_date: filters?.startDate || null,
-    p_end_date: filters?.endDate || null,
-  };
+    // Convert camelCase filters to snake_case RPC parameters
+    const rpcParams = {
+      p_organisation_id: filters?.organisationId || null,
+      p_project_id: filters?.projectId || null,
+      p_module: filters?.module || null,
+      p_start_date: filters?.startDate || null,
+      p_end_date: filters?.endDate || null,
+    };
 
-  console.log('📊 Calling calculate_quote_stats with filters:', rpcParams);
+    console.log('📊 Calling calculate_quote_stats with filters:', rpcParams);
 
-  // Get quote statistics
-  const { data: quoteStats, error: quoteError } = await supabase.rpc('calculate_quote_stats', rpcParams);
+    // Get quote statistics
+    const { data: quoteStats, error: quoteError } = await supabase.rpc('calculate_quote_stats', rpcParams);
 
-  if (quoteError) {
-    console.error('❌ Error fetching quote stats:', quoteError);
-  } else {
-    console.log('✅ Quote stats loaded:', quoteStats);
+    if (quoteError) {
+      console.error('❌ Error fetching quote stats:', quoteError);
+      throw quoteError;
+    } else {
+      console.log('✅ Quote stats loaded:', quoteStats);
+    }
+
+    // Get audit statistics
+    const { data: auditStats, error: auditError } = await supabase.rpc('calculate_audit_stats', rpcParams);
+
+    if (auditError) {
+      console.error('❌ Error fetching audit stats:', auditError);
+      throw auditError;
+    } else {
+      console.log('✅ Audit stats loaded:', auditStats);
+    }
+
+    // Calculate time savings
+    const quotesCount = quoteStats?.total_quotes || 0;
+    const auditsCount = auditStats?.total_audits || 0;
+
+    const hoursSaved =
+      quotesCount * config.manual_review_hours_per_quote +
+      auditsCount * config.manual_scope_matrix_hours_per_audit;
+
+    const labourSavingsNZD = hoursSaved * config.labour_rate_per_hour_nzd;
+
+    // Calculate cost savings
+    const estimatedCostAvoided = parseFloat(auditStats?.estimated_cost_avoided || '0');
+
+    const result = {
+      totalQuotes: quoteStats?.total_quotes || 0,
+      quotesSuccessfullyParsed: quoteStats?.success_quotes || 0,
+      parseSuccessRate: parseFloat(quoteStats?.success_rate || '0'),
+      totalLineItems: quoteStats?.total_line_items || 0,
+      avgParseConfidence: parseFloat(quoteStats?.avg_confidence || '0'),
+      avgTimeToAudit: parseFloat(auditStats?.avg_duration_seconds || '0'),
+      totalAuditsCompleted: auditsCount,
+      riskDistribution: auditStats?.risk_distribution || {
+        low: 0,
+        medium: 0,
+        high: 0,
+        critical: 0,
+      },
+      topGapTypes: auditStats?.top_gap_types || [],
+      topManufacturers: quoteStats?.top_manufacturers || [],
+      timeSavings: {
+        hoursSaved,
+        labourSavingsNZD,
+      },
+      costSavings: {
+        conservative: estimatedCostAvoided * config.scenario_multiplier_conservative,
+        expected: estimatedCostAvoided * config.scenario_multiplier_expected,
+        aggressive: estimatedCostAvoided * config.scenario_multiplier_aggressive,
+      },
+    };
+
+    console.log('✅ Final KPI result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Fatal error in calculateAuditKPIs:', error);
+    throw error;
   }
-
-  // Get audit statistics
-  const { data: auditStats, error: auditError } = await supabase.rpc('calculate_audit_stats', rpcParams);
-
-  if (auditError) {
-    console.error('Error fetching audit stats:', auditError);
-  }
-
-  // Calculate time savings
-  const quotesCount = quoteStats?.total_quotes || 0;
-  const auditsCount = auditStats?.total_audits || 0;
-
-  const hoursSaved =
-    quotesCount * config.manual_review_hours_per_quote +
-    auditsCount * config.manual_scope_matrix_hours_per_audit;
-
-  const labourSavingsNZD = hoursSaved * config.labour_rate_per_hour_nzd;
-
-  // Calculate cost savings
-  const estimatedCostAvoided = auditStats?.estimated_cost_avoided || 0;
-
-  return {
-    totalQuotes: quoteStats?.total_quotes || 0,
-    quotesSuccessfullyParsed: quoteStats?.success_quotes || 0,
-    parseSuccessRate: quoteStats?.success_rate || 0,
-    totalLineItems: quoteStats?.total_line_items || 0,
-    avgParseConfidence: quoteStats?.avg_confidence || 0,
-    avgTimeToAudit: auditStats?.avg_duration_seconds || 0,
-    totalAuditsCompleted: auditsCount,
-    riskDistribution: auditStats?.risk_distribution || {
-      low: 0,
-      medium: 0,
-      high: 0,
-      critical: 0,
-    },
-    topGapTypes: auditStats?.top_gap_types || [],
-    topManufacturers: quoteStats?.top_manufacturers || [],
-    timeSavings: {
-      hoursSaved,
-      labourSavingsNZD,
-    },
-    costSavings: {
-      conservative: estimatedCostAvoided * config.scenario_multiplier_conservative,
-      expected: estimatedCostAvoided * config.scenario_multiplier_expected,
-      aggressive: estimatedCostAvoided * config.scenario_multiplier_aggressive,
-    },
-  };
 }
 
 export async function logAuditEvent(

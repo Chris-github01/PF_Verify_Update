@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Download, TrendingUp, TrendingDown, FileText, AlertTriangle, CheckCircle, Clock, DollarSign, BarChart3, Filter, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { calculateAuditKPIs, AuditKPIs } from '../../lib/audit/auditCalculations';
+import { generateMonthlyReportHTML, downloadMonthlyReport, MonthlyReportOptions } from '../../lib/reports/executiveMonthlyReport';
 
 interface KPICardProps {
   title: string;
@@ -105,11 +106,15 @@ export default function ExecutiveDashboard() {
       if (dateRange.start) filters.startDate = dateRange.start + 'T00:00:00Z';
       if (dateRange.end) filters.endDate = dateRange.end + 'T23:59:59Z';
 
+      console.log('📊 Loading Executive Dashboard data with filters:', filters);
       const data = await calculateAuditKPIs(filters);
+      console.log('📊 Executive Dashboard data received:', data);
       setKpis(data);
       setLastUpdated(new Date().toLocaleString());
     } catch (error) {
-      console.error('Failed to load KPIs:', error);
+      console.error('❌ Failed to load KPIs:', error);
+      // Set kpis to null on error to show the "No Data Available" message
+      setKpis(null);
     } finally {
       setLoading(false);
     }
@@ -131,6 +136,29 @@ export default function ExecutiveDashboard() {
   const filteredProjects = selectedOrg
     ? projects.filter(p => p.organisation_id === selectedOrg)
     : projects;
+
+  const handleGenerateReport = () => {
+    if (!kpis) {
+      alert('No data available to generate report. Please wait for data to load.');
+      return;
+    }
+
+    const selectedOrgData = organisations.find(o => o.id === selectedOrg);
+    const selectedProjectData = filteredProjects.find(p => p.id === selectedProject);
+
+    const reportOptions: MonthlyReportOptions = {
+      organisationName: selectedOrgData?.name,
+      projectName: selectedProjectData?.name,
+      module: selectedModule || undefined,
+      startDate: dateRange.start,
+      endDate: dateRange.end,
+    };
+
+    const html = generateMonthlyReportHTML(kpis, reportOptions);
+
+    const filename = `VerifyPlus_Monthly_Report_${dateRange.start}_to_${dateRange.end}.html`;
+    downloadMonthlyReport(html, filename);
+  };
 
   return (
     <div className="px-6 py-6 max-w-[1600px] mx-auto">
@@ -161,8 +189,9 @@ export default function ExecutiveDashboard() {
             Filters
           </button>
           <button
-            onClick={() => window.alert('Monthly report generation coming soon')}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0A66C2] text-white text-sm font-semibold hover:bg-[#0952A0] transition"
+            onClick={handleGenerateReport}
+            disabled={!kpis || loading}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0A66C2] text-white text-sm font-semibold hover:bg-[#0952A0] transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download size={16} />
             Generate Monthly Report
@@ -251,7 +280,7 @@ export default function ExecutiveDashboard() {
 
       {loading ? (
         <LoadingSkeleton />
-      ) : kpis ? (
+      ) : (kpis && kpis.totalQuotes >= 0) ? (
         <div className="space-y-6">
           {/* Primary KPI Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
