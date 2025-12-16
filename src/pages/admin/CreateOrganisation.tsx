@@ -48,9 +48,26 @@ export default function CreateOrganisation() {
   const [ownerPhone, setOwnerPhone] = useState('');
 
   // Section 4: Billing & Trial Controls
-  const [trialType, setTrialType] = useState('14_day');
+  const [subscriptionPlan, setSubscriptionPlan] = useState('starter');
+  const [trialDuration, setTrialDuration] = useState(14);
   const [seatLimit, setSeatLimit] = useState(5);
   const [billingContactEmail, setBillingContactEmail] = useState('');
+
+  // Update seat limit when subscription plan changes
+  const handlePlanChange = (plan: string) => {
+    setSubscriptionPlan(plan);
+    switch (plan) {
+      case 'starter':
+        setSeatLimit(5);
+        break;
+      case 'professional':
+        setSeatLimit(15);
+        break;
+      case 'enterprise':
+        setSeatLimit(999); // Unlimited represented as high number
+        break;
+    }
+  };
 
   // Section 5: Governance
   const [complianceAcceptance, setComplianceAcceptance] = useState(false);
@@ -110,15 +127,15 @@ export default function CreateOrganisation() {
           owner_role_title: ownerRoleTitle,
           owner_email: ownerEmail.toLowerCase().trim(),
           owner_phone: ownerPhone || null,
-          trial_type: trialType,
+          trial_type: `${trialDuration}_day`,
           seat_limit: seatLimit,
           billing_contact_email: billingContactEmail || ownerEmail.toLowerCase().trim(),
           audit_namespace: auditNamespace,
           compliance_acceptance: complianceAcceptance,
           created_by_admin_id: user?.id || null,
           subscription_status: 'trial',
-          pricing_tier: 'standard',
-          trial_end_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+          pricing_tier: subscriptionPlan,
+          trial_end_date: new Date(Date.now() + trialDuration * 24 * 60 * 60 * 1000).toISOString(),
           trade_type: primaryTradeFocus
         })
         .select()
@@ -132,7 +149,7 @@ export default function CreateOrganisation() {
           p_name: legalName,
           p_status: 'trial',
           p_seat_limit: seatLimit,
-          p_pricing_tier: 'standard',
+          p_pricing_tier: subscriptionPlan,
           p_owner_email: ownerEmail.toLowerCase().trim()
         });
 
@@ -425,25 +442,41 @@ export default function CreateOrganisation() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Trial Type <span className="text-rose-600">*</span>
-                      <Tooltip text="Duration of trial period" />
+                      Subscription Plan <span className="text-rose-600">*</span>
+                      <Tooltip text="Select the pricing tier for this organisation" />
                     </label>
                     <select
-                      value={trialType}
-                      onChange={(e) => setTrialType(e.target.value)}
+                      value={subscriptionPlan}
+                      onChange={(e) => handlePlanChange(e.target.value)}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
                     >
-                      <option value="14_day">14 Days (Default)</option>
-                      <option value="30_day">30 Days</option>
-                      <option value="60_day">60 Days</option>
-                      <option value="custom">Custom</option>
+                      <option value="starter">Starter - Up to 5 users ($11,988 NZD/year)</option>
+                      <option value="professional">Professional - Up to 15 users ($23,988 NZD/year)</option>
+                      <option value="enterprise">Enterprise - Unlimited users (From $33,600 NZD/year)</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Seat Limit <span className="text-rose-600">*</span>
-                      <Tooltip text="Maximum number of user seats (owners, admins, members)" />
+                      Trial Duration (Days) <span className="text-rose-600">*</span>
+                      <Tooltip text="Number of days for the trial period" />
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="90"
+                      value={trialDuration}
+                      onChange={(e) => setTrialDuration(parseInt(e.target.value) || 14)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      User Seat Limit <span className="text-rose-600">*</span>
+                      <Tooltip text="Auto-set based on subscription plan. Can be adjusted if needed." />
                     </label>
                     <input
                       type="number"
@@ -453,21 +486,26 @@ export default function CreateOrganisation() {
                       max="1000"
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
                     />
+                    <p className="text-xs text-slate-500 mt-1">
+                      {subscriptionPlan === 'starter' && 'Starter plan includes up to 5 users'}
+                      {subscriptionPlan === 'professional' && 'Professional plan includes up to 15 users'}
+                      {subscriptionPlan === 'enterprise' && 'Enterprise plan includes unlimited users'}
+                    </p>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Billing Contact Email
-                    <Tooltip text="Email for billing and invoicing (defaults to owner email if not provided)" />
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="billing@company.com (optional)"
-                    value={billingContactEmail}
-                    onChange={(e) => setBillingContactEmail(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Billing Contact Email
+                      <Tooltip text="Email for billing and invoicing (defaults to owner email if not provided)" />
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="billing@company.com (optional)"
+                      value={billingContactEmail}
+                      onChange={(e) => setBillingContactEmail(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                    />
+                  </div>
                 </div>
               </div>
             )}
