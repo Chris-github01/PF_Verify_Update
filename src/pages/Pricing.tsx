@@ -73,9 +73,9 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
     {
       name: 'Enterprise',
       badge: 'For Tier-1 contractors & national PQS practices',
-      monthlyPrice: null,
-      annualPrice: null,
-      customPrice: 'From $3,500+/month',
+      monthlyPrice: 3500,
+      annualPrice: 2800,
+      customPricePrefix: 'From ',
       description: 'Maximum power, flexibility, and white-glove support',
       features: [
         'Everything in Professional, plus:',
@@ -226,27 +226,40 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
                 <h3 className="text-2xl font-bold text-slate-50 mb-4">{tier.name}</h3>
 
                 <div className="mb-4">
-                  {tier.customPrice ? (
-                    <div className="text-3xl font-bold text-slate-50">{tier.customPrice}</div>
-                  ) : (
-                    <>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-4xl font-bold text-slate-50">
-                          ${billingPeriod === 'annual' && tier.annualPrice ? tier.annualPrice : tier.monthlyPrice}
-                        </span>
-                        <span className="text-slate-300">NZD / month</span>
-                      </div>
-                      {billingPeriod === 'annual' && tier.annualPrice && (
-                        <div className="text-sm text-slate-400 mt-1">billed annually</div>
-                      )}
-                      {billingPeriod === 'monthly' && tier.monthlyPrice && tier.annualPrice && (
-                        <div className="text-sm text-slate-400 mt-1">or ${tier.annualPrice} annually</div>
-                      )}
-                      {tier.savingsNote && billingPeriod === 'annual' && (
-                        <div className="text-sm font-semibold text-green-400 mt-2">{tier.savingsNote}</div>
-                      )}
-                    </>
-                  )}
+                  <>
+                    {billingPeriod === 'annual' && tier.annualPrice ? (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          {tier.customPricePrefix && <span className="text-2xl font-medium text-slate-300">From </span>}
+                          <span className="text-4xl font-bold text-slate-50">
+                            ${(tier.annualPrice * 12).toLocaleString()}
+                          </span>
+                          <span className="text-slate-300">NZD / year</span>
+                        </div>
+                        <div className="text-sm text-slate-400 mt-1">
+                          ${tier.annualPrice.toLocaleString()}/month equivalent
+                        </div>
+                        {tier.savingsNote && (
+                          <div className="text-sm font-semibold text-green-400 mt-2">{tier.savingsNote}</div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          {tier.customPricePrefix && <span className="text-2xl font-medium text-slate-300">From </span>}
+                          <span className="text-4xl font-bold text-slate-50">
+                            ${tier.monthlyPrice?.toLocaleString()}
+                          </span>
+                          <span className="text-slate-300">NZD / month</span>
+                        </div>
+                        {tier.annualPrice && (
+                          <div className="text-sm text-slate-400 mt-1">
+                            or ${(tier.annualPrice * 12).toLocaleString()}/year (save 20%)
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
                 </div>
 
                 <p className="text-sm text-slate-300">{tier.description}</p>
