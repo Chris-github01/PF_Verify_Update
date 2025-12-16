@@ -19,15 +19,21 @@ export default function GlobalPDFVault() {
   const loadData = async () => {
     setLoading(true);
     try {
+      console.log('Loading PDF vault data...');
+
       const [quotesData, orgsData] = await Promise.all([
         getAllQuotes(),
         supabase.from('organisations').select('id, name').order('name')
       ]);
 
+      console.log('Quotes loaded:', quotesData?.length || 0);
+      console.log('Sample quote:', quotesData?.[0]);
+
       setQuotes(quotesData);
       setOrganisations(orgsData.data || []);
     } catch (error) {
       console.error('Failed to load data:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
     } finally {
       setLoading(false);
     }
