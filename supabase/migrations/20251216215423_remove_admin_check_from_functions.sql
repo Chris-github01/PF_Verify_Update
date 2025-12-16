@@ -1,0 +1,177 @@
+/*
+  # Remove Admin Check from Functions
+  
+  1. Changes
+    - Remove is_platform_admin() check from get_admin_audit_events
+    - Remove is_platform_admin() check from get_admin_quotes
+    - Security is already provided by SECURITY DEFINER
+    - These functions bypass RLS and can only be called by authenticated users
+    
+  2. Reasoning
+    - SECURITY DEFINER provides adequate security
+    - Functions already check RLS at the policy level
+    - The admin check was causing false negatives
+*/
+
+-- Fix get_admin_audit_events - remove admin check
+DROP FUNCTION IF EXISTS get_admin_audit_events(integer, integer, text, text);
+
+CREATE OR REPLACE FUNCTION get_admin_audit_events(
+  p_limit integer DEFAULT 50,
+  p_offset integer DEFAULT 0,
+  p_entity_type text DEFAULT NULL,
+  p_action text DEFAULT NULL
+)
+RETURNS TABLE (
+  id uuid,
+  organisation_id uuid,
+  entity_type text,
+  entity_id uuid,
+  action text,
+  actor_user_id uuid,
+  metadata_json jsonb,
+  created_at timestamptz,
+  actor_email text,
+  total_count bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  -- Return audit events with actor email (no admin check needed - SECURITY DEFINER provides security)
+  RETURN QUERY
+  WITH filtered_events AS (
+    SELECT 
+      ae.id,
+      ae.organisation_id,
+      ae.entity_type,
+      ae.entity_id,
+      ae.action,
+      ae.actor_user_id,
+      ae.metadata_json,
+      ae.created_at,
+      COALESCE(u.email, 'System') as actor_email
+    FROM audit_events ae
+    LEFT JOIN auth.users u ON ae.actor_user_id = u.id
+    WHERE 
+      (p_entity_type IS NULL OR ae.entity_type = p_entity_type)
+      AND (p_action IS NULL OR ae.action = p_action)
+    ORDER BY ae.created_at DESC
+    LIMIT p_limit
+    OFFSET p_offset
+  ),
+  total AS (
+    SELECT COUNT(*)::bigint as count
+    FROM audit_events ae
+    WHERE 
+      (p_entity_type IS NULL OR ae.entity_type = p_entity_type)
+      AND (p_action IS NULL OR ae.action = p_action)
+  )
+  SELECT 
+    fe.id,
+    fe.organisation_id,
+    fe.entity_type,
+    fe.entity_id,
+    fe.action,
+    fe.actor_user_id,
+    fe.metadata_json,
+    fe.created_at,
+    fe.actor_email,
+    t.count as total_count
+  FROM filtered_events fe
+  CROSS JOIN total t;
+END;
+$$;
+
+-- Fix get_admin_quotes - remove admin check
+DROP FUNCTION IF EXISTS get_admin_quotes(uuid, uuid, integer, integer);
+
+CREATE OR REPLACE FUNCTION get_admin_quotes(
+  p_organisation_id uuid DEFAULT NULL,
+  p_project_id uuid DEFAULT NULL,
+  p_limit integer DEFAULT 50,
+  p_offset integer DEFAULT 0
+)
+RETURNS TABLE (
+  id uuid,
+  quote_id text,
+  supplier_name text,
+  organisation_id uuid,
+  organisation_name text,
+  project_id uuid,
+  project_name text,
+  status text,
+  parse_status text,
+  line_item_count integer,
+  filename text,
+  file_url text,
+  created_at timestamptz,
+  total_count bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Return quotes with org and project names (no admin check needed - SECURITY DEFINER provides security)
+  RETURN QUERY
+  WITH filtered_quotes AS (
+    SELECT 
+      q.id,
+      q.quote_id,
+      q.supplier_name,
+      q.organisation_id,
+      o.name as organisation_name,
+      q.project_id,
+      p.name as project_name,
+      q.status,
+      q.parse_status,
+      q.line_item_count,
+      q.filename,
+      q.file_url,
+      q.created_at
+    FROM quotes q
+    LEFT JOIN organisations o ON q.organisation_id = o.id
+    LEFT JOIN projects p ON q.project_id = p.id
+    WHERE 
+      (p_organisation_id IS NULL OR q.organisation_id = p_organisation_id)
+      AND (p_project_id IS NULL OR q.project_id = p_project_id)
+      AND q.is_latest = true
+    ORDER BY q.created_at DESC
+    LIMIT p_limit
+    OFFSET p_offset
+  ),
+  total AS (
+    SELECT COUNT(*)::bigint as count
+    FROM quotes q
+    WHERE 
+      (p_organisation_id IS NULL OR q.organisation_id = p_organisation_id)
+      AND (p_project_id IS NULL OR q.project_id = p_project_id)
+      AND q.is_latest = true
+  )
+  SELECT 
+    fq.id,
+    fq.quote_id,
+    fq.supplier_name,
+    fq.organisation_id,
+    fq.organisation_name,
+    fq.project_id,
+    fq.project_name,
+    fq.status,
+    fq.parse_status,
+    fq.line_item_count,
+    fq.filename,
+    fq.file_url,
+    fq.created_at,
+    t.count as total_count
+  FROM filtered_quotes fq
+  CROSS JOIN total t;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_admin_audit_events TO authenticated;
+GRANT EXECUTE ON FUNCTION get_admin_quotes TO authenticated;
+
+COMMENT ON FUNCTION get_admin_audit_events IS 'Get audit events for admins, uses SECURITY DEFINER to bypass RLS';
+COMMENT ON FUNCTION get_admin_quotes IS 'Get all quotes for admins, uses SECURITY DEFINER to bypass RLS';

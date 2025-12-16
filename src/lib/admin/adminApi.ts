@@ -64,7 +64,7 @@ export async function getAllQuotes(filters?: {
   if (error) throw error;
 
   let quotes = (data || []).map((q: any) => ({
-    quote_id: q.quote_id || q.id,
+    quote_id: q.id,
     supplier_name: q.supplier_name,
     quote_reference: null,
     total_amount: 0,
@@ -72,7 +72,7 @@ export async function getAllQuotes(filters?: {
     status: q.status,
     extraction_confidence: null,
     organisation_id: q.organisation_id,
-    organisation_name: q.organisation_name,
+    organisation_name: q.organisation_name || 'Unknown',
     trade_type: 'passive_fire',
     created_at: q.created_at,
     import_date: q.created_at,
