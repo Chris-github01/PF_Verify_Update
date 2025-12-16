@@ -103,24 +103,28 @@ export async function calculateAuditKPIs(filters?: {
     console.log('📊 Calling calculate_quote_stats with filters:', rpcParams);
 
     // Get quote statistics
-    const { data: quoteStats, error: quoteError } = await supabase.rpc('calculate_quote_stats', rpcParams);
+    const { data: quoteStatsRaw, error: quoteError } = await supabase.rpc('calculate_quote_stats', rpcParams);
 
     if (quoteError) {
       console.error('❌ Error fetching quote stats:', quoteError);
       throw quoteError;
-    } else {
-      console.log('✅ Quote stats loaded:', quoteStats);
     }
 
+    // RPC functions return arrays, so we need to get the first element
+    const quoteStats = Array.isArray(quoteStatsRaw) ? quoteStatsRaw[0] : quoteStatsRaw;
+    console.log('✅ Quote stats loaded:', quoteStats);
+
     // Get audit statistics
-    const { data: auditStats, error: auditError } = await supabase.rpc('calculate_audit_stats', rpcParams);
+    const { data: auditStatsRaw, error: auditError } = await supabase.rpc('calculate_audit_stats', rpcParams);
 
     if (auditError) {
       console.error('❌ Error fetching audit stats:', auditError);
       throw auditError;
-    } else {
-      console.log('✅ Audit stats loaded:', auditStats);
     }
+
+    // RPC functions return arrays, so we need to get the first element
+    const auditStats = Array.isArray(auditStatsRaw) ? auditStatsRaw[0] : auditStatsRaw;
+    console.log('✅ Audit stats loaded:', auditStats);
 
     // Calculate time savings
     const quotesCount = quoteStats?.total_quotes || 0;

@@ -63,25 +63,40 @@ export async function getAllQuotes(filters?: {
 
   if (error) throw error;
 
-  let quotes = (data || []).map((q: any) => ({
-    quote_id: q.id,
-    supplier_name: q.supplier_name,
-    quote_reference: null,
-    total_amount: 0,
-    items_count: q.line_item_count || 0,
-    status: q.status,
-    extraction_confidence: null,
-    organisation_id: q.organisation_id,
-    organisation_name: q.organisation_name || 'Unknown',
-    trade_type: 'passive_fire',
-    created_at: q.created_at,
-    import_date: q.created_at,
-    uploaded_by_email: null,
-    project_name: q.project_name || 'No Project',
-    avg_confidence: null,
-    file_url: q.file_url,
-    filename: q.filename,
+  // For each quote, get the total amount and avg confidence from quote_items
+  const quotesWithDetails = await Promise.all((data || []).map(async (q: any) => {
+    const { data: itemsData } = await supabase
+      .from('quote_items')
+      .select('total_price, confidence')
+      .eq('quote_id', q.id);
+
+    const totalAmount = itemsData?.reduce((sum, item) => sum + (item.total_price || 0), 0) || 0;
+    const avgConfidence = itemsData && itemsData.length > 0
+      ? itemsData.reduce((sum, item) => sum + (item.confidence || 0), 0) / itemsData.length
+      : null;
+
+    return {
+      quote_id: q.id,
+      supplier_name: q.supplier_name,
+      quote_reference: null,
+      total_amount: totalAmount,
+      items_count: q.line_item_count || 0,
+      status: q.status,
+      extraction_confidence: avgConfidence,
+      organisation_id: q.organisation_id,
+      organisation_name: q.organisation_name || 'Unknown',
+      trade_type: 'passive_fire',
+      created_at: q.created_at,
+      import_date: q.created_at,
+      uploaded_by_email: null,
+      project_name: q.project_name || 'No Project',
+      avg_confidence: avgConfidence,
+      file_url: q.file_url,
+      filename: q.filename,
+    };
   }));
+
+  let quotes = quotesWithDetails;
 
   // Apply client-side filters if provided
   if (filters?.tradeType) {

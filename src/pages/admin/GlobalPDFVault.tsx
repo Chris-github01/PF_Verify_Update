@@ -41,11 +41,22 @@ export default function GlobalPDFVault() {
         return;
       }
 
+      // Remove 'quotes/' prefix if it exists (since we specify the bucket in .from())
+      let filePath = quote.file_url;
+      if (filePath.startsWith('quotes/')) {
+        filePath = filePath.substring(7); // Remove 'quotes/' prefix
+      }
+
+      console.log('Downloading file:', filePath, 'from bucket: quotes');
+
       const { data, error } = await supabase.storage
         .from('quotes')
-        .createSignedUrl(quote.file_url, 3600);
+        .createSignedUrl(filePath, 3600);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Storage error:', error);
+        throw error;
+      }
 
       if (data?.signedUrl) {
         window.open(data.signedUrl, '_blank');
