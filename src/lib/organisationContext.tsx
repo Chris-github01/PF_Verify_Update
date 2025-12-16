@@ -98,93 +98,6 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
     console.log('🔍 [OrganisationContext] Loading organisations for user:', user.id, user.email);
 
-    // GOD-MODE OVERRIDE: Hard-coded permanent access for owners
-    const GOD_MODE_EMAILS = ['chris@optimalfire.co.nz', 'pieter@optimalfire.co.nz'];
-    const isGodMode = user.email && GOD_MODE_EMAILS.includes(user.email.toLowerCase());
-    debug.isGodMode = isGodMode;
-
-    if (isGodMode) {
-      console.log('👑👑👑 [OrganisationContext] GOD-MODE OWNER DETECTED:', user.email);
-      console.log('👑 [OrganisationContext] Ensuring God-Mode access to ALL organisations...');
-      setIsGodMode(true);
-
-      // Call the function to ensure God-Mode owner has access to all orgs
-      const { error: ensureError } = await supabase.rpc('ensure_god_mode_access');
-      if (ensureError) {
-        console.error('⚠️ [OrganisationContext] Error ensuring God-Mode access:', ensureError);
-      } else {
-        console.log('✅ [OrganisationContext] God-Mode access ensured');
-      }
-
-      // Load ALL organisations for God-Mode owners
-      const { data: allOrgs, error: orgsError } = await supabase
-        .from('organisations')
-        .select('id, name, created_at, subscription_status')
-        .order('name', { ascending: true });
-
-      if (orgsError) {
-        console.error('❌ [OrganisationContext] Error loading organisations for God-Mode:', orgsError);
-        debug.orgsError = orgsError.message;
-        setDebugInfo(debug);
-        setLoading(false);
-        return;
-      }
-
-      console.log('👑 [OrganisationContext] God-Mode: Loaded', allOrgs?.length || 0, 'organisations');
-      debug.godModeOrgCount = allOrgs?.length || 0;
-      debug.godModeOrgNames = allOrgs?.map((o: any) => o.name) || [];
-
-      // AUTO-CREATE TEST ORG if no organisations exist
-      if (!allOrgs || allOrgs.length === 0) {
-        console.log('🚀 [OrganisationContext] NO ORGANISATIONS FOUND - Auto-creating test org for God-Mode user');
-        debug.autoCreateTriggered = true;
-
-        const { data: newOrgId, error: createError } = await supabase.rpc('create_god_mode_test_org', {
-          for_user_id: user.id
-        });
-
-        if (createError) {
-          console.error('❌ [OrganisationContext] Error auto-creating test org:', createError);
-          debug.autoCreateError = createError.message;
-        } else {
-          console.log('✅ [OrganisationContext] Test org auto-created:', newOrgId);
-          debug.autoCreatedOrgId = newOrgId;
-
-          // Reload organisations after creation
-          const { data: reloadedOrgs, error: reloadError } = await supabase
-            .from('organisations')
-            .select('id, name, created_at, subscription_status')
-            .order('name', { ascending: true });
-
-          if (!reloadError && reloadedOrgs) {
-            setOrganisations(reloadedOrgs);
-            const testOrg = reloadedOrgs.find((o: Organisation) => o.id === newOrgId);
-            if (testOrg) {
-              setCurrentOrganisation(testOrg);
-              localStorage.setItem('passivefire_current_organisation_id', testOrg.id);
-              console.log('👑 [OrganisationContext] God-Mode: Auto-selected test org:', testOrg.name);
-            }
-          }
-        }
-      } else {
-        setOrganisations(allOrgs);
-        setIsAdminView(true);
-
-        const savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
-        const savedOrg = allOrgs.find((o: Organisation) => o.id === savedOrgId);
-        setCurrentOrganisation(savedOrg || allOrgs[0]);
-        if (!savedOrg) {
-          localStorage.setItem('passivefire_current_organisation_id', allOrgs[0].id);
-        }
-        console.log('👑 [OrganisationContext] God-Mode: Set current org:', (savedOrg || allOrgs[0]).name);
-      }
-
-      setDebugInfo(debug);
-      setLoading(false);
-      console.log('👑👑👑 [OrganisationContext] GOD-MODE LOAD COMPLETE');
-      return;
-    }
-
     // Check if admin is impersonating
     const impersonatedOrgId = getImpersonatedOrgId();
     if (impersonatedOrgId) {
@@ -205,7 +118,62 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // PERMANENT FIX: Fetch memberships via organisation_members junction table
+    // STEP 1: Check if user is a platform admin (god-mode)
+    const { data: adminCheck, error: adminError } = await supabase
+      .from('platform_admins')
+      .select('is_active')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    debug.isPlatformAdmin = !!adminCheck;
+    debug.adminError = adminError?.message;
+
+    console.log('🔐 [OrganisationContext] Platform admin check:', { isAdmin: !!adminCheck, error: adminError?.message });
+
+    if (adminCheck) {
+      // PLATFORM ADMIN: Load ALL organisations
+      console.log('👑 [OrganisationContext] User is platform admin with god-mode - loading ALL organisations');
+      setIsGodMode(true);
+      setIsAdminView(true);
+
+      const { data: allOrgs, error: orgsError } = await supabase
+        .from('organisations')
+        .select('id, name, created_at, subscription_status')
+        .order('name', { ascending: true });
+
+      if (orgsError) {
+        console.error('❌ [OrganisationContext] Error loading organisations for admin:', orgsError);
+        debug.orgsError = orgsError.message;
+        setDebugInfo(debug);
+        setLoading(false);
+        return;
+      }
+
+      console.log('👑 [OrganisationContext] Platform admin loaded', allOrgs?.length || 0, 'organisations');
+      debug.adminOrgCount = allOrgs?.length || 0;
+      debug.adminOrgNames = allOrgs?.map((o: any) => o.name) || [];
+
+      setOrganisations(allOrgs || []);
+
+      const savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
+      const savedOrg = allOrgs?.find((o: Organisation) => o.id === savedOrgId);
+      setCurrentOrganisation(savedOrg || allOrgs?.[0] || null);
+      if (!savedOrg && allOrgs?.[0]) {
+        localStorage.setItem('passivefire_current_organisation_id', allOrgs[0].id);
+      }
+
+      setDebugInfo(debug);
+      setLoading(false);
+      console.log('👑 [OrganisationContext] Platform admin load complete');
+      return;
+    }
+
+    // STEP 2: Regular user - load only organizations they're members of
+    console.log('👤 [OrganisationContext] Regular user - fetching memberships');
+    setIsGodMode(false);
+    setIsAdminView(false);
+
     const { data: memberships, error: membershipError } = await supabase
       .from('organisation_members')
       .select('organisation_id, role, status')
@@ -228,63 +196,29 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    let orgs = null;
-    let orgsError = null;
-
     if (!memberships || memberships.length === 0) {
-      console.log('🔍 [OrganisationContext] No memberships found, checking platform admin status');
-      const { data: adminCheck, error: adminError } = await supabase
-        .from('platform_admins')
-        .select('is_active')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      debug.isAdmin = !!adminCheck;
-      debug.adminError = adminError?.message;
-
-      console.log('🔐 [OrganisationContext] Admin check result:', { isAdmin: !!adminCheck, error: adminError?.message });
-
-      if (adminCheck) {
-        console.log('👑 [OrganisationContext] User is platform admin, loading all organisations');
-        const result = await supabase
-          .from('organisations')
-          .select('id, name, created_at, subscription_status')
-          .order('created_at', { ascending: false });
-
-        console.log('📦 [OrganisationContext] All orgs loaded:', result.data?.length || 0, 'organisations');
-        orgs = result.data;
-        orgsError = result.error;
-        debug.orgCount = orgs?.length || 0;
-        debug.orgNames = orgs?.map((o: any) => o.name) || [];
-        setIsAdminView(true);
-      } else {
-        console.warn('⚠️ [OrganisationContext] Not an admin and no memberships - user cannot see any orgs');
-        setOrganisations([]);
-        setIsAdminView(false);
-        setDebugInfo(debug);
-        setLoading(false);
-        return;
-      }
-    } else {
-      console.log('✅ [OrganisationContext] User has', memberships.length, 'active memberships, loading organisations');
-      const orgIds = memberships.map(m => m.organisation_id);
-
-      const result = await supabase
-        .from('organisations')
-        .select('id, name, created_at, subscription_status')
-        .in('id', orgIds)
-        .order('name', { ascending: true });
-
-      debug.orgCount = result.data?.length || 0;
-      debug.orgNames = result.data?.map((o: any) => o.name) || [];
-
-      console.log('📦 [OrganisationContext] Loaded', result.data?.length || 0, 'organisations:', result.data?.map((o: any) => o.name).join(', '));
-
-      orgs = result.data;
-      orgsError = result.error;
-      setIsAdminView(false);
+      console.warn('⚠️ [OrganisationContext] Regular user has no organisation memberships');
+      setOrganisations([]);
+      setCurrentOrganisation(null);
+      setDebugInfo(debug);
+      setLoading(false);
+      return;
     }
+
+    // Load only the organisations this user is a member of
+    console.log('✅ [OrganisationContext] User has', memberships.length, 'active memberships, loading their organisations');
+    const orgIds = memberships.map(m => m.organisation_id);
+
+    const { data: orgs, error: orgsError } = await supabase
+      .from('organisations')
+      .select('id, name, created_at, subscription_status')
+      .in('id', orgIds)
+      .order('name', { ascending: true });
+
+    debug.orgCount = orgs?.length || 0;
+    debug.orgNames = orgs?.map((o: any) => o.name) || [];
+
+    console.log('📦 [OrganisationContext] Loaded', orgs?.length || 0, 'organisations:', orgs?.map((o: any) => o.name).join(', '));
 
     if (orgsError) {
       console.error('❌ [OrganisationContext] Error loading organisations:', orgsError);
