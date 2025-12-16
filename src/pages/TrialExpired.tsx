@@ -184,7 +184,7 @@ export default function TrialExpired() {
         {/* Logo */}
         <div className="text-center mt-8">
           <p className="text-slate-400 text-sm">
-            PassiveFire Verify+ Quote Audit Engine
+            VerifyTrade Quote Audit Engine
           </p>
         </div>
       </motion.div>

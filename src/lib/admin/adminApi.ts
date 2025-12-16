@@ -244,7 +244,7 @@ export async function getTradePricing(): Promise<any> {
 }
 
 export const TRADE_LABELS: Record<string, string> = {
-  'passive_fire': 'PassiveFire Verify+',
+  'passive_fire': 'VerifyTrade Passive Fire',
   'electrical': 'Electrical Verify+',
   'plumbing': 'Plumbing Verify+',
   'mechanical': 'Mechanical Verify+',
@@ -252,7 +252,7 @@ export const TRADE_LABELS: Record<string, string> = {
 };
 
 export const ALL_TRADES = [
-  { value: 'passive_fire', label: 'PassiveFire Verify+', price: 299, color: 'orange' },
+  { value: 'passive_fire', label: 'VerifyTrade Passive Fire', price: 299, color: 'orange' },
   { value: 'electrical', label: 'Electrical Verify+', price: 349, color: 'yellow' },
   { value: 'plumbing', label: 'Plumbing Verify+', price: 329, color: 'blue' },
   { value: 'mechanical', label: 'Mechanical Verify+', price: 399, color: 'green' }

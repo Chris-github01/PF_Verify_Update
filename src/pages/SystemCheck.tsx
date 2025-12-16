@@ -393,7 +393,7 @@ export default function SystemCheck() {
                 <span>Last check: {formatTimestamp(result.timestamp)}</span>
               </div>
               <div className="text-gray-500 font-medium">
-                PassiveFire Verify+ v1.0.0
+                VerifyTrade v1.0.0
               </div>
             </div>
           </div>

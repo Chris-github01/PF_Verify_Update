@@ -133,7 +133,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
 
           <h2 className="text-2xl font-bold text-white">Book a Live Demo</h2>
           <p className="text-orange-100 mt-2 text-sm">
-            See exactly how PassiveFire Verify+ audits quotes, catches scope gaps, and generates award recommendations in a 20-minute walkthrough.
+            See exactly how VerifyTrade audits quotes, catches scope gaps, and generates award recommendations in a 20-minute walkthrough.
           </p>
         </div>
 

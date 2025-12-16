@@ -1072,11 +1072,11 @@ export default function Settings({ projectId, onProjectDeleted, onNavigateToMatr
       </div>
 
       <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
-        <h3 className="text-lg font-medium text-slate-100 mb-4">About PassiveFire Verify+</h3>
+        <h3 className="text-lg font-medium text-slate-100 mb-4">About VerifyTrade</h3>
         <div className="text-sm text-slate-300 space-y-2">
           <p>Version 1.0</p>
           <p>
-            PassiveFire Verify+ helps you manage and analyze quotes for passive fire protection projects.
+            VerifyTrade helps you manage and analyze quotes for passive fire protection projects.
             Import quotes, review items, compare suppliers, and generate award reports.
           </p>
         </div>

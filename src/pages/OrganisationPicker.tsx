@@ -207,7 +207,7 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
                 <Shield className="text-white" size={24} />
               </div>
               <div className="flex flex-col">
-                <span className="text-lg font-semibold text-slate-50">PassiveFire Verify+</span>
+                <span className="text-lg font-semibold text-slate-50">VerifyTrade</span>
                 <span className="text-xs text-slate-400">Quote Audit Engine</span>
               </div>
             </div>

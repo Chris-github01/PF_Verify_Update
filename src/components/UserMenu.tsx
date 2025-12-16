@@ -28,7 +28,7 @@ export default function UserMenu({
   const [userData, setUserData] = useState<UserData>({
     email: '',
     initials: 'U',
-    organisation: 'PassiveFire',
+    organisation: 'VerifyTrade',
     organisationCount: 1,
   });
   const menuRef = useRef<HTMLDivElement>(null);
@@ -68,7 +68,7 @@ export default function UserMenu({
     if (user) {
       const email = user.email || '';
       const name = user.user_metadata?.full_name || user.user_metadata?.name || '';
-      const organisation = user.user_metadata?.organisation || 'PassiveFire';
+      const organisation = user.user_metadata?.organisation || 'VerifyTrade';
 
       const initials = name
         ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)

@@ -275,7 +275,7 @@ export default function AdminApp() {
 
         {/* Version Footer */}
         <div className="border-t border-slate-800/80 px-4 py-3 text-[11px] text-slate-500">
-          v1.9 • © 2025 PassiveFire
+          v1.9 • © 2025 VerifyTrade
         </div>
       </aside>
 
