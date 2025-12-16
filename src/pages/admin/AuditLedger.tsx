@@ -31,47 +31,37 @@ export default function AuditLedger() {
   const loadEvents = async () => {
     setLoading(true);
     try {
-      // Check authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('🔐 Current session:', session?.user?.email || 'Not logged in');
-
-      // Check if platform admin
-      const { data: adminCheck, error: adminError } = await supabase.rpc('is_platform_admin');
-      console.log('👤 Platform admin check:', adminCheck, adminError);
-
-      let query = supabase
-        .from('audit_events')
-        .select('*, actor:auth.users!audit_events_actor_user_id_fkey(email)', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
-
-      if (entityTypeFilter) {
-        query = query.eq('entity_type', entityTypeFilter);
-      }
-
-      if (actionFilter) {
-        query = query.eq('action', actionFilter);
-      }
-
-      console.log('📊 Fetching audit events...');
-      const { data, error, count } = await query;
+      // Use admin function that bypasses RLS
+      const { data, error } = await supabase.rpc('get_admin_audit_events', {
+        p_limit: pageSize,
+        p_offset: (currentPage - 1) * pageSize,
+        p_entity_type: entityTypeFilter || null,
+        p_action: actionFilter || null,
+      });
 
       if (error) {
-        console.error('❌ RLS Error:', error);
+        console.error('Failed to load audit events:', error);
         throw error;
       }
 
-      console.log('✅ Loaded', data?.length || 0, 'events, total:', count);
-
       const eventsWithActor = data?.map(event => ({
-        ...event,
-        actor_email: (event as any).actor?.email || 'System',
+        id: event.id,
+        organisation_id: event.organisation_id,
+        entity_type: event.entity_type,
+        entity_id: event.entity_id,
+        action: event.action,
+        actor_user_id: event.actor_user_id,
+        metadata_json: event.metadata_json,
+        created_at: event.created_at,
+        actor_email: event.actor_email || 'System',
       })) || [];
 
+      const totalCount = data && data.length > 0 ? data[0].total_count : 0;
+
       setEvents(eventsWithActor);
-      setTotalEvents(count || 0);
+      setTotalEvents(Number(totalCount));
     } catch (error) {
-      console.error('❌ Failed to load audit events:', error);
+      console.error('Failed to load audit events:', error);
     } finally {
       setLoading(false);
     }

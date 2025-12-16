@@ -54,16 +54,36 @@ export async function getAllQuotes(filters?: {
   endDate?: string;
 }): Promise<GlobalQuote[]> {
   const { data, error } = await supabase
-    .rpc('get_admin_global_quotes');
+    .rpc('get_admin_quotes', {
+      p_organisation_id: filters?.organisationId || null,
+      p_project_id: null,
+      p_limit: 1000,
+      p_offset: 0,
+    });
 
   if (error) throw error;
 
-  let quotes = data || [];
+  let quotes = (data || []).map((q: any) => ({
+    quote_id: q.quote_id || q.id,
+    supplier_name: q.supplier_name,
+    quote_reference: null,
+    total_amount: 0,
+    items_count: q.line_item_count || 0,
+    status: q.status,
+    extraction_confidence: null,
+    organisation_id: q.organisation_id,
+    organisation_name: q.organisation_name,
+    trade_type: 'passive_fire',
+    created_at: q.created_at,
+    import_date: q.created_at,
+    uploaded_by_email: null,
+    project_name: q.project_name || 'No Project',
+    avg_confidence: null,
+    file_url: q.file_url,
+    filename: q.filename,
+  }));
 
   // Apply client-side filters if provided
-  if (filters?.organisationId) {
-    quotes = quotes.filter(q => q.organisation_id === filters.organisationId);
-  }
   if (filters?.tradeType) {
     quotes = quotes.filter(q => q.trade_type === filters.tradeType);
   }
@@ -74,7 +94,7 @@ export async function getAllQuotes(filters?: {
     quotes = quotes.filter(q => q.created_at <= filters.endDate);
   }
 
-  return quotes.slice(0, 1000);
+  return quotes;
 }
 
 export async function createOrganisation(params: {
