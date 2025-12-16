@@ -972,6 +972,7 @@ function AppContent() {
                 setProjectId(null);
                 setProjectInfo(null);
                 setActiveTab('dashboard');
+                setCurrentOrganisation(null);
               }}
             />
           </>
