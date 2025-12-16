@@ -98,6 +98,11 @@ export default function AppBar({
             <button className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 text-xs text-slate-200 shadow-sm hover:border-sky-500 hover:text-sky-200 transition-colors">
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               {currentOrganisation.name}
+              {currentOrganisation.subscription_status === 'trial' && (
+                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-orange-950/50 text-orange-400 border border-orange-700/50 rounded ml-1">
+                  Trial
+                </span>
+              )}
             </button>
           )}
 
