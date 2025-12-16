@@ -1,6 +1,6 @@
 // PERMANENT FIX FOR CHRIS – DO NOT REGRESS – USER MUST SEE "Pi" ORG
 // CRITICAL: Wait for user session to load before rendering organisation selector
-import { Building2, AlertCircle, Loader2, Shield, Bug, Check, ChevronRight, User, LogOut } from 'lucide-react';
+import { Building2, AlertCircle, Loader2, Shield, Bug, Check, ChevronRight, User, LogOut, X } from 'lucide-react';
 import { useOrganisation } from '../lib/organisationContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -18,6 +18,10 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
   const [userLoading, setUserLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [creatingTestOrg, setCreatingTestOrg] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [orgName, setOrgName] = useState('');
+  const [selectedTier, setSelectedTier] = useState<'starter' | 'professional'>('starter');
+  const [creatingOrg, setCreatingOrg] = useState(false);
   const isDev = import.meta.env.DEV;
   const GOD_MODE_EMAILS = ['chris@optimalfire.co.nz', 'pieter@optimalfire.co.nz'];
   const isGodMode = userEmail && GOD_MODE_EMAILS.includes(userEmail.toLowerCase());
@@ -106,6 +110,41 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
     console.log('🔧 [OrganisationPicker] Open Admin Console clicked');
     console.log('Navigating to /admin');
     window.location.href = '/admin';
+  };
+
+  const handleCreateTrialOrg = async () => {
+    if (!orgName.trim()) {
+      setError('Please enter an organization name');
+      return;
+    }
+
+    if (!currentUser) {
+      setError('You must be logged in to create an organization');
+      return;
+    }
+
+    setCreatingOrg(true);
+    setError('');
+
+    try {
+      const { data, error: fnError } = await supabase.rpc('create_trial_account', {
+        p_user_id: currentUser.id,
+        p_email: currentUser.email,
+        p_organisation_name: orgName.trim(),
+        p_pricing_tier: selectedTier
+      });
+
+      if (fnError) throw fnError;
+
+      console.log('✅ Trial organization created:', data);
+      alert('Organization created successfully! Refreshing...');
+      window.location.reload();
+    } catch (err: any) {
+      console.error('❌ Failed to create organization:', err);
+      setError(err.message || 'Failed to create organization');
+    } finally {
+      setCreatingOrg(false);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -272,8 +311,16 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
             <AlertCircle className="mx-auto mb-4 text-gray-400" size={48} />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No Organisations Found</h3>
             <p className="text-gray-600 mb-6">
-              You are not a member of any organisation. Please contact your administrator to be added to an organisation.
+              You are not a member of any organisation. Create your trial organization to get started.
             </p>
+
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-lg"
+            >
+              <Building2 size={20} />
+              Create Trial Organization
+            </button>
 
             {(isDev || isGodMode) && (
               <div className="mt-6 border-t pt-6">
@@ -344,6 +391,110 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
           </div>
         )}
       </main>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Create Trial Organization</h2>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setError('');
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Organization Name
+                </label>
+                <input
+                  type="text"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder="Your Company Name"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Select Trial Plan
+                </label>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setSelectedTier('starter')}
+                    className={`text-left p-4 rounded-lg border-2 transition-all ${
+                      selectedTier === 'starter'
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <h3 className="font-semibold text-gray-900 mb-1">Starter</h3>
+                    <p className="text-sm text-gray-600 mb-2">Perfect for smaller teams</p>
+                    <ul className="space-y-1 text-xs text-gray-600">
+                      <li>✓ Up to 5 users</li>
+                      <li>✓ 100 quotes/month</li>
+                      <li>✓ Full reports</li>
+                    </ul>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedTier('professional')}
+                    className={`text-left p-4 rounded-lg border-2 transition-all ${
+                      selectedTier === 'professional'
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <h3 className="font-semibold text-gray-900 mb-1">Professional</h3>
+                    <p className="text-sm text-gray-600 mb-2">For growing contractors</p>
+                    <ul className="space-y-1 text-xs text-gray-600">
+                      <li>✓ Up to 15 users</li>
+                      <li>✓ 500 quotes/month</li>
+                      <li>✓ Priority support</li>
+                    </ul>
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setError('');
+                  }}
+                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateTrialOrg}
+                  disabled={creatingOrg || !orgName.trim()}
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creatingOrg ? 'Creating...' : 'Start 14-Day Trial'}
+                </button>
+              </div>
+
+              <div className="text-center text-xs text-gray-500">
+                No credit card required. Full access to all features for 14 days.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
