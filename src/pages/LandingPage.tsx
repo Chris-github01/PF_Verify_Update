@@ -1,6 +1,8 @@
 import { Shield, Upload, Cpu, Layers, Zap, FileText, BarChart3, Download, CheckCircle, ArrowRight, Target, AlertTriangle, Award, Users, Brain, Database, FileSearch, TrendingUp, ShieldAlert, Clock, Lock, Briefcase, BookOpen, HelpCircle, FileCode, LifeBuoy } from 'lucide-react';
 import { useState } from 'react';
 import DemoBookingModal from '../components/DemoBookingModal';
+import PrivacyPolicy from './PrivacyPolicy';
+import TermsOfService from './TermsOfService';
 
 interface LandingPageProps {
   onSignIn: () => void;
@@ -9,6 +11,8 @@ interface LandingPageProps {
 
 export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProps) {
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const [showTermsOfService, setShowTermsOfService] = useState(false);
 
   const comingSoonTrades = [
     'PassiveFire Verify+ • Now Available',
@@ -18,6 +22,14 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
     'ActiveFire Verify+ • Q1 2026',
     'Trade Analysis Suite • Expanding'
   ];
+
+  if (showPrivacyPolicy) {
+    return <PrivacyPolicy onBack={() => setShowPrivacyPolicy(false)} />;
+  }
+
+  if (showTermsOfService) {
+    return <TermsOfService onBack={() => setShowTermsOfService(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)]">
@@ -1112,8 +1124,8 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <li><a href="#early-access" className="hover:text-slate-50 transition-colors">Early Access Program</a></li>
                 <li><a href="#contact" className="hover:text-slate-50 transition-colors">Contact</a></li>
                 <li><a href="#careers" className="hover:text-slate-50 transition-colors">Careers</a></li>
-                <li><a href="#privacy" className="hover:text-slate-50 transition-colors">Privacy Policy</a></li>
-                <li><a href="#terms" className="hover:text-slate-50 transition-colors">Terms of Service</a></li>
+                <li><button onClick={() => setShowPrivacyPolicy(true)} className="hover:text-slate-50 transition-colors text-left">Privacy Policy</button></li>
+                <li><button onClick={() => setShowTermsOfService(true)} className="hover:text-slate-50 transition-colors text-left">Terms of Service</button></li>
               </ul>
             </div>
             <div>
