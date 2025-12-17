@@ -12,6 +12,7 @@ interface FormData {
   phone: string;
   company: string;
   role: string;
+  message: string;
 }
 
 export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalProps) {
@@ -21,6 +22,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
     phone: '',
     company: '',
     role: 'Main Contractor',
+    message: '',
   });
 
   const [loading, setLoading] = useState(false);
@@ -29,7 +31,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
 
   if (!isOpen) return null;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value
@@ -90,6 +92,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
           phone: '',
           company: '',
           role: 'Main Contractor',
+          message: '',
         });
         setStatus('idle');
         setMessage('');
@@ -113,6 +116,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
         phone: '',
         company: '',
         role: 'Main Contractor',
+        message: '',
       });
       setStatus('idle');
       setMessage('');
@@ -165,7 +169,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
               name="name"
               value={formData.name}
               onChange={handleChange}
-              placeholder="Christopher Knight"
+              placeholder="Enter your full name"
               required
               disabled={loading || status === 'success'}
               className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
@@ -182,7 +186,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="chris@optimalfire.co.nz"
+              placeholder="your.email@company.com"
               required
               disabled={loading || status === 'success'}
               className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
@@ -199,7 +203,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
               name="phone"
               value={formData.phone}
               onChange={handleChange}
-              placeholder="0324668605"
+              placeholder="Enter your phone number"
               disabled={loading || status === 'success'}
               className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             />
@@ -215,7 +219,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
               name="company"
               value={formData.company}
               onChange={handleChange}
-              placeholder="Optimal Fire"
+              placeholder="Enter your company name"
               required
               disabled={loading || status === 'success'}
               className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
@@ -242,6 +246,22 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
               <option value="Consultant">Consultant</option>
               <option value="Other">Other</option>
             </select>
+          </div>
+
+          <div>
+            <label htmlFor="message" className="block text-sm font-medium text-slate-300 mb-2">
+              Message (Optional)
+            </label>
+            <textarea
+              id="message"
+              name="message"
+              value={formData.message}
+              onChange={handleChange}
+              placeholder="Tell us about your project or any specific requirements for the demo"
+              rows={3}
+              disabled={loading || status === 'success'}
+              className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none"
+            />
           </div>
 
           <div className="flex gap-3 pt-4">
