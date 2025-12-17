@@ -278,7 +278,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-300 leading-relaxed mb-4">
                   "After manually auditing hundreds of passive fire quotes, we knew there had to be a better way. VerifyTrade eliminates the guesswork and gives us complete confidence in our procurement decisions."
                 </p>
-                <p className="text-sm text-slate-500 italic">Coming in Q1 2026</p>
+                <p className="text-sm text-green-400 italic font-semibold">Live</p>
               </div>
 
               <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
@@ -294,7 +294,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-300 leading-relaxed mb-4">
                   "The ability to compare quotes line-by-line across multiple suppliers in minutes instead of days is transformative. Every recommendation is now backed by data, not gut feel."
                 </p>
-                <p className="text-sm text-slate-500 italic">Early access customers</p>
+                <p className="text-sm text-green-400 italic font-semibold">Live</p>
               </div>
 
               <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
@@ -310,7 +310,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-300 leading-relaxed mb-4">
                   "Verifying that quoted systems actually meet our fire report requirements used to take hours of manual checking. Now it's instant, and we catch non-compliant systems before they become problems."
                 </p>
-                <p className="text-sm text-slate-500 italic">Beta testing phase</p>
+                <p className="text-sm text-green-400 italic font-semibold">Live</p>
               </div>
             </div>
 
