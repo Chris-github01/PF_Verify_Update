@@ -255,7 +255,81 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           </div>
         </section>
 
-        <section id="features" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
+        <section id="customers" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10 sm:mb-12 md:mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Built for Industry Leaders</h2>
+              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4 max-w-3xl mx-auto">
+                Trusted by construction professionals who demand precision and accountability
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8 mb-12">
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
+                    <Users className="text-blue-400" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-100">Main Contractors</h3>
+                    <p className="text-sm text-slate-500">NZ & Australia</p>
+                  </div>
+                </div>
+                <p className="text-slate-300 leading-relaxed mb-4">
+                  "After manually auditing hundreds of passive fire quotes, we knew there had to be a better way. VerifyTrade eliminates the guesswork and gives us complete confidence in our procurement decisions."
+                </p>
+                <p className="text-sm text-slate-500 italic">Coming in Q1 2026</p>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+                    <BarChart3 className="text-green-400" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-100">Quantity Surveyors</h3>
+                    <p className="text-sm text-slate-500">Professional Services</p>
+                  </div>
+                </div>
+                <p className="text-slate-300 leading-relaxed mb-4">
+                  "The ability to compare quotes line-by-line across multiple suppliers in minutes instead of days is transformative. Every recommendation is now backed by data, not gut feel."
+                </p>
+                <p className="text-sm text-slate-500 italic">Early access customers</p>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center">
+                    <Shield className="text-orange-400" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-100">Fire Engineers</h3>
+                    <p className="text-sm text-slate-500">Compliance Verification</p>
+                  </div>
+                </div>
+                <p className="text-slate-300 leading-relaxed mb-4">
+                  "Verifying that quoted systems actually meet our fire report requirements used to take hours of manual checking. Now it's instant, and we catch non-compliant systems before they become problems."
+                </p>
+                <p className="text-sm text-slate-500 italic">Beta testing phase</p>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 text-center">
+              <h3 className="text-2xl font-bold text-slate-100 mb-4">Join the Early Access Program</h3>
+              <p className="text-lg text-slate-400 mb-6 max-w-2xl mx-auto">
+                Be among the first to experience the future of construction procurement. Early access customers get priority support, discounted pricing, and direct input into product development.
+              </p>
+              <button
+                onClick={onSignIn}
+                className="px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
+              >
+                Apply for Early Access
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="py-12 sm:py-16 md:py-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-10 sm:mb-12 md:mb-16">
               <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Revolutionary Features</h2>
@@ -696,6 +770,259 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                   Comprehensive video library covering every feature, from basic quote import to advanced audit customization.
                 </p>
                 <span className="text-red-400 text-sm font-medium">Coming with launch →</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="resources" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10 sm:mb-12 md:mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Resources Hub</h2>
+              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4 max-w-3xl mx-auto">
+                Everything you need to master quote auditing and procurement best practices
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-blue-500/50 transition-all">
+                <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
+                  <BookOpen className="text-blue-400" size={28} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-3">Knowledge Base</h3>
+                <p className="text-slate-400 mb-4 leading-relaxed">
+                  Comprehensive guides, tutorials, and best practices for passive fire quote auditing. Searchable articles covering every feature and workflow.
+                </p>
+                <a href="#docs" className="text-blue-400 text-sm font-medium hover:text-blue-300 transition-colors">
+                  Browse Documentation →
+                </a>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-purple-500/50 transition-all">
+                <div className="w-14 h-14 bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
+                  <FileText className="text-purple-400" size={28} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-3">Industry Insights</h3>
+                <p className="text-slate-400 mb-4 leading-relaxed">
+                  Expert analysis on passive fire trends, common procurement pitfalls, and how to improve your quote evaluation process.
+                </p>
+                <span className="text-purple-400 text-sm font-medium">Blog launching Q1 2026 →</span>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-green-500/50 transition-all">
+                <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center mb-4">
+                  <HelpCircle className="text-green-400" size={28} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-3">FAQs</h3>
+                <p className="text-slate-400 mb-4 leading-relaxed">
+                  Quick answers to common questions about AI extraction accuracy, data security, pricing, and platform capabilities.
+                </p>
+                <a href="#help" className="text-green-400 text-sm font-medium hover:text-green-300 transition-colors">
+                  View FAQ →
+                </a>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-orange-500/50 transition-all">
+                <div className="w-14 h-14 bg-orange-500/20 rounded-xl flex items-center justify-center mb-4">
+                  <FileCode className="text-orange-400" size={28} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-3">API Reference</h3>
+                <p className="text-slate-400 mb-4 leading-relaxed">
+                  Complete API documentation for developers integrating VerifyTrade into existing procurement systems and workflows.
+                </p>
+                <span className="text-orange-400 text-sm font-medium">Available Q2 2026 →</span>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-yellow-500/50 transition-all">
+                <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center mb-4">
+                  <Target className="text-yellow-400" size={28} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-3">Template Library</h3>
+                <p className="text-slate-400 mb-4 leading-relaxed">
+                  52+ pre-built passive fire system templates. Download, customize, and share across your organization.
+                </p>
+                <span className="text-yellow-400 text-sm font-medium">Available at launch →</span>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-red-500/50 transition-all">
+                <div className="w-14 h-14 bg-red-500/20 rounded-xl flex items-center justify-center mb-4">
+                  <Users className="text-red-400" size={28} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-3">Webinars & Training</h3>
+                <p className="text-slate-400 mb-4 leading-relaxed">
+                  Live training sessions, recorded webinars, and certification programs to help your team maximize platform value.
+                </p>
+                <span className="text-red-400 text-sm font-medium">Starting Q1 2026 →</span>
+              </div>
+            </div>
+
+            <div className="mt-12 text-center">
+              <p className="text-slate-400 mb-6">
+                Can't find what you're looking for?
+              </p>
+              <a
+                href="#support"
+                className="inline-block px-6 py-3 text-base font-semibold text-slate-100 bg-slate-800 border-2 border-slate-600 rounded-xl hover:border-slate-500 hover:bg-slate-700 transition-all"
+              >
+                Contact Support
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <section id="support" className="py-12 sm:py-16 md:py-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10 sm:mb-12 md:mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">World-Class Support</h2>
+              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4 max-w-3xl mx-auto">
+                We're here to help you succeed at every step of your journey
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8 mb-12">
+              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <LifeBuoy className="text-blue-400" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-100 mb-2">Email Support</h3>
+                    <p className="text-sm text-slate-500 mb-4">Available on all plans</p>
+                    <p className="text-slate-400 leading-relaxed">
+                      Get expert help via email with guaranteed 24-hour response time. Our team of passive fire specialists understands your challenges and provides detailed, actionable solutions.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-slate-700">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>24-hour response time</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Expert passive fire knowledge</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Detailed troubleshooting</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Users className="text-purple-400" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-100 mb-2">Priority Support</h3>
+                    <p className="text-sm text-slate-500 mb-4">Professional & Enterprise plans</p>
+                    <p className="text-slate-400 leading-relaxed">
+                      Get faster response times, direct access to senior engineers, and proactive monitoring of your account. Includes dedicated onboarding and training sessions.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-slate-700">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>4-hour response time</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Dedicated account manager</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Onboarding & training included</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <BookOpen className="text-green-400" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-100 mb-2">Self-Service Resources</h3>
+                    <p className="text-sm text-slate-500 mb-4">Available 24/7</p>
+                    <p className="text-slate-400 leading-relaxed">
+                      Comprehensive knowledge base, video tutorials, and interactive guides help you find answers instantly without waiting for support.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-slate-700">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Searchable knowledge base</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Video tutorial library</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Step-by-step guides</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Target className="text-orange-400" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-100 mb-2">Implementation Support</h3>
+                    <p className="text-sm text-slate-500 mb-4">Enterprise plans</p>
+                    <p className="text-slate-400 leading-relaxed">
+                      Hands-on assistance setting up custom templates, integrating with your systems, and training your team. We ensure smooth adoption across your organization.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-slate-700">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Custom template setup</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Team training sessions</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <CheckCircle className="text-green-400" size={16} />
+                      <span>Integration assistance</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-8 text-center">
+              <h3 className="text-2xl font-bold text-slate-100 mb-3">Need Help Right Now?</h3>
+              <p className="text-lg text-slate-400 mb-6">
+                Our support team is ready to assist with any questions about features, pricing, or implementation.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <button
+                  onClick={() => setShowDemoModal(true)}
+                  className="px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
+                >
+                  Book a Demo Call
+                </button>
+                <a
+                  href="#help"
+                  className="px-8 py-3 text-lg font-semibold text-slate-100 bg-slate-800 border-2 border-slate-600 rounded-xl hover:border-slate-500 hover:bg-slate-700 transition-all inline-block"
+                >
+                  View FAQ
+                </a>
               </div>
             </div>
           </div>
