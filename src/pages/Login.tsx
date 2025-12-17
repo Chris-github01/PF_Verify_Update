@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Shield, Mail, Lock, Chrome, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Shield, Mail, Lock, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export default function Login() {
@@ -8,6 +8,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+
+  useEffect(() => {
+    const adminMode = localStorage.getItem('verifytrade_admin_login');
+    if (adminMode === 'true') {
+      setIsAdminMode(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +36,12 @@ export default function Login() {
           password,
         });
         if (error) throw error;
+
+        localStorage.removeItem('verifytrade_admin_login');
+
+        if (isAdminMode) {
+          window.location.href = '/admin';
+        }
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred');
@@ -36,21 +50,29 @@ export default function Login() {
     }
   };
 
-  const handleSocialLogin = async (provider: 'google' | 'azure') => {
+  const handleGoogleLogin = async () => {
     setError('');
     setLoading(true);
     try {
+      const redirectPath = isAdminMode ? '/admin' : '/';
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: provider === 'google' ? 'google' : 'azure',
+        provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}${redirectPath}`,
         },
       });
       if (error) throw error;
+
+      localStorage.removeItem('verifytrade_admin_login');
     } catch (err: any) {
-      setError(err.message || 'Social login failed');
+      setError(err.message || 'Google login failed');
       setLoading(false);
     }
+  };
+
+  const handleAdminLoginClick = () => {
+    localStorage.setItem('verifytrade_admin_login', 'true');
+    window.location.reload();
   };
 
   return (
@@ -64,39 +86,29 @@ export default function Login() {
             <span className="text-2xl font-bold text-slate-50">VerifyTrade</span>
           </div>
           <h1 className="text-3xl font-bold text-slate-50 mb-2">
-            {isSignUp ? 'Create your account' : 'Sign in to VerifyTrade'}
+            {isSignUp ? 'Create your account' : isAdminMode ? 'Admin Center Login' : 'Sign in to VerifyTrade'}
           </h1>
           <p className="text-slate-400">
-            {isSignUp ? 'Get started with your free trial' : 'Welcome back! Please enter your details'}
+            {isSignUp ? 'Get started with your free trial' : isAdminMode ? 'Access the Enterprise Admin Console' : 'Welcome back! Please enter your details'}
           </p>
         </div>
 
         <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700/50 p-8">
           {!isSignUp && (
             <>
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <button
-                  onClick={() => handleSocialLogin('google')}
-                  disabled={loading}
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Chrome size={20} className="text-slate-300" />
-                  <span className="text-sm font-medium text-slate-300">Google</span>
-                </button>
-                <button
-                  onClick={() => handleSocialLogin('azure')}
-                  disabled={loading}
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 23 23" fill="none">
-                    <path d="M0 0h11v11H0z" fill="#f25022"/>
-                    <path d="M12 0h11v11H12z" fill="#00a4ef"/>
-                    <path d="M0 12h11v11H0z" fill="#ffb900"/>
-                    <path d="M12 12h11v11H12z" fill="#7fba00"/>
-                  </svg>
-                  <span className="text-sm font-medium text-slate-300">Microsoft</span>
-                </button>
-              </div>
+              <button
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 border border-slate-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm mb-6"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                <span className="text-sm font-medium text-slate-700">Continue with Google</span>
+              </button>
 
               <div className="relative mb-6">
                 <div className="absolute inset-0 flex items-center">
@@ -184,24 +196,43 @@ export default function Login() {
           </form>
 
           <div className="mt-6 text-center space-y-3">
-            <button
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setError('');
-              }}
-              className="text-sm text-slate-400 hover:text-slate-100 font-medium"
-            >
-              {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-              <span className="text-blue-400 hover:text-blue-300">
-                {isSignUp ? 'Sign in' : 'Sign up'}
-              </span>
-            </button>
+            {!isAdminMode && (
+              <button
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setError('');
+                }}
+                className="text-sm text-slate-400 hover:text-slate-100 font-medium"
+              >
+                {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                <span className="text-blue-400 hover:text-blue-300">
+                  {isSignUp ? 'Sign in' : 'Sign up'}
+                </span>
+              </button>
+            )}
 
-            {!isSignUp && (
+            {!isSignUp && !isAdminMode && (
               <div className="pt-3 border-t border-slate-800">
-                <a href="/admin" className="text-sm text-slate-500 hover:text-slate-300">
+                <button
+                  onClick={handleAdminLoginClick}
+                  className="text-sm text-slate-500 hover:text-slate-300"
+                >
                   Enterprise / Admin login →
-                </a>
+                </button>
+              </div>
+            )}
+
+            {isAdminMode && (
+              <div className="pt-3 border-t border-slate-800">
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('verifytrade_admin_login');
+                    window.location.reload();
+                  }}
+                  className="text-sm text-slate-500 hover:text-slate-300"
+                >
+                  ← Back to regular login
+                </button>
               </div>
             )}
           </div>
