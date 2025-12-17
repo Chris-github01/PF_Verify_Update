@@ -322,7 +322,7 @@ export default function TermsOfService({ onBack }: TermsOfServiceProps) {
 
               <h3 className="text-xl font-semibold text-white mt-6 mb-3">17.1 Informal Resolution</h3>
               <p className="mb-4">
-                Before filing a formal claim, you agree to contact us at legal@verifytrade.com to attempt to resolve the dispute informally. We will try to resolve the dispute within 60 days.
+                Before filing a formal claim, you agree to contact us at legal@verifytrade.co.nz to attempt to resolve the dispute informally. We will try to resolve the dispute within 60 days.
               </p>
 
               <h3 className="text-xl font-semibold text-white mt-6 mb-3">17.2 Arbitration Agreement</h3>
@@ -429,9 +429,9 @@ export default function TermsOfService({ onBack }: TermsOfServiceProps) {
                 For questions, concerns, or notices regarding these Terms, please contact us:
               </p>
               <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
-                <p className="mb-2"><strong>General Inquiries:</strong> legal@verifytrade.com</p>
-                <p className="mb-2"><strong>Support:</strong> support@verifytrade.com</p>
-                <p className="mb-2"><strong>Billing:</strong> billing@verifytrade.com</p>
+                <p className="mb-2"><strong>General Inquiries:</strong> legal@verifytrade.co.nz</p>
+                <p className="mb-2"><strong>Support:</strong> support@verifytrade.co.nz</p>
+                <p className="mb-2"><strong>Billing:</strong> billing@verifytrade.co.nz</p>
                 <p className="mt-4 text-sm text-slate-400">
                   We will respond to your inquiry within 5 business days.
                 </p>

@@ -150,7 +150,7 @@ export default function PrivacyPolicy({ onBack }: PrivacyPolicyProps) {
               </ul>
 
               <p className="mt-4">
-                To exercise these rights, please contact us at privacy@verifytrade.com. We will respond to your request within 30 days.
+                To exercise these rights, please contact us at privacy@verifytrade.co.nz. We will respond to your request within 30 days.
               </p>
             </section>
 
@@ -244,9 +244,9 @@ export default function PrivacyPolicy({ onBack }: PrivacyPolicyProps) {
                 If you have questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us:
               </p>
               <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
-                <p className="mb-2"><strong>Email:</strong> privacy@verifytrade.com</p>
-                <p className="mb-2"><strong>Data Protection Officer:</strong> dpo@verifytrade.com</p>
-                <p className="mb-2"><strong>Support:</strong> support@verifytrade.com</p>
+                <p className="mb-2"><strong>Email:</strong> privacy@verifytrade.co.nz</p>
+                <p className="mb-2"><strong>Data Protection Officer:</strong> dpo@verifytrade.co.nz</p>
+                <p className="mb-2"><strong>Support:</strong> support@verifytrade.co.nz</p>
                 <p className="mt-4 text-sm text-slate-400">
                   We will respond to your inquiry within 30 days of receipt.
                 </p>
