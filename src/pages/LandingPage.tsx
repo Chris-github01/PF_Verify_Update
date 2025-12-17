@@ -475,16 +475,41 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {['Electrical Verify+', 'Plumbing Verify+', 'HVAC Verify+', 'ActiveFire Verify+'].map((product) => (
-                <div key={product} className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
-                  <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q1 2026</span>
-                  <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
-                    <CheckCircle className="text-slate-500" size={24} />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-100 mb-2">{product}</h3>
-                  <p className="text-slate-400 text-sm">Quote audit intelligence for {product.split(' ')[0].toLowerCase()} trades</p>
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
+                <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q1 2026</span>
+                <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
+                  <CheckCircle className="text-slate-500" size={24} />
                 </div>
-              ))}
+                <h3 className="text-xl font-bold text-slate-100 mb-2">Electrical Verify+</h3>
+                <p className="text-slate-400 text-sm">Quote audit intelligence for electrical trades</p>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
+                <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q2 2026</span>
+                <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
+                  <CheckCircle className="text-slate-500" size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-2">Plumbing Verify+</h3>
+                <p className="text-slate-400 text-sm">Quote audit intelligence for plumbing trades</p>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
+                <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q3 2026</span>
+                <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
+                  <CheckCircle className="text-slate-500" size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-2">HVAC Verify+</h3>
+                <p className="text-slate-400 text-sm">Quote audit intelligence for hvac trades</p>
+              </div>
+
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
+                <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q4 2026</span>
+                <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
+                  <CheckCircle className="text-slate-500" size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-100 mb-2">ActiveFire Verify+</h3>
+                <p className="text-slate-400 text-sm">Quote audit intelligence for activefire trades</p>
+              </div>
             </div>
           </div>
         </section>
