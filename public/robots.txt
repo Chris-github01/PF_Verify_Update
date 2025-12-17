@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /how-it-works
+Allow: /pricing
+Allow: /customers
+Allow: /resources
+Allow: /support
+Disallow: /admin
+Disallow: /dashboard
+
+Sitemap: https://www.verifytrade.co.nz/sitemap.xml
