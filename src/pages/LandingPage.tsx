@@ -10,14 +10,13 @@ interface LandingPageProps {
 export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProps) {
   const [showDemoModal, setShowDemoModal] = useState(false);
 
-  const trustedCompanies = [
-    'Fletcher Construction',
-    'Hawkins',
-    'Mainzeal',
-    'RLB',
-    'WT Partnership',
-    'Holmes Fire',
-    '87+ others'
+  const comingSoonTrades = [
+    'PassiveFire Verify+ • Now Available',
+    'Electrical Verify+ • Q1 2026',
+    'Plumbing Verify+ • Q1 2026',
+    'HVAC Verify+ • Q1 2026',
+    'ActiveFire Verify+ • Q1 2026',
+    'Trade Analysis Suite • Expanding'
   ];
 
   return (
@@ -86,7 +85,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               </p>
 
               <p className="text-sm sm:text-base md:text-lg text-slate-400 mb-8 sm:mb-12 max-w-3xl mx-auto px-4">
-                Used by 200+ Main Contractors & PQS across NZ & Australia to make defensible, risk-free awards
+                Built for Main Contractors & PQS across NZ & Australia who need defensible, risk-free awards
               </p>
 
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 mb-8 sm:mb-12 border border-slate-700/50 mx-2 sm:mx-0">
@@ -351,9 +350,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="relative overflow-hidden py-4 rounded-lg">
               <div className="flex animate-scroll whitespace-nowrap">
-                {[...trustedCompanies, ...trustedCompanies].map((company, idx) => (
+                {[...comingSoonTrades, ...comingSoonTrades].map((trade, idx) => (
                   <span key={idx} className="inline-block px-8 text-sm font-medium text-slate-500">
-                    Used by {company}
+                    {trade}
                   </span>
                 ))}
               </div>
