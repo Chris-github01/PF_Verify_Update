@@ -54,6 +54,9 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     additionalSections
   } = options;
 
+  const totalSystems = suppliers[0]?.totalItems || 0;
+  const supplierCount = suppliers.length;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,18 +115,18 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     }
 
     .logo-icon {
-      width: 48px;
-      height: 48px;
+      width: 52px;
+      height: 52px;
       background: linear-gradient(135deg, ${VERIFYTRADE_ORANGE} 0%, ${VERIFYTRADE_ORANGE_DARK} 100%);
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 6px rgba(249, 115, 22, 0.2);
+      box-shadow: 0 4px 8px rgba(249, 115, 22, 0.25);
     }
 
     .logo-text {
-      font-size: 24px;
+      font-size: 26px;
       font-weight: 700;
       color: #111827;
       letter-spacing: -0.5px;
@@ -153,36 +156,43 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
 
     /* === TYPOGRAPHY === */
     h1 {
-      font-size: 42px;
+      font-size: 46px;
       font-weight: 800;
       color: #111827;
-      letter-spacing: -1px;
+      letter-spacing: -1.2px;
       line-height: 1.1;
       margin-bottom: 12px;
     }
 
     h2 {
-      font-size: 28px;
+      font-size: 30px;
       font-weight: 700;
       color: #111827;
       letter-spacing: -0.5px;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
       padding-bottom: 12px;
       border-bottom: 2px solid #f3f4f6;
     }
 
     h3 {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 600;
       color: #374151;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
+    }
+
+    h4 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #4b5563;
+      margin-bottom: 14px;
     }
 
     .subtitle {
-      font-size: 20px;
+      font-size: 22px;
       color: #6b7280;
       font-weight: 400;
-      margin-bottom: 40px;
+      margin-bottom: 48px;
     }
 
     /* === EXECUTIVE DASHBOARD (Page 1) === */
@@ -423,37 +433,233 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     .methodology-grid {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 16px;
-      margin: 32px 0;
+      gap: 18px;
+      margin: 36px 0;
     }
 
     .methodology-step {
       background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 20px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 24px 16px;
       text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .methodology-step:hover {
+      border-color: ${VERIFYTRADE_ORANGE};
+      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
     }
 
     .step-number {
-      width: 48px;
-      height: 48px;
-      margin: 0 auto 12px;
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 14px;
       border-radius: 50%;
       background: linear-gradient(135deg, ${VERIFYTRADE_ORANGE} 0%, ${VERIFYTRADE_ORANGE_DARK} 100%);
       color: white;
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 700;
       display: flex;
       align-items: center;
       justify-content: center;
+      box-shadow: 0 3px 8px rgba(249, 115, 22, 0.3);
     }
 
     .step-title {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
       color: #374151;
-      line-height: 1.3;
+      line-height: 1.4;
+    }
+
+    /* === INFO BOXES === */
+    .info-box {
+      background: #f9fafb;
+      border-left: 4px solid #d1d5db;
+      border-radius: 0 8px 8px 0;
+      padding: 20px 24px;
+      margin: 24px 0;
+      line-height: 1.8;
+    }
+
+    .info-box.what-happened {
+      border-left-color: #60a5fa;
+      background: #eff6ff;
+    }
+
+    .info-box.what-means {
+      border-left-color: #a78bfa;
+      background: #f5f3ff;
+    }
+
+    .info-box-title {
+      font-weight: 700;
+      font-size: 15px;
+      color: #111827;
+      margin-bottom: 8px;
+    }
+
+    .info-box-content {
+      color: #4b5563;
+      font-size: 14px;
+    }
+
+    /* === CHECKMARK LIST === */
+    .checkmark-list {
+      list-style: none;
+      padding: 0;
+      margin: 24px 0;
+    }
+
+    .checkmark-list li {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      line-height: 1.7;
+    }
+
+    .checkmark-list li:before {
+      content: "✓";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: #10b981;
+      color: white;
+      border-radius: 50%;
+      margin-right: 12px;
+      flex-shrink: 0;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    /* === METRICS BOX === */
+    .metrics-box {
+      background: #f9fafb;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 32px 0;
+    }
+
+    .metrics-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .metric-item {
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 28px;
+      font-weight: 800;
+      color: ${VERIFYTRADE_ORANGE};
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      color: #6b7280;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* === ITEMIZED COMPARISON SECTION === */
+    .itemized-section {
+      background: white;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 28px;
+      margin: 32px 0;
+    }
+
+    .itemized-section h3 {
+      margin-bottom: 12px;
+    }
+
+    .itemized-description {
+      color: #6b7280;
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: 2px solid;
+    }
+
+    .btn-primary {
+      background: ${VERIFYTRADE_ORANGE};
+      color: white;
+      border-color: ${VERIFYTRADE_ORANGE};
+    }
+
+    .btn-primary:hover {
+      background: ${VERIFYTRADE_ORANGE_DARK};
+      border-color: ${VERIFYTRADE_ORANGE_DARK};
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #374151;
+      border-color: #d1d5db;
+    }
+
+    .btn-secondary:hover {
+      background: #f9fafb;
+      border-color: #9ca3af;
+    }
+
+    /* === ACTION TAG === */
+    .action-tag {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .action-tag.approved {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .action-tag.pending {
+      background: #fef3c7;
+      color: #92400e;
     }
 
     /* === CONTENT SECTIONS === */
@@ -545,9 +751,9 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
 </head>
 <body>
   ${generateCoverPage(options)}
-  ${generateSupplierComparison(suppliers)}
-  ${executiveSummary ? generateExecutiveSummaryPage(executiveSummary, suppliers) : ''}
-  ${methodology ? generateMethodologyPage(methodology) : ''}
+  ${methodology ? generateMethodologyPages(methodology) : ''}
+  ${generateRecommendationsPage(options)}
+  ${generateSupplierComparisonPage(options)}
   ${additionalSections ? additionalSections.map(section => generateCustomSection(section)).join('') : ''}
 </body>
 </html>`;
@@ -557,59 +763,40 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
  * Generate Cover Page (Page 1)
  */
 function generateCoverPage(options: ModernPdfOptions): string {
-  const { projectName, clientName, generatedAt, recommendations } = options;
+  const { projectName, clientName, generatedAt, suppliers } = options;
+  const totalSystems = suppliers[0]?.totalItems || 0;
+  const supplierCount = suppliers.length;
 
   return `
   <div class="page cover-page">
-    <header>
-      <div class="logo-section">
-        <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+      <h1 style="text-align: center;">Award Recommendation Report</h1>
+      <div class="subtitle" style="text-align: center;">Project Analysis & Supplier Evaluation</div>
+
+      <div style="text-align: center; color: #6b7280; font-size: 16px; margin: 32px 0; line-height: 1.8;">
+        <strong style="color: #111827;">Project:</strong> ${projectName} &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong style="color: #111827;">Mode:</strong> Model &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong style="color: #111827;">Suppliers:</strong> ${supplierCount} &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong style="color: #111827;">Systems:</strong> ${totalSystems}
+      </div>
+
+      <div style="margin-top: 60px; display: flex; align-items: center; gap: 16px;">
+        <div class="logo-icon" style="width: 72px; height: 72px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
           </svg>
         </div>
-        <div class="logo-text">VerifyTrade</div>
-      </div>
-      <div class="generated-by">
-        Generated by <strong>VerifyTrade</strong><br>
-        ${new Date(generatedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-      </div>
-    </header>
-
-    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
-      <h1>Award Recommendation Report</h1>
-      <div class="subtitle">Project Analysis & Supplier Evaluation</div>
-
-      <div class="project-details-card">
-        <div class="detail-row">
-          <span class="detail-label">Project Name</span>
-          <span class="detail-value">${projectName}</span>
+        <div>
+          <div class="logo-text" style="font-size: 32px;">VerifyTrade</div>
+          <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
+            Generated ${new Date(generatedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
         </div>
-        ${clientName ? `
-        <div class="detail-row">
-          <span class="detail-label">Client</span>
-          <span class="detail-value">${clientName}</span>
-        </div>` : ''}
-        <div class="detail-row">
-          <span class="detail-label">Report Date</span>
-          <span class="detail-value">${new Date(generatedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Suppliers Evaluated</span>
-          <span class="detail-value">${recommendations.length} Suppliers</span>
-        </div>
-      </div>
-
-      <h2 style="margin-top: 48px; border: none; text-align: center; font-size: 22px;">Evaluation Results</h2>
-
-      <div class="recommendations-grid">
-        ${recommendations.map(rec => generateRecommendationCard(rec)).join('')}
       </div>
     </div>
 
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 1</div>
+    <footer style="text-align: right; margin-top: auto;">
+      <div style="color: ${VERIFYTRADE_ORANGE}; font-weight: 600;">Generated by VerifyTrade</div>
     </footer>
   </div>
   `;
@@ -659,9 +846,208 @@ function generateRecommendationCard(rec: RecommendationCard): string {
 }
 
 /**
- * Generate Supplier Comparison Table (Page 2)
+ * Generate Methodology Pages (Pages 2-3)
  */
-function generateSupplierComparison(suppliers: SupplierRow[]): string {
+function generateMethodologyPages(steps: string[]): string {
+  return `
+  <div class="page page-break">
+    <header>
+      <div class="logo-section">
+        <div class="logo-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+        </div>
+        <div class="logo-text">VerifyTrade</div>
+      </div>
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    <h2>Report Overview & Methodology</h2>
+
+    <div class="executive-summary">
+      <strong style="display: block; margin-bottom: 12px; font-size: 16px; color: #111827;">How This Report Works</strong>
+      This comprehensive award recommendation report evaluates supplier quotes through a rigorous five-stage analysis process. Our methodology ensures objective, data-driven supplier selection based on price competitiveness, technical compliance, scope coverage, and risk assessment.
+    </div>
+
+    <h3 style="margin-top: 40px;">Five-Stage Evaluation Process</h3>
+
+    <div class="methodology-grid">
+      ${steps.slice(0, 5).map((step, index) => `
+        <div class="methodology-step">
+          <div class="step-number">${index + 1}</div>
+          <div class="step-title">${step}</div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="margin-top: 48px;">
+      <h4>Stage 1: Quote Import & Validation</h4>
+      <div class="info-box what-happened">
+        <div class="info-box-title">What Happened</div>
+        <div class="info-box-content">
+          All supplier quotes were imported and parsed using advanced extraction algorithms. Each line item was validated for completeness and mathematical accuracy.
+        </div>
+      </div>
+      <div class="info-box what-means">
+        <div class="info-box-title">What This Means</div>
+        <div class="info-box-content">
+          You can trust the data quality. All prices, quantities, and descriptions have been verified and normalized for accurate comparison.
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page 2</div>
+    </footer>
+  </div>
+
+  <div class="page page-break">
+    <header>
+      <div class="logo-section">
+        <div class="logo-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+        </div>
+        <div class="logo-text">VerifyTrade</div>
+      </div>
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    <h2>Scoring & Weighting Criteria</h2>
+
+    <div style="margin-top: 24px;">
+      <h4>Multi-Criteria Decision Analysis (MCDA)</h4>
+      <p style="color: #6b7280; line-height: 1.8; margin-bottom: 28px;">
+        Each supplier is evaluated across four key dimensions with weighted scoring to identify the optimal choice:
+      </p>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card-value">40%</div>
+          <div class="stat-card-label">Price Competitiveness</div>
+          <p style="font-size: 12px; color: #6b7280; margin-top: 12px; line-height: 1.5;">
+            Inverse linear scaling. Lowest price = 10 points.
+          </p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value">25%</div>
+          <div class="stat-card-label">Technical Compliance</div>
+          <p style="font-size: 12px; color: #6b7280; margin-top: 12px; line-height: 1.5;">
+            Based on specification adherence and risk factors.
+          </p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value">20%</div>
+          <div class="stat-card-label">Scope Coverage</div>
+          <p style="font-size: 12px; color: #6b7280; margin-top: 12px; line-height: 1.5;">
+            Percentage of baseline items quoted by supplier.
+          </p>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value">15%</div>
+          <div class="stat-card-label">Risk Assessment</div>
+          <p style="font-size: 12px; color: #6b7280; margin-top: 12px; line-height: 1.5;">
+            Based on missing items and risk flags identified.
+          </p>
+        </div>
+      </div>
+
+      <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 20px 24px; margin-top: 32px;">
+        <strong style="color: #92400e; font-size: 14px;">Weighted Score Formula:</strong>
+        <div style="font-family: monospace; color: #78350f; margin-top: 8px; font-size: 13px; line-height: 1.6;">
+          Score = (Price × 0.40) + (Compliance × 0.25) + (Coverage × 0.20) + (Risk × 0.15)
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page 3</div>
+    </footer>
+  </div>
+  `;
+}
+
+/**
+ * Generate Recommendations Page (Page 4)
+ */
+function generateRecommendationsPage(options: ModernPdfOptions): string {
+  const { recommendations, suppliers } = options;
+  const topSupplier = suppliers[0];
+  const totalSystems = suppliers[0]?.totalItems || 0;
+  const avgCoverage = suppliers.reduce((sum, s) => sum + s.coveragePercent, 0) / suppliers.length;
+
+  return `
+  <div class="page page-break">
+    <header>
+      <div class="logo-section">
+        <div class="logo-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+        </div>
+        <div class="logo-text">VerifyTrade</div>
+      </div>
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    <h2>Award Recommendations</h2>
+
+    <div class="recommendations-grid">
+      ${recommendations.map(rec => generateRecommendationCard(rec)).join('')}
+    </div>
+
+    <div class="metrics-box">
+      <div class="metrics-title">Key Metrics</div>
+      <div class="metrics-grid">
+        <div class="metric-item">
+          <span class="metric-value">${suppliers.length}</span>
+          <span class="metric-label">Quotes Evaluated</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-value">${totalSystems}</span>
+          <span class="metric-label">Systems Compared</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-value">${avgCoverage.toFixed(0)}%</span>
+          <span class="metric-label">Avg Coverage</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 40px;">
+      <h3>Why This Recommendation?</h3>
+      <ul class="checkmark-list">
+        <li><strong>Best Overall Value:</strong> ${topSupplier.supplierName} achieves the highest weighted score (${topSupplier.weightedScore?.toFixed(1) || 'N/A'}/10) across all evaluation criteria.</li>
+        <li><strong>Comprehensive Coverage:</strong> Quotes ${topSupplier.coveragePercent.toFixed(1)}% of required scope (${topSupplier.itemsQuoted}/${topSupplier.totalItems} items), minimizing variation risk.</li>
+        <li><strong>Optimal Balance:</strong> Provides competitive pricing while maintaining strong technical compliance and minimal delivery risk.</li>
+      </ul>
+    </div>
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page 4</div>
+    </footer>
+  </div>
+  `;
+}
+
+/**
+ * Generate Supplier Comparison Page (Page 5)
+ */
+function generateSupplierComparisonPage(options: ModernPdfOptions): string {
+  const { suppliers } = options;
+  const totalItems = suppliers[0]?.totalItems || 0;
+
   return `
   <div class="page page-break">
     <header>
@@ -684,146 +1070,60 @@ function generateSupplierComparison(suppliers: SupplierRow[]): string {
       <table>
         <thead>
           <tr>
-            <th>Rank</th>
-            <th>Supplier Name</th>
-            <th>Adjusted Total</th>
+            <th>Supplier</th>
+            <th>Total Price</th>
+            <th>Systems Covered</th>
+            <th>Coverage %</th>
             <th>Risk Score</th>
-            <th>Coverage</th>
-            <th>Items Quoted</th>
-            ${suppliers[0]?.weightedScore !== undefined ? '<th>Weighted Score</th>' : ''}
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${suppliers.map(supplier => `
-            <tr class="rank-${supplier.rank}">
-              <td>
-                <span class="rank-badge ${supplier.rank === 1 ? 'rank-1-badge' : ''}">${supplier.rank}</span>
-              </td>
+          ${suppliers.map((supplier, index) => `
+            <tr class="${supplier.rank === 1 ? 'rank-1' : ''}">
               <td><strong>${supplier.supplierName}</strong></td>
               <td class="price-cell">$${supplier.adjustedTotal.toLocaleString()}</td>
-              <td>${(10 - supplier.riskScore).toFixed(1)}/10</td>
-              <td>${supplier.coveragePercent.toFixed(1)}%</td>
               <td>${supplier.itemsQuoted} / ${supplier.totalItems}</td>
-              ${supplier.weightedScore !== undefined ? `<td><strong>${supplier.weightedScore.toFixed(2)}</strong></td>` : ''}
+              <td>${supplier.coveragePercent.toFixed(1)}%</td>
+              <td>${(10 - supplier.riskScore).toFixed(1)}/10</td>
+              <td>
+                ${supplier.rank === 1 ? '<span class="action-tag approved">Approved</span>' : '<span class="action-tag pending">Pending</span>'}
+              </td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     </div>
 
-    ${suppliers[0]?.notes?.length ? `
-    <div class="content-section">
-      <h3>Key Notes</h3>
-      <ul style="padding-left: 24px; margin-top: 16px; line-height: 1.8;">
-        ${suppliers.slice(0, 3).map(s =>
-          s.notes && s.notes.length > 0
-            ? `<li><strong>${s.supplierName}:</strong> ${s.notes[0]}</li>`
-            : ''
-        ).filter(Boolean).join('')}
-      </ul>
-    </div>` : ''}
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 2</div>
-    </footer>
-  </div>
-  `;
-}
-
-/**
- * Generate Executive Summary Page
- */
-function generateExecutiveSummaryPage(summary: string, suppliers: SupplierRow[]): string {
-  const topSupplier = suppliers[0];
-
-  return `
-  <div class="page page-break">
-    <header>
-      <div class="logo-section">
-        <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+    <div class="itemized-section">
+      <h3>Itemized Comparison</h3>
+      <p class="itemized-description">
+        ${totalItems} line items available for detailed comparison. Access the full itemized breakdown with side-by-side pricing, quantities, and variance analysis.
+      </p>
+      <div class="button-group">
+        <div class="btn btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
           </svg>
+          View Full Itemized Comparison
         </div>
-        <div class="logo-text">VerifyTrade</div>
-      </div>
-      <div class="generated-by">
-        Generated by <strong>VerifyTrade</strong>
-      </div>
-    </header>
-
-    <h2>Executive Summary</h2>
-
-    <div class="executive-summary">
-      ${summary}
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-card-value">${suppliers.length}</div>
-        <div class="stat-card-label">Suppliers Evaluated</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-value">$${topSupplier.adjustedTotal.toLocaleString()}</div>
-        <div class="stat-card-label">Recommended Price</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-value">${topSupplier.coveragePercent.toFixed(0)}%</div>
-        <div class="stat-card-label">Scope Coverage</div>
-      </div>
-    </div>
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 3</div>
-    </footer>
-  </div>
-  `;
-}
-
-/**
- * Generate Methodology Page
- */
-function generateMethodologyPage(steps: string[]): string {
-  return `
-  <div class="page page-break">
-    <header>
-      <div class="logo-section">
-        <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+        <div class="btn btn-secondary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
+          Export Itemized Excel
         </div>
-        <div class="logo-text">VerifyTrade</div>
       </div>
-      <div class="generated-by">
-        Generated by <strong>VerifyTrade</strong>
-      </div>
-    </header>
-
-    <h2>Evaluation Methodology</h2>
-
-    <div class="methodology-grid">
-      ${steps.slice(0, 5).map((step, index) => `
-        <div class="methodology-step">
-          <div class="step-number">${index + 1}</div>
-          <div class="step-title">${step}</div>
-        </div>
-      `).join('')}
     </div>
-
-    ${steps.length > 5 ? `
-    <div class="content-section">
-      <h3>Additional Steps</h3>
-      <ul style="padding-left: 24px; margin-top: 16px; line-height: 1.8;">
-        ${steps.slice(5).map(step => `<li>${step}</li>`).join('')}
-      </ul>
-    </div>` : ''}
 
     <footer>
       <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 4</div>
+      <div>Page 5</div>
     </footer>
   </div>
   `;
