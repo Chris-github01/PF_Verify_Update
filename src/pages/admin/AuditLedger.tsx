@@ -77,30 +77,30 @@ export default function AuditLedger() {
 
   const getEntityBadgeColor = (entityType: string) => {
     const colors: any = {
-      quote: 'bg-blue-100 text-blue-700',
-      audit: 'bg-emerald-100 text-emerald-700',
-      export: 'bg-amber-100 text-amber-700',
-      org: 'bg-purple-100 text-purple-700',
-      project: 'bg-cyan-100 text-cyan-700',
-      supplier: 'bg-pink-100 text-pink-700',
-      user: 'bg-slate-100 text-slate-700',
+      quote: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
+      audit: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
+      export: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+      org: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
+      project: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30',
+      supplier: 'bg-pink-500/20 text-pink-300 border border-pink-500/30',
+      user: 'bg-slate-500/20 text-slate-300 border border-slate-500/30',
     };
-    return colors[entityType] || 'bg-gray-100 text-gray-700';
+    return colors[entityType] || 'bg-gray-500/20 text-gray-300 border border-gray-500/30';
   };
 
   const getActionBadgeColor = (action: string) => {
     const colors: any = {
-      created: 'bg-emerald-100 text-emerald-700',
-      updated: 'bg-blue-100 text-blue-700',
-      deleted: 'bg-rose-100 text-rose-700',
-      parsed: 'bg-amber-100 text-amber-700',
-      scored: 'bg-purple-100 text-purple-700',
-      exported: 'bg-cyan-100 text-cyan-700',
-      recommended: 'bg-green-100 text-green-700',
-      approved: 'bg-emerald-100 text-emerald-700',
-      rejected: 'bg-rose-100 text-rose-700',
+      created: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
+      updated: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
+      deleted: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
+      parsed: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+      scored: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
+      exported: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30',
+      recommended: 'bg-green-500/20 text-green-300 border border-green-500/30',
+      approved: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
+      rejected: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
     };
-    return colors[action] || 'bg-gray-100 text-gray-700';
+    return colors[action] || 'bg-gray-500/20 text-gray-300 border border-gray-500/30';
   };
 
   const totalPages = Math.ceil(totalEvents / pageSize);
@@ -110,35 +110,35 @@ export default function AuditLedger() {
       <div className="mb-6">
         <button
           onClick={() => (window.location.href = '/admin/dashboard')}
-          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-4"
+          className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-4"
         >
           <ArrowLeft size={16} />
           Back to dashboard
         </button>
-        <h1 className="text-2xl font-bold text-slate-900">Audit Ledger</h1>
-        <p className="text-sm text-slate-600 mt-1">
+        <h1 className="text-2xl font-bold text-white">Audit Ledger</h1>
+        <p className="text-sm text-gray-400 mt-1">
           Immutable event log of all system activities
         </p>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-        <div className="p-6 border-b border-slate-200">
+      <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
+        <div className="p-6 border-b border-slate-700">
           <div className="flex items-center gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
                 placeholder="Search events..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
+                className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
 
             <select
               value={entityTypeFilter}
               onChange={(e) => setEntityTypeFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
+              className="rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">All Entity Types</option>
               <option value="quote">Quote</option>
@@ -153,7 +153,7 @@ export default function AuditLedger() {
             <select
               value={actionFilter}
               onChange={(e) => setActionFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
+              className="rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="">All Actions</option>
               <option value="created">Created</option>
@@ -172,26 +172,26 @@ export default function AuditLedger() {
         <div className="overflow-x-auto">
           {loading ? (
             <div className="p-12 text-center">
-              <div className="inline-block w-8 h-8 border-4 border-slate-200 border-t-[#0A66C2] rounded-full animate-spin" />
-              <p className="text-sm text-slate-600 mt-3">Loading events...</p>
+              <div className="inline-block w-8 h-8 border-4 border-slate-700 border-t-orange-500 rounded-full animate-spin" />
+              <p className="text-sm text-gray-400 mt-3">Loading events...</p>
             </div>
           ) : filteredEvents.length > 0 ? (
             <>
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-slate-800/50 border-b border-slate-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Timestamp</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Entity</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Action</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Actor</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Entity ID</th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Timestamp</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Entity</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Action</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Actor</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Entity ID</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-400 uppercase">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-700/50">
                   {filteredEvents.map((event) => (
-                    <tr key={event.id} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4 text-sm text-slate-600">
+                    <tr key={event.id} className="hover:bg-slate-800/30 transition">
+                      <td className="px-6 py-4 text-sm text-gray-400">
                         {new Date(event.created_at).toLocaleString()}
                       </td>
                       <td className="px-6 py-4">
@@ -204,16 +204,16 @@ export default function AuditLedger() {
                           {event.action}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-700">
+                      <td className="px-6 py-4 text-sm text-white">
                         {event.actor_email}
                       </td>
-                      <td className="px-6 py-4 text-sm font-mono text-slate-500">
+                      <td className="px-6 py-4 text-sm font-mono text-gray-400">
                         {event.entity_id.substring(0, 8)}...
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button
                           onClick={() => setSelectedEvent(event)}
-                          className="inline-flex items-center gap-1 text-sm font-medium text-[#0A66C2] hover:text-[#0952A0]"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-orange-500 hover:text-orange-600"
                         >
                           View
                           <ChevronRight size={14} />
@@ -224,25 +224,25 @@ export default function AuditLedger() {
                 </tbody>
               </table>
 
-              <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-                <p className="text-sm text-slate-600">
+              <div className="px-6 py-4 border-t border-slate-700 flex items-center justify-between">
+                <p className="text-sm text-gray-400">
                   Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalEvents)} of {totalEvents} events
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-600 text-sm font-medium text-white hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Previous
                   </button>
-                  <span className="text-sm text-slate-600">
+                  <span className="text-sm text-gray-400">
                     Page {currentPage} of {totalPages}
                   </span>
                   <button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-600 text-sm font-medium text-white hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next
                   </button>
@@ -251,9 +251,9 @@ export default function AuditLedger() {
             </>
           ) : (
             <div className="p-12 text-center">
-              <Eye size={48} className="mx-auto text-slate-400 mb-4" />
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">No Events Found</h3>
-              <p className="text-sm text-slate-600">
+              <Eye size={48} className="mx-auto text-gray-400 mb-4" />
+              <h3 className="text-lg font-semibold text-white mb-2">No Events Found</h3>
+              <p className="text-sm text-gray-400">
                 Try adjusting your filters or search criteria.
               </p>
             </div>
@@ -263,48 +263,48 @@ export default function AuditLedger() {
 
       {selectedEvent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6" onClick={() => setSelectedEvent(null)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">Event Details</h2>
+          <div className="bg-slate-900 border border-white/20 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-700">
+              <h2 className="text-lg font-semibold text-white">Event Details</h2>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Event ID</label>
-                <p className="text-sm font-mono text-slate-900">{selectedEvent.id}</p>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Event ID</label>
+                <p className="text-sm font-mono text-white">{selectedEvent.id}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Entity Type</label>
-                  <p className="text-sm text-slate-900">{selectedEvent.entity_type}</p>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Entity Type</label>
+                  <p className="text-sm text-white">{selectedEvent.entity_type}</p>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Action</label>
-                  <p className="text-sm text-slate-900">{selectedEvent.action}</p>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Action</label>
+                  <p className="text-sm text-white">{selectedEvent.action}</p>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Entity ID</label>
-                <p className="text-sm font-mono text-slate-900">{selectedEvent.entity_id}</p>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Entity ID</label>
+                <p className="text-sm font-mono text-white">{selectedEvent.entity_id}</p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Actor</label>
-                <p className="text-sm text-slate-900">{selectedEvent.actor_email}</p>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Actor</label>
+                <p className="text-sm text-white">{selectedEvent.actor_email}</p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Timestamp</label>
-                <p className="text-sm text-slate-900">{new Date(selectedEvent.created_at).toLocaleString()}</p>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Timestamp</label>
+                <p className="text-sm text-white">{new Date(selectedEvent.created_at).toLocaleString()}</p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Metadata</label>
-                <pre className="text-xs bg-slate-50 p-3 rounded-lg overflow-auto max-h-48 font-mono text-slate-900">
+                <label className="block text-xs font-medium text-gray-400 mb-1">Metadata</label>
+                <pre className="text-xs bg-slate-800/50 p-3 rounded-lg overflow-auto max-h-48 font-mono text-white">
                   {JSON.stringify(selectedEvent.metadata_json, null, 2)}
                 </pre>
               </div>
             </div>
-            <div className="p-6 border-t border-slate-200 flex justify-end">
+            <div className="p-6 border-t border-slate-700 flex justify-end">
               <button
                 onClick={() => setSelectedEvent(null)}
-                className="px-4 py-2 rounded-lg bg-slate-100 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                className="px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-600 text-sm font-medium text-white hover:bg-slate-700/50"
               >
                 Close
               </button>

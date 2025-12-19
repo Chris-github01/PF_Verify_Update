@@ -255,8 +255,8 @@ export default function CreateOrganisation() {
         <div
           className={`fixed top-4 right-4 z-50 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3 ${
             toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border border-rose-200'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
           }`}
         >
           {toast.type === 'error' && <AlertCircle size={18} />}
@@ -269,16 +269,16 @@ export default function CreateOrganisation() {
 
       <button
         onClick={() => (window.location.href = '/admin/organisations')}
-        className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-6"
+        className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-6"
       >
         <ArrowLeft size={16} />
         Back to organisations
       </button>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)] p-8">
+      <div className="rounded-xl border border-white/20 bg-white/10 backdrop-blur-sm p-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-slate-900 mb-2">Enterprise Organisation Onboarding</h1>
-          <p className="text-sm text-slate-600">
+          <h1 className="text-2xl font-semibold text-white mb-2">Enterprise Organisation Onboarding</h1>
+          <p className="text-sm text-gray-400">
             Complete this form to set up a new organisation with full compliance context and audit readiness.
           </p>
         </div>
@@ -286,13 +286,13 @@ export default function CreateOrganisation() {
         <div className="space-y-8">
           {/* Section 1: Organisation Details */}
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-4 pb-2 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-slate-700">
               1. Organisation Details
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Legal Organisation Name <span className="text-rose-600">*</span>
+                <label className="block text-sm font-medium text-gray-400 mb-1">
+                  Legal Organisation Name <span className="text-rose-400">*</span>
                   <Tooltip text="Official registered business name as it appears on legal documents" />
                 </label>
                 <input
@@ -300,12 +300,12 @@ export default function CreateOrganisation() {
                   placeholder="ABC Fire Protection Ltd"
                   value={legalName}
                   onChange={(e) => setLegalName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                  className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-gray-400 mb-1">
                   Trading Name (if different)
                   <Tooltip text="Public-facing name used for business operations, if different from legal name" />
                 </label>
@@ -314,22 +314,22 @@ export default function CreateOrganisation() {
                   placeholder="ABC Fire (optional)"
                   value={tradingName}
                   onChange={(e) => setTradingName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                  className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-gray-400 mb-1">
                   Organisation Logo
                   <Tooltip text="Your logo will appear in the header of all generated PDF reports. SVG preferred for best quality." />
                 </label>
                 <div className="space-y-2">
                   {!logoPreview ? (
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-[#0A66C2] hover:bg-slate-50 transition-colors">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer hover:border-orange-500 hover:bg-slate-800/30 transition-colors">
                       <div className="flex flex-col items-center justify-center py-4">
-                        <Upload size={24} className="text-slate-400 mb-2" />
-                        <p className="text-xs text-slate-600 font-medium">Click to upload logo</p>
-                        <p className="text-xs text-slate-400 mt-1">SVG or PNG, max 2MB</p>
+                        <Upload size={24} className="text-gray-400 mb-2" />
+                        <p className="text-xs text-gray-400 font-medium">Click to upload logo</p>
+                        <p className="text-xs text-gray-400 mt-1">SVG or PNG, max 2MB</p>
                       </div>
                       <input
                         type="file"
@@ -339,9 +339,9 @@ export default function CreateOrganisation() {
                       />
                     </label>
                   ) : (
-                    <div className="relative border border-slate-300 rounded-lg p-4 bg-slate-50">
+                    <div className="relative border border-slate-600 rounded-lg p-4 bg-slate-800/50">
                       <div className="flex items-center gap-4">
-                        <div className="w-24 h-24 flex items-center justify-center bg-white border border-slate-200 rounded-lg p-2">
+                        <div className="w-24 h-24 flex items-center justify-center bg-slate-900 border border-slate-600 rounded-lg p-2">
                           <img
                             src={logoPreview}
                             alt="Logo preview"
@@ -349,15 +349,15 @@ export default function CreateOrganisation() {
                           />
                         </div>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-700">{logoFile?.name}</p>
-                          <p className="text-xs text-slate-500 mt-1">
+                          <p className="text-sm font-medium text-white">{logoFile?.name}</p>
+                          <p className="text-xs text-gray-400 mt-1">
                             {logoFile && `${(logoFile.size / 1024).toFixed(1)} KB`}
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={handleRemoveLogo}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          className="p-2 text-gray-400 hover:text-rose-400 hover:bg-rose-500/20 rounded-lg transition-colors"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -369,14 +369,14 @@ export default function CreateOrganisation() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Country / Region <span className="text-rose-600">*</span>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Country / Region <span className="text-rose-400">*</span>
                     <Tooltip text="Used to determine applicable standards, compliance requirements, and local regulations" />
                   </label>
                   <select
                     value={countryRegion}
                     onChange={(e) => setCountryRegion(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                    className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   >
                     <option value="New Zealand">New Zealand</option>
                     <option value="Australia">Australia</option>
@@ -389,14 +389,14 @@ export default function CreateOrganisation() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Industry Type <span className="text-rose-600">*</span>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Industry Type <span className="text-rose-400">*</span>
                     <Tooltip text="Primary business role in construction projects" />
                   </label>
                   <select
                     value={industryType}
                     onChange={(e) => setIndustryType(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                    className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   >
                     <option value="Main Contractor">Main Contractor</option>
                     <option value="PQS">PQS (Professional Quantity Surveyor)</option>
@@ -409,14 +409,14 @@ export default function CreateOrganisation() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Primary Trade Focus <span className="text-rose-600">*</span>
+                <label className="block text-sm font-medium text-gray-400 mb-1">
+                  Primary Trade Focus <span className="text-rose-400">*</span>
                   <Tooltip text="Default trade module (extensible for future Verify+ modules)" />
                 </label>
                 <select
                   value={primaryTradeFocus}
                   onChange={(e) => setPrimaryTradeFocus(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                  className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 >
                   <option value="passive_fire">Passive Fire Protection</option>
                   <option value="mechanical">Mechanical (Coming Soon)</option>
@@ -429,7 +429,7 @@ export default function CreateOrganisation() {
 
           {/* Section 2: Commercial & Compliance Context */}
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-4 pb-2 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-slate-700">
               2. Commercial & Compliance Context
             </h2>
             <div className="space-y-4">
@@ -489,7 +489,7 @@ export default function CreateOrganisation() {
 
           {/* Section 3: Primary Owner Details */}
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-4 pb-2 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-slate-700">
               3. Primary Owner Details
             </h2>
             <div className="space-y-4">
@@ -721,22 +721,22 @@ export default function CreateOrganisation() {
 
           {/* Section 5: Governance & Audit Readiness */}
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-4 pb-2 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-slate-700">
               5. Governance & Audit Readiness
             </h2>
-            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+            <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-600">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={complianceAcceptance}
                   onChange={(e) => setComplianceAcceptance(e.target.checked)}
-                  className="mt-1 w-4 h-4 text-[#0A66C2] border-slate-300 rounded focus:ring-[#0A66C2]"
+                  className="mt-1 w-4 h-4 text-orange-500 border-slate-600 rounded focus:ring-orange-500"
                 />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-900">
-                    Compliance Terms Acceptance <span className="text-rose-600">*</span>
+                  <p className="text-sm font-medium text-white">
+                    Compliance Terms Acceptance <span className="text-rose-400">*</span>
                   </p>
-                  <p className="text-xs text-slate-600 mt-1">
+                  <p className="text-xs text-gray-400 mt-1">
                     This organisation understands that Verify+ provides audit intelligence and compliance analysis tools.
                     These tools do not replace professional judgment, engineering sign-off, or formal compliance certification.
                     Final responsibility for compliance decisions remains with qualified professionals within the organisation.
@@ -745,8 +745,8 @@ export default function CreateOrganisation() {
               </label>
             </div>
 
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-xs text-blue-900">
+            <div className="mt-4 p-3 bg-blue-500/20 rounded-lg border border-blue-500/30">
+              <p className="text-xs text-blue-300">
                 <strong>Auto-generated upon creation:</strong> Organisation ID and unique Audit Namespace for blockchain-ready traceability
               </p>
             </div>
@@ -754,10 +754,10 @@ export default function CreateOrganisation() {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-8 flex items-center justify-end gap-3 pt-6 border-t border-slate-200">
+        <div className="mt-8 flex items-center justify-end gap-3 pt-6 border-t border-slate-700">
           <button
             onClick={() => (window.location.href = '/admin/organisations')}
-            className="px-5 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition"
+            className="px-5 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition"
             disabled={creating}
           >
             Cancel
@@ -765,7 +765,7 @@ export default function CreateOrganisation() {
           <button
             onClick={handleCreate}
             disabled={creating || !legalName || !ownerFullName || !ownerEmail || !complianceAcceptance}
-            className="px-5 py-2.5 rounded-lg bg-[#0A66C2] text-sm font-semibold text-white hover:bg-[#0952A0] disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
+            className="px-5 py-2.5 rounded-lg bg-orange-500 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {creating ? 'Creating Organisation...' : 'Create Organisation'}
           </button>

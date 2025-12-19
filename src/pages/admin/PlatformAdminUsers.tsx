@@ -144,7 +144,7 @@ export default function PlatformAdminUsers() {
   if (loading) {
     return (
       <div className="px-6 py-6 max-w-7xl mx-auto">
-        <div className="text-center py-12 text-slate-500">Loading...</div>
+        <div className="text-center py-12 text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -155,13 +155,13 @@ export default function PlatformAdminUsers() {
         <div
           className={`fixed top-4 right-4 z-50 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3 ${
             toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border border-rose-200'
+              ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+              : 'bg-rose-500/10 text-rose-300 border border-rose-500/30'
           }`}
         >
           {toast.type === 'error' && <AlertCircle size={18} />}
           <span className="text-sm font-medium">{toast.message}</span>
-          <button onClick={() => setToast(null)} className="ml-2">
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-300 hover:text-slate-100">
             <XIcon size={16} />
           </button>
         </div>
@@ -169,59 +169,59 @@ export default function PlatformAdminUsers() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Platform Administrators</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-white">Platform Administrators</h1>
+          <p className="mt-1 text-sm text-gray-400">
             Manage users with platform admin access and permissions
           </p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition"
         >
           <UserPlus size={18} />
           Add admin
         </button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)]">
+      <div className="rounded-xl border border-white/20 bg-white/10 backdrop-blur-sm shadow-lg">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-slate-100">
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-700">
+                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-400">
                   Administrator
                 </th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-400">
                   Status
                 </th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-400">
                   Added
                 </th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-400">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-700/50">
               {admins.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-400">
                     No platform administrators found
                   </td>
                 </tr>
               ) : (
                 admins.map((admin) => (
-                  <tr key={admin.user_id} className="hover:bg-slate-50 transition">
+                  <tr key={admin.user_id} className="hover:bg-slate-800/30 transition">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <Shield className="text-blue-600" size={18} />
+                        <div className="w-10 h-10 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center">
+                          <Shield className="text-orange-400" size={18} />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-slate-900">
+                          <div className="text-sm font-medium text-white">
                             {admin.full_name}
                           </div>
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-gray-400">
                             {admin.email}
                           </div>
                         </div>
@@ -231,8 +231,8 @@ export default function PlatformAdminUsers() {
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
                           admin.is_active
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-slate-50 text-slate-700 border border-slate-200'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
                         }`}
                       >
                         {admin.is_active ? (
@@ -245,7 +245,7 @@ export default function PlatformAdminUsers() {
                         )}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
+                    <td className="px-6 py-4 text-sm text-gray-300">
                       {formatDate(admin.created_at)}
                     </td>
                     <td className="px-6 py-4">
@@ -254,16 +254,16 @@ export default function PlatformAdminUsers() {
                           onClick={() => handleToggleActive(admin.user_id, admin.is_active)}
                           className={`text-sm font-medium ${
                             admin.is_active
-                              ? 'text-slate-600 hover:text-slate-800'
-                              : 'text-emerald-600 hover:text-emerald-800'
+                              ? 'text-gray-400 hover:text-gray-200'
+                              : 'text-emerald-400 hover:text-emerald-300'
                           } transition`}
                         >
                           {admin.is_active ? 'Deactivate' : 'Activate'}
                         </button>
-                        <span className="text-slate-300">|</span>
+                        <span className="text-slate-600">|</span>
                         <button
                           onClick={() => handleRemoveAdmin(admin.user_id, admin.email)}
-                          className="text-sm font-medium text-rose-600 hover:text-rose-800 transition"
+                          className="text-sm font-medium text-rose-400 hover:text-rose-300 transition"
                         >
                           Remove
                         </button>
@@ -278,45 +278,45 @@ export default function PlatformAdminUsers() {
       </div>
 
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-lg w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Add Platform Administrator</h3>
+              <h3 className="text-lg font-semibold text-white">Add Platform Administrator</h3>
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   setEmailInput('');
                 }}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-gray-400 hover:text-gray-200 transition"
               >
                 <XIcon size={20} />
               </button>
             </div>
 
-            <p className="text-sm text-slate-600 mb-4">
+            <p className="text-sm text-gray-400 mb-4">
               Enter the email address of a user to grant platform administrator access. They will be able to manage organisations and view all data.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  User email address <span className="text-rose-600">*</span>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  User email address <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="email"
                   placeholder="user@example.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   autoFocus
                 />
-                <p className="mt-1.5 text-xs text-slate-500">
+                <p className="mt-1.5 text-xs text-gray-400">
                   The user must already have an account in the system
                 </p>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <p className="text-xs text-amber-800">
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                <p className="text-xs text-amber-300">
                   <strong>Warning:</strong> Platform administrators have full access to all organisations, members, and data. Only grant this permission to trusted users.
                 </p>
               </div>
@@ -328,7 +328,7 @@ export default function PlatformAdminUsers() {
                   setShowAddModal(false);
                   setEmailInput('');
                 }}
-                className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition"
                 disabled={adding}
               >
                 Cancel
@@ -336,7 +336,7 @@ export default function PlatformAdminUsers() {
               <button
                 onClick={handleAddAdmin}
                 disabled={adding || !emailInput.trim()}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-4 py-2 rounded-lg bg-orange-500 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
                 {adding ? 'Adding...' : 'Add administrator'}
               </button>

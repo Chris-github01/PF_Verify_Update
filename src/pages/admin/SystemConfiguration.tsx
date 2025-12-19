@@ -184,7 +184,7 @@ export default function SystemConfiguration() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
+        <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
       </div>
     );
   }
@@ -201,8 +201,8 @@ export default function SystemConfiguration() {
         <div
           className={`mb-6 p-4 rounded-lg flex items-start gap-3 ${
             message.type === 'success'
-              ? 'bg-green-50 text-green-800 border border-green-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
+              ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+              : 'bg-red-500/20 text-red-300 border border-red-500/30'
           }`}
         >
           {message.type === 'success' ? (
@@ -214,15 +214,15 @@ export default function SystemConfiguration() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-200 bg-gray-50">
-          <h2 className="text-lg font-semibold text-gray-900">API Keys</h2>
-          <p className="text-sm text-gray-600 mt-1">
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 overflow-hidden">
+        <div className="p-6 border-b border-slate-700 bg-slate-800/50">
+          <h2 className="text-lg font-semibold text-white">API Keys</h2>
+          <p className="text-sm text-gray-400 mt-1">
             Configure external service API keys. Required keys must be set for core functionality.
           </p>
         </div>
 
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-slate-700/50">
           {configs.map(config => {
             const status = getConfigStatus(config);
             const isVisible = visibleKeys.has(config.key);
@@ -232,20 +232,20 @@ export default function SystemConfiguration() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-gray-900">{config.key}</h3>
+                      <h3 className="font-medium text-white">{config.key}</h3>
                       {config.required && (
-                        <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                        <span className="text-xs bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded">
                           Required
                         </span>
                       )}
                       {status === 'ok' && (
-                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <CheckCircle className="w-4 h-4 text-green-400" />
                       )}
                       {status === 'missing' && (
-                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                        <AlertTriangle className="w-4 h-4 text-red-400" />
                       )}
                     </div>
-                    <p className="text-sm text-gray-600">{config.description}</p>
+                    <p className="text-sm text-gray-400">{config.description}</p>
                   </div>
                 </div>
 
@@ -255,23 +255,23 @@ export default function SystemConfiguration() {
                     value={config.value}
                     onChange={(e) => handleValueChange(config.key, e.target.value)}
                     placeholder={`Enter ${config.key}`}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   />
                   <button
                     onClick={() => toggleVisibility(config.key)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg hover:bg-slate-700/50 transition-colors"
                     title={isVisible ? 'Hide' : 'Show'}
                   >
                     {isVisible ? (
-                      <EyeOff className="w-5 h-5 text-gray-600" />
+                      <EyeOff className="w-5 h-5 text-gray-400" />
                     ) : (
-                      <Eye className="w-5 h-5 text-gray-600" />
+                      <Eye className="w-5 h-5 text-gray-400" />
                     )}
                   </button>
                 </div>
 
                 {status === 'missing' && (
-                  <p className="mt-2 text-sm text-red-600">
+                  <p className="mt-2 text-sm text-red-300">
                     This required API key is not configured. Some features may not work.
                   </p>
                 )}
@@ -280,8 +280,8 @@ export default function SystemConfiguration() {
           })}
         </div>
 
-        <div className="p-6 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
-          <div className="text-sm text-gray-600">
+        <div className="p-6 bg-slate-800/50 border-t border-slate-700 flex justify-between items-center">
+          <div className="text-sm text-gray-400">
             {configs.filter(c => getConfigStatus(c) === 'ok').length} of{' '}
             {configs.filter(c => c.required).length} required keys configured
           </div>
@@ -289,7 +289,7 @@ export default function SystemConfiguration() {
             <button
               onClick={handleTestConnection}
               disabled={testing}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700/50 border border-slate-600 text-white rounded-lg hover:bg-slate-600/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {testing ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -301,7 +301,7 @@ export default function SystemConfiguration() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -317,20 +317,20 @@ export default function SystemConfiguration() {
       {testResult && (
         <div className={`mt-6 p-6 rounded-lg border ${
           testResult.ok
-            ? 'bg-green-50 border-green-200'
-            : 'bg-yellow-50 border-yellow-200'
+            ? 'bg-green-500/20 border-green-500/30'
+            : 'bg-yellow-500/20 border-yellow-500/30'
         }`}>
           <div className="flex items-start gap-3 mb-4">
             {testResult.ok ? (
-              <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
+              <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0" />
             ) : (
-              <AlertTriangle className="w-6 h-6 text-yellow-600 flex-shrink-0" />
+              <AlertTriangle className="w-6 h-6 text-yellow-400 flex-shrink-0" />
             )}
             <div>
-              <h3 className={`font-semibold ${testResult.ok ? 'text-green-900' : 'text-yellow-900'}`}>
+              <h3 className={`font-semibold ${testResult.ok ? 'text-green-300' : 'text-yellow-300'}`}>
                 {testResult.ok ? 'Connection Test Passed' : 'Configuration Issue Detected'}
               </h3>
-              <p className={`text-sm mt-1 ${testResult.ok ? 'text-green-800' : 'text-yellow-800'}`}>
+              <p className={`text-sm mt-1 ${testResult.ok ? 'text-green-300' : 'text-yellow-300'}`}>
                 {testResult.message}
               </p>
             </div>
@@ -338,21 +338,21 @@ export default function SystemConfiguration() {
 
           {testResult.ok && (
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="bg-white p-3 rounded border border-green-200">
-                <div className="text-gray-600 mb-1">Models Available</div>
-                <div className="font-semibold text-green-900">{testResult.modelCount || 'N/A'}</div>
+              <div className="bg-slate-800/50 p-3 rounded border border-green-500/30">
+                <div className="text-gray-400 mb-1">Models Available</div>
+                <div className="font-semibold text-green-300">{testResult.modelCount || 'N/A'}</div>
               </div>
-              <div className="bg-white p-3 rounded border border-green-200">
-                <div className="text-gray-600 mb-1">GPT-4 Available</div>
-                <div className="font-semibold text-green-900">{testResult.gpt4Available ? 'Yes' : 'No'}</div>
+              <div className="bg-slate-800/50 p-3 rounded border border-green-500/30">
+                <div className="text-gray-400 mb-1">GPT-4 Available</div>
+                <div className="font-semibold text-green-300">{testResult.gpt4Available ? 'Yes' : 'No'}</div>
               </div>
             </div>
           )}
 
           {!testResult.configured && testResult.instructions && (
-            <div className="mt-4 p-4 bg-white rounded border border-yellow-300">
-              <h4 className="font-medium text-yellow-900 mb-2">Setup Instructions</h4>
-              <ol className="text-sm text-yellow-800 space-y-1 list-decimal list-inside">
+            <div className="mt-4 p-4 bg-slate-800/50 rounded border border-yellow-500/30">
+              <h4 className="font-medium text-yellow-300 mb-2">Setup Instructions</h4>
+              <ol className="text-sm text-yellow-300 space-y-1 list-decimal list-inside">
                 {testResult.instructions.map((instruction: string, i: number) => (
                   <li key={i}>{instruction}</li>
                 ))}
@@ -362,9 +362,9 @@ export default function SystemConfiguration() {
         </div>
       )}
 
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h3 className="font-medium text-blue-900 mb-2">Important Notes</h3>
-        <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+      <div className="mt-6 p-4 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+        <h3 className="font-medium text-blue-300 mb-2">Important Notes</h3>
+        <ul className="text-sm text-blue-300 space-y-1 list-disc list-inside">
           <li>API keys are stored securely in the database</li>
           <li>OPENAI_API_KEY is required for LLM-based quote parsing</li>
           <li>Use the Test LLM Parser button to verify your configuration</li>

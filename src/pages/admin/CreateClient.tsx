@@ -102,50 +102,50 @@ export default function CreateClient() {
           subtitle="The new client organisation is ready"
         />
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto">
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-8 max-w-2xl mx-auto">
           <div className="text-center">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle size={32} className="text-green-600" />
+            <div className="mx-auto w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle size={32} className="text-green-400" />
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <h2 className="text-2xl font-bold text-white mb-2">
               {formData.name} Created!
             </h2>
 
-            <p className="text-gray-600 mb-6">{success.message}</p>
+            <p className="text-gray-400 mb-6">{success.message}</p>
 
-            <div className="bg-gray-50 rounded-lg p-4 text-left space-y-2 mb-6">
+            <div className="bg-slate-800/50 rounded-lg p-4 text-left space-y-2 mb-6">
               <div className="flex justify-between">
-                <span className="text-gray-600">Organisation ID:</span>
-                <span className="font-mono text-sm text-gray-900">{success.organisationId}</span>
+                <span className="text-gray-400">Organisation ID:</span>
+                <span className="font-mono text-sm text-white">{success.organisationId}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Owner Email:</span>
-                <span className="font-medium text-gray-900">{formData.ownerEmail}</span>
+                <span className="text-gray-400">Owner Email:</span>
+                <span className="font-medium text-white">{formData.ownerEmail}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Licensed Trades:</span>
+                <span className="text-gray-400">Licensed Trades:</span>
                 <div className="flex flex-wrap gap-1 justify-end">
                   {formData.selectedTrades.map(trade => (
-                    <span key={trade} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                    <span key={trade} className="px-2 py-1 bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-medium rounded">
                       {TRADE_LABELS[trade]?.replace(' Verify+', '')}
                     </span>
                   ))}
                 </div>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Monthly Revenue:</span>
-                <span className="text-lg font-bold text-green-600">${monthlyRevenue.toFixed(0)}</span>
+                <span className="text-gray-400">Monthly Revenue:</span>
+                <span className="text-lg font-bold text-green-400">${monthlyRevenue.toFixed(0)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Trial Length:</span>
-                <span className="font-medium text-gray-900">{formData.trialDays} days</span>
+                <span className="text-gray-400">Trial Length:</span>
+                <span className="font-medium text-white">{formData.trialDays} days</span>
               </div>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left mb-6">
-              <h3 className="font-semibold text-blue-900 mb-2">Next Steps:</h3>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
+            <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4 text-left mb-6">
+              <h3 className="font-semibold text-blue-300 mb-2">Next Steps:</h3>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-blue-300">
                 <li>Owner must sign up at the app using: <strong>{formData.ownerEmail}</strong></li>
                 <li>They'll be automatically added to this organisation</li>
                 <li>During trial: All {formData.selectedTrades.length} trades are accessible</li>
@@ -156,7 +156,7 @@ export default function CreateClient() {
             <div className="flex gap-3">
               <button
                 onClick={() => window.location.href = '/admin/dashboard'}
-                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-md hover:bg-orange-600 font-medium"
               >
                 Back to Dashboard
               </button>
@@ -170,7 +170,7 @@ export default function CreateClient() {
                     ownerEmail: ''
                   });
                 }}
-                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
+                className="flex-1 px-6 py-3 bg-slate-800/50 border border-slate-600 text-white rounded-md hover:bg-slate-700/50 font-medium"
               >
                 Create Another Client
               </button>
@@ -186,7 +186,7 @@ export default function CreateClient() {
       <div className="flex items-center gap-4">
         <button
           onClick={() => window.location.href = '/admin/dashboard'}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          className="p-2 text-gray-400 hover:bg-slate-800/50 rounded transition-colors"
         >
           <ArrowLeft size={20} />
         </button>
@@ -197,15 +197,15 @@ export default function CreateClient() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4">
+        <div className="bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg p-4">
           {error}
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-w-3xl">
+      <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-6 max-w-3xl">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-400 mb-2">
               Company Name *
             </label>
             <input
@@ -214,13 +214,13 @@ export default function CreateClient() {
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Acme Fire Protection Ltd"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Licensed Trades * <span className="text-gray-500 font-normal">(select all that apply)</span>
+            <label className="block text-sm font-medium text-gray-400 mb-3">
+              Licensed Trades * <span className="text-gray-400 font-normal">(select all that apply)</span>
             </label>
             <div className="grid grid-cols-2 gap-3">
               {ALL_TRADES.map(trade => {
@@ -233,8 +233,8 @@ export default function CreateClient() {
                     disabled={isSelected && formData.selectedTrades.length === 1}
                     className={`p-4 border-2 rounded-lg text-left transition-all ${
                       isSelected
-                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                        : 'border-gray-200 hover:border-blue-300'
+                        ? 'border-orange-500 bg-orange-500/20 ring-2 ring-orange-500/30'
+                        : 'border-slate-600 hover:border-orange-500/50'
                     } ${isSelected && formData.selectedTrades.length === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center gap-3 mb-2">
@@ -244,55 +244,55 @@ export default function CreateClient() {
                         trade.color === 'blue' ? 'bg-blue-500' :
                         'bg-green-500'
                       }`}></div>
-                      <div className="font-medium text-gray-900">{trade.label}</div>
+                      <div className="font-medium text-white">{trade.label}</div>
                       {isSelected && (
-                        <CheckCircle size={16} className="ml-auto text-blue-600" />
+                        <CheckCircle size={16} className="ml-auto text-orange-400" />
                       )}
                     </div>
-                    <div className="text-sm text-gray-600">${trade.price}/month</div>
+                    <div className="text-sm text-gray-400">${trade.price}/month</div>
                   </button>
                 );
               })}
             </div>
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-gray-400">
               Client can access all selected trades during trial. After trial, they pay for what they keep.
             </p>
           </div>
 
-          <div className="bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-lg p-5">
+          <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-5">
             <div className="flex items-center gap-3 mb-3">
-              <DollarSign className="text-green-600" size={24} />
-              <h3 className="font-bold text-green-900">Revenue Calculator</h3>
+              <DollarSign className="text-green-400" size={24} />
+              <h3 className="font-bold text-green-300">Revenue Calculator</h3>
             </div>
 
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-green-800">Base Price ({formData.selectedTrades.length} trades):</span>
-                <span className="font-medium text-green-900">${fullPrice}/month</span>
+                <span className="text-green-300">Base Price ({formData.selectedTrades.length} trades):</span>
+                <span className="font-medium text-green-300">${fullPrice}/month</span>
               </div>
 
               {formData.selectedTrades.length >= 2 && (
                 <>
                   <div className="flex justify-between text-sm">
-                    <span className="text-green-800">
+                    <span className="text-green-300">
                       Bundle Discount (
                       {formData.selectedTrades.length === 2 && '15%'}
                       {formData.selectedTrades.length === 3 && '25%'}
                       {formData.selectedTrades.length >= 4 && '35%'}
                       ):
                     </span>
-                    <span className="font-medium text-green-600">-${savings.toFixed(0)}</span>
+                    <span className="font-medium text-green-400">-${savings.toFixed(0)}</span>
                   </div>
-                  <div className="h-px bg-green-300 my-2"></div>
+                  <div className="h-px bg-green-500/30 my-2"></div>
                 </>
               )}
 
               <div className="flex justify-between">
-                <span className="font-bold text-green-900">Monthly Revenue:</span>
-                <span className="text-2xl font-bold text-green-900">${monthlyRevenue.toFixed(0)}</span>
+                <span className="font-bold text-green-300">Monthly Revenue:</span>
+                <span className="text-2xl font-bold text-green-300">${monthlyRevenue.toFixed(0)}</span>
               </div>
 
-              <div className="text-xs text-green-700 mt-2">
+              <div className="text-xs text-green-300 mt-2">
                 {formData.selectedTrades.length === 1 && 'Select another trade for 15% bundle discount'}
                 {formData.selectedTrades.length === 2 && 'Select one more trade for 25% bundle discount (10% more savings)'}
                 {formData.selectedTrades.length === 3 && 'Select all trades for 35% bundle discount'}
@@ -302,7 +302,7 @@ export default function CreateClient() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-400 mb-2">
               Trial Length *
             </label>
             <div className="grid grid-cols-4 gap-2">
@@ -313,8 +313,8 @@ export default function CreateClient() {
                   onClick={() => setFormData({ ...formData, trialDays: days })}
                   className={`px-4 py-2 rounded-md font-medium transition-colors ${
                     formData.trialDays === days
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-slate-800/50 border border-slate-600 text-white hover:bg-slate-700/50'
                   }`}
                 >
                   {days} days
@@ -324,7 +324,7 @@ export default function CreateClient() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-400 mb-2">
               Owner Email *
             </label>
             <input
@@ -333,16 +333,16 @@ export default function CreateClient() {
               value={formData.ownerEmail}
               onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })}
               placeholder="owner@company.com"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-400">
               They'll need to sign up with this email to access the organisation
             </p>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-900 mb-2">What happens next:</h3>
-            <ul className="list-disc list-inside space-y-1 text-sm text-blue-800">
+          <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-4">
+            <h3 className="font-semibold text-blue-300 mb-2">What happens next:</h3>
+            <ul className="list-disc list-inside space-y-1 text-sm text-blue-300">
               <li>Organisation created with {formData.selectedTrades.length} licensed trade{formData.selectedTrades.length > 1 ? 's' : ''}</li>
               <li>Default project set up for primary trade</li>
               <li>Owner can sign up and access all {formData.selectedTrades.length} trades during trial</li>
@@ -354,14 +354,14 @@ export default function CreateClient() {
             <button
               type="button"
               onClick={() => window.location.href = '/admin/dashboard'}
-              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
+              className="flex-1 px-6 py-3 bg-slate-800/50 border border-slate-600 text-white rounded-md hover:bg-slate-700/50 font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={creating}
-              className="flex-1 px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex-1 px-6 py-3 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium disabled:bg-slate-700 disabled:cursor-not-allowed"
             >
               {creating ? 'Creating...' : `Create Client ($${monthlyRevenue.toFixed(0)}/mo)`}
             </button>

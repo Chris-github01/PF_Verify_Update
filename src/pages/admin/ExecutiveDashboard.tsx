@@ -23,21 +23,21 @@ function KPICard({ title, value, subtitle, icon, trend, color = 'blue' }: KPICar
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+    <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
       <div className="flex items-start justify-between mb-3">
         <div className={`p-3 rounded-lg ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue}`}>
           {icon}
         </div>
         {trend && (
-          <div className={`flex items-center gap-1 text-sm font-medium ${trend.direction === 'up' ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <div className={`flex items-center gap-1 text-sm font-medium ${trend.direction === 'up' ? 'text-emerald-400' : 'text-rose-400'}`}>
             {trend.direction === 'up' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
             {trend.value}
           </div>
         )}
       </div>
-      <h3 className="text-sm font-medium text-slate-600 mb-1">{title}</h3>
-      <p className="text-3xl font-bold text-slate-900 mb-1">{value}</p>
-      {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
+      <h3 className="text-sm font-medium text-gray-400 mb-1">{title}</h3>
+      <p className="text-3xl font-bold text-white mb-1">{value}</p>
+      {subtitle && <p className="text-sm text-gray-400">{subtitle}</p>}
     </div>
   );
 }
@@ -47,10 +47,10 @@ function LoadingSkeleton() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-white rounded-xl border border-slate-200 p-6 animate-pulse">
-            <div className="w-12 h-12 bg-slate-200 rounded-lg mb-3" />
-            <div className="h-4 bg-slate-200 rounded w-2/3 mb-2" />
-            <div className="h-8 bg-slate-200 rounded w-1/2" />
+          <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6 animate-pulse">
+            <div className="w-12 h-12 bg-slate-700/50 rounded-lg mb-3" />
+            <div className="h-4 bg-slate-700/50 rounded w-2/3 mb-2" />
+            <div className="h-8 bg-slate-700/50 rounded w-1/2" />
           </div>
         ))}
       </div>
@@ -167,14 +167,14 @@ export default function ExecutiveDashboard() {
           <div className="flex items-center gap-3 mb-2">
             <button
               onClick={() => (window.location.href = '/admin')}
-              className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white"
             >
               <ArrowLeft size={16} />
               Back to admin
             </button>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Executive Dashboard</h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <h1 className="text-2xl font-bold text-white">Executive Dashboard</h1>
+          <p className="text-sm text-gray-400 mt-1">
             Comprehensive audit and reporting intelligence
             {lastUpdated && ` • Last updated: ${lastUpdated}`}
           </p>
@@ -183,7 +183,7 @@ export default function ExecutiveDashboard() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-600 text-sm font-medium text-white hover:bg-slate-700/50 transition"
           >
             <Filter size={16} />
             Filters
@@ -191,7 +191,7 @@ export default function ExecutiveDashboard() {
           <button
             onClick={handleGenerateReport}
             disabled={!kpis || loading}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0A66C2] text-white text-sm font-semibold hover:bg-[#0952A0] transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download size={16} />
             Generate Monthly Report
@@ -200,11 +200,11 @@ export default function ExecutiveDashboard() {
       </div>
 
       {showFilters && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-          <h3 className="text-sm font-semibold text-slate-900 mb-4">Filters</h3>
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6 mb-6">
+          <h3 className="text-sm font-semibold text-white mb-4">Filters</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">
                 Organisation
               </label>
               <select
@@ -213,7 +213,7 @@ export default function ExecutiveDashboard() {
                   setSelectedOrg(e.target.value);
                   setSelectedProject('');
                 }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
+                className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="">All Organisations</option>
                 {organisations.map(org => (
@@ -223,13 +223,13 @@ export default function ExecutiveDashboard() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">
                 Project
               </label>
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
+                className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 disabled={!selectedOrg}
               >
                 <option value="">All Projects</option>
@@ -240,13 +240,13 @@ export default function ExecutiveDashboard() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">
                 Module
               </label>
               <select
                 value={selectedModule}
                 onChange={(e) => setSelectedModule(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
+                className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="">All Modules</option>
                 <option value="passivefire">Passive Fire</option>
@@ -256,7 +256,7 @@ export default function ExecutiveDashboard() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">
                 Date Range
               </label>
               <div className="flex gap-2">
@@ -264,13 +264,13 @@ export default function ExecutiveDashboard() {
                   type="date"
                   value={dateRange.start}
                   onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
+                  className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
                 <input
                   type="date"
                   value={dateRange.end}
                   onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
+                  className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
             </div>
@@ -319,152 +319,152 @@ export default function ExecutiveDashboard() {
 
           {/* Time & Cost Savings */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 rounded-lg bg-emerald-50 text-emerald-600">
+                <div className="p-3 rounded-lg bg-emerald-500/20 text-emerald-400">
                   <Clock size={24} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-slate-600">Time Savings</h3>
-                  <p className="text-2xl font-bold text-slate-900">
+                  <h3 className="text-sm font-medium text-gray-400">Time Savings</h3>
+                  <p className="text-2xl font-bold text-white">
                     {formatNumber(Math.round(kpis.timeSavings.hoursSaved))} hours
                   </p>
                 </div>
               </div>
-              <p className="text-sm text-slate-600">
-                Labour value: <span className="font-semibold text-emerald-600">{formatCurrency(kpis.timeSavings.labourSavingsNZD)}</span>
+              <p className="text-sm text-gray-400">
+                Labour value: <span className="font-semibold text-emerald-400">{formatCurrency(kpis.timeSavings.labourSavingsNZD)}</span>
               </p>
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-gray-400 mt-2">
                 Based on configurable manual review time estimates
               </p>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 rounded-lg bg-blue-50 text-blue-600">
+                <div className="p-3 rounded-lg bg-blue-500/20 text-blue-400">
                   <DollarSign size={24} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-slate-600">Estimated Cost Avoided</h3>
-                  <p className="text-2xl font-bold text-slate-900">
+                  <h3 className="text-sm font-medium text-gray-400">Estimated Cost Avoided</h3>
+                  <p className="text-2xl font-bold text-white">
                     {formatCurrency(kpis.costSavings.expected)}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-4 text-sm">
                 <div>
-                  <span className="text-slate-600">Conservative:</span>
-                  <span className="ml-2 font-semibold text-slate-900">{formatCurrency(kpis.costSavings.conservative)}</span>
+                  <span className="text-gray-400">Conservative:</span>
+                  <span className="ml-2 font-semibold text-white">{formatCurrency(kpis.costSavings.conservative)}</span>
                 </div>
                 <div>
-                  <span className="text-slate-600">Aggressive:</span>
-                  <span className="ml-2 font-semibold text-slate-900">{formatCurrency(kpis.costSavings.aggressive)}</span>
+                  <span className="text-gray-400">Aggressive:</span>
+                  <span className="ml-2 font-semibold text-white">{formatCurrency(kpis.costSavings.aggressive)}</span>
                 </div>
               </div>
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-gray-400 mt-2">
                 Risk avoidance based on completed audits
               </p>
             </div>
           </div>
 
           {/* Risk Distribution */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Risk Score Distribution</h3>
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Risk Score Distribution</h3>
             {kpis.totalAuditsCompleted > 0 ? (
               <div className="grid grid-cols-4 gap-4">
                 <div className="text-center">
-                  <div className="w-full h-32 bg-emerald-100 rounded-lg flex items-end justify-center pb-2 mb-2">
+                  <div className="w-full h-32 bg-emerald-500/20 rounded-lg flex items-end justify-center pb-2 mb-2">
                     <div
                       className="w-16 bg-emerald-500 rounded-t transition-all"
                       style={{ height: `${Math.max((kpis.riskDistribution.low / kpis.totalAuditsCompleted) * 100, 5)}%` }}
                     />
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.low}</p>
-                  <p className="text-sm text-slate-600">Low Risk (&lt;40)</p>
+                  <p className="text-2xl font-bold text-white">{kpis.riskDistribution.low}</p>
+                  <p className="text-sm text-gray-400">Low Risk (&lt;40)</p>
                 </div>
 
                 <div className="text-center">
-                  <div className="w-full h-32 bg-amber-100 rounded-lg flex items-end justify-center pb-2 mb-2">
+                  <div className="w-full h-32 bg-amber-500/20 rounded-lg flex items-end justify-center pb-2 mb-2">
                     <div
                       className="w-16 bg-amber-500 rounded-t transition-all"
                       style={{ height: `${Math.max((kpis.riskDistribution.medium / kpis.totalAuditsCompleted) * 100, 5)}%` }}
                     />
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.medium}</p>
-                  <p className="text-sm text-slate-600">Medium (40-70)</p>
+                  <p className="text-2xl font-bold text-white">{kpis.riskDistribution.medium}</p>
+                  <p className="text-sm text-gray-400">Medium (40-70)</p>
                 </div>
 
                 <div className="text-center">
-                  <div className="w-full h-32 bg-orange-100 rounded-lg flex items-end justify-center pb-2 mb-2">
+                  <div className="w-full h-32 bg-orange-500/20 rounded-lg flex items-end justify-center pb-2 mb-2">
                     <div
                       className="w-16 bg-orange-500 rounded-t transition-all"
                       style={{ height: `${Math.max((kpis.riskDistribution.high / kpis.totalAuditsCompleted) * 100, 5)}%` }}
                     />
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.high}</p>
-                  <p className="text-sm text-slate-600">High (70-90)</p>
+                  <p className="text-2xl font-bold text-white">{kpis.riskDistribution.high}</p>
+                  <p className="text-sm text-gray-400">High (70-90)</p>
                 </div>
 
                 <div className="text-center">
-                  <div className="w-full h-32 bg-rose-100 rounded-lg flex items-end justify-center pb-2 mb-2">
+                  <div className="w-full h-32 bg-rose-500/20 rounded-lg flex items-end justify-center pb-2 mb-2">
                     <div
                       className="w-16 bg-rose-500 rounded-t transition-all"
                       style={{ height: `${Math.max((kpis.riskDistribution.critical / kpis.totalAuditsCompleted) * 100, 5)}%` }}
                     />
                   </div>
-                  <p className="text-2xl font-bold text-slate-900">{kpis.riskDistribution.critical}</p>
-                  <p className="text-sm text-slate-600">Critical (≥90)</p>
+                  <p className="text-2xl font-bold text-white">{kpis.riskDistribution.critical}</p>
+                  <p className="text-sm text-gray-400">Critical (≥90)</p>
                 </div>
               </div>
             ) : (
               <div className="text-center py-8">
-                <AlertTriangle size={48} className="mx-auto text-slate-300 mb-3" />
-                <p className="text-sm text-slate-600">No audit risk data available yet</p>
-                <p className="text-xs text-slate-500 mt-1">Complete audits to see risk distribution</p>
+                <AlertTriangle size={48} className="mx-auto text-gray-400 mb-3" />
+                <p className="text-sm text-gray-400">No audit risk data available yet</p>
+                <p className="text-xs text-gray-400 mt-1">Complete audits to see risk distribution</p>
               </div>
             )}
           </div>
 
           {/* Top Insights */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">Top Gap Types</h3>
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Top Gap Types</h3>
               {kpis.topGapTypes.length > 0 ? (
                 <div className="space-y-3">
                   {kpis.topGapTypes.slice(0, 5).map((gap, idx) => (
                     <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700 capitalize">{gap.type.replace('_', ' ')}</span>
-                      <span className="text-sm font-semibold text-slate-900">{gap.count}</span>
+                      <span className="text-sm text-gray-300 capitalize">{gap.type.replace('_', ' ')}</span>
+                      <span className="text-sm font-semibold text-white">{gap.count}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">No gap data available</p>
+                <p className="text-sm text-gray-400">No gap data available</p>
               )}
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">Top Manufacturers</h3>
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Top Manufacturers</h3>
               {kpis.topManufacturers.length > 0 ? (
                 <div className="space-y-3">
                   {kpis.topManufacturers.slice(0, 5).map((mfg, idx) => (
                     <div key={idx} className="flex items-center justify-between">
-                      <span className="text-sm text-slate-700">{mfg.manufacturer}</span>
-                      <span className="text-sm font-semibold text-slate-900">{mfg.count}</span>
+                      <span className="text-sm text-gray-300">{mfg.manufacturer}</span>
+                      <span className="text-sm font-semibold text-white">{mfg.count}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">No manufacturer data available</p>
+                <p className="text-sm text-gray-400">No manufacturer data available</p>
               )}
             </div>
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <AlertTriangle size={48} className="mx-auto text-slate-400 mb-4" />
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">No Data Available</h3>
-          <p className="text-sm text-slate-600">
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-12 text-center">
+          <AlertTriangle size={48} className="mx-auto text-gray-400 mb-4" />
+          <h3 className="text-lg font-semibold text-white mb-2">No Data Available</h3>
+          <p className="text-sm text-gray-400">
             Try adjusting your filters or date range to see audit intelligence.
           </p>
         </div>
