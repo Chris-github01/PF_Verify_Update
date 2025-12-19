@@ -397,7 +397,7 @@ export default function CreateOrganisation() {
                     className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   >
                     <option value="Main Contractor">Main Contractor</option>
-                    <option value="PQS">PQS (Professional Quantity Surveyor)</option>
+                    <option value="Quantity Surveyor">Quantity Surveyor</option>
                     <option value="Fire Engineer">Fire Engineer</option>
                     <option value="Subcontractor">Subcontractor</option>
                     <option value="Auditor">Auditor</option>

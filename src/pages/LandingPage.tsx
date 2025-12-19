@@ -78,7 +78,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                   Main Contractors
                 </span>
                 <span className="px-3 py-1.5 text-xs sm:text-sm font-medium text-purple-300 bg-purple-900/40 rounded-full border border-purple-800/50 backdrop-blur-sm">
-                  Quantity Surveyors & PQS
+                  Quantity Surveyors
                 </span>
                 <span className="px-3 py-1.5 text-xs sm:text-sm font-medium text-green-300 bg-green-900/40 rounded-full border border-green-800/50 backdrop-blur-sm">
                   Fire Engineers
@@ -97,7 +97,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               </p>
 
               <p className="text-sm sm:text-base md:text-lg text-slate-400 mb-8 sm:mb-12 max-w-3xl mx-auto px-4">
-                Built for Main Contractors & PQS across NZ & Australia who need defensible, risk-free awards
+                Built for Main Contractors & Quantity Surveyors across NZ & Australia who need defensible, risk-free awards
               </p>
 
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 mb-8 sm:mb-12 border border-slate-700/50 mx-2 sm:mx-0">
@@ -238,7 +238,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <div className="w-14 h-14 bg-purple-900/40 rounded-xl flex items-center justify-center mb-4">
                   <BarChart3 className="text-purple-400" size={28} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Quantity Surveyors & PQS</h3>
+                <h3 className="text-xl font-bold text-slate-100 mb-3">Quantity Surveyors</h3>
                 <p className="text-slate-400 leading-relaxed">
                   Make awards with total confidence. Defend every decision with data.
                 </p>

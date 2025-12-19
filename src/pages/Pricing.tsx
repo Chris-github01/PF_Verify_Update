@@ -52,7 +52,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
     },
     {
       name: 'Professional',
-      badge: 'For growing main contractors & PQS firms',
+      badge: 'For growing main contractors & Quantity Surveyors',
       monthlyPrice: 2499,
       annualPrice: 1999,
       savingsNote: 'Save $6,000/year',
@@ -72,7 +72,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
     },
     {
       name: 'Enterprise',
-      badge: 'For Tier-1 contractors & national PQS practices',
+      badge: 'For Tier-1 contractors & national Quantity Surveyors',
       monthlyPrice: 3500,
       annualPrice: 2800,
       customPricePrefix: 'From ',
@@ -308,7 +308,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       <div className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <h3 className="text-center text-sm font-semibold text-slate-400 uppercase tracking-wider mb-8">
-            Used by leading New Zealand main contractors & PQS firms
+            Used by leading New Zealand main contractors & Quantity Surveyors
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 mb-12">
             {companyLogos.map((logo, index) => (

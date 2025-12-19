@@ -1093,7 +1093,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                       className="w-full rounded-xl border border-slate-700 bg-slate-800 text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                     >
                       <option value="Main Contractor">Main Contractor</option>
-                      <option value="PQS">PQS (Professional Quantity Surveyor)</option>
+                      <option value="Quantity Surveyor">Quantity Surveyor</option>
                       <option value="Fire Engineer">Fire Engineer</option>
                       <option value="Subcontractor">Subcontractor</option>
                       <option value="Consultant">Consultant</option>
