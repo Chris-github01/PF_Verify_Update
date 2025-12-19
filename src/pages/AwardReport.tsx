@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Download, MoreHorizontal, RefreshCw, ChevronDown, Award, Shield, TrendingUp, BarChart3, Printer, FileSpreadsheet, Trash2, Edit3, AlertCircle, CheckCircle, Scale, DollarSign, Activity } from 'lucide-react';
+import { ArrowLeft, Download, MoreHorizontal, RefreshCw, ChevronDown, Award, Shield, TrendingUp, BarChart3, Printer, FileSpreadsheet, Trash2, Edit3, AlertCircle, CheckCircle, Scale, DollarSign, Activity, CheckSquare, Square, ArrowRight, ChevronRight, Target, FileText, AlertOctagon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { EqualisationMode } from '../types/equalisation.types';
@@ -45,6 +45,7 @@ export default function AwardReport({
   const [showItemizedDetails, setShowItemizedDetails] = useState(false);
   const [quotesMap, setQuotesMap] = useState<Map<string, string>>(new Map());
   const [showMethodology, setShowMethodology] = useState(false);
+  const [actionChecklist, setActionChecklist] = useState<Record<string, boolean>>({});
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
   const moreDropdownRef = useRef<HTMLDivElement>(null);
@@ -737,16 +738,19 @@ export default function AwardReport({
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-orange-900/40 to-orange-800/20 rounded-xl shadow-xl p-8 border-2 border-orange-600/30 hover:border-orange-500/50 transition-all">
+          <div className="bg-gradient-to-br from-orange-900/40 to-orange-800/20 rounded-xl shadow-xl p-8 border-2 border-orange-600/30 hover:border-orange-500/50 transition-all relative">
+            <div className="absolute -top-3 -right-3 bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+              RECOMMENDED
+            </div>
             <div className="flex items-center justify-center w-16 h-16 bg-orange-600 rounded-xl mx-auto mb-4 shadow-lg">
               <Scale className="w-8 h-8 text-white" />
             </div>
             <div className="text-center">
               <p className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-2">Balanced Choice</p>
-              <p className="text-2xl font-bold text-white mb-3">
+              <p className="text-3xl font-black text-white mb-3">
                 {balanced?.supplier.supplierName || 'N/A'}
               </p>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-2 text-sm mb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400">Price</span>
                   <span className="font-bold text-orange-400">{balanced ? formatCurrency(balanced.supplier.adjustedTotal) : 'N/A'}</span>
@@ -760,9 +764,226 @@ export default function AwardReport({
                   <span className="font-bold text-white">{balanced ? `${(10 - balanced.supplier.riskScore).toFixed(1)}/10` : 'N/A'}</span>
                 </div>
               </div>
+              <button
+                onClick={() => balanced && handleApproveQuote(balanced.supplier.supplierName)}
+                className="w-full px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+              >
+                <Target className="w-5 h-5" />
+                Proceed to Approval
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Next Steps & Action Plan */}
+        <div className="bg-gradient-to-br from-green-900/20 to-green-800/10 rounded-xl shadow-xl border-2 border-green-600/30 p-8 mb-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg">
+              <CheckCircle className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-white">Next Steps & Action Plan</h3>
+              <p className="text-sm text-green-300">Actionable steps for award finalization</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {[
+              {
+                id: 'approve',
+                title: 'Approve Recommended Supplier',
+                description: `Click "Proceed to Approval" to formally approve ${balanced?.supplier.supplierName || 'the recommended supplier'} and initiate contract process`,
+                urgent: true,
+              },
+              {
+                id: 'review_gaps',
+                title: 'Request Clarification on Scope Gaps',
+                description: `Issue RFI for ${criticalGaps.length} critical gaps identified in risk assessment below`,
+                urgent: criticalGaps.length > 0,
+              },
+              {
+                id: 'negotiate',
+                title: 'Negotiate Price Outliers',
+                description: 'Review itemized comparison for high-variance items and negotiate with shortlisted suppliers',
+                urgent: false,
+              },
+              {
+                id: 'savings',
+                title: 'Review Estimated Savings',
+                description: balanced && bestValue
+                  ? `Potential savings of ${formatCurrency(Math.abs(balanced.supplier.adjustedTotal - bestValue.supplier.adjustedTotal))} if awarded now vs. re-tender`
+                  : 'Review cost-benefit analysis for immediate award',
+                urgent: false,
+              },
+              {
+                id: 'contract',
+                title: 'Prepare Contract Documentation',
+                description: 'Draft formal contract including conditions of award and clarified items',
+                urgent: false,
+              },
+              {
+                id: 'unsuccessful',
+                title: 'Issue Unsuccessful Letters',
+                description: `Notify ${awardSummary.suppliers.length - 1} unsuccessful suppliers with feedback`,
+                urgent: false,
+              },
+            ].map((action) => (
+              <div
+                key={action.id}
+                className={`flex items-start gap-4 p-4 rounded-lg border transition-all ${
+                  actionChecklist[action.id]
+                    ? 'bg-green-900/20 border-green-600/50'
+                    : action.urgent
+                    ? 'bg-orange-900/20 border-orange-600/50'
+                    : 'bg-slate-700/30 border-slate-600/50'
+                }`}
+              >
+                <button
+                  onClick={() => setActionChecklist({ ...actionChecklist, [action.id]: !actionChecklist[action.id] })}
+                  className="flex-shrink-0 mt-1 text-slate-300 hover:text-green-400 transition-colors"
+                >
+                  {actionChecklist[action.id] ? (
+                    <CheckSquare className="w-6 h-6 text-green-400" />
+                  ) : (
+                    <Square className="w-6 h-6" />
+                  )}
+                </button>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-bold text-white">{action.title}</h4>
+                    {action.urgent && !actionChecklist[action.id] && (
+                      <span className="px-2 py-0.5 bg-orange-600 text-white text-xs font-bold rounded">
+                        URGENT
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-300">{action.description}</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-slate-500 flex-shrink-0 mt-1" />
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+            <div className="flex items-start gap-3">
+              <FileText className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-200">
+                <strong className="text-blue-300">Pro Tip:</strong> Complete urgent actions within 24 hours to maintain quote validity.
+                Export this report to PDF for stakeholder presentation and approval workflow.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Risk & Exceptions Table */}
+        {(criticalGaps.length > 0 || nonCriticalGaps.length > 0) && (
+          <div className="bg-slate-800/60 rounded-xl shadow-xl border border-slate-700 mb-8 overflow-hidden">
+            <div className="bg-gradient-to-r from-red-900/40 to-red-800/20 px-8 py-6 border-b border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
+                  <AlertOctagon className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-white">Risk & Exceptions Register</h3>
+                  <p className="text-sm text-red-300">Issues requiring attention before final award</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-700">
+                  <tr>
+                    <th className="text-left text-xs font-bold text-slate-300 uppercase tracking-wide px-6 py-4">Issue / Scope Gap</th>
+                    <th className="text-center text-xs font-bold text-slate-300 uppercase tracking-wide px-6 py-4 w-32">Severity</th>
+                    <th className="text-left text-xs font-bold text-slate-300 uppercase tracking-wide px-6 py-4">Recommended Mitigation / Action</th>
+                    <th className="text-center text-xs font-bold text-slate-300 uppercase tracking-wide px-6 py-4 w-40">Responsible Party</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {criticalGaps.slice(0, 10).map((gap: any, idx: number) => (
+                    <tr
+                      key={idx}
+                      className={`border-b border-slate-700 hover:bg-slate-700/30 transition-colors ${
+                        gap.severity === 'HIGH' ? 'bg-red-900/10' : 'bg-yellow-900/10'
+                      }`}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${gap.severity === 'HIGH' ? 'text-red-400' : 'text-yellow-400'}`} />
+                          <div>
+                            <p className="text-white font-medium">{gap.description || gap.item || 'Unspecified issue'}</p>
+                            <p className="text-xs text-slate-400 mt-1">{gap.details || ''}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span
+                          className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${
+                            gap.severity === 'HIGH'
+                              ? 'bg-red-600/20 text-red-400 border border-red-600/50'
+                              : 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/50'
+                          }`}
+                        >
+                          {gap.severity || 'MEDIUM'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-slate-300 text-sm">
+                          {gap.severity === 'HIGH'
+                            ? 'Issue formal RFI for pricing and clarification before award'
+                            : 'Confirm inclusion in final scope or adjust budget accordingly'}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="text-sm font-semibold text-blue-400">
+                          {gap.severity === 'HIGH' ? 'Procurement Lead' : 'Project Manager'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {nonCriticalGaps.slice(0, 5).map((gap: any, idx: number) => (
+                    <tr
+                      key={`non-${idx}`}
+                      className="border-b border-slate-700 hover:bg-slate-700/30 transition-colors bg-slate-800/30"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-slate-400" />
+                          <div>
+                            <p className="text-slate-300 font-medium">{gap.description || gap.item || 'Minor clarification'}</p>
+                            <p className="text-xs text-slate-500 mt-1">{gap.details || ''}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="inline-flex px-3 py-1 rounded-full text-xs font-bold bg-slate-600/20 text-slate-400 border border-slate-600/50">
+                          LOW
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-slate-400 text-sm">Noting only - address during contract negotiation if required</p>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="text-sm font-semibold text-slate-400">Site Team</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {(criticalGaps.length + nonCriticalGaps.length > 15) && (
+              <div className="px-8 py-4 bg-slate-700/30 border-t border-slate-700">
+                <p className="text-sm text-slate-400 text-center">
+                  Showing first 15 of {criticalGaps.length + nonCriticalGaps.length} identified risks.
+                  Full register available in detailed report export.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="bg-slate-800/60 rounded-xl shadow-xl border border-slate-700 p-8 mb-8">
           <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
@@ -860,13 +1081,25 @@ export default function AwardReport({
                         <button
                           onClick={() => handleApproveQuote(supplier.supplierName)}
                           disabled={currentProject?.approved_quote_id === quotesMap.get(supplier.supplierName)}
-                          className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                          className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all transform hover:scale-105 shadow-md flex items-center gap-2 mx-auto ${
                             currentProject?.approved_quote_id === quotesMap.get(supplier.supplierName)
-                              ? 'bg-green-600/20 text-green-400 border border-green-600/50 cursor-not-allowed'
-                              : 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-500'
+                              ? 'bg-green-600/20 text-green-400 border-2 border-green-600/50 cursor-not-allowed'
+                              : isTopChoice
+                              ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white hover:from-orange-700 hover:to-orange-800 border-2 border-orange-500'
+                              : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 border-2 border-blue-500'
                           }`}
                         >
-                          {currentProject?.approved_quote_id === quotesMap.get(supplier.supplierName) ? 'Approved' : 'Approve'}
+                          {currentProject?.approved_quote_id === quotesMap.get(supplier.supplierName) ? (
+                            <>
+                              <CheckCircle className="w-4 h-4" />
+                              Approved
+                            </>
+                          ) : (
+                            <>
+                              <Target className="w-4 h-4" />
+                              Approve Award
+                            </>
+                          )}
                         </button>
                       </td>
                     </tr>
@@ -963,47 +1196,77 @@ export default function AwardReport({
 
           {showMethodology && (
             <div className="px-8 py-6 border-t border-slate-700 space-y-6">
-              <p className="text-slate-300 leading-relaxed">
-                This report represents a comprehensive analysis of supplier quotes for your project,
-                processed through VerifyTrade's advanced workflow. Each quote has been systematically
-                evaluated across multiple dimensions to provide you with actionable recommendations.
-              </p>
+              <div className="bg-gradient-to-r from-slate-700/50 to-slate-800/50 rounded-xl p-6 border border-slate-600/50">
+                <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-orange-500" />
+                  5-Stage Evaluation Process
+                </h4>
+                <p className="text-slate-300 text-sm mb-6 leading-relaxed">
+                  Each quote has been systematically evaluated through VerifyTrade's advanced workflow to provide
+                  actionable recommendations based on multiple objective criteria.
+                </p>
 
-              <div className="grid grid-cols-5 gap-4">
-                {[
-                  { num: 1, title: 'Quote Import & Validation', color: 'blue' },
-                  { num: 2, title: 'Data Normalization', color: 'green' },
-                  { num: 3, title: 'Scope Gap Analysis', color: 'purple' },
-                  { num: 4, title: 'Risk Assessment', color: 'orange' },
-                  { num: 5, title: 'Multi-Criteria Scoring', color: 'red' }
-                ].map((step) => (
-                  <div key={step.num} className="bg-slate-700/30 rounded-lg p-4 text-center border border-slate-600/50">
-                    <div className={`w-12 h-12 mx-auto mb-3 rounded-full bg-${step.color}-600 flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
-                      {step.num}
+                <div className="flex items-center justify-between gap-3">
+                  {[
+                    { num: 1, title: 'Import & Validate', icon: '📥', color: 'from-blue-600 to-blue-700' },
+                    { num: 2, title: 'Normalize Data', icon: '🔄', color: 'from-green-600 to-green-700' },
+                    { num: 3, title: 'Gap Analysis', icon: '🔍', color: 'from-purple-600 to-purple-700' },
+                    { num: 4, title: 'Risk Assessment', icon: '⚠️', color: 'from-orange-600 to-orange-700' },
+                    { num: 5, title: 'Score & Rank', icon: '🎯', color: 'from-red-600 to-red-700' }
+                  ].map((step, idx) => (
+                    <div key={step.num} className="flex items-center gap-2">
+                      <div className="flex-shrink-0">
+                        <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${step.color} flex flex-col items-center justify-center text-white shadow-lg border-2 border-white/20`}>
+                          <div className="text-2xl mb-0.5">{step.icon}</div>
+                          <div className="text-xs font-bold">{step.num}</div>
+                        </div>
+                        <div className="text-xs font-semibold text-slate-300 text-center mt-2 leading-tight">{step.title}</div>
+                      </div>
+                      {idx < 4 && (
+                        <ChevronRight className="w-5 h-5 text-slate-500 flex-shrink-0" />
+                      )}
                     </div>
-                    <div className="text-sm font-semibold text-slate-300 leading-tight">{step.title}</div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
-              <div className="bg-slate-700/30 border border-slate-600/50 rounded-lg p-6">
-                <h4 className="text-lg font-bold text-white mb-3">Understanding the Key Metrics</h4>
-                <div className="space-y-3 text-sm text-slate-300">
-                  <p>
-                    <strong className="text-orange-400">Total Price:</strong> The sum of all line items quoted by each supplier.
-                  </p>
-                  <p>
-                    <strong className="text-orange-400">Systems Covered:</strong> The number of distinct fire protection systems
-                    included in the supplier's quote out of {awardSummary.totalSystems} total systems.
-                  </p>
-                  <p>
-                    <strong className="text-orange-400">Coverage %:</strong> The percentage of your total project scope addressed
-                    by this supplier.
-                  </p>
-                  <p>
-                    <strong className="text-orange-400">Risk Score (0-10):</strong> A composite risk assessment where higher is better.
-                    Considers scope gaps, pricing anomalies, specification quality, and completeness.
-                  </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-700/30 border border-slate-600/50 rounded-lg p-5">
+                  <h4 className="text-md font-bold text-white mb-3 flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-orange-500" />
+                    Key Metrics Explained
+                  </h4>
+                  <div className="space-y-2 text-xs text-slate-300">
+                    <p><strong className="text-orange-400">Total Price:</strong> Sum of all quoted line items</p>
+                    <p><strong className="text-orange-400">Systems Covered:</strong> {awardSummary.totalSystems} systems analyzed</p>
+                    <p><strong className="text-orange-400">Coverage %:</strong> Completeness of scope coverage</p>
+                    <p><strong className="text-orange-400">Risk Score:</strong> Composite assessment (higher = better)</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-700/30 border border-slate-600/50 rounded-lg p-5">
+                  <h4 className="text-md font-bold text-white mb-3 flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-orange-500" />
+                    Scoring Weights
+                  </h4>
+                  <div className="space-y-2 text-xs text-slate-300">
+                    <div className="flex justify-between items-center">
+                      <span>Price Competitiveness</span>
+                      <span className="font-bold text-orange-400">40%</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Technical Compliance</span>
+                      <span className="font-bold text-orange-400">25%</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Scope Coverage</span>
+                      <span className="font-bold text-orange-400">20%</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Risk Factors</span>
+                      <span className="font-bold text-orange-400">15%</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
