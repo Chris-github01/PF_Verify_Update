@@ -260,31 +260,45 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading equalisation analysis...</div>
+      <div className="min-h-screen bg-slate-900">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-slate-400">Loading equalisation analysis...</div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (comparisonData.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-        <p className="text-gray-500 text-lg">No data available.</p>
-        <p className="text-gray-400 mt-2">Import quotes and configure model rate settings to view equalisation.</p>
+      <div className="min-h-screen bg-slate-900">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <h1 className="text-2xl font-bold text-slate-50 mb-6">Equalisation</h1>
+          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-12 text-center">
+            <p className="text-slate-300 text-lg">No data available.</p>
+            <p className="text-slate-400 mt-2">Import quotes and configure model rate settings to view equalisation.</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="min-h-screen bg-slate-900">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <h1 className="text-2xl font-bold text-slate-50 mb-2">Equalisation</h1>
+        <p className="text-base text-slate-400 mb-6">Balance scope gaps across all suppliers for fair comparison.</p>
+
+        <div className="space-y-6">
+          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Equalisation Analysis</h2>
+          <h2 className="text-xl font-semibold text-slate-50">Equalisation Analysis</h2>
           <div className="relative group">
             <button
               onClick={exportEqualisationLog}
               disabled={!equalisationResult || equalisationResult.equalisationLog.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
               title={!equalisationResult || equalisationResult.equalisationLog.length === 0
                 ? 'No equalisation entries to export. This happens when all suppliers quote all systems.'
                 : 'Export equalisation log to CSV'}
@@ -296,7 +310,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
               )}
             </button>
             {equalisationResult && equalisationResult.equalisationLog.length === 0 && (
-              <div className="absolute right-0 top-full mt-2 w-72 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+              <div className="absolute right-0 top-full mt-2 w-72 bg-amber-900/90 border border-amber-700 rounded-lg p-3 text-xs text-amber-100 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                 <strong>No scope gaps to equalise.</strong><br/>
                 All suppliers have quoted all systems. The export log only includes items that were equalised (filled in) using {mode === 'MODEL' ? 'model rates' : 'peer median rates'}.
               </div>
@@ -305,11 +319,13 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         </div>
 
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
+          <label className="block text-sm font-medium text-slate-300 mb-3">
             Equalisation Mode
           </label>
           <div className="flex gap-4">
-            <label className="flex items-center gap-3 px-4 py-3 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50">
+            <label className={`flex items-center gap-3 px-4 py-3 border-2 rounded-lg cursor-pointer transition-all ${
+              mode === 'MODEL' ? 'border-blue-500 bg-blue-500/10' : 'border-slate-600 bg-slate-700/30 hover:bg-slate-700/50'
+            }`}>
               <input
                 type="radio"
                 name="equalisationMode"
@@ -319,11 +335,13 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
                 className="w-4 h-4 text-blue-600"
               />
               <div>
-                <div className="font-medium text-gray-900">Model Rate</div>
-                <div className="text-xs text-gray-600">Use model rates for missing items</div>
+                <div className="font-medium text-slate-100">Model Rate</div>
+                <div className="text-xs text-slate-400">Use model rates for missing items</div>
               </div>
             </label>
-            <label className="flex items-center gap-3 px-4 py-3 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50">
+            <label className={`flex items-center gap-3 px-4 py-3 border-2 rounded-lg cursor-pointer transition-all ${
+              mode === 'PEER_MEDIAN' ? 'border-blue-500 bg-blue-500/10' : 'border-slate-600 bg-slate-700/30 hover:bg-slate-700/50'
+            }`}>
               <input
                 type="radio"
                 name="equalisationMode"
@@ -333,18 +351,18 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
                 className="w-4 h-4 text-blue-600"
               />
               <div>
-                <div className="font-medium text-gray-900">Peer Median</div>
-                <div className="text-xs text-gray-600">Use median of other suppliers' rates</div>
+                <div className="font-medium text-slate-100">Peer Median</div>
+                <div className="text-xs text-slate-400">Use median of other suppliers' rates</div>
               </div>
             </label>
           </div>
         </div>
 
-        <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200 mb-6">
-          <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-          <div className="text-sm text-blue-900">
+        <div className="flex items-start gap-3 p-4 bg-blue-900/20 rounded-lg border border-blue-700/50 mb-6">
+          <Info className="text-blue-400 flex-shrink-0 mt-0.5" size={20} />
+          <div className="text-sm text-blue-100">
             <p className="font-medium mb-1">About Equalisation</p>
-            <p>
+            <p className="text-blue-200">
               Equalisation fills in missing scope items for each supplier to enable fair comparison.
               <strong> MODEL</strong> mode uses your configured model rates, while
               <strong> PEER_MEDIAN</strong> uses the median rate from other suppliers for the same system.
@@ -353,31 +371,31 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         </div>
 
         {comparisonData.length > 0 && (
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h4 className="font-medium text-gray-900 mb-2 text-sm">Data Status</h4>
+          <div className="p-4 bg-slate-700/30 rounded-lg border border-slate-600">
+            <h4 className="font-medium text-slate-100 mb-2 text-sm">Data Status</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
               <div>
-                <span className="text-gray-600">Total Items:</span>
-                <span className="ml-2 font-semibold text-gray-900">{comparisonData.length}</span>
+                <span className="text-slate-400">Total Items:</span>
+                <span className="ml-2 font-semibold text-slate-100">{comparisonData.length}</span>
               </div>
               <div>
-                <span className="text-gray-600">Model Rates Available:</span>
-                <span className="ml-2 font-semibold text-gray-900">
+                <span className="text-slate-400">Model Rates Available:</span>
+                <span className="ml-2 font-semibold text-slate-100">
                   {comparisonData.filter(row => row.modelRate !== null).length}
                 </span>
-                <span className="ml-1 text-xs text-gray-500">
+                <span className="ml-1 text-xs text-slate-500">
                   ({((comparisonData.filter(row => row.modelRate !== null).length / comparisonData.length) * 100).toFixed(0)}%)
                 </span>
               </div>
               <div>
-                <span className="text-gray-600">Systems:</span>
-                <span className="ml-2 font-semibold text-gray-900">
+                <span className="text-slate-400">Systems:</span>
+                <span className="ml-2 font-semibold text-slate-100">
                   {new Set(comparisonData.map(row => row.systemLabel)).size}
                 </span>
               </div>
             </div>
             {comparisonData.filter(row => row.modelRate !== null).length === 0 && mode === 'MODEL' && (
-              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+              <div className="mt-3 p-3 bg-amber-900/30 border border-amber-700/50 rounded text-sm text-amber-200">
                 <strong>Warning:</strong> No model rates are configured. MODEL mode equalisation will not work.
                 Please configure model rates in Settings or use PEER_MEDIAN mode instead.
               </div>
@@ -388,60 +406,60 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
 
       {equalisationResult && (
         <>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
             <div className="flex items-center gap-2 mb-6">
-              <TrendingUp size={20} className="text-gray-700" />
-              <h3 className="text-lg font-semibold text-gray-900">Supplier Totals Comparison</h3>
+              <TrendingUp size={20} className="text-slate-300" />
+              <h3 className="text-lg font-semibold text-slate-50">Supplier Totals Comparison</h3>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-4 py-3 text-left font-medium text-gray-700 border border-gray-200">
+                  <tr className="bg-slate-900/50">
+                    <th className="px-4 py-3 text-left font-medium text-slate-300 border border-slate-700">
                       Supplier
                     </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-700 border border-gray-200">
+                    <th className="px-4 py-3 text-right font-medium text-slate-300 border border-slate-700">
                       Original Total
                     </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-700 border border-gray-200">
+                    <th className="px-4 py-3 text-right font-medium text-slate-300 border border-slate-700">
                       Equalised Total
                     </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-700 border border-gray-200">
+                    <th className="px-4 py-3 text-right font-medium text-slate-300 border border-slate-700">
                       Adjustment
                     </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-700 border border-gray-200">
+                    <th className="px-4 py-3 text-right font-medium text-slate-300 border border-slate-700">
                       Adjustment %
                     </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-700 border border-gray-200">
+                    <th className="px-4 py-3 text-right font-medium text-slate-300 border border-slate-700">
                       Items Added
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {equalisationResult.supplierTotals.map((supplier, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900 border border-gray-200">
+                    <tr key={idx} className="hover:bg-slate-700/30">
+                      <td className="px-4 py-3 font-medium text-slate-100 border border-slate-700">
                         {supplier.supplierName}
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-900 border border-gray-200">
+                      <td className="px-4 py-3 text-right text-slate-100 border border-slate-700">
                         ${supplier.originalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-900 border border-gray-200">
+                      <td className="px-4 py-3 text-right font-semibold text-slate-100 border border-slate-700">
                         ${supplier.equalisedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className={`px-4 py-3 text-right font-medium border border-gray-200 ${
-                        supplier.adjustment > 0 ? 'text-red-700' : supplier.adjustment < 0 ? 'text-green-700' : 'text-gray-600'
+                      <td className={`px-4 py-3 text-right font-medium border border-slate-700 ${
+                        supplier.adjustment > 0 ? 'text-red-400' : supplier.adjustment < 0 ? 'text-green-400' : 'text-slate-400'
                       }`}>
                         {supplier.adjustment >= 0 ? '+' : ''}${supplier.adjustment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className={`px-4 py-3 text-right font-medium border border-gray-200 ${
-                        supplier.adjustmentPct > 0 ? 'text-red-700' : supplier.adjustmentPct < 0 ? 'text-green-700' : 'text-gray-600'
+                      <td className={`px-4 py-3 text-right font-medium border border-slate-700 ${
+                        supplier.adjustmentPct > 0 ? 'text-red-400' : supplier.adjustmentPct < 0 ? 'text-green-400' : 'text-slate-400'
                       }`}>
                         {supplier.adjustmentPct >= 0 ? '+' : ''}{supplier.adjustmentPct.toFixed(1)}%
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-900 border border-gray-200">
-                        {supplier.equalisationCount}
+                      <td className="px-4 py-3 text-right text-slate-100 border border-slate-700">
+                        {supplier.itemsAdded}
                       </td>
                     </tr>
                   ))}
@@ -451,74 +469,74 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
           </div>
 
           {equalisationResult.equalisationLog.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6">
+              <h3 className="text-lg font-semibold text-slate-50 mb-4">
                 Equalisation Audit Log
-                <span className="ml-2 text-sm font-normal text-gray-600">
-                  ({equalisationResult.totalEqualisations} entries)
+                <span className="ml-2 text-sm font-normal text-slate-400">
+                  ({equalisationResult.equalisationLog.length} entries)
                 </span>
               </h3>
 
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="bg-gray-50">
-                      <th className="px-3 py-2 text-left font-medium text-gray-700 border border-gray-200">
+                    <tr className="bg-slate-900/50">
+                      <th className="px-3 py-2 text-left font-medium text-slate-300 border border-slate-700">
                         Supplier
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-700 border border-gray-200">
+                      <th className="px-3 py-2 text-left font-medium text-slate-300 border border-slate-700">
                         System
                       </th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-700 border border-gray-200">
+                      <th className="px-3 py-2 text-left font-medium text-slate-300 border border-slate-700">
                         Reason
                       </th>
-                      <th className="px-3 py-2 text-center font-medium text-gray-700 border border-gray-200">
+                      <th className="px-3 py-2 text-center font-medium text-slate-300 border border-slate-700">
                         Source
                       </th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-700 border border-gray-200">
+                      <th className="px-3 py-2 text-right font-medium text-slate-300 border border-slate-700">
                         Rate Used
                       </th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-700 border border-gray-200">
+                      <th className="px-3 py-2 text-right font-medium text-slate-300 border border-slate-700">
                         Quantity
                       </th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-700 border border-gray-200">
+                      <th className="px-3 py-2 text-right font-medium text-slate-300 border border-slate-700">
                         Total
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {equalisationResult.equalisationLog.map((entry, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-900 border border-gray-200">
+                      <tr key={idx} className="hover:bg-slate-700/30">
+                        <td className="px-3 py-2 text-slate-100 border border-slate-700">
                           {entry.supplierName}
                         </td>
-                        <td className="px-3 py-2 border border-gray-200">
+                        <td className="px-3 py-2 border border-slate-700">
                           <div className="flex flex-col">
-                            <span className="font-medium text-gray-900">{entry.systemLabel}</span>
+                            <span className="font-medium text-slate-100">{entry.systemLabel}</span>
                             {entry.systemId !== entry.systemLabel && (
-                              <span className="text-xs text-gray-500">{entry.systemId}</span>
+                              <span className="text-xs text-slate-400">{entry.systemId}</span>
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-gray-700 border border-gray-200">
+                        <td className="px-3 py-2 text-slate-300 border border-slate-700">
                           {entry.reason}
                         </td>
-                        <td className="px-3 py-2 text-center border border-gray-200">
+                        <td className="px-3 py-2 text-center border border-slate-700">
                           <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                             entry.source === 'MODEL'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-purple-100 text-purple-800'
+                              ? 'bg-blue-500/20 text-blue-300'
+                              : 'bg-purple-500/20 text-purple-300'
                           }`}>
                             {entry.source}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-right text-gray-900 border border-gray-200">
+                        <td className="px-3 py-2 text-right text-slate-100 border border-slate-700">
                           ${entry.rateUsed.toFixed(2)}
                         </td>
-                        <td className="px-3 py-2 text-right text-gray-900 border border-gray-200">
+                        <td className="px-3 py-2 text-right text-slate-100 border border-slate-700">
                           {entry.quantity}
                         </td>
-                        <td className="px-3 py-2 text-right font-medium text-gray-900 border border-gray-200">
+                        <td className="px-3 py-2 text-right font-medium text-slate-100 border border-slate-700">
                           ${entry.total.toFixed(2)}
                         </td>
                       </tr>
@@ -530,9 +548,9 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
           )}
 
           {equalisationResult.equalisationLog.length === 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-              <p className="text-gray-500">No equalisation adjustments needed.</p>
-              <p className="text-gray-400 mt-2">All suppliers have quoted all systems.</p>
+            <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-12 text-center">
+              <p className="text-slate-300">No equalisation adjustments needed.</p>
+              <p className="text-slate-400 mt-2">All suppliers have quoted all systems.</p>
             </div>
           )}
         </>
@@ -546,6 +564,8 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         backLabel="Back: Scope Matrix"
         nextLabel="Next: Award Report"
       />
+        </div>
+      </div>
     </div>
   );
 }
