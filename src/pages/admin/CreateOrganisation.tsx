@@ -223,19 +223,17 @@ export default function CreateOrganisation() {
 
       if (orgError) throw orgError;
 
-      // Now create the owner as a member using the RPC function
-      const { error: memberError } = await supabase
-        .rpc('create_organisation_with_owner_by_email', {
-          p_name: legalName,
-          p_status: subscriptionStatus,
-          p_seat_limit: seatLimit,
-          p_pricing_tier: pricingTier,
-          p_owner_email: ownerEmail.toLowerCase().trim()
-        });
+      // Owner is automatically added by database trigger
+      // Check if owner was added successfully
+      const { data: ownerCheck } = await supabase
+        .from('organisation_members')
+        .select('id')
+        .eq('organisation_id', org.id)
+        .eq('role', 'owner')
+        .maybeSingle();
 
-      // If member creation fails, we still have the org, so just warn
-      if (memberError) {
-        console.error('Warning: Failed to create owner member:', memberError);
+      if (!ownerCheck) {
+        console.warn('Warning: Owner was not automatically added. They may need to be added manually.');
       }
 
       setToast({ type: 'success', message: 'Organisation created successfully!' });

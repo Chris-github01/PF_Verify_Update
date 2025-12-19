@@ -409,65 +409,29 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
     setInviting(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      // Use the new RPC function to add member
+      const { data, error } = await supabase.rpc('add_member_to_organisation_by_email', {
+        p_organisation_id: organisationId,
+        p_email: inviteEmail.toLowerCase().trim(),
+        p_role: inviteRole
+      });
 
-      let userId = '';
-      let memberStatus: 'active' | 'invited' = 'invited';
+      if (error) throw error;
 
-      const { data: { users: existingUsers }, error: userLookupError } = await supabase.auth.admin.listUsers();
-      if (userLookupError) throw userLookupError;
-
-      const existingUser = existingUsers?.find(u => u.email === inviteEmail);
-
-      if (existingUser) {
-        userId = existingUser.id;
-        memberStatus = 'active';
-
-        const { data: existingMember } = await supabase
-          .from('organisation_members')
-          .select('id')
-          .eq('organisation_id', organisationId)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (existingMember) {
-          setToast({ type: 'error', message: 'User is already a member of this organisation' });
-          setInviting(false);
-          return;
-        }
-      } else {
-        const tempPassword = Math.random().toString(36).slice(-12);
-        const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
-          email: inviteEmail,
-          password: tempPassword,
-          email_confirm: false,
-        });
-
-        if (authError) throw authError;
-        userId = newUser.user.id;
+      if (data && !data.success) {
+        setToast({ type: 'error', message: data.error || 'Failed to add member' });
+        setInviting(false);
+        return;
       }
 
-      const { error: memberError } = await supabase
-        .from('organisation_members')
-        .insert({
-          organisation_id: organisationId,
-          user_id: userId,
-          role: inviteRole,
-          status: memberStatus,
-          invited_by_user_id: currentUser?.id,
-          activated_at: memberStatus === 'active' ? new Date().toISOString() : null,
-        });
-
-      if (memberError) throw memberError;
-
-      setToast({ type: 'success', message: `User ${memberStatus === 'active' ? 'added' : 'invited'} successfully` });
+      setToast({ type: 'success', message: 'User added successfully' });
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('member');
       await loadOrganisation();
     } catch (error: any) {
-      console.error('Error inviting user:', error);
-      setToast({ type: 'error', message: error.message || 'Failed to invite user' });
+      console.error('Error adding user:', error);
+      setToast({ type: 'error', message: error.message || 'Failed to add user' });
     } finally {
       setInviting(false);
     }
