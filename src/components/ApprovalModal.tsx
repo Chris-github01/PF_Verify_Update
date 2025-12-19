@@ -168,7 +168,7 @@ export default function ApprovalModal({
       const { error: reportUpdateError } = await supabase
         .from('award_reports')
         .update({
-          approved_supplier_id: selectedSupplier,
+          approved_supplier_id: quoteData?.id || null,
           approved_at: new Date().toISOString(),
           approval_id: approvalData.id,
         })
