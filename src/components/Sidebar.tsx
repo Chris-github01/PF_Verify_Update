@@ -93,7 +93,10 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
           </div>
           <div className="flex flex-col gap-1.5">
             <button
-              onClick={() => onDashboardModeChange('original')}
+              onClick={() => {
+                onDashboardModeChange('original');
+                onTabChange('dashboard');
+              }}
               className={`
                 group flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all
                 ${
@@ -112,7 +115,10 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
               )}
             </button>
             <button
-              onClick={() => onDashboardModeChange('revisions')}
+              onClick={() => {
+                onDashboardModeChange('revisions');
+                onTabChange('dashboard');
+              }}
               className={`
                 group flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all
                 ${
