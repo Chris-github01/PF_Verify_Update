@@ -248,6 +248,42 @@ Deno.serve(async (req: Request) => {
     const sortedByRisk = [...suppliers].sort((a, b) => a.riskScore - b.riskScore);
     const sortedByCoverage = [...suppliers].sort((a, b) => b.coveragePercent - a.coveragePercent);
 
+    // Calculate weighted scores for balanced recommendation
+    const lowestPrice = sortedByPrice[0].adjustedTotal;
+    const highestPrice = sortedByPrice[sortedByPrice.length - 1].adjustedTotal;
+    const maxRisk = Math.max(...suppliers.map(s => s.riskScore));
+
+    const suppliersWithWeightedScores = suppliers.map(s => {
+      // Price Score: 10 = cheapest, 0 = most expensive
+      const priceRange = highestPrice - lowestPrice;
+      const priceScore = priceRange > 0
+        ? 10 - ((s.adjustedTotal - lowestPrice) / priceRange) * 10
+        : 10;
+
+      // Coverage Score: Direct percentage to 0-10 scale
+      const coverageScore = (s.coveragePercent / 100) * 10;
+
+      // Risk Score: 10 = no missing items, 0 = many missing items
+      const riskScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 10 : 10;
+
+      // Compliance Score: Based on risk factors (fewer missing items = better)
+      const complianceScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 5 : 10;
+
+      // Weighted Total: Price 40%, Compliance 25%, Coverage 20%, Risk 15%
+      const weightedTotal = (
+        (priceScore * 0.4) +
+        (complianceScore * 0.25) +
+        (coverageScore * 0.2) +
+        (riskScore * 0.15)
+      ) * 10; // Scale to 0-100
+
+      return { ...s, weightedTotal };
+    });
+
+    const sortedByWeightedScore = [...suppliersWithWeightedScores].sort(
+      (a, b) => b.weightedTotal - a.weightedTotal
+    );
+
     const recommendations = [
       {
         type: "BEST_VALUE",
@@ -258,14 +294,14 @@ Deno.serve(async (req: Request) => {
       {
         type: "LOWEST_RISK",
         supplier: sortedByRisk[0],
-        reason: `Best scope coverage at ${sortedByRisk[0].coveragePercent.toFixed(1)}%`,
+        reason: `Lowest risk with ${sortedByRisk[0].riskScore} missing scope items and ${sortedByRisk[0].coveragePercent.toFixed(1)}% coverage`,
         confidence: 80,
       },
       {
         type: "BALANCED",
-        supplier: sortedByCoverage[0],
-        reason: `Good balance of price and coverage`,
-        confidence: 75,
+        supplier: sortedByWeightedScore[0],
+        reason: `Highest weighted score (${sortedByWeightedScore[0].weightedTotal.toFixed(1)}/100) combining price, compliance, coverage, and risk factors`,
+        confidence: 85,
       },
     ];
 

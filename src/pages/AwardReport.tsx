@@ -461,7 +461,8 @@ export default function AwardReport({
       } else {
         const bestValue = sortedSuppliers[0];
         const lowestRisk = [...sortedSuppliers].sort((a, b) => a.riskScore - b.riskScore)[0];
-        const balanced = sortedSuppliers[Math.floor(sortedSuppliers.length / 2)] || sortedSuppliers[0];
+        // Use highest weighted score for balanced choice
+        const balanced = [...sortedSuppliers].sort((a, b) => b.weightedScore - a.weightedScore)[0];
 
         recommendations = [
           bestValue && {

@@ -382,10 +382,10 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
           score: lowestRisk.weightedScore
         }] : [];
       })(),
-      // Find balanced choice (middle of the pack in overall score)
+      // Find balanced choice (highest weighted score)
       ...(() => {
         const sorted = [...reportData.suppliers].sort((a, b) => b.weightedScore - a.weightedScore);
-        const balanced = sorted[Math.floor(sorted.length / 2)] || sorted[0];
+        const balanced = sorted[0]; // Top weighted score
         return balanced ? [{
           type: 'balanced' as const,
           supplierName: balanced.supplierName,
