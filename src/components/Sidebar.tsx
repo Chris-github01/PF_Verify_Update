@@ -29,6 +29,7 @@ export type SidebarTab =
   | 'insights'
   | 'systemcheck'
   | 'copilotaudit'
+  | 'admincenter'
   | 'settings';
 
 interface SidebarProps {
@@ -47,6 +48,7 @@ const menuItems = [
   { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
   { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3 },
   { id: 'contract' as SidebarTab, label: 'Contract Manager', icon: Briefcase },
+  { id: 'admincenter' as SidebarTab, label: 'Admin Center', icon: ShieldAlert, requiresAdminAccess: true },
   { id: 'settings' as SidebarTab, label: 'Settings', icon: Settings, requiresAdminAccess: true },
 ];
 

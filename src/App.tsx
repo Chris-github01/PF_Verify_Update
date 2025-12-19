@@ -19,6 +19,7 @@ import InsightsDashboard from './pages/InsightsDashboard';
 import SystemCheck from './pages/SystemCheck';
 import CopilotAudit from './pages/CopilotAudit';
 import Settings from './pages/Settings';
+import OrganisationAdminCenter from './pages/OrganisationAdminCenter';
 import Toast, { ToastType } from './components/Toast';
 import ToastContainer from './components/ToastContainer';
 import AppFooter from './components/AppFooter';
@@ -691,6 +692,9 @@ function AppContent() {
 
       case 'copilotaudit':
         return <CopilotAudit />;
+
+      case 'admincenter':
+        return <OrganisationAdminCenter />;
 
       case 'settings':
         if (!isMasterAdmin) {
