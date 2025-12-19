@@ -204,7 +204,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0B1623] p-6">
+      <div className="min-h-screen bg-slate-900">
         <div className="flex items-center justify-center h-64">
           <div className="text-slate-400">Loading contract information...</div>
         </div>
@@ -215,93 +215,106 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   const hasAward = !!awardInfo;
 
   return (
-    <div className="min-h-screen bg-[#0B1623] p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <button
-            onClick={onNavigateBack}
-            className="flex items-center gap-2 text-slate-400 hover:text-white mb-4 text-sm transition-colors"
-          >
-            <ArrowLeft size={16} />
-            Back to Project Dashboard
-          </button>
-
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <div className="text-sm text-slate-400 mb-1">
-                Projects → {projectInfo?.name || 'Unknown Project'} → Contract Manager
-              </div>
-              <h1 className="text-3xl font-bold text-white">{projectInfo?.name || 'Unknown Project'}</h1>
-              <h2 className="text-xl text-slate-300 mt-1">Contract Manager</h2>
+    <div className="min-h-screen bg-slate-900">
+      {/* Header Navigation */}
+      <div className="bg-slate-800/60 border-b border-slate-700">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={onNavigateBack}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-100 transition-colors"
+              >
+                <ArrowLeft size={16} />
+                Back to Dashboard
+              </button>
             </div>
-            <div className="text-right text-sm">
-              <div className="text-slate-400">Organisation</div>
-              <div className="font-medium text-white">{currentOrganisation?.name || 'N/A'}</div>
-              <div className="text-slate-400 mt-2">Last Updated</div>
-              <div className="font-medium text-white">
-                {projectInfo?.updated_at ? new Date(projectInfo.updated_at).toLocaleDateString() : 'N/A'}
-              </div>
-            </div>
-          </div>
 
-          <div className="flex items-center justify-between py-4 border-t border-b border-slate-700">
-            <p className="text-slate-300">
-              Manage your subcontract scope and handover information.
-            </p>
             {hasAward && (
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={handleGenerateJuniorPack}
                   disabled={generatingJunior}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium shadow-lg"
                 >
                   <Users size={16} />
-                  {generatingJunior ? 'Generating...' : 'Generate Junior Pack'}
+                  {generatingJunior ? 'Generating...' : 'Junior Pack'}
                 </button>
                 <button
                   onClick={handleGenerateSeniorReport}
                   disabled={generatingSenior}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-md hover:from-orange-700 hover:to-orange-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium shadow-lg"
                 >
                   <Briefcase size={16} />
-                  {generatingSenior ? 'Generating...' : 'Generate Senior Pack'}
+                  {generatingSenior ? 'Generating...' : 'Senior Pack'}
                 </button>
               </div>
             )}
           </div>
         </div>
+      </div>
+
+      {/* Page Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Title Section */}
+        <div className="text-center mb-12">
+          <h1 className="text-5xl font-bold text-white mb-3">Contract Manager</h1>
+          <p className="text-xl text-slate-300 mb-6">Subcontract Scope & Handover Management</p>
+
+          <div className="inline-flex items-center gap-6 text-sm text-slate-400 bg-slate-800/40 px-8 py-3 rounded-lg border border-slate-700/50">
+            <div>
+              <span className="font-semibold text-slate-300">Project:</span> {projectInfo?.name || 'N/A'}
+            </div>
+            <div className="h-4 w-px bg-slate-600"></div>
+            <div>
+              <span className="font-semibold text-slate-300">Client:</span> {projectInfo?.client || 'N/A'}
+            </div>
+            {hasAward && (
+              <>
+                <div className="h-4 w-px bg-slate-600"></div>
+                <div>
+                  <span className="font-semibold text-slate-300">Subcontractor:</span> {awardInfo.supplier_name}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="mt-4 text-sm text-slate-500">
+            Powered by <span className="font-semibold text-orange-500">VerifyTrade</span>
+          </div>
+        </div>
 
         {!hasAward ? (
-          <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-12 text-center">
-            <AlertCircle className="mx-auto text-slate-400 mb-4" size={48} />
-            <h3 className="text-xl font-bold text-white mb-2">No award selected</h3>
-            <p className="text-slate-300 mb-6">
+          <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-12 text-center shadow-xl">
+            <AlertCircle className="mx-auto text-orange-500/70 mb-4" size={64} />
+            <h3 className="text-2xl font-bold text-white mb-3">No Award Selected</h3>
+            <p className="text-slate-300 mb-8 max-w-md mx-auto">
               Select a preferred supplier in your Award Report before using Contract Manager.
             </p>
             <button
               onClick={() => window.location.href = '#/reports'}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              className="px-8 py-3 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium transition-all shadow-lg"
             >
               Go to Reports
             </button>
           </div>
         ) : (
           <>
-            <div className="border-b border-slate-700 mb-6">
-              <div className="flex gap-1">
+            <div className="border-b border-slate-700/50 mb-8">
+              <div className="flex gap-2">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors ${
+                      className={`flex items-center gap-2 px-5 py-3 font-medium transition-all rounded-t-lg ${
                         activeTab === tab.id
-                          ? 'text-blue-400 border-b-2 border-blue-400'
-                          : 'text-slate-400 hover:text-white'
+                          ? 'text-orange-400 bg-slate-800/60 border-b-2 border-orange-500'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                       }`}
                     >
-                      <Icon size={16} />
+                      <Icon size={18} />
                       {tab.label}
                     </button>
                   );
@@ -309,7 +322,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
               </div>
             </div>
 
-            <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-6">
+            <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-8 shadow-xl">
               {activeTab === 'summary' && <ContractSummaryTab awardInfo={awardInfo} projectInfo={projectInfo} />}
               {activeTab === 'scope' && <ScopeSystemsTab projectId={projectId} scopeSystems={scopeSystems} />}
               {activeTab === 'inclusions' && <InclusionsExclusionsTab />}
@@ -330,79 +343,82 @@ function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo |
   const netAmount = totalAmount - retentionAmount;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h3 className="text-lg font-semibold text-white mb-6">Contract Summary</h3>
+        <h3 className="text-2xl font-bold text-white mb-8 flex items-center gap-3">
+          <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full"></div>
+          Contract Summary
+        </h3>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-4">
-            <label className="block text-sm font-medium text-slate-400 mb-2">Subcontractor</label>
-            <div className="text-lg text-white font-medium">{awardInfo?.supplier_name || 'TBC'}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Subcontractor</label>
+            <div className="text-xl text-white font-semibold">{awardInfo?.supplier_name || 'TBC'}</div>
           </div>
 
-          <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-4">
-            <label className="block text-sm font-medium text-slate-400 mb-2">Subcontract Sum</label>
-            <div className="text-2xl font-bold text-blue-400">
+          <div className="bg-gradient-to-br from-orange-900/30 to-orange-800/10 rounded-xl border border-orange-700/30 p-5 hover:border-orange-600/50 transition-all">
+            <label className="block text-xs font-semibold text-orange-300/70 uppercase tracking-wider mb-2">Subcontract Sum</label>
+            <div className="text-3xl font-bold text-orange-400">
               ${totalAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
             </div>
           </div>
 
-          <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-4">
-            <label className="block text-sm font-medium text-slate-400 mb-2">Main Contractor</label>
-            <div className="text-lg text-white">TBC</div>
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Main Contractor</label>
+            <div className="text-xl text-white font-semibold">TBC</div>
           </div>
 
-          <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-4">
-            <label className="block text-sm font-medium text-slate-400 mb-2">Client / End User</label>
-            <div className="text-lg text-white">{projectInfo?.client || 'TBC'}</div>
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Client / End User</label>
+            <div className="text-xl text-white font-semibold">{projectInfo?.client || 'TBC'}</div>
           </div>
 
-          <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-4">
-            <label className="block text-sm font-medium text-slate-400 mb-2">Payment Terms</label>
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Payment Terms</label>
             <div className="text-base text-slate-300">20th following month, 22 working days</div>
           </div>
 
-          <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-4">
-            <label className="block text-sm font-medium text-slate-400 mb-2">Liquidated Damages</label>
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Liquidated Damages</label>
             <div className="text-base text-slate-300">None specified</div>
           </div>
         </div>
       </div>
 
-      <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-6">
-        <h4 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-          <BarChart3 size={18} />
+      <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 rounded-xl border border-slate-700/50 p-6 shadow-lg">
+        <h4 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+          <BarChart3 size={20} className="text-orange-500" />
           Financial Breakdown
         </h4>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-300">Net Payable (97%)</span>
-              <span className="text-white font-medium">
+              <span className="text-slate-300 font-medium">Net Payable (97%)</span>
+              <span className="text-white font-semibold">
                 ${netAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
-              <div className="bg-green-500 h-full rounded-full" style={{ width: '97%' }} />
+            <div className="w-full bg-slate-900/80 rounded-full h-4 overflow-hidden border border-slate-700/50">
+              <div className="bg-gradient-to-r from-green-500 to-green-600 h-full rounded-full shadow-lg" style={{ width: '97%' }} />
             </div>
           </div>
 
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-300">Retention Held (3%)</span>
-              <span className="text-amber-400 font-medium">
+              <span className="text-slate-300 font-medium">Retention Held (3%)</span>
+              <span className="text-orange-400 font-semibold">
                 ${retentionAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
-              <div className="bg-amber-500 h-full rounded-full" style={{ width: '3%' }} />
+            <div className="w-full bg-slate-900/80 rounded-full h-4 overflow-hidden border border-slate-700/50">
+              <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-full rounded-full shadow-lg" style={{ width: '3%' }} />
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-700">
+          <div className="pt-5 border-t border-slate-700/50 mt-2">
             <div className="flex justify-between">
-              <span className="text-white font-semibold">Total Contract Value</span>
+              <span className="text-white font-bold text-lg">Total Contract Value</span>
               <span className="text-blue-400 font-bold text-lg">
                 ${totalAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
               </span>
@@ -411,7 +427,7 @@ function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo |
         </div>
       </div>
 
-      <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 text-sm text-blue-300">
+      <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl p-4 text-sm text-blue-300">
         <AlertCircle size={16} className="inline mr-2" />
         These values will be refined as Contract Manager is integrated with your commercial data.
       </div>
@@ -434,34 +450,37 @@ function ScopeSystemsTab({ projectId, scopeSystems }: { projectId: string; scope
   };
 
   return (
-    <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-white mb-4">Scope & Systems</h3>
+    <div className="space-y-8">
+      <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+        <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full"></div>
+        Scope & Systems
+      </h3>
 
       {scopeSystems.length > 0 ? (
         <div className="space-y-4">
           {scopeSystems.map((system, idx) => (
-            <div key={idx} className="bg-slate-900/50 rounded-lg border border-slate-700 p-5">
+            <div key={idx} className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 rounded-xl border border-slate-700/50 p-6 hover:border-slate-600 transition-all shadow-lg">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h4 className="text-base font-semibold text-white mb-1">{system.service_type}</h4>
+                  <h4 className="text-lg font-bold text-white mb-1">{system.service_type}</h4>
                   <p className="text-sm text-slate-400">{system.item_count} line items</p>
                 </div>
                 {getCoverageBadge(system.coverage)}
               </div>
 
               {system.details.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-700">
-                  <p className="text-xs font-medium text-slate-400 mb-2">Sample Items:</p>
-                  <ul className="space-y-1.5">
+                <div className="mt-5 pt-5 border-t border-slate-700/50">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Sample Items:</p>
+                  <ul className="space-y-2">
                     {system.details.slice(0, 3).map((detail, i) => (
                       <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
-                        <span className="text-blue-400 mt-1">•</span>
+                        <span className="text-orange-500 mt-1">•</span>
                         <span className="flex-1">{detail}</span>
                       </li>
                     ))}
                   </ul>
                   {system.details.length > 3 && (
-                    <p className="text-xs text-slate-500 mt-2">
+                    <p className="text-xs text-slate-500 mt-3">
                       +{system.details.length - 3} more items
                     </p>
                   )}
@@ -471,15 +490,15 @@ function ScopeSystemsTab({ projectId, scopeSystems }: { projectId: string; scope
           ))}
         </div>
       ) : (
-        <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-8 text-center">
-          <CheckCircle className="mx-auto text-slate-500 mb-3" size={40} />
+        <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-12 text-center">
+          <CheckCircle className="mx-auto text-slate-500 mb-4" size={48} />
           <p className="text-slate-400">
             Scope & Systems will be populated from the approved quote's line items.
           </p>
         </div>
       )}
 
-      <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 text-sm text-blue-300">
+      <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl p-4 text-sm text-blue-300">
         <AlertCircle size={16} className="inline mr-2" />
         Service types are auto-categorized from quote line items. Use scope_category field for custom grouping.
       </div>
