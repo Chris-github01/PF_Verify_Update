@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet, Printer, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
 import ApprovalModal from '../components/ApprovalModal';
+import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
 import EnhancedSupplierTable from '../components/award/EnhancedSupplierTable';
 import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdown';
 import CoverageBreakdownChart from '../components/award/CoverageBreakdownChart';
@@ -69,6 +70,9 @@ export default function AwardReportEnhanced({
   const [weights] = useState<ScoringWeights>(DEFAULT_WEIGHTS);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadProjectInfo();
@@ -78,6 +82,16 @@ export default function AwardReportEnhanced({
       loadLatestReport();
     }
   }, [reportId, projectId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+        setShowExportDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const loadProjectInfo = async () => {
     try {
@@ -363,6 +377,38 @@ export default function AwardReportEnhanced({
     onToast?.('Excel exported successfully', 'success');
   };
 
+  const handlePrintPDF = async () => {
+    if (!currentProject || !awardSummary) return;
+
+    try {
+      const htmlContent = generateModernPdfHtml({
+        projectName: currentProject.name,
+        clientName: currentProject.client || 'N/A',
+        generatedDate: new Date().toLocaleDateString(),
+        awardSummary,
+        comparisonData,
+        includeSections: [
+          'Executive Summary',
+          'Supplier Comparison',
+          'Weighted Scoring',
+          'Coverage Analysis',
+          'Risk Assessment',
+          'Recommendations',
+          'Methodology'
+        ],
+        additionalSections: []
+      });
+
+      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
+      downloadPdfHtml(htmlContent, filename);
+
+      onToast?.('PDF report downloaded! Open the HTML file and use "Print to PDF" to save as PDF.', 'success');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      onToast?.('Failed to generate PDF report', 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 bg-slate-900">
@@ -420,13 +466,43 @@ export default function AwardReportEnhanced({
                 </button>
               )}
 
-              <button
-                onClick={exportToExcel}
-                className="flex items-center gap-2 px-4 py-2 border border-slate-600 bg-slate-800/60 text-slate-300 rounded-md hover:bg-slate-700/50 transition-colors text-sm"
-              >
-                <FileSpreadsheet size={16} />
-                Export Excel
-              </button>
+              <div className="relative" ref={exportDropdownRef}>
+                <button
+                  onClick={() => setShowExportDropdown(!showExportDropdown)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md hover:from-blue-700 hover:to-blue-800 transition-all text-sm font-medium shadow-lg"
+                >
+                  <Download size={16} />
+                  Export Report
+                  <ChevronDown size={14} className={`transition-transform ${showExportDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showExportDropdown && (
+                  <div className="absolute right-0 mt-2 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50">
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          handlePrintPDF();
+                          setShowExportDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <Printer size={16} />
+                        Export PDF
+                      </button>
+                      <button
+                        onClick={() => {
+                          exportToExcel();
+                          setShowExportDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <FileSpreadsheet size={16} />
+                        Export Excel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
