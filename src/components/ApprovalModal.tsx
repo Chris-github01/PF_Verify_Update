@@ -14,6 +14,7 @@ interface ApprovalModalProps {
   allSuppliers: EnhancedSupplierMetrics[];
   onApprovalComplete: (approvalId: string) => void;
   onToast?: (message: string, type: 'success' | 'error') => void;
+  existingApprovalId?: string | null;
 }
 
 const OVERRIDE_REASONS = [
@@ -36,6 +37,7 @@ export default function ApprovalModal({
   allSuppliers,
   onApprovalComplete,
   onToast,
+  existingApprovalId,
 }: ApprovalModalProps) {
   const [selectedSupplier, setSelectedSupplier] = useState<string>(aiRecommendedSupplier.supplierName);
   const [overrideReason, setOverrideReason] = useState<string>('');
@@ -111,32 +113,54 @@ export default function ApprovalModal({
         .eq('is_latest', true)
         .maybeSingle();
 
-      // Create approval record
-      const { data: approvalData, error: approvalError } = await supabase
-        .from('award_approvals')
-        .insert({
-          award_report_id: reportId,
-          project_id: projectId,
-          organisation_id: organisationId,
-          ai_recommended_supplier: aiRecommendedSupplier.supplierName,
-          final_approved_supplier: selectedSupplier,
-          final_approved_quote_id: quoteData?.id || null,
-          is_override: isOverride,
-          override_reason_category: isOverride ? overrideReason : null,
-          override_reason_detail: isOverride ? overrideDetail : null,
-          approved_by_user_id: user.id,
-          weighted_score_difference: scoreDifference,
-          metadata_json: {
-            top_three_suppliers: allSuppliers.slice(0, 3).map(s => ({
-              name: s.supplierName,
-              score: s.weightedTotal,
-              price: s.totalPrice,
-              coverage: s.coveragePercent,
-            })),
-          },
-        })
-        .select()
-        .single();
+      // Create or update approval record
+      let approvalData;
+      let approvalError;
+
+      const approvalRecord = {
+        award_report_id: reportId,
+        project_id: projectId,
+        organisation_id: organisationId,
+        ai_recommended_supplier: aiRecommendedSupplier.supplierName,
+        final_approved_supplier: selectedSupplier,
+        final_approved_quote_id: quoteData?.id || null,
+        is_override: isOverride,
+        override_reason_category: isOverride ? overrideReason : null,
+        override_reason_detail: isOverride ? overrideDetail : null,
+        approved_by_user_id: user.id,
+        weighted_score_difference: scoreDifference,
+        metadata_json: {
+          top_three_suppliers: allSuppliers.slice(0, 3).map(s => ({
+            name: s.supplierName,
+            score: s.weightedTotal,
+            price: s.totalPrice,
+            coverage: s.coveragePercent,
+          })),
+        },
+      };
+
+      if (existingApprovalId) {
+        // Update existing approval
+        const result = await supabase
+          .from('award_approvals')
+          .update(approvalRecord)
+          .eq('id', existingApprovalId)
+          .select()
+          .single();
+
+        approvalData = result.data;
+        approvalError = result.error;
+      } else {
+        // Insert new approval
+        const result = await supabase
+          .from('award_approvals')
+          .insert(approvalRecord)
+          .select()
+          .single();
+
+        approvalData = result.data;
+        approvalError = result.error;
+      }
 
       if (approvalError) throw approvalError;
 
@@ -172,10 +196,11 @@ export default function ApprovalModal({
           .eq('id', quoteData.id);
       }
 
+      const actionText = existingApprovalId ? 'updated' : 'approved';
       onToast?.(
         isOverride
-          ? `Award approved with override: ${selectedSupplier}`
-          : `Award approved: ${selectedSupplier}`,
+          ? `Award ${actionText} with override: ${selectedSupplier}`
+          : `Award ${actionText}: ${selectedSupplier}`,
         'success'
       );
 

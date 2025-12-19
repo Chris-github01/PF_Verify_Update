@@ -381,28 +381,72 @@ export default function AwardReportEnhanced({
     if (!currentProject || !awardSummary) return;
 
     try {
+      // Transform suppliers to match PDF template format
+      const suppliers = enhancedSuppliers.map((s, idx) => ({
+        rank: idx + 1,
+        supplierName: s.supplierName,
+        adjustedTotal: s.totalPrice,
+        riskScore: s.riskMitigationScore,
+        coveragePercent: s.coveragePercent,
+        itemsQuoted: s.itemsQuoted,
+        totalItems: awardSummary.totalSystems,
+        weightedScore: s.weightedTotal,
+        notes: []
+      }));
+
+      // Transform recommendations
+      const recommendations = [];
+      if (bestValue) {
+        recommendations.push({
+          type: 'best_value' as const,
+          supplierName: bestValue.supplierName,
+          price: bestValue.totalPrice,
+          coverage: bestValue.coveragePercent,
+          riskScore: bestValue.riskMitigationScore,
+          score: bestValue.weightedTotal
+        });
+      }
+      if (lowestRisk) {
+        recommendations.push({
+          type: 'lowest_risk' as const,
+          supplierName: lowestRisk.supplierName,
+          price: lowestRisk.totalPrice,
+          coverage: lowestRisk.coveragePercent,
+          riskScore: lowestRisk.riskMitigationScore,
+          score: lowestRisk.weightedTotal
+        });
+      }
+      if (topSupplier) {
+        recommendations.push({
+          type: 'balanced' as const,
+          supplierName: topSupplier.supplierName,
+          price: topSupplier.totalPrice,
+          coverage: topSupplier.coveragePercent,
+          riskScore: topSupplier.riskMitigationScore,
+          score: topSupplier.weightedTotal
+        });
+      }
+
       const htmlContent = generateModernPdfHtml({
         projectName: currentProject.name,
-        clientName: currentProject.client || 'N/A',
-        generatedDate: new Date().toLocaleDateString(),
-        awardSummary,
-        comparisonData,
-        includeSections: [
-          'Executive Summary',
-          'Supplier Comparison',
-          'Weighted Scoring',
-          'Coverage Analysis',
+        clientName: currentProject.client || undefined,
+        generatedAt: new Date().toLocaleDateString(),
+        recommendations,
+        suppliers,
+        executiveSummary: `This report provides a comprehensive evaluation of ${suppliers.length} supplier quotes received for ${currentProject.name}. Our analysis employs a multi-criteria assessment framework evaluating pricing competitiveness, technical compliance, scope completeness, and risk factors. The recommended supplier demonstrates optimal value delivery across all evaluation dimensions.`,
+        methodology: [
+          'Quote Import & Validation',
+          'Data Normalization',
+          'Scope Gap Analysis',
           'Risk Assessment',
-          'Recommendations',
-          'Methodology'
-        ],
-        additionalSections: []
+          'Multi-Criteria Scoring'
+        ]
       });
 
       const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
       downloadPdfHtml(htmlContent, filename);
 
-      onToast?.('PDF report downloaded! Open the HTML file and use "Print to PDF" to save as PDF.', 'success');
+      onToast?.('PDF report downloaded! Open the HTML file in your browser and use "Print to PDF" to save as PDF.', 'success');
     } catch (error) {
       console.error('Error generating PDF:', error);
       onToast?.('Failed to generate PDF report', 'error');
@@ -456,15 +500,13 @@ export default function AwardReportEnhanced({
                 Recalculate
               </button>
 
-              {!approvalData && (
-                <button
-                  onClick={() => setShowApprovalModal(true)}
-                  className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-md hover:from-orange-700 hover:to-orange-800 transition-all text-sm font-bold shadow-lg"
-                >
-                  <CheckCircle2 size={16} />
-                  Approve Award
-                </button>
-              )}
+              <button
+                onClick={() => setShowApprovalModal(true)}
+                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-md hover:from-orange-700 hover:to-orange-800 transition-all text-sm font-bold shadow-lg"
+              >
+                <CheckCircle2 size={16} />
+                {approvalData ? 'Change Approval' : 'Approve Award'}
+              </button>
 
               <div className="relative" ref={exportDropdownRef}>
                 <button
@@ -611,6 +653,7 @@ export default function AwardReportEnhanced({
             loadSavedReport(currentReportId);
           }}
           onToast={onToast}
+          existingApprovalId={approvalData?.id || null}
         />
       )}
     </div>
