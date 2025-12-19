@@ -777,6 +777,7 @@ function generateLogoSection(organisationLogoUrl?: string, size: 'small' | 'larg
         <img
           src="${organisationLogoUrl}"
           alt="Organisation Logo"
+          crossorigin="anonymous"
           style="max-width: 140px; max-height: ${logoSize}px; object-fit: contain;"
         />
         <div style="border-left: 2px solid #e5e7eb; height: ${logoSize}px; margin: 0 12px;"></div>

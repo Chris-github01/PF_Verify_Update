@@ -364,23 +364,14 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
           .maybeSingle();
 
         if (orgData?.logo_url) {
+          // Get public URL for the logo (bucket is now public)
           const { data: urlData } = supabase.storage
             .from('organisation-logos')
             .getPublicUrl(orgData.logo_url);
 
           if (urlData?.publicUrl) {
-            try {
-              const response = await fetch(urlData.publicUrl);
-              const blob = await response.blob();
-              const reader = new FileReader();
-              const dataUrl = await new Promise<string>((resolve) => {
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(blob);
-              });
-              organisationLogoUrl = dataUrl;
-            } catch (err) {
-              console.error('Error loading organization logo:', err);
-            }
+            organisationLogoUrl = urlData.publicUrl;
+            console.log('Organisation logo URL:', organisationLogoUrl);
           }
         }
       }
