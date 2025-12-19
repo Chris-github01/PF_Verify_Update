@@ -109,6 +109,8 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Baseline quote ${baselineQuote.supplier_name} has no items`);
     }
 
+    const usedItemIds = new Set<string>();
+
     for (const baseItem of baselineQuote.items) {
       const row: ComparisonRow = {
         description: baseItem.description,
@@ -133,11 +135,18 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        const matchedItem = otherQuote.items.find(item =>
-          item && item.description && item.description.toLowerCase() === baseItem.description.toLowerCase()
-        );
+        const matchedItem = otherQuote.items.find(item => {
+          if (!item || !item.description || usedItemIds.has(item.id)) {
+            return false;
+          }
+          const descMatch = item.description.toLowerCase() === baseItem.description.toLowerCase();
+          const qtyMatch = Number(item.quantity) === Number(baseItem.quantity);
+          const unitMatch = (item.unit || "").toLowerCase() === (baseItem.unit || "").toLowerCase();
+          return descMatch && qtyMatch && unitMatch;
+        });
 
         if (matchedItem) {
+          usedItemIds.add(matchedItem.id);
           row.suppliers[otherQuote.supplier_name] = {
             unitPrice: Number(matchedItem.unit_price),
             total: Number(matchedItem.total_price),
@@ -164,15 +173,18 @@ Deno.serve(async (req: Request) => {
       }
 
       for (const item of otherQuote.items) {
-        if (!item || !item.description) {
+        if (!item || !item.description || usedItemIds.has(item.id)) {
           continue;
         }
 
         const alreadyIncluded = comparisonData.some(row =>
-          row.suppliers[otherQuote.supplier_name]?.originalDescription === item.description
+          row.suppliers[otherQuote.supplier_name]?.originalDescription === item.description &&
+          row.quantity === Number(item.quantity) &&
+          row.unit.toLowerCase() === (item.unit || "").toLowerCase()
         );
 
         if (!alreadyIncluded) {
+          usedItemIds.add(item.id);
           const row: ComparisonRow = {
             description: item.description,
             unit: item.unit || "",
