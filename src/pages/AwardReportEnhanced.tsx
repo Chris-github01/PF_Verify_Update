@@ -195,9 +195,15 @@ export default function AwardReportEnhanced({
         isQuoted: row.suppliers[supplier.supplierName]?.unitPrice !== null
       }));
 
+      // Get missing items with full context for accurate cost estimation
       const missingItems = comparisonData
         .filter(row => !row.suppliers[supplier.supplierName]?.unitPrice)
-        .map(row => ({ description: row.description, category: row.category }));
+        .map(row => ({
+          description: row.description,
+          category: row.category,
+          quantity: row.quantity,
+          suppliers: row.suppliers, // Include all supplier data for market rate calculation
+        }));
 
       return {
         supplierName: supplier.supplierName,
@@ -205,6 +211,8 @@ export default function AwardReportEnhanced({
         systemsCovered: supplier.itemsQuoted,
         totalSystems: supplier.totalItems,
         coveragePercent: supplier.coveragePercent,
+        quoteId: supplier.quoteId,
+        itemsQuoted: supplier.itemsQuoted,
 
         normalizedPricePerSystem: calculateNormalizedPrice(supplier.adjustedTotal, supplier.itemsQuoted),
         variancePercent: calculateVariancePercent(supplier.adjustedTotal, averagePrice),

@@ -9,6 +9,8 @@ export interface EnhancedSupplierMetrics {
   systemsCovered: number;
   totalSystems: number;
   coveragePercent: number;
+  quoteId?: string;
+  itemsQuoted?: number;
 
   // NEW: Normalized metrics
   normalizedPricePerSystem: number;
@@ -179,10 +181,11 @@ export function generateSystemsBreakdown(
 }
 
 /**
- * Estimate scope gap costs
+ * Estimate scope gap costs using actual item-specific data
+ * FIXED: Uses individual item quantities and market rates instead of supplier average
  */
 export function estimateScopeGapCosts(
-  missingItems: Array<{ description: string; category?: string }>,
+  missingItems: Array<{ description: string; category?: string; quantity?: number; suppliers?: Record<string, any> }>,
   averageUnitRate: number,
   systemsCovered: number,
   totalSystems: number
@@ -190,24 +193,54 @@ export function estimateScopeGapCosts(
   const coveragePercent = (systemsCovered / totalSystems) * 100;
   const markup = 1.2; // 20% markup for missing items
 
-  return missingItems.slice(0, 5).map((item, index) => {
-    // Estimate cost based on average rate with markup
-    const estimatedCost = averageUnitRate * markup;
+  // Calculate individual costs for each missing item
+  const gaps = missingItems.map((item, index) => {
+    let baseRate = averageUnitRate;
+    const quantity = item.quantity || 1;
 
-    // Determine severity based on coverage and item priority
+    // Try to use market rate from other suppliers who quoted this item
+    if (item.suppliers) {
+      const supplierRates: number[] = [];
+      Object.values(item.suppliers).forEach((supplierData: any) => {
+        if (supplierData?.unitPrice && supplierData.unitPrice > 0) {
+          supplierRates.push(supplierData.unitPrice);
+        }
+      });
+
+      if (supplierRates.length > 0) {
+        // Use average of other suppliers' rates for this specific item
+        baseRate = supplierRates.reduce((sum, rate) => sum + rate, 0) / supplierRates.length;
+      }
+    }
+
+    // Calculate total cost: baseRate * quantity * markup
+    const estimatedCost = baseRate * quantity * markup;
+
+    // Determine severity based on cost magnitude and coverage
     let severity: 'low' | 'medium' | 'high' = 'medium';
-    if (coveragePercent > 90) {
-      severity = 'low';
-    } else if (coveragePercent < 70 || index < 2) {
+    if (estimatedCost > 10000 || (coveragePercent < 70 && index < 2)) {
       severity = 'high';
+    } else if (estimatedCost < 2000 || coveragePercent > 90) {
+      severity = 'low';
     }
 
     return {
       description: item.description,
-      estimatedCost,
+      estimatedCost: Math.round(estimatedCost),
       severity,
+      _sortCost: estimatedCost, // For sorting
     };
   });
+
+  // Sort by cost (highest first) and return top 5
+  return gaps
+    .sort((a, b) => b._sortCost - a._sortCost)
+    .slice(0, 5)
+    .map(({ description, estimatedCost, severity }) => ({
+      description,
+      estimatedCost,
+      severity,
+    }));
 }
 
 /**
