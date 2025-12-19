@@ -12,6 +12,7 @@ import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdo
 import CoverageBreakdownChart from '../components/award/CoverageBreakdownChart';
 import MethodologyFlowchart from '../components/award/MethodologyFlowchart';
 import EnhancedRecommendationsCard from '../components/award/EnhancedRecommendationsCard';
+import SupplierDetailModal from '../components/award/SupplierDetailModal';
 import {
   calculatePriceScore,
   calculateComplianceScore,
@@ -74,6 +75,7 @@ export default function AwardReportEnhanced({
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | null>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<EnhancedSupplierMetrics | null>(null);
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -731,7 +733,13 @@ export default function AwardReportEnhanced({
         <MethodologyFlowchart />
 
         {/* Enhanced Supplier Table */}
-        <EnhancedSupplierTable suppliers={enhancedSuppliers} />
+        <EnhancedSupplierTable
+          suppliers={enhancedSuppliers}
+          onSupplierClick={(supplierName) => {
+            const supplier = enhancedSuppliers.find(s => s.supplierName === supplierName);
+            setSelectedSupplier(supplier || null);
+          }}
+        />
 
         {/* Weighted Scoring Breakdown */}
         <WeightedScoringBreakdown suppliers={enhancedSuppliers} weights={weights} />
@@ -791,6 +799,12 @@ export default function AwardReportEnhanced({
           onToast={onToast}
         />
       )}
+
+      {/* Supplier Detail Modal */}
+      <SupplierDetailModal
+        supplier={selectedSupplier}
+        onClose={() => setSelectedSupplier(null)}
+      />
     </div>
   );
 }
