@@ -48,6 +48,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
   const [editMode, setEditMode] = useState(false);
   const [planName, setPlanName] = useState('');
   const [seatLimit, setSeatLimit] = useState(10);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<'trial' | 'active' | 'expired' | 'suspended' | 'cancelled'>('trial');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [ownerEmail, setOwnerEmail] = useState('');
   const [createdDate, setCreatedDate] = useState('');
@@ -93,6 +94,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
       setOrganisation(orgWithDefaults);
       setSeatLimit(org.seat_limit);
+      setSubscriptionStatus(org.subscription_status || 'trial');
       setCreatedDate(new Date(org.created_at).toLocaleDateString('en-GB', {
         day: 'numeric',
         month: 'short',
@@ -192,28 +194,28 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
     try {
       const planTierMap: Record<string, string> = {
         'Trial': 'trial',
-        'Starter': 'standard',
+        'Starter': 'starter',
         'Pro': 'professional',
         'Enterprise': 'enterprise'
       };
 
-      const pricingTier = planTierMap[planName] || 'standard';
+      const pricingTier = planTierMap[planName] || 'starter';
 
-      const { error: orgError } = await supabase
-        .from('organisations')
-        .update({
-          seat_limit: seatLimit,
-          pricing_tier: pricingTier
-        })
-        .eq('id', organisationId);
+      // Use the admin function to update subscription
+      const { data, error } = await supabase.rpc('admin_update_subscription', {
+        p_organisation_id: organisationId,
+        p_pricing_tier: pricingTier,
+        p_subscription_status: subscriptionStatus,
+        p_monthly_quote_limit: planName === 'Starter' ? 100 : planName === 'Pro' ? 500 : planName === 'Enterprise' ? 99999 : null
+      });
 
-      if (orgError) throw orgError;
+      if (error) throw error;
 
-      setToast({ type: 'success', message: 'Changes saved successfully' });
+      setToast({ type: 'success', message: 'Subscription updated successfully' });
       setEditMode(false);
       await loadOrganisation();
     } catch (error: any) {
-      setToast({ type: 'error', message: error.message || 'Failed to save changes' });
+      setToast({ type: 'error', message: error.message || 'Failed to update subscription' });
     } finally {
       setSaving(false);
     }
@@ -624,7 +626,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Plan</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Plan Tier</label>
                 <select
                   value={planName}
                   onChange={(e) => setPlanName(e.target.value)}
@@ -632,10 +634,38 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                   className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:opacity-50"
                 >
                   <option value="Trial">Trial (14 days)</option>
-                  <option value="Starter">Starter</option>
-                  <option value="Pro">Pro</option>
-                  <option value="Enterprise">Enterprise</option>
+                  <option value="Starter">Starter - $299/mo (100 quotes)</option>
+                  <option value="Pro">Professional - $599/mo (500 quotes)</option>
+                  <option value="Enterprise">Enterprise - Custom (Unlimited)</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Subscription Status</label>
+                <select
+                  value={subscriptionStatus}
+                  onChange={(e) => setSubscriptionStatus(e.target.value as any)}
+                  disabled={!editMode}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:opacity-50"
+                >
+                  <option value="trial">Trial</option>
+                  <option value="active">Active (Paid)</option>
+                  <option value="expired">Expired</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <p className="mt-1 text-xs text-slate-400">
+                  {subscriptionStatus === 'trial' && 'Trial accounts expire after 14 days'}
+                  {subscriptionStatus === 'active' && 'Active paid subscription with full access'}
+                  {subscriptionStatus === 'expired' && 'Trial period has ended, user cannot access app'}
+                  {subscriptionStatus === 'suspended' && 'Account suspended, no access'}
+                  {subscriptionStatus === 'cancelled' && 'Subscription cancelled, no access'}
+                </p>
+                {organisation.subscription_status === 'trial' && organisation.trial_end_date && (
+                  <p className="mt-1 text-xs text-amber-400">
+                    Trial ends: {new Date(organisation.trial_end_date).toLocaleDateString()}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -672,6 +702,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                       setEditMode(false);
                       setSeatLimit(organisation.seat_limit);
                       setPlanName(subscription?.plan_name || 'Trial');
+                      setSubscriptionStatus(organisation.subscription_status || 'trial');
                     }}
                     className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 transition"
                   >

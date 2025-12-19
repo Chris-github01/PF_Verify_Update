@@ -32,7 +32,11 @@ export default function TrialExpired() {
   };
 
   const handleContactSales = () => {
-    window.location.href = 'mailto:sales@passivefireverify.com?subject=Trial Upgrade Request';
+    window.location.href = 'mailto:sales@verifytrade.com?subject=Trial Upgrade Request';
+  };
+
+  const handleViewPricing = () => {
+    window.location.href = '/pricing';
   };
 
   const handleLogout = async () => {
@@ -155,11 +159,18 @@ export default function TrialExpired() {
             {/* Actions */}
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                onClick={handleContactSales}
+                onClick={handleViewPricing}
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-sky-500/50"
               >
-                <Mail size={20} />
-                Contact Sales to Upgrade
+                <CreditCard size={20} />
+                View Pricing Plans
+              </button>
+              <button
+                onClick={handleContactSales}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-slate-700/50 hover:bg-slate-700 text-white font-semibold rounded-lg transition-all duration-200 border border-slate-600/50"
+              >
+                <Mail size={18} />
+                Contact Sales
               </button>
               <button
                 onClick={handleLogout}
@@ -173,9 +184,17 @@ export default function TrialExpired() {
             <div className="text-center">
               <p className="text-sm text-slate-400">
                 Need help? Email us at{' '}
-                <a href="mailto:support@passivefireverify.com" className="text-sky-400 hover:text-sky-300 underline">
-                  support@passivefireverify.com
+                <a href="mailto:support@verifytrade.com" className="text-sky-400 hover:text-sky-300 underline">
+                  support@verifytrade.com
                 </a>
+              </p>
+            </div>
+
+            <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4 text-sm text-amber-300">
+              <p className="font-semibold mb-2">Trial Expired?</p>
+              <p className="text-amber-200">
+                View our pricing plans to upgrade your account and regain access to all your projects and data.
+                Contact our sales team for custom enterprise solutions.
               </p>
             </div>
           </div>
