@@ -59,6 +59,56 @@ export interface Database {
           approval_notes?: string | null
         }
       }
+      contract_allowances: {
+        Row: {
+          id: string
+          project_id: string
+          description: string
+          quantity: string
+          unit: string
+          rate: number | null
+          total: number
+          notes: string | null
+          category: string
+          is_provisional: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          description: string
+          quantity?: string
+          unit?: string
+          rate?: number | null
+          total: number
+          notes?: string | null
+          category?: string
+          is_provisional?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          description?: string
+          quantity?: string
+          unit?: string
+          rate?: number | null
+          total?: number
+          notes?: string | null
+          category?: string
+          is_provisional?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+        }
+      }
       organisations: {
         Row: {
           id: string

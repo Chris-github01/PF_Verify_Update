@@ -146,6 +146,12 @@ Deno.serve(async (req: Request) => {
       .select('*')
       .eq('project_id', projectId);
 
+    const { data: allowancesData } = await supabase
+      .from('contract_allowances')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('sort_order');
+
     const awardResult = awardReport?.result_json || {};
     const awardSummary = awardResult.awardSummary || {};
     const bestSupplier = awardSummary.suppliers?.[0] || {};
@@ -177,6 +183,15 @@ Deno.serve(async (req: Request) => {
     scopeSystems.forEach(system => {
       system.percentage = totalItems > 0 ? (system.item_count / totalItems) * 100 : 0;
     });
+
+    const realAllowances = (allowancesData || []).map(a => ({
+      description: a.description,
+      quantity: a.quantity,
+      unit: a.unit,
+      rate: a.rate,
+      total: a.total,
+      notes: a.notes
+    }));
 
     if (mode === 'junior_pack') {
       const htmlContent = generateJuniorPackHTML(project.name, project.client || 'TBC', supplierName, scopeSystems, organisationLogoUrl);
@@ -247,7 +262,7 @@ Deno.serve(async (req: Request) => {
         'Working hours are standard day shift (7am-5pm weekdays).',
         'Site facilities (power, water, parking) are available.'
       ],
-      allowances: [
+      allowances: realAllowances.length > 0 ? realAllowances : [
         {
           description: 'Remedial fire stopping allowance',
           quantity: '20',
