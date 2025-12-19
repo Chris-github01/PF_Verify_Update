@@ -211,6 +211,14 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
       if (error) throw error;
 
+      // Also update seat limit separately
+      const { error: seatError } = await supabase
+        .from('organisations')
+        .update({ seat_limit: seatLimit })
+        .eq('id', organisationId);
+
+      if (seatError) throw seatError;
+
       setToast({ type: 'success', message: 'Subscription updated successfully' });
       setEditMode(false);
       await loadOrganisation();
