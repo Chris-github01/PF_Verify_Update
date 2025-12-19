@@ -66,6 +66,16 @@ export default function ApprovalModal({
     ? allSuppliers[0].weightedTotal - allSuppliers[1].weightedTotal
     : 0;
 
+  // Debug logging
+  console.log('🎯 ApprovalModal State:', {
+    selectedSupplier,
+    aiRecommended: aiRecommendedSupplier.supplierName,
+    isOverride,
+    hasSelectedSupplierData: !!selectedSupplierData,
+    overrideReason,
+    overrideDetail: overrideDetail.substring(0, 50) + '...'
+  });
+
   const handleSubmit = async () => {
     // Validation
     if (!selectedSupplier) {
@@ -180,10 +190,10 @@ export default function ApprovalModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-slate-800 rounded-2xl shadow-2xl border-2 border-slate-700 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-slate-800 rounded-2xl shadow-2xl border-2 border-slate-700 max-w-3xl w-full flex flex-col max-h-[95vh]">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-orange-900/40 to-orange-800/20 border-b-2 border-orange-600/30 px-8 py-6">
+        <div className="flex-shrink-0 bg-gradient-to-r from-orange-900/40 to-orange-800/20 border-b-2 border-orange-600/30 px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 bg-orange-600 rounded-xl flex items-center justify-center">
@@ -205,7 +215,7 @@ export default function ApprovalModal({
           </div>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="flex-1 overflow-y-auto p-8 space-y-6">
           {/* Close Score Warning */}
           {showCloseScoreWarning && (
             <div className="bg-yellow-900/20 border-l-4 border-yellow-600 rounded-r-lg p-4">
@@ -265,6 +275,21 @@ export default function ApprovalModal({
             </select>
           </div>
 
+          {/* Override Warning Banner */}
+          {isOverride && (
+            <div className="bg-yellow-600/20 border-2 border-yellow-500 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 text-yellow-400 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-bold text-yellow-300 mb-1">⚠️ OVERRIDE DETECTED</p>
+                  <p className="text-sm text-yellow-200">
+                    You are selecting <span className="font-bold">{selectedSupplier}</span> instead of the AI-recommended supplier <span className="font-bold">{aiRecommendedSupplier.supplierName}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Selected Supplier Details */}
           {selectedSupplierData && (
             <div className={`border-2 rounded-xl p-6 ${
@@ -304,10 +329,15 @@ export default function ApprovalModal({
 
           {/* Override Reason (only if different from AI) */}
           {isOverride && (
-            <div className="space-y-4 bg-yellow-900/10 border-l-4 border-yellow-600 rounded-r-xl p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                <p className="font-semibold text-yellow-300">Override Justification Required</p>
+            <div className="space-y-4 bg-yellow-900/20 border-2 border-yellow-600/60 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-yellow-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-yellow-300 text-lg">Override Justification Required</p>
+                  <p className="text-sm text-yellow-200/80">You must provide a reason for selecting a different supplier</p>
+                </div>
               </div>
 
               <div>
@@ -350,7 +380,7 @@ export default function ApprovalModal({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-slate-800 border-t-2 border-slate-700 px-8 py-6">
+        <div className="flex-shrink-0 bg-slate-800 border-t-2 border-slate-700 px-8 py-6">
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-400">
               {isOverride ? (
