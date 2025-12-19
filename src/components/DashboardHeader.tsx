@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronDown, Bell, User, Building2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
+import TradeModuleBadge from './TradeModuleBadge';
 
 interface DashboardHeaderProps {
   currentProjectId?: string;
@@ -27,6 +28,7 @@ export default function DashboardHeader({
   const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [currentProjectTrade, setCurrentProjectTrade] = useState<string>('passive_fire');
   const { currentOrganisation } = useOrganisation();
 
   useEffect(() => {
@@ -34,16 +36,36 @@ export default function DashboardHeader({
     loadUser();
   }, [currentOrganisation]);
 
+  useEffect(() => {
+    if (currentProjectId) {
+      loadCurrentProjectTrade();
+    }
+  }, [currentProjectId]);
+
   const loadProjects = async () => {
     if (!currentOrganisation) return;
 
     const { data } = await supabase
       .from('projects')
-      .select('id, name, client, reference')
+      .select('id, name, client, reference, trade')
       .eq('organisation_id', currentOrganisation.id)
       .order('updated_at', { ascending: false });
 
     if (data) setProjects(data);
+  };
+
+  const loadCurrentProjectTrade = async () => {
+    if (!currentProjectId) return;
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('trade')
+      .eq('id', currentProjectId)
+      .maybeSingle();
+
+    if (!error && data) {
+      setCurrentProjectTrade(data.trade || 'passive_fire');
+    }
   };
 
   const loadUser = async () => {
@@ -63,6 +85,12 @@ export default function DashboardHeader({
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Building2 size={16} />
               <span>{currentOrganisation.name}</span>
+            </div>
+          )}
+
+          {currentProjectId && (
+            <div className="hidden lg:flex border-l border-gray-300 pl-4 ml-4">
+              <TradeModuleBadge trade={currentProjectTrade} />
             </div>
           )}
 

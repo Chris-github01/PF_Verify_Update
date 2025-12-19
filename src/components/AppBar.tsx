@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
+import TradeModuleBadge from './TradeModuleBadge';
 
 export type PrimaryTab = 'project' | 'import' | 'analysis' | 'reports';
 
@@ -27,6 +28,7 @@ interface Project {
   name: string;
   client: string | null;
   reference: string | null;
+  trade?: string;
 }
 
 export default function AppBar({
@@ -43,6 +45,7 @@ export default function AppBar({
   const { currentOrganisation } = useOrganisation();
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [currentProjectTrade, setCurrentProjectTrade] = useState<string>('passive_fire');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,6 +53,12 @@ export default function AppBar({
       loadProjects();
     }
   }, [currentOrganisation]);
+
+  useEffect(() => {
+    if (currentProjectId) {
+      loadCurrentProjectTrade();
+    }
+  }, [currentProjectId]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -69,12 +78,26 @@ export default function AppBar({
 
     const { data, error } = await supabase
       .from('projects')
-      .select('id, name, client, reference')
+      .select('id, name, client, reference, trade')
       .eq('organisation_id', currentOrganisation.id)
       .order('name', { ascending: true });
 
     if (!error && data) {
       setProjects(data);
+    }
+  };
+
+  const loadCurrentProjectTrade = async () => {
+    if (!currentProjectId) return;
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('trade')
+      .eq('id', currentProjectId)
+      .maybeSingle();
+
+    if (!error && data) {
+      setCurrentProjectTrade(data.trade || 'passive_fire');
     }
   };
 
@@ -109,6 +132,12 @@ export default function AppBar({
                 </span>
               )}
             </button>
+          )}
+
+          {currentProjectId && (
+            <div className="hidden xl:flex">
+              <TradeModuleBadge trade={currentProjectTrade} compact />
+            </div>
           )}
 
           {currentProjectId && currentProjectName && (
