@@ -276,6 +276,8 @@ export default function AwardReport({
       const dataStartRow = 6;
       const range = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 5, c: 2 } };
 
+      const supplierTotals = suppliers.map(() => 0);
+
       comparisonData.forEach((row, idx) => {
         const rowNum = dataStartRow + idx;
 
@@ -308,6 +310,7 @@ export default function AwardReport({
               v: supplierData.total,
               z: '"$"#,##0.00'
             };
+            supplierTotals[supplierIdx] += supplierData.total || 0;
           } else {
             ws[XLSX.utils.encode_cell({ r: rowNum, c: unitRateCol })] = {
               t: 's',
@@ -324,6 +327,22 @@ export default function AwardReport({
         range.e.c = Math.max(range.e.c, startCol + (suppliers.length * 2) - 1);
       });
 
+      const subtotalRow = dataStartRow + comparisonData.length;
+      ws[XLSX.utils.encode_cell({ r: subtotalRow, c: 0 })] = {
+        t: 's',
+        v: 'Subtotals:'
+      };
+
+      suppliers.forEach((supplier, supplierIdx) => {
+        const totalCol = startCol + (supplierIdx * 2) + 1;
+        ws[XLSX.utils.encode_cell({ r: subtotalRow, c: totalCol })] = {
+          t: 'n',
+          v: supplierTotals[supplierIdx],
+          z: '$#,##0.00'
+        };
+      });
+
+      range.e.r = Math.max(range.e.r, subtotalRow);
       ws['!ref'] = XLSX.utils.encode_range(range);
 
       const sanitizedProjectName = (currentProject?.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
