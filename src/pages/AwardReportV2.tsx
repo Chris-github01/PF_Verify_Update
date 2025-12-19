@@ -45,6 +45,17 @@ interface ReportData {
   conditionsOfAward: string[];
 }
 
+interface ApprovalData {
+  id: string;
+  ai_recommended_supplier: string;
+  final_approved_supplier: string;
+  is_override: boolean;
+  override_reason_category: string | null;
+  override_reason_detail: string | null;
+  approved_at: string;
+  approved_by_email: string;
+}
+
 interface AwardReportV2Props {
   projectId: string;
   onToast?: (message: string, type: 'success' | 'error') => void;
@@ -65,6 +76,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
   const [approvedSupplierQuoteId, setApprovedSupplierQuoteId] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState(false);
   const [quoteDate, setQuoteDate] = useState<string>('');
+  const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
 
   useEffect(() => {
     if (projectId) {
@@ -72,6 +84,12 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
       loadIntelligenceData();
     }
   }, [projectId]);
+
+  useEffect(() => {
+    if (reportId) {
+      loadApprovalData();
+    }
+  }, [reportId]);
 
   const loadIntelligenceData = async () => {
     setLoadingIntelligence(true);
@@ -82,6 +100,47 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
       console.error('Error loading intelligence data:', error);
     } finally {
       setLoadingIntelligence(false);
+    }
+  };
+
+  const loadApprovalData = async () => {
+    if (!reportId) return;
+
+    try {
+      const { data: approvals } = await supabase
+        .from('award_approvals')
+        .select(`
+          id,
+          ai_recommended_supplier,
+          final_approved_supplier,
+          is_override,
+          override_reason_category,
+          override_reason_detail,
+          approved_at,
+          approved_by_user_id
+        `)
+        .eq('award_report_id', reportId)
+        .order('approved_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (approvals) {
+        const { data: userData } = await supabase
+          .from('organisation_members')
+          .select('user_id')
+          .eq('user_id', approvals.approved_by_user_id)
+          .maybeSingle();
+
+        const approvalWithEmail = {
+          ...approvals,
+          approved_by_email: userData?.user_id || 'Unknown'
+        };
+
+        setApprovalData(approvalWithEmail);
+        setIsApproved(true);
+      }
+    } catch (error) {
+      console.error('Error loading approval data:', error);
     }
   };
 
@@ -356,6 +415,42 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
           <ul style="padding-left: 24px; line-height: 1.8; color: #374151;">
             ${reportData.conditionsOfAward.map(condition => `<li style="margin-bottom: 8px;">${condition}</li>`).join('')}
           </ul>
+        `
+      });
+    }
+
+    // Add Approval Details if available
+    if (approvalData) {
+      const overrideTag = approvalData.is_override
+        ? `<span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 8px;">OVERRIDE</span>`
+        : '';
+
+      additionalSections.push({
+        title: `Approval Decision${overrideTag}`,
+        content: `
+          <div style="background: ${approvalData.is_override ? '#fef3c7' : '#dcfce7'}; border: 2px solid ${approvalData.is_override ? '#f59e0b' : '#22c55e'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div>
+                <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Verify+ Recommended</p>
+                <p style="font-size: 16px; color: #111827; font-weight: 600;">${approvalData.ai_recommended_supplier}</p>
+              </div>
+              <div>
+                <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Final Approved Supplier</p>
+                <p style="font-size: 16px; color: ${approvalData.is_override ? '#d97706' : '#059669'}; font-weight: 700;">${approvalData.final_approved_supplier}</p>
+              </div>
+            </div>
+            ${approvalData.is_override ? `
+              <div style="border-top: 2px solid #f59e0b; padding-top: 16px; margin-top: 16px;">
+                <p style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 8px;">Override Reason:</p>
+                <p style="font-size: 14px; color: #78350f; font-weight: 600; margin-bottom: 8px;">${approvalData.override_reason_category?.replace(/_/g, ' ').toUpperCase() || 'N/A'}</p>
+                <p style="font-size: 14px; color: #451a03; line-height: 1.6;">${approvalData.override_reason_detail || 'No additional details provided.'}</p>
+              </div>
+            ` : ''}
+            <div style="border-top: 1px solid ${approvalData.is_override ? '#fbbf24' : '#86efac'}; padding-top: 12px; margin-top: 16px; display: flex; justify-content: space-between; font-size: 12px; color: #6b7280;">
+              <span><strong>Approved By:</strong> ${approvalData.approved_by_email}</span>
+              <span><strong>Approved At:</strong> ${new Date(approvalData.approved_at).toLocaleString()}</span>
+            </div>
+          </div>
         `
       });
     }

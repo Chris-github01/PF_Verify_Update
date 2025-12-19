@@ -410,11 +410,11 @@ export default function ApprovalModal({
             <p className="text-sm text-slate-400">
               {isOverride ? (
                 <span className="text-yellow-400">
-                  <strong>Override:</strong> You are selecting a different supplier than recommended by AI
+                  <strong>Override:</strong> You are selecting a different supplier than recommended by Verify+
                 </span>
               ) : (
                 <span className="text-green-400">
-                  <strong>Confirmed:</strong> You are approving the AI recommendation
+                  <strong>Confirmed:</strong> You are approving the Verify+ recommendation
                 </span>
               )}
             </p>
