@@ -109,6 +109,141 @@ export interface Database {
           created_by?: string | null
         }
       }
+      letters_of_intent: {
+        Row: {
+          id: string
+          project_id: string
+          supplier_name: string
+          supplier_contact: string | null
+          supplier_email: string | null
+          scope_summary: string
+          service_types: Json
+          target_start_date: string | null
+          target_completion_date: string | null
+          key_milestones: Json
+          next_steps_checklist: Json
+          custom_terms: string | null
+          status: string
+          generated_at: string
+          sent_at: string | null
+          acknowledged_at: string | null
+          user_confirmed_nonbinding: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          supplier_name: string
+          supplier_contact?: string | null
+          supplier_email?: string | null
+          scope_summary: string
+          service_types?: Json
+          target_start_date?: string | null
+          target_completion_date?: string | null
+          key_milestones?: Json
+          next_steps_checklist?: Json
+          custom_terms?: string | null
+          status?: string
+          generated_at?: string
+          sent_at?: string | null
+          acknowledged_at?: string | null
+          user_confirmed_nonbinding?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          supplier_name?: string
+          supplier_contact?: string | null
+          supplier_email?: string | null
+          scope_summary?: string
+          service_types?: Json
+          target_start_date?: string | null
+          target_completion_date?: string | null
+          key_milestones?: Json
+          next_steps_checklist?: Json
+          custom_terms?: string | null
+          status?: string
+          generated_at?: string
+          sent_at?: string | null
+          acknowledged_at?: string | null
+          user_confirmed_nonbinding?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      onboarding_compliance_documents: {
+        Row: {
+          id: string
+          project_id: string
+          document_type: string
+          document_name: string
+          file_path: string
+          status: string
+          notes: string | null
+          uploaded_at: string
+          verified_at: string | null
+          verified_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          document_type: string
+          document_name: string
+          file_path: string
+          status?: string
+          notes?: string | null
+          uploaded_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          document_type?: string
+          document_name?: string
+          file_path?: string
+          status?: string
+          notes?: string | null
+          uploaded_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          created_at?: string
+        }
+      }
+      onboarding_audit_log: {
+        Row: {
+          id: string
+          project_id: string
+          event_type: string
+          event_data: Json
+          user_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          event_type: string
+          event_data?: Json
+          user_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          event_type?: string
+          event_data?: Json
+          user_id?: string | null
+          created_at?: string
+        }
+      }
       organisations: {
         Row: {
           id: string

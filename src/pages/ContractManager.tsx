@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { useOrganisation } from '../lib/organisationContext';
@@ -44,7 +44,36 @@ interface Allowance {
   sort_order: number;
 }
 
-type TabId = 'summary' | 'scope' | 'inclusions' | 'allowances' | 'variations';
+interface LetterOfIntent {
+  id: string;
+  supplier_name: string;
+  supplier_contact: string | null;
+  supplier_email: string | null;
+  scope_summary: string;
+  service_types: string[];
+  target_start_date: string | null;
+  target_completion_date: string | null;
+  key_milestones: Array<{ title: string; date: string }>;
+  next_steps_checklist: Array<{ step: string; completed: boolean }>;
+  custom_terms: string | null;
+  status: string;
+  user_confirmed_nonbinding: boolean;
+  generated_at: string;
+  sent_at: string | null;
+}
+
+interface ComplianceDocument {
+  id: string;
+  document_type: string;
+  document_name: string;
+  file_path: string;
+  status: string;
+  notes: string | null;
+  uploaded_at: string;
+  verified_at: string | null;
+}
+
+type TabId = 'summary' | 'scope' | 'inclusions' | 'allowances' | 'variations' | 'onboarding';
 
 export default function ContractManager({ projectId, onNavigateBack, dashboardMode = 'original' }: ContractManagerProps) {
   const [activeTab, setActiveTab] = useState<TabId>('summary');
@@ -54,6 +83,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   const [scopeSystems, setScopeSystems] = useState<ScopeSystem[]>([]);
   const [generatingJunior, setGeneratingJunior] = useState(false);
   const [generatingSenior, setGeneratingSenior] = useState(false);
+  const [isApproved, setIsApproved] = useState(false);
   const { currentOrganisation } = useOrganisation();
 
   useEffect(() => {
@@ -88,6 +118,18 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             total_amount: approvedQuote.total_amount || 0,
             awarded_date: approvedQuote.updated_at
           });
+
+          const { data: awardReport } = await supabase
+            .from('award_reports')
+            .select('approved_at')
+            .eq('project_id', projectId)
+            .order('generated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (awardReport?.approved_at) {
+            setIsApproved(true);
+          }
         }
 
         const { data: quoteItems } = await supabase
@@ -207,13 +249,17 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
     }
   };
 
-  const tabs = [
+  const baseTabs = [
     { id: 'summary' as TabId, label: 'Contract Summary', icon: FileText },
     { id: 'scope' as TabId, label: 'Scope & Systems', icon: CheckCircle },
     { id: 'inclusions' as TabId, label: 'Inclusions & Exclusions', icon: FileCheck },
     { id: 'allowances' as TabId, label: 'Allowances', icon: FileText },
     { id: 'variations' as TabId, label: 'Variations Log', icon: AlertCircle },
   ];
+
+  const tabs = isApproved
+    ? [...baseTabs, { id: 'onboarding' as TabId, label: 'Subcontractor Onboarding', icon: UserCheck }]
+    : baseTabs;
 
   if (loading) {
     return (
@@ -341,6 +387,14 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
               {activeTab === 'inclusions' && <InclusionsExclusionsTab />}
               {activeTab === 'allowances' && <AllowancesTab projectId={projectId} />}
               {activeTab === 'variations' && <VariationsLogTab />}
+              {activeTab === 'onboarding' && isApproved && (
+                <OnboardingTab
+                  projectId={projectId}
+                  awardInfo={awardInfo}
+                  scopeSystems={scopeSystems}
+                  organisationLogoUrl={currentOrganisation?.logo_url || null}
+                />
+              )}
             </div>
           </>
         )}
@@ -946,4 +1000,855 @@ function VariationsLogTab() {
       </p>
     </div>
   );
+}
+
+interface OnboardingTabProps {
+  projectId: string;
+  awardInfo: AwardInfo | null;
+  scopeSystems: ScopeSystem[];
+  organisationLogoUrl: string | null;
+}
+
+function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl }: OnboardingTabProps) {
+  const [currentStep, setCurrentStep] = useState<'loi' | 'compliance' | 'handover'>('loi');
+  const [loi, setLoi] = useState<LetterOfIntent | null>(null);
+  const [loadingLoi, setLoadingLoi] = useState(true);
+  const [complianceDocs, setComplianceDocs] = useState<ComplianceDocument[]>([]);
+  const [loadingCompliance, setLoadingCompliance] = useState(true);
+
+  useEffect(() => {
+    loadOnboardingData();
+  }, [projectId]);
+
+  const loadOnboardingData = async () => {
+    try {
+      const { data: loiData } = await supabase
+        .from('letters_of_intent')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (loiData) {
+        setLoi(loiData as any);
+      }
+
+      const { data: complianceData } = await supabase
+        .from('onboarding_compliance_documents')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('uploaded_at', { ascending: false });
+
+      setComplianceDocs((complianceData || []) as any);
+    } catch (error) {
+      console.error('Error loading onboarding data:', error);
+    } finally {
+      setLoadingLoi(false);
+      setLoadingCompliance(false);
+    }
+  };
+
+  const steps = [
+    { id: 'loi', label: 'Letter of Intent', icon: FileText, completed: loi !== null },
+    { id: 'compliance', label: 'Compliance Documents', icon: Shield, completed: complianceDocs.length > 0 },
+    { id: 'handover', label: 'Handover Packs', icon: Download, completed: false }
+  ];
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-2xl font-bold text-white mb-2">Subcontractor Onboarding</h3>
+        <p className="text-slate-400">Guided onboarding process for your awarded subcontractor</p>
+      </div>
+
+      <div className="flex items-center justify-between bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          const isActive = currentStep === step.id;
+          const isCompleted = step.completed;
+
+          return (
+            <div key={step.id} className="flex items-center flex-1">
+              <button
+                onClick={() => setCurrentStep(step.id as any)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                  isActive
+                    ? 'bg-blue-900/30 border border-blue-700'
+                    : isCompleted
+                    ? 'bg-green-900/20 border border-green-700/50'
+                    : 'bg-slate-800/50 border border-slate-700/50'
+                }`}
+              >
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                    isCompleted
+                      ? 'bg-green-600 text-white'
+                      : isActive
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-700 text-slate-400'
+                  }`}
+                >
+                  {isCompleted ? <CheckCircle size={16} /> : <Icon size={16} />}
+                </div>
+                <div className="text-left">
+                  <div className={`text-sm font-medium ${isActive ? 'text-blue-400' : isCompleted ? 'text-green-400' : 'text-slate-400'}`}>
+                    Step {index + 1}
+                  </div>
+                  <div className={`text-xs ${isActive ? 'text-blue-300' : isCompleted ? 'text-green-300' : 'text-slate-500'}`}>
+                    {step.label}
+                  </div>
+                </div>
+              </button>
+              {index < steps.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-2 ${isCompleted ? 'bg-green-600' : 'bg-slate-700'}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="bg-slate-800/30 rounded-lg border border-slate-700/50 p-6">
+        {currentStep === 'loi' && (
+          <LOIStep
+            projectId={projectId}
+            awardInfo={awardInfo}
+            scopeSystems={scopeSystems}
+            organisationLogoUrl={organisationLogoUrl}
+            existingLoi={loi}
+            onLoiUpdated={loadOnboardingData}
+          />
+        )}
+        {currentStep === 'compliance' && (
+          <ComplianceStep
+            projectId={projectId}
+            complianceDocs={complianceDocs}
+            onDocsUpdated={loadOnboardingData}
+          />
+        )}
+        {currentStep === 'handover' && (
+          <HandoverStep projectId={projectId} awardInfo={awardInfo} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface LOIStepProps {
+  projectId: string;
+  awardInfo: AwardInfo | null;
+  scopeSystems: ScopeSystem[];
+  organisationLogoUrl: string | null;
+  existingLoi: LetterOfIntent | null;
+  onLoiUpdated: () => void;
+}
+
+function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, existingLoi, onLoiUpdated }: LOIStepProps) {
+  const [showForm, setShowForm] = useState(false);
+  const [confirmedNonBinding, setConfirmedNonBinding] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [formData, setFormData] = useState({
+    supplier_contact: '',
+    supplier_email: '',
+    scope_summary: `Fire protection and passive fire stopping works for ${awardInfo?.supplier_name || 'project'}`,
+    target_start_date: '',
+    target_completion_date: '',
+    custom_terms: ''
+  });
+
+  const handleGenerate = async () => {
+    if (!confirmedNonBinding) {
+      alert('Please confirm that you understand this is a non-binding document');
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const serviceTypes = scopeSystems.map(s => s.service_type);
+
+      const { error } = await supabase.from('letters_of_intent').insert({
+        project_id: projectId,
+        supplier_name: awardInfo?.supplier_name || 'TBC',
+        supplier_contact: formData.supplier_contact,
+        supplier_email: formData.supplier_email,
+        scope_summary: formData.scope_summary,
+        service_types: serviceTypes,
+        target_start_date: formData.target_start_date || null,
+        target_completion_date: formData.target_completion_date || null,
+        key_milestones: [
+          { title: 'Site Mobilization', date: formData.target_start_date || 'TBC' },
+          { title: 'Works Completion', date: formData.target_completion_date || 'TBC' }
+        ],
+        next_steps_checklist: [
+          { step: 'Provide insurance certificates', completed: false },
+          { step: 'Submit method statements', completed: false },
+          { step: 'Confirm availability and resources', completed: false },
+          { step: 'Review scope and schedule', completed: false }
+        ],
+        custom_terms: formData.custom_terms,
+        status: 'draft',
+        user_confirmed_nonbinding: confirmedNonBinding
+      });
+
+      if (error) throw error;
+
+      await supabase.rpc('log_onboarding_event', {
+        p_project_id: projectId,
+        p_event_type: 'loi_generated',
+        p_event_data: { supplier: awardInfo?.supplier_name }
+      });
+
+      alert('Letter of Intent generated successfully!');
+      setShowForm(false);
+      onLoiUpdated();
+    } catch (error) {
+      console.error('Error generating LOI:', error);
+      alert('Failed to generate Letter of Intent');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!existingLoi) return;
+
+    const htmlContent = generateLOIHtml(existingLoi, awardInfo, organisationLogoUrl);
+    generatePdfWithPrint(htmlContent, `LOI_Draft_${awardInfo?.supplier_name?.replace(/[^a-zA-Z0-9]/g, '_')}`);
+  };
+
+  if (!awardInfo) {
+    return <div className="text-slate-400">No award information available</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h4 className="text-xl font-bold text-white mb-2">Letter of Intent</h4>
+          <p className="text-slate-400">Generate a non-binding letter of intent for your subcontractor</p>
+        </div>
+        {existingLoi && !showForm && (
+          <div className="flex gap-2">
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-all"
+            >
+              <Download size={16} />
+              Download LOI
+            </button>
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md transition-all"
+            >
+              <Edit2 size={16} />
+              Regenerate
+            </button>
+          </div>
+        )}
+        {!existingLoi && !showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md hover:from-blue-700 hover:to-blue-800 transition-all"
+          >
+            <Plus size={16} />
+            Generate Letter of Intent
+          </button>
+        )}
+      </div>
+
+      <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <Shield className="text-red-400 flex-shrink-0 mt-0.5" size={20} />
+          <div className="text-sm text-red-300">
+            <div className="font-semibold mb-1">LEGAL DISCLAIMER</div>
+            <p>
+              This Letter of Intent is a NON-BINDING expression of intent only. No contractual relationship is created until formal contract execution.
+              This document is subject to legal review and creates no liability. Always consult with legal counsel before sending.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {showForm && (
+        <div className="space-y-4 bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Contact Person</label>
+              <input
+                type="text"
+                value={formData.supplier_contact}
+                onChange={(e) => setFormData({ ...formData, supplier_contact: e.target.value })}
+                placeholder="John Smith"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+              <input
+                type="email"
+                value={formData.supplier_email}
+                onChange={(e) => setFormData({ ...formData, supplier_email: e.target.value })}
+                placeholder="john@supplier.com"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Scope Summary</label>
+            <textarea
+              value={formData.scope_summary}
+              onChange={(e) => setFormData({ ...formData, scope_summary: e.target.value })}
+              rows={3}
+              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Target Start Date</label>
+              <input
+                type="date"
+                value={formData.target_start_date}
+                onChange={(e) => setFormData({ ...formData, target_start_date: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Target Completion Date</label>
+              <input
+                type="date"
+                value={formData.target_completion_date}
+                onChange={(e) => setFormData({ ...formData, target_completion_date: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Additional Terms (Optional)</label>
+            <textarea
+              value={formData.custom_terms}
+              onChange={(e) => setFormData({ ...formData, custom_terms: e.target.value })}
+              rows={3}
+              placeholder="Any additional terms or conditions..."
+              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+            />
+          </div>
+
+          <div className="bg-orange-900/20 border border-orange-700/50 rounded-lg p-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmedNonBinding}
+                onChange={(e) => setConfirmedNonBinding(e.target.checked)}
+                className="mt-1"
+              />
+              <span className="text-sm text-orange-300">
+                I confirm that I understand this is a NON-BINDING document and creates no legal obligations or liabilities.
+                I will seek legal review before sending to the subcontractor.
+              </span>
+            </label>
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setShowForm(false)}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={generating || !confirmedNonBinding}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generating ? 'Generating...' : 'Generate LOI'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {existingLoi && !showForm && (
+        <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-700">
+            <div>
+              <div className="text-sm text-slate-400">Generated</div>
+              <div className="text-white font-medium">
+                {new Date(existingLoi.generated_at).toLocaleDateString()}
+              </div>
+            </div>
+            <div className={`px-3 py-1 rounded text-sm ${
+              existingLoi.status === 'sent'
+                ? 'bg-blue-900/30 text-blue-400 border border-blue-700'
+                : existingLoi.status === 'acknowledged'
+                ? 'bg-green-900/30 text-green-400 border border-green-700'
+                : 'bg-slate-800 text-slate-400 border border-slate-700'
+            }`}>
+              {existingLoi.status.charAt(0).toUpperCase() + existingLoi.status.slice(1)}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <div className="text-slate-400">Supplier</div>
+              <div className="text-white font-medium">{existingLoi.supplier_name}</div>
+            </div>
+            <div>
+              <div className="text-slate-400">Contact</div>
+              <div className="text-white">{existingLoi.supplier_contact || 'N/A'}</div>
+            </div>
+            <div>
+              <div className="text-slate-400">Target Start</div>
+              <div className="text-white">
+                {existingLoi.target_start_date
+                  ? new Date(existingLoi.target_start_date).toLocaleDateString()
+                  : 'TBC'}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-400">Target Completion</div>
+              <div className="text-white">
+                {existingLoi.target_completion_date
+                  ? new Date(existingLoi.target_completion_date).toLocaleDateString()
+                  : 'TBC'}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-sm text-slate-400 mb-2">Service Types</div>
+            <div className="flex flex-wrap gap-2">
+              {existingLoi.service_types.map((type, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-blue-900/30 text-blue-400 text-sm rounded border border-blue-700"
+                >
+                  {type}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ComplianceStepProps {
+  projectId: string;
+  complianceDocs: ComplianceDocument[];
+  onDocsUpdated: () => void;
+}
+
+function ComplianceStep({ projectId, complianceDocs, onDocsUpdated }: ComplianceStepProps) {
+  const [uploading, setUploading] = useState(false);
+
+  const requiredDocs = [
+    { type: 'insurance', label: 'Public Liability Insurance', icon: Shield },
+    { type: 'safety', label: 'Health & Safety Documentation', icon: Shield },
+    { type: 'license', label: 'Trade License/Certification', icon: FileCheck },
+    { type: 'method_statement', label: 'Method Statements', icon: FileText }
+  ];
+
+  const handleFileUpload = async (docType: string, file: File) => {
+    setUploading(true);
+    try {
+      const filePath = `${projectId}/${docType}/${Date.now()}_${file.name}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('compliance-documents')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase
+        .from('onboarding_compliance_documents')
+        .insert({
+          project_id: projectId,
+          document_type: docType,
+          document_name: file.name,
+          file_path: filePath,
+          status: 'submitted'
+        });
+
+      if (dbError) throw dbError;
+
+      await supabase.rpc('log_onboarding_event', {
+        p_project_id: projectId,
+        p_event_type: 'compliance_uploaded',
+        p_event_data: { document_type: docType, file_name: file.name }
+      });
+
+      onDocsUpdated();
+      alert('Document uploaded successfully!');
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload document');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h4 className="text-xl font-bold text-white mb-2">Compliance Documents</h4>
+        <p className="text-slate-400">Collect required documentation from your subcontractor</p>
+      </div>
+
+      <div className="grid gap-4">
+        {requiredDocs.map((doc) => {
+          const Icon = doc.icon;
+          const submitted = complianceDocs.filter(d => d.document_type === doc.type);
+
+          return (
+            <div key={doc.type} className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-800 rounded-lg">
+                    <Icon className="text-blue-400" size={20} />
+                  </div>
+                  <div>
+                    <div className="text-white font-medium">{doc.label}</div>
+                    <div className="text-sm text-slate-400">
+                      {submitted.length} document{submitted.length !== 1 ? 's' : ''} uploaded
+                    </div>
+                  </div>
+                </div>
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileUpload(doc.type, file);
+                    }}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                  <div className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-all text-sm">
+                    <Upload size={16} />
+                    Upload
+                  </div>
+                </label>
+              </div>
+
+              {submitted.length > 0 && (
+                <div className="space-y-2 mt-3 pt-3 border-t border-slate-700">
+                  {submitted.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <FileText size={14} className="text-slate-400" />
+                        <span className="text-white">{doc.document_name}</span>
+                      </div>
+                      <div className={`px-2 py-1 rounded text-xs ${
+                        doc.status === 'verified'
+                          ? 'bg-green-900/30 text-green-400'
+                          : doc.status === 'rejected'
+                          ? 'bg-red-900/30 text-red-400'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {doc.status}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+interface HandoverStepProps {
+  projectId: string;
+  awardInfo: AwardInfo | null;
+}
+
+function HandoverStep({ projectId, awardInfo }: HandoverStepProps) {
+  const [generatingJunior, setGeneratingJunior] = useState(false);
+  const [generatingSenior, setGeneratingSenior] = useState(false);
+
+  const handleGenerateJuniorPack = async () => {
+    setGeneratingJunior(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          mode: 'junior_pack'
+        })
+      });
+
+      if (!response.ok) throw new Error('Export failed');
+
+      const result = await response.json();
+      const filename = `JuniorSiteTeamPack_${awardInfo?.supplier_name?.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      generatePdfWithPrint(result.html, filename);
+
+      await supabase.rpc('log_onboarding_event', {
+        p_project_id: projectId,
+        p_event_type: 'handover_pack_generated',
+        p_event_data: { pack_type: 'junior' }
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to generate Junior Pack');
+    } finally {
+      setGeneratingJunior(false);
+    }
+  };
+
+  const handleGenerateSeniorPack = async () => {
+    setGeneratingSenior(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          mode: 'senior_report'
+        })
+      });
+
+      if (!response.ok) throw new Error('Export failed');
+
+      const result = await response.json();
+      const filename = `SeniorManagementReport_${awardInfo?.supplier_name?.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      generatePdfWithPrint(result.html, filename);
+
+      await supabase.rpc('log_onboarding_event', {
+        p_project_id: projectId,
+        p_event_type: 'handover_pack_generated',
+        p_event_data: { pack_type: 'senior' }
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to generate Senior Report');
+    } finally {
+      setGeneratingSenior(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h4 className="text-xl font-bold text-white mb-2">Handover Packs</h4>
+        <p className="text-slate-400">Generate comprehensive handover documentation for different stakeholders</p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="p-3 bg-blue-900/30 rounded-lg">
+              <Users className="text-blue-400" size={24} />
+            </div>
+            <div className="flex-1">
+              <h5 className="text-lg font-semibold text-white mb-2">Junior Site Team Pack</h5>
+              <p className="text-sm text-slate-400 mb-4">
+                Practical handover pack for site supervisors and foremen. Includes scope breakdown, site instructions, and safety requirements.
+              </p>
+              <ul className="text-sm text-slate-300 space-y-1 mb-4">
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-400" />
+                  Service types and scope details
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-400" />
+                  Site-specific requirements
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-400" />
+                  Quality checkpoints
+                </li>
+              </ul>
+              <button
+                onClick={handleGenerateJuniorPack}
+                disabled={generatingJunior}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-all disabled:opacity-50"
+              >
+                <Download size={16} />
+                {generatingJunior ? 'Generating...' : 'Generate Junior Pack'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="p-3 bg-orange-900/30 rounded-lg">
+              <Briefcase className="text-orange-400" size={24} />
+            </div>
+            <div className="flex-1">
+              <h5 className="text-lg font-semibold text-white mb-2">Senior Management Report</h5>
+              <p className="text-sm text-slate-400 mb-4">
+                Executive summary for senior project managers and stakeholders. Includes commercial overview and key risks.
+              </p>
+              <ul className="text-sm text-slate-300 space-y-1 mb-4">
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-400" />
+                  Commercial summary
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-400" />
+                  Risk assessment
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-400" />
+                  Program milestones
+                </li>
+              </ul>
+              <button
+                onClick={handleGenerateSeniorPack}
+                disabled={generatingSenior}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-all disabled:opacity-50"
+              >
+                <Download size={16} />
+                {generatingSenior ? 'Generating...' : 'Generate Senior Report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function generateLOIHtml(loi: LetterOfIntent, awardInfo: AwardInfo | null, logoUrl: string | null): string {
+  const today = new Date().toLocaleDateString('en-NZ', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 40px; color: #333; position: relative; }
+        .watermark {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(-45deg);
+          font-size: 120px;
+          color: rgba(255, 0, 0, 0.1);
+          font-weight: bold;
+          z-index: -1;
+          pointer-events: none;
+        }
+        .header { text-align: center; margin-bottom: 40px; }
+        .logo { max-width: 200px; margin-bottom: 20px; }
+        .title { font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #1e40af; }
+        .date { color: #666; margin-bottom: 30px; }
+        .section { margin-bottom: 30px; }
+        .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #1e40af; border-bottom: 2px solid #1e40af; padding-bottom: 5px; }
+        .disclaimer { background: #fee; border: 2px solid #f00; padding: 20px; margin: 30px 0; border-radius: 8px; }
+        .disclaimer-title { font-weight: bold; color: #c00; font-size: 16px; margin-bottom: 10px; }
+        .service-list { list-style: none; padding: 0; }
+        .service-item { background: #f0f9ff; padding: 10px; margin: 5px 0; border-left: 3px solid #1e40af; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #1e40af; color: white; }
+      </style>
+    </head>
+    <body>
+      <div class="watermark">DRAFT – LEGAL REVIEW REQUIRED</div>
+
+      ${logoUrl ? `<div class="header"><img src="${logoUrl}" class="logo" alt="Company Logo" /></div>` : ''}
+
+      <div class="header">
+        <div class="title">LETTER OF INTENT</div>
+        <div class="date">${today}</div>
+      </div>
+
+      <div class="disclaimer">
+        <div class="disclaimer-title">⚠️ IMPORTANT LEGAL DISCLAIMER</div>
+        <p><strong>This Letter of Intent is a NON-BINDING expression of intent only.</strong></p>
+        <p>No contractual relationship is created, implied, or established by this document. This letter does not constitute an offer, acceptance, or agreement to enter into any contract. No legal obligations or liabilities are created by this document.</p>
+        <p>This document is subject to legal review, formal contract negotiation, and execution of definitive agreements. All terms are indicative only and subject to change.</p>
+        <p><strong>Do not commence any work based on this letter alone.</strong></p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">To: ${loi.supplier_name}</div>
+        ${loi.supplier_contact ? `<p><strong>Attention:</strong> ${loi.supplier_contact}</p>` : ''}
+        ${loi.supplier_email ? `<p><strong>Email:</strong> ${loi.supplier_email}</p>` : ''}
+      </div>
+
+      <div class="section">
+        <div class="section-title">Scope of Works (Indicative)</div>
+        <p>${loi.scope_summary}</p>
+
+        ${loi.service_types.length > 0 ? `
+          <p><strong>Service Types (Indicative):</strong></p>
+          <ul class="service-list">
+            ${loi.service_types.map(type => `<li class="service-item">${type}</li>`).join('')}
+          </ul>
+        ` : ''}
+      </div>
+
+      <div class="section">
+        <div class="section-title">Indicative Timeline</div>
+        <table>
+          <tr>
+            <th>Milestone</th>
+            <th>Indicative Date</th>
+          </tr>
+          <tr>
+            <td>Proposed Start Date</td>
+            <td>${loi.target_start_date ? new Date(loi.target_start_date).toLocaleDateString() : 'To Be Confirmed'}</td>
+          </tr>
+          <tr>
+            <td>Proposed Completion Date</td>
+            <td>${loi.target_completion_date ? new Date(loi.target_completion_date).toLocaleDateString() : 'To Be Confirmed'}</td>
+          </tr>
+        </table>
+        <p style="font-size: 12px; color: #666;"><em>Note: All dates are indicative and subject to formal contract terms.</em></p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Next Steps (Indicative)</div>
+        <ul>
+          <li>Provide current insurance certificates</li>
+          <li>Submit health and safety documentation</li>
+          <li>Provide method statements</li>
+          <li>Confirm availability and resource allocation</li>
+          <li>Attend pre-contract meeting</li>
+          <li>Legal review and formal contract negotiation</li>
+        </ul>
+      </div>
+
+      ${loi.custom_terms ? `
+        <div class="section">
+          <div class="section-title">Additional Terms (Indicative)</div>
+          <p>${loi.custom_terms}</p>
+        </div>
+      ` : ''}
+
+      <div class="disclaimer">
+        <p><strong>RECONFIRMATION OF NON-BINDING NATURE:</strong></p>
+        <p>This document creates absolutely no binding obligations, commitments, or liabilities whatsoever. No party should rely on this document for any purpose. Any work commenced prior to execution of formal contracts is done entirely at the subcontractor's own risk.</p>
+        <p><strong>This document must be reviewed by legal counsel before distribution.</strong></p>
+      </div>
+
+      <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; text-align: center;">
+        <p>Generated by VerifyTrade Contract Manager • ${today}</p>
+        <p><strong>DRAFT DOCUMENT – NOT FOR DISTRIBUTION WITHOUT LEGAL REVIEW</strong></p>
+      </div>
+    </body>
+    </html>
+  `;
 }
