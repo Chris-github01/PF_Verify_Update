@@ -73,6 +73,7 @@ export default function AwardReportEnhanced({
   const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | null>(null);
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -99,12 +100,31 @@ export default function AwardReportEnhanced({
     try {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, client, approved_quote_id')
+        .select('id, name, client, approved_quote_id, organisation_id')
         .eq('id', projectId)
         .maybeSingle();
 
       if (data) {
         setCurrentProject(data);
+
+        // Fetch organization logo if available
+        if ((data as any).organisation_id) {
+          const { data: orgData } = await supabase
+            .from('organisations')
+            .select('logo_url')
+            .eq('id', (data as any).organisation_id)
+            .maybeSingle();
+
+          if (orgData?.logo_url) {
+            const { data: urlData } = supabase.storage
+              .from('organisation-logos')
+              .getPublicUrl(orgData.logo_url);
+
+            if (urlData?.publicUrl) {
+              setOrganisationLogoUrl(urlData.publicUrl);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading project:', error);
@@ -616,6 +636,21 @@ export default function AwardReportEnhanced({
         <div className="text-center">
           <h1 className="text-5xl font-bold text-white mb-3">Award Recommendation Report</h1>
           <p className="text-xl text-slate-300 mb-6">Project Analysis & Supplier Evaluation</p>
+
+          {/* Logo Section */}
+          {organisationLogoUrl && (
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <img
+                src={organisationLogoUrl}
+                alt="Organisation Logo"
+                className="max-w-[140px] max-h-[52px] object-contain"
+                crossOrigin="anonymous"
+              />
+              <div className="h-12 w-px bg-slate-600"></div>
+              <div className="text-3xl font-bold text-white">VerifyTrade</div>
+            </div>
+          )}
+
           <div className="inline-flex items-center gap-6 text-sm text-slate-400 bg-slate-800/40 px-8 py-3 rounded-lg border border-slate-700/50">
             <div>
               <span className="font-semibold text-slate-300">Project:</span> {currentProject?.name}
