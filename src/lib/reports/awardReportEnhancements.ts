@@ -43,6 +43,11 @@ export interface EnhancedSupplierMetrics {
     description: string;
     estimatedCost: number;
     severity: 'low' | 'medium' | 'high';
+    system?: string;
+    category?: string;
+    itemsCount?: number;
+    estimatedImpact?: string;
+    details?: string[];
   }>;
 
   rank: number;
@@ -228,6 +233,7 @@ export function estimateScopeGapCosts(
       description: item.description,
       estimatedCost: Math.round(estimatedCost),
       severity,
+      category: item.category,
       _sortCost: estimatedCost, // For sorting
     };
   });
@@ -236,10 +242,15 @@ export function estimateScopeGapCosts(
   return gaps
     .sort((a, b) => b._sortCost - a._sortCost)
     .slice(0, 5)
-    .map(({ description, estimatedCost, severity }) => ({
+    .map(({ description, estimatedCost, severity, ...item }) => ({
       description,
       estimatedCost,
       severity,
+      system: item.category || 'Unknown System',
+      category: item.category,
+      itemsCount: 1,
+      estimatedImpact: `Est. ${formatCurrency(estimatedCost)} @ 20% markup`,
+      details: [],
     }));
 }
 

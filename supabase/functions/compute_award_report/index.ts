@@ -15,6 +15,13 @@ interface QuoteItem {
   unit_price: number;
   total_price: number;
   scope_category?: string;
+  system_id?: string;
+  system_label?: string;
+  service?: string;
+  subclass?: string;
+  frr?: string;
+  confidence?: number;
+  system_confidence?: number;
 }
 
 interface Quote {
@@ -28,6 +35,11 @@ interface ComparisonRow {
   unit: string;
   quantity: number;
   category: string;
+  systemId?: string;
+  systemLabel?: string;
+  service?: string;
+  subclass?: string;
+  frr?: string;
   suppliers: Record<string, {
     unitPrice: number | null;
     total: number | null;
@@ -85,7 +97,11 @@ Deno.serve(async (req: Request) => {
     for (const quote of quotes) {
       const { data: items, error: itemsError } = await supabase
         .from("quote_items")
-        .select("id, description, unit, quantity, unit_price, total_price, scope_category")
+        .select(`
+          id, description, unit, quantity, unit_price, total_price,
+          scope_category, system_id, system_label, service,
+          subclass, frr, confidence, system_confidence
+        `)
         .eq("quote_id", quote.id)
         .eq("is_excluded", false);
 
@@ -117,6 +133,11 @@ Deno.serve(async (req: Request) => {
         unit: baseItem.unit || "",
         quantity: Number(baseItem.quantity) || 1,
         category: baseItem.scope_category || "General",
+        systemId: baseItem.system_id,
+        systemLabel: baseItem.system_label,
+        service: baseItem.service,
+        subclass: baseItem.subclass,
+        frr: baseItem.frr,
         suppliers: {},
         matchStatus: "exact",
         matchConfidence: 100,
@@ -190,6 +211,11 @@ Deno.serve(async (req: Request) => {
             unit: item.unit || "",
             quantity: Number(item.quantity) || 1,
             category: item.scope_category || "General",
+            systemId: item.system_id,
+            systemLabel: item.system_label,
+            service: item.service,
+            subclass: item.subclass,
+            frr: item.frr,
             suppliers: {},
             matchStatus: "unmatched",
             matchConfidence: 0,
@@ -225,6 +251,7 @@ Deno.serve(async (req: Request) => {
       const missingItems = comparisonData.length - quotedItems.length;
 
       return {
+        quoteId: q.id,
         supplierName: q.supplier_name,
         supplierId: q.supplier_name,
         adjustedTotal: total,

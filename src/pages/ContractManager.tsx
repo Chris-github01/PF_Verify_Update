@@ -79,7 +79,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
         const { data: quoteItems } = await supabase
           .from('quote_items')
-          .select('scope_category, description, quantity, unit_rate, total')
+          .select('scope_category, description, quantity, unit_price, total_price')
           .eq('quote_id', approvedQuoteId);
 
         if (quoteItems && quoteItems.length > 0) {

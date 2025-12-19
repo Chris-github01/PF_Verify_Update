@@ -126,7 +126,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: items } = await supabase
         .from('quote_items')
-        .select('scope_category, description, quantity, unit_rate, total')
+        .select('scope_category, description, quantity, unit_price, total_price')
         .eq('quote_id', approvedQuoteId)
         .limit(1000);
 

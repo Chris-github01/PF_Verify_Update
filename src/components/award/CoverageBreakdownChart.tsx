@@ -62,13 +62,13 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
         </p>
       </div>
 
-      <div className="p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+      <div className="p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Pie Chart */}
-          <div className="relative">
+          <div className="relative max-w-xs mx-auto lg:mx-0">
             <svg
               viewBox="0 0 100 100"
-              className="w-full max-w-sm mx-auto drop-shadow-lg"
+              className="w-full drop-shadow-lg"
               style={{ filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))' }}
             >
               {segments.map((segment, idx) => (
@@ -110,11 +110,11 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
           </div>
 
           {/* Legend */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             {supplier.systemsBreakdown.map((category, idx) => (
               <div
                 key={idx}
-                className={`flex items-center justify-between p-3 rounded-lg transition-all cursor-pointer ${
+                className={`flex items-center justify-between p-2.5 rounded-lg transition-all cursor-pointer ${
                   hoveredSegment === category.category
                     ? 'bg-slate-700/60 scale-105'
                     : 'bg-slate-700/30 hover:bg-slate-700/50'
@@ -142,16 +142,16 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
 
         {/* Top 5 Scope Gaps */}
         {supplier.scopeGaps && supplier.scopeGaps.length > 0 && (
-          <div className="mt-8 pt-8 border-t border-slate-700">
-            <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <div className="mt-6 pt-6 border-t border-slate-700">
+            <h4 className="text-base font-bold text-white mb-3 flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-yellow-500" />
               Top 5 Scope Gaps
             </h4>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {supplier.scopeGaps.map((gap, idx) => (
                 <div
                   key={idx}
-                  className={`flex items-start justify-between p-4 rounded-lg border ${
+                  className={`flex items-start justify-between p-3 rounded-lg border ${
                     gap.severity === 'high'
                       ? 'border-red-600/50 bg-red-900/20'
                       : gap.severity === 'medium'
@@ -159,8 +159,8 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
                       : 'border-blue-600/50 bg-blue-900/20'
                   }`}
                 >
-                  <div className="flex-1 min-w-0 pr-4">
-                    <div className="flex items-center gap-2 mb-1">
+                  <div className="flex-1 min-w-0 pr-3">
+                    <div className="flex items-center gap-2 mb-0.5">
                       <span
                         className={`px-2 py-0.5 text-xs font-bold rounded-full ${
                           gap.severity === 'high'
@@ -185,10 +185,10 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
                 </div>
               ))}
             </div>
-            <div className="mt-4 p-4 bg-slate-700/30 rounded-lg">
+            <div className="mt-3 p-3 bg-slate-700/30 rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">Total Estimated Gap Cost (20% markup):</span>
-                <span className="font-bold text-orange-400 text-lg">
+                <span className="text-xs text-slate-400">Total Estimated Gap Cost (20% markup):</span>
+                <span className="font-bold text-orange-400 text-base">
                   {formatCurrency(supplier.scopeGaps.reduce((sum, gap) => sum + gap.estimatedCost, 0))}
                 </span>
               </div>
