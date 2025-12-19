@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { FileText, ExternalLink, Loader2 } from 'lucide-react';
-import AwardReport from './AwardReport';
+import AwardReportEnhanced from './AwardReportEnhanced';
 import { supabase } from '../lib/supabase';
 import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
+import { useOrganisation } from '../lib/organisationContext';
 
 interface ProjectReportPageProps {
   projectId: string;
@@ -17,6 +18,7 @@ export default function ProjectReportPage({
   onNavigateToHub,
   onToast
 }: ProjectReportPageProps) {
+  const { currentOrganisation } = useOrganisation();
   const [hasReport, setHasReport] = useState<boolean | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -309,10 +311,11 @@ export default function ProjectReportPage({
       </div>
 
       <div className="flex-1 overflow-auto">
-        <AwardReport
+        <AwardReportEnhanced
           key={reportId || 'no-report'}
           projectId={projectId}
           reportId={reportId || undefined}
+          organisationId={currentOrganisation?.id || ''}
           onToast={onToast}
           onNavigate={(page) => {
             console.log('Navigate to:', page);
