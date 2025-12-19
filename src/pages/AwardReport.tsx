@@ -803,6 +803,59 @@ export default function AwardReport({
           </div>
         </div>
 
+        {/* Approval Status Banner */}
+        {!approvalData && (
+          <div className="mb-8 bg-gradient-to-r from-blue-900/30 to-blue-800/20 border-2 border-blue-600/40 rounded-xl p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="w-6 h-6 text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-lg font-bold text-white mb-2">Approval Required</h4>
+                <p className="text-slate-300 mb-3">
+                  Review the AI recommendations below and select a supplier to proceed with the approval process.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-blue-300">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Look for "Proceed to Approval" buttons in the recommendation cards or supplier table below</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {approvalData && (
+          <div className="mb-8 bg-gradient-to-r from-green-900/30 to-green-800/20 border-2 border-green-600/40 rounded-xl p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <CheckCircle className="w-6 h-6 text-green-400" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-lg font-bold text-white mb-2">Award Approved</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-slate-400">Approved Supplier:</span>
+                    <span className="ml-2 text-white font-bold">{approvalData.final_approved_supplier}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Approved By:</span>
+                    <span className="ml-2 text-white font-bold">{approvalData.approved_by_email}</span>
+                  </div>
+                </div>
+                {approvalData.is_override && (
+                  <div className="mt-3 pt-3 border-t border-yellow-700/50">
+                    <span className="inline-flex items-center gap-2 text-xs font-bold text-yellow-400 bg-yellow-900/30 px-3 py-1 rounded">
+                      <AlertOctagon className="w-3 h-3" />
+                      OVERRIDE DECISION
+                    </span>
+                    <p className="text-sm text-slate-300 mt-2">{approvalData.override_reason_detail}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <div className="bg-gradient-to-br from-green-900/40 to-green-800/20 rounded-xl shadow-xl p-8 border-2 border-green-600/30 hover:border-green-500/50 transition-all">
             <div className="flex items-center justify-center w-16 h-16 bg-green-600 rounded-xl mx-auto mb-4 shadow-lg">

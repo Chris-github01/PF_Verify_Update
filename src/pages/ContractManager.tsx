@@ -119,17 +119,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             awarded_date: approvedQuote.updated_at
           });
 
-          const { data: awardReport } = await supabase
-            .from('award_reports')
-            .select('approved_at')
-            .eq('project_id', projectId)
-            .order('generated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (awardReport?.approved_at) {
-            setIsApproved(true);
-          }
+          // Show Onboarding tab whenever there's an approved quote
+          setIsApproved(true);
         }
 
         const { data: quoteItems } = await supabase
