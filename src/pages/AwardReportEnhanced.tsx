@@ -129,11 +129,9 @@ export default function AwardReportEnhanced({
         .maybeSingle();
 
       if (approvals) {
-        // Get user email
+        // Get user email using the RPC function
         const { data: userData } = await supabase
-          .from('auth.users')
-          .select('email')
-          .eq('id', approvals.approved_by_user_id)
+          .rpc('get_user_details', { p_user_id: approvals.approved_by_user_id })
           .maybeSingle();
 
         setApprovalData({
@@ -427,6 +425,43 @@ export default function AwardReportEnhanced({
         });
       }
 
+      // Add approval details if available
+      const additionalSections = [];
+      if (approvalData) {
+        const overrideTag = approvalData.is_override
+          ? `<span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 8px;">OVERRIDE</span>`
+          : '';
+
+        additionalSections.push({
+          title: `Approval Decision${overrideTag}`,
+          content: `
+            <div style="background: ${approvalData.is_override ? '#fef3c7' : '#dcfce7'}; border: 2px solid ${approvalData.is_override ? '#f59e0b' : '#22c55e'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                <div>
+                  <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Verify+ Recommended</p>
+                  <p style="font-size: 16px; color: #111827; font-weight: 600;">${approvalData.ai_recommended_supplier}</p>
+                </div>
+                <div>
+                  <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Final Approved Supplier</p>
+                  <p style="font-size: 16px; color: ${approvalData.is_override ? '#d97706' : '#059669'}; font-weight: 700;">${approvalData.final_approved_supplier}</p>
+                </div>
+              </div>
+              ${approvalData.is_override ? `
+                <div style="border-top: 2px solid #f59e0b; padding-top: 16px; margin-top: 16px;">
+                  <p style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 8px;">Override Reason:</p>
+                  <p style="font-size: 14px; color: #78350f; font-weight: 600; margin-bottom: 8px;">${approvalData.override_reason_category?.replace(/_/g, ' ').toUpperCase() || 'N/A'}</p>
+                  <p style="font-size: 14px; color: #451a03; line-height: 1.6;">${approvalData.override_reason_detail || 'No additional details provided.'}</p>
+                </div>
+              ` : ''}
+              <div style="border-top: 1px solid ${approvalData.is_override ? '#fbbf24' : '#86efac'}; padding-top: 12px; margin-top: 16px; display: flex; justify-content: space-between; font-size: 12px; color: #6b7280;">
+                <span><strong>Approved By:</strong> ${approvalData.approved_by_email}</span>
+                <span><strong>Approved At:</strong> ${new Date(approvalData.approved_at).toLocaleString()}</span>
+              </div>
+            </div>
+          `
+        });
+      }
+
       const htmlContent = generateModernPdfHtml({
         projectName: currentProject.name,
         clientName: currentProject.client || undefined,
@@ -440,7 +475,8 @@ export default function AwardReportEnhanced({
           'Scope Gap Analysis',
           'Risk Assessment',
           'Multi-Criteria Scoring'
-        ]
+        ],
+        additionalSections
       });
 
       const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;

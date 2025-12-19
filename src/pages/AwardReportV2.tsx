@@ -125,15 +125,14 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         .maybeSingle();
 
       if (approvals) {
+        // Get user email using the RPC function
         const { data: userData } = await supabase
-          .from('organisation_members')
-          .select('user_id')
-          .eq('user_id', approvals.approved_by_user_id)
+          .rpc('get_user_details', { p_user_id: approvals.approved_by_user_id })
           .maybeSingle();
 
         const approvalWithEmail = {
           ...approvals,
-          approved_by_email: userData?.user_id || 'Unknown'
+          approved_by_email: userData?.email || 'Unknown'
         };
 
         setApprovalData(approvalWithEmail);
