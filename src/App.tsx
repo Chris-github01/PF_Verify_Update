@@ -693,6 +693,16 @@ function AppContent() {
         return <CopilotAudit />;
 
       case 'settings':
+        if (!isMasterAdmin) {
+          return (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-slate-300 mb-2">Access Denied</h2>
+                <p className="text-slate-500">Settings are only accessible to administrators.</p>
+              </div>
+            </div>
+          );
+        }
         if (projectId) {
           return <Settings projectId={projectId} onProjectDeleted={() => setProjectId(null)} />;
         }

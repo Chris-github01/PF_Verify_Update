@@ -47,7 +47,7 @@ const menuItems = [
   { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
   { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3 },
   { id: 'contract' as SidebarTab, label: 'Contract Manager', icon: Briefcase },
-  { id: 'settings' as SidebarTab, label: 'Settings', icon: Settings, requiresManagePermission: true },
+  { id: 'settings' as SidebarTab, label: 'Settings', icon: Settings, requiresAdminAccess: true },
 ];
 
 export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMode, onDashboardModeChange }: SidebarProps) {
@@ -147,7 +147,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
         </div>
         <ul className="space-y-1">
           {menuItems.map((item) => {
-            if ((item as any).requiresManagePermission && !hasPermission('manage')) {
+            if ((item as any).requiresAdminAccess && !isMasterAdmin) {
               return null;
             }
 
