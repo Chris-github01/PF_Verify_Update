@@ -355,64 +355,88 @@ export default function AwardReport({
     }
 
     try {
+      // Calculate weighted scores based on price, risk, and coverage
+      const suppliersWithScores = awardSummary.suppliers.map(s => {
+        const priceScore = 100 - ((s.adjustedTotal / Math.max(...awardSummary.suppliers.map(sup => sup.adjustedTotal))) * 100);
+        const riskScore = 100 - s.riskScore;
+        const coverageScore = s.coveragePercent;
+        const weightedScore = (priceScore * 0.4 + riskScore * 0.3 + coverageScore * 0.3);
+        return { ...s, weightedScore };
+      });
+
+      // Sort by weighted score
+      const sortedSuppliers = [...suppliersWithScores].sort((a, b) => b.weightedScore - a.weightedScore);
+
       // Transform suppliers data for modern PDF template
-      const suppliers = awardSummary.suppliers.map((s, idx) => ({
+      const suppliers = sortedSuppliers.map((s, idx) => ({
         rank: idx + 1,
         supplierName: s.supplierName,
-        adjustedTotal: s.price,
+        adjustedTotal: s.adjustedTotal,
         riskScore: s.riskScore,
         coveragePercent: s.coveragePercent,
         itemsQuoted: s.itemsQuoted,
         totalItems: s.totalItems,
         weightedScore: s.weightedScore,
-        notes: s.risks && s.risks.length > 0 ? s.risks : undefined
+        notes: s.notes && s.notes.length > 0 ? s.notes : undefined
       }));
 
-      // Create recommendation cards (Best Value, Lowest Risk, Balanced)
-      const recommendations = [
-        {
-          type: 'best_value' as const,
-          supplierName: awardSummary.recommendedSupplier.supplierName,
-          price: awardSummary.recommendedSupplier.price,
-          coverage: awardSummary.recommendedSupplier.coveragePercent,
-          riskScore: awardSummary.recommendedSupplier.riskScore,
-          score: awardSummary.recommendedSupplier.weightedScore
-        },
-        // Find lowest risk supplier
-        ...(() => {
-          const lowestRisk = [...awardSummary.suppliers].sort((a, b) => a.riskScore - b.riskScore)[0];
-          return lowestRisk ? [{
+      // Create recommendation cards from existing recommendations or calculate them
+      let recommendations = [];
+
+      if (awardSummary.recommendations && awardSummary.recommendations.length > 0) {
+        // Use existing recommendations
+        recommendations = awardSummary.recommendations.slice(0, 3).map(rec => ({
+          type: rec.type === 'BEST_VALUE' ? 'best_value' as const :
+                rec.type === 'LOWEST_RISK' ? 'lowest_risk' as const :
+                'balanced' as const,
+          supplierName: rec.supplier.supplierName,
+          price: rec.supplier.adjustedTotal,
+          coverage: rec.supplier.coveragePercent,
+          riskScore: rec.supplier.riskScore,
+          score: suppliersWithScores.find(s => s.supplierName === rec.supplier.supplierName)?.weightedScore || 0
+        }));
+      } else {
+        // Calculate recommendations
+        const bestValue = sortedSuppliers[0];
+        const lowestRisk = [...sortedSuppliers].sort((a, b) => a.riskScore - b.riskScore)[0];
+        const balanced = sortedSuppliers[Math.floor(sortedSuppliers.length / 2)] || sortedSuppliers[0];
+
+        recommendations = [
+          bestValue && {
+            type: 'best_value' as const,
+            supplierName: bestValue.supplierName,
+            price: bestValue.adjustedTotal,
+            coverage: bestValue.coveragePercent,
+            riskScore: bestValue.riskScore,
+            score: bestValue.weightedScore
+          },
+          lowestRisk && {
             type: 'lowest_risk' as const,
             supplierName: lowestRisk.supplierName,
-            price: lowestRisk.price,
+            price: lowestRisk.adjustedTotal,
             coverage: lowestRisk.coveragePercent,
             riskScore: lowestRisk.riskScore,
             score: lowestRisk.weightedScore
-          }] : [];
-        })(),
-        // Find balanced choice (middle of the pack in overall score)
-        ...(() => {
-          const sorted = [...awardSummary.suppliers].sort((a, b) => b.weightedScore - a.weightedScore);
-          const balanced = sorted[Math.floor(sorted.length / 2)] || sorted[0];
-          return balanced ? [{
+          },
+          balanced && {
             type: 'balanced' as const,
             supplierName: balanced.supplierName,
-            price: balanced.price,
+            price: balanced.adjustedTotal,
             coverage: balanced.coveragePercent,
             riskScore: balanced.riskScore,
             score: balanced.weightedScore
-          }] : [];
-        })()
-      ].slice(0, 3);
+          }
+        ].filter(Boolean).slice(0, 3);
+      }
 
       // Generate modern PDF HTML
       const htmlContent = generateModernPdfHtml({
         projectName: currentProject.name,
         clientName: currentProject.client || undefined,
-        generatedAt: reportTimestamp || new Date().toISOString(),
+        generatedAt: reportTimestamp || awardSummary.generatedAt || new Date().toISOString(),
         recommendations,
         suppliers,
-        executiveSummary: awardSummary.executiveSummary,
+        executiveSummary: `Award recommendation analysis for ${currentProject.name}. Total systems analyzed: ${awardSummary.totalSystems}. Equalisation mode: ${awardSummary.equalisationMode}.`,
         methodology: [
           'Quote Import & Validation',
           'Data Normalization',
