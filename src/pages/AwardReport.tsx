@@ -414,7 +414,7 @@ export default function AwardReport({
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     setShowExportDropdown(false);
 
     if (!awardSummary || !currentProject) {
@@ -423,6 +423,40 @@ export default function AwardReport({
     }
 
     try {
+      // Fetch organization logo if available
+      let organisationLogoUrl: string | undefined = undefined;
+      if (currentProject.organisation_id) {
+        const { data: orgData } = await supabase
+          .from('organisations')
+          .select('logo_url')
+          .eq('id', currentProject.organisation_id)
+          .maybeSingle();
+
+        if (orgData?.logo_url) {
+          // Get public URL for the logo
+          const { data: urlData } = supabase.storage
+            .from('organisation-logos')
+            .getPublicUrl(orgData.logo_url);
+
+          if (urlData?.publicUrl) {
+            // Convert to data URL for embedding in PDF
+            try {
+              const response = await fetch(urlData.publicUrl);
+              const blob = await response.blob();
+              const reader = new FileReader();
+              const dataUrl = await new Promise<string>((resolve) => {
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+              organisationLogoUrl = dataUrl;
+            } catch (err) {
+              console.error('Error loading organization logo:', err);
+              // Continue without logo if there's an error
+            }
+          }
+        }
+      }
+
       const suppliersWithScores = awardSummary.suppliers.map(s => {
         const priceScore = 100 - ((s.adjustedTotal / Math.max(...awardSummary.suppliers.map(sup => sup.adjustedTotal))) * 100);
         const riskScore = 100 - s.riskScore;
@@ -533,7 +567,8 @@ export default function AwardReport({
               </div>
             </div>
           `
-        }] : []
+        }] : [],
+        organisationLogoUrl
       });
 
       const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;

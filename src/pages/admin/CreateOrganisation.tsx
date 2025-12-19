@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, AlertCircle, X, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, AlertCircle, X, Info, ChevronDown, ChevronUp, Upload, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface TooltipProps {
@@ -32,6 +32,8 @@ export default function CreateOrganisation() {
   // Section 1: Organisation Details
   const [legalName, setLegalName] = useState('');
   const [tradingName, setTradingName] = useState('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [countryRegion, setCountryRegion] = useState('New Zealand');
   const [industryType, setIndustryType] = useState('Main Contractor');
   const [primaryTradeFocus, setPrimaryTradeFocus] = useState('passive_fire');
@@ -89,6 +91,37 @@ export default function CreateOrganisation() {
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!['image/svg+xml', 'image/png'].includes(file.type)) {
+      setToast({ type: 'error', message: 'Please upload an SVG or PNG file' });
+      return;
+    }
+
+    // Validate file size (2MB)
+    if (file.size > 2097152) {
+      setToast({ type: 'error', message: 'Logo file must be less than 2MB' });
+      return;
+    }
+
+    setLogoFile(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+  };
+
   const handleCreate = async () => {
     // Validation
     if (!legalName || !countryRegion || !industryType || !projectSizeRange ||
@@ -134,6 +167,28 @@ export default function CreateOrganisation() {
         : null;
       const pricingTier = accountType === 'trial' ? 'starter' : subscriptionPlan;
 
+      // Upload logo if provided
+      let logoUrl: string | null = null;
+      if (logoFile) {
+        const fileExt = logoFile.name.split('.').pop();
+        const fileName = `${auditNamespace}-logo.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('organisation-logos')
+          .upload(filePath, logoFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error('Logo upload error:', uploadError);
+          throw new Error('Failed to upload logo. Please try again.');
+        }
+
+        logoUrl = filePath;
+      }
+
       // Create organisation
       const { data: org, error: orgError } = await supabase
         .from('organisations')
@@ -141,6 +196,7 @@ export default function CreateOrganisation() {
           name: legalName,
           legal_name: legalName,
           trading_name: tradingName || null,
+          logo_url: logoUrl,
           country_region: countryRegion,
           industry_type: industryType,
           primary_trade_focus: primaryTradeFocus,
@@ -260,6 +316,55 @@ export default function CreateOrganisation() {
                   onChange={(e) => setTradingName(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Organisation Logo
+                  <Tooltip text="Your logo will appear in the header of all generated PDF reports. SVG preferred for best quality." />
+                </label>
+                <div className="space-y-2">
+                  {!logoPreview ? (
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-[#0A66C2] hover:bg-slate-50 transition-colors">
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <Upload size={24} className="text-slate-400 mb-2" />
+                        <p className="text-xs text-slate-600 font-medium">Click to upload logo</p>
+                        <p className="text-xs text-slate-400 mt-1">SVG or PNG, max 2MB</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/svg+xml,image/png"
+                        onChange={handleLogoChange}
+                        className="hidden"
+                      />
+                    </label>
+                  ) : (
+                    <div className="relative border border-slate-300 rounded-lg p-4 bg-slate-50">
+                      <div className="flex items-center gap-4">
+                        <div className="w-24 h-24 flex items-center justify-center bg-white border border-slate-200 rounded-lg p-2">
+                          <img
+                            src={logoPreview}
+                            alt="Logo preview"
+                            className="max-w-full max-h-full object-contain"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-700">{logoFile?.name}</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {logoFile && `${(logoFile.size / 1024).toFixed(1)} KB`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveLogo}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

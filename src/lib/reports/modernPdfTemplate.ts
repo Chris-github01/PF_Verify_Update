@@ -33,6 +33,7 @@ interface ModernPdfOptions {
   executiveSummary?: string;
   methodology?: string[];
   additionalSections?: Array<{ title: string; content: string }>;
+  organisationLogoUrl?: string;
 }
 
 const VERIFYTRADE_ORANGE = '#f97316';
@@ -51,7 +52,8 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     suppliers,
     executiveSummary,
     methodology,
-    additionalSections
+    additionalSections,
+    organisationLogoUrl
   } = options;
 
   const totalSystems = suppliers[0]?.totalItems || 0;
@@ -751,19 +753,54 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
 </head>
 <body>
   ${generateCoverPage(options)}
-  ${methodology ? generateMethodologyPages(methodology) : ''}
+  ${methodology ? generateMethodologyPages(methodology, organisationLogoUrl) : ''}
   ${generateRecommendationsPage(options)}
   ${generateSupplierComparisonPage(options)}
-  ${additionalSections ? additionalSections.map(section => generateCustomSection(section)).join('') : ''}
+  ${additionalSections ? additionalSections.map(section => generateCustomSection(section, organisationLogoUrl)).join('') : ''}
 </body>
 </html>`;
+}
+
+/**
+ * Generate Logo Section for Headers
+ * Displays organization logo (if available) alongside VerifyTrade branding
+ */
+function generateLogoSection(organisationLogoUrl?: string, size: 'small' | 'large' = 'small'): string {
+  const logoSize = size === 'large' ? 72 : 52;
+  const iconSize = size === 'large' ? 40 : 28;
+  const textSize = size === 'large' ? 32 : 'inherit';
+
+  if (organisationLogoUrl) {
+    // Show organization logo + VerifyTrade text
+    return `
+      <div class="logo-section">
+        <img
+          src="${organisationLogoUrl}"
+          alt="Organisation Logo"
+          style="max-width: 140px; max-height: ${logoSize}px; object-fit: contain;"
+        />
+        <div style="border-left: 2px solid #e5e7eb; height: ${logoSize}px; margin: 0 12px;"></div>
+        <div class="logo-text" style="font-size: ${textSize};">VerifyTrade</div>
+      </div>`;
+  } else {
+    // Show VerifyTrade logo + text only
+    return `
+      <div class="logo-section">
+        <div class="logo-icon" ${size === 'large' ? `style="width: ${logoSize}px; height: ${logoSize}px;"` : ''}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+        </div>
+        <div class="logo-text" style="font-size: ${textSize};">VerifyTrade</div>
+      </div>`;
+  }
 }
 
 /**
  * Generate Cover Page (Page 1)
  */
 function generateCoverPage(options: ModernPdfOptions): string {
-  const { projectName, clientName, generatedAt, suppliers } = options;
+  const { projectName, clientName, generatedAt, suppliers, organisationLogoUrl } = options;
   const totalSystems = suppliers[0]?.totalItems || 0;
   const supplierCount = suppliers.length;
 
@@ -780,17 +817,10 @@ function generateCoverPage(options: ModernPdfOptions): string {
         <strong style="color: #111827;">Systems:</strong> ${totalSystems}
       </div>
 
-      <div style="margin-top: 60px; display: flex; align-items: center; gap: 16px;">
-        <div class="logo-icon" style="width: 72px; height: 72px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-        </div>
-        <div>
-          <div class="logo-text" style="font-size: 32px;">VerifyTrade</div>
-          <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
-            Generated ${new Date(generatedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-          </div>
+      <div style="margin-top: 60px;">
+        ${generateLogoSection(organisationLogoUrl, 'large')}
+        <div style="font-size: 13px; color: #6b7280; margin-top: 12px; text-align: center;">
+          Generated ${new Date(generatedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
         </div>
       </div>
     </div>
@@ -848,18 +878,11 @@ function generateRecommendationCard(rec: RecommendationCard): string {
 /**
  * Generate Methodology Pages (Pages 2-3)
  */
-function generateMethodologyPages(steps: string[]): string {
+function generateMethodologyPages(steps: string[], organisationLogoUrl?: string): string {
   return `
   <div class="page page-break">
     <header>
-      <div class="logo-section">
-        <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-        </div>
-        <div class="logo-text">VerifyTrade</div>
-      </div>
+      ${generateLogoSection(organisationLogoUrl, 'small')}
       <div class="generated-by">
         Generated by <strong>VerifyTrade</strong>
       </div>
@@ -907,14 +930,7 @@ function generateMethodologyPages(steps: string[]): string {
 
   <div class="page page-break">
     <header>
-      <div class="logo-section">
-        <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-        </div>
-        <div class="logo-text">VerifyTrade</div>
-      </div>
+      ${generateLogoSection(organisationLogoUrl, 'small')}
       <div class="generated-by">
         Generated by <strong>VerifyTrade</strong>
       </div>
@@ -979,7 +995,7 @@ function generateMethodologyPages(steps: string[]): string {
  * Generate Recommendations Page (Page 4)
  */
 function generateRecommendationsPage(options: ModernPdfOptions): string {
-  const { recommendations, suppliers } = options;
+  const { recommendations, suppliers, organisationLogoUrl } = options;
   const topSupplier = suppliers[0];
   const totalSystems = suppliers[0]?.totalItems || 0;
   const avgCoverage = suppliers.reduce((sum, s) => sum + s.coveragePercent, 0) / suppliers.length;
@@ -987,14 +1003,7 @@ function generateRecommendationsPage(options: ModernPdfOptions): string {
   return `
   <div class="page page-break">
     <header>
-      <div class="logo-section">
-        <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-        </div>
-        <div class="logo-text">VerifyTrade</div>
-      </div>
+      ${generateLogoSection(organisationLogoUrl, 'small')}
       <div class="generated-by">
         Generated by <strong>VerifyTrade</strong>
       </div>
@@ -1045,20 +1054,13 @@ function generateRecommendationsPage(options: ModernPdfOptions): string {
  * Generate Supplier Comparison Page (Page 5)
  */
 function generateSupplierComparisonPage(options: ModernPdfOptions): string {
-  const { suppliers } = options;
+  const { suppliers, organisationLogoUrl } = options;
   const totalItems = suppliers[0]?.totalItems || 0;
 
   return `
   <div class="page page-break">
     <header>
-      <div class="logo-section">
-        <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-        </div>
-        <div class="logo-text">VerifyTrade</div>
-      </div>
+      ${generateLogoSection(organisationLogoUrl, 'small')}
       <div class="generated-by">
         Generated by <strong>VerifyTrade</strong>
       </div>
@@ -1132,18 +1134,11 @@ function generateSupplierComparisonPage(options: ModernPdfOptions): string {
 /**
  * Generate Custom Section
  */
-function generateCustomSection(section: { title: string; content: string }): string {
+function generateCustomSection(section: { title: string; content: string }, organisationLogoUrl?: string): string {
   return `
   <div class="page page-break">
     <header>
-      <div class="logo-section">
-        <div class="logo-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-        </div>
-        <div class="logo-text">VerifyTrade</div>
-      </div>
+      ${generateLogoSection(organisationLogoUrl, 'small')}
       <div class="generated-by">
         Generated by <strong>VerifyTrade</strong>
       </div>
