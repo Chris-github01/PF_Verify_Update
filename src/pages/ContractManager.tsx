@@ -140,11 +140,11 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
       const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
       const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
-      const filename = `JuniorSiteTeamPack_${projectName}_${timestamp}.pdf`;
+      const filename = `JuniorSiteTeamPack_${projectName}_${timestamp}`;
 
       generatePdfWithPrint(result.html, filename);
 
-      alert('Junior Site Team Handover Pack generated! Print dialog opened - choose "Save as PDF" as your printer destination.');
+      alert('Print window opened! In the print dialog, select "Save as PDF" or "Microsoft Print to PDF" as your destination.');
     } catch (error) {
       console.error('Export error:', error);
       alert('Could not generate Junior Pack. Please try again.');
@@ -181,11 +181,11 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
       const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
       const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
-      const filename = `SeniorProjectOverview_${projectName}_${timestamp}.pdf`;
+      const filename = `SeniorProjectOverview_${projectName}_${timestamp}`;
 
       generatePdfWithPrint(result.html, filename);
 
-      alert('Senior Project Team Pack generated! Print dialog opened - choose "Save as PDF" as your printer destination.');
+      alert('Print window opened! In the print dialog, select "Save as PDF" or "Microsoft Print to PDF" as your destination.');
     } catch (error) {
       console.error('Export error:', error);
       alert('Could not generate Senior Pack. Please try again.');

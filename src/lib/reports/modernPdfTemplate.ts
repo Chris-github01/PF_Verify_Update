@@ -1177,7 +1177,7 @@ export function downloadPdfHtml(htmlContent: string, filename: string): void {
  * This provides a seamless UX - opens report and immediately shows print-to-PDF dialog
  */
 export function generatePdfWithPrint(htmlContent: string, filename: string): void {
-  // Add auto-print script to the HTML
+  // Add auto-print script and instructions to the HTML
   const htmlWithAutoPrint = htmlContent.replace(
     '</body>',
     `
@@ -1186,8 +1186,27 @@ export function generatePdfWithPrint(htmlContent: string, filename: string): voi
       window.onload = function() {
         setTimeout(function() {
           window.print();
-        }, 500);
+        }, 1000);
       };
+
+      // Show instructions banner
+      window.addEventListener('DOMContentLoaded', function() {
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: #f97316; color: white; padding: 16px; text-align: center; font-size: 16px; font-weight: 600; z-index: 10000; box-shadow: 0 2px 8px rgba(0,0,0,0.2);';
+        banner.innerHTML = '📄 Print Dialog Opening... Select "Save as PDF" as your destination printer to save this report';
+        document.body.insertBefore(banner, document.body.firstChild);
+
+        // Hide banner when printing
+        window.addEventListener('beforeprint', function() {
+          banner.style.display = 'none';
+        });
+
+        window.addEventListener('afterprint', function() {
+          banner.style.display = 'block';
+          banner.innerHTML = '✅ Print dialog closed. You can close this window now.';
+          banner.style.background = '#059669';
+        });
+      });
     </script>
     </body>
     `
@@ -1198,10 +1217,11 @@ export function generatePdfWithPrint(htmlContent: string, filename: string): voi
   if (printWindow) {
     printWindow.document.write(htmlWithAutoPrint);
     printWindow.document.close();
-    printWindow.document.title = filename.replace('.html', '');
+    printWindow.document.title = filename.replace('.pdf', '').replace('.html', '');
   } else {
     // Fallback to download if popup blocked
     console.warn('Popup blocked. Falling back to HTML download.');
-    downloadPdfHtml(htmlContent, filename);
+    const htmlFilename = filename.replace('.pdf', '.html');
+    downloadPdfHtml(htmlContent, htmlFilename);
   }
 }

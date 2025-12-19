@@ -513,10 +513,10 @@ export default function AwardReportEnhanced({
         additionalSections
       });
 
-      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}`;
       generatePdfWithPrint(htmlContent, filename);
 
-      onToast?.('PDF print dialog opened! Choose "Save as PDF" as your printer destination.', 'success');
+      onToast?.('Print window opened! In the print dialog, select "Save as PDF" or "Microsoft Print to PDF" as your destination.', 'success');
     } catch (error) {
       console.error('Error generating PDF:', error);
       onToast?.('Failed to generate PDF report', 'error');
