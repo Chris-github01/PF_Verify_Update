@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet, Printer, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet, Printer, ChevronDown, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
 import ApprovalModal from '../components/ApprovalModal';
+import RevisionRequestModal from '../components/RevisionRequestModal';
 import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
 import EnhancedSupplierTable from '../components/award/EnhancedSupplierTable';
 import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdown';
@@ -71,6 +72,7 @@ export default function AwardReportEnhanced({
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -537,6 +539,14 @@ export default function AwardReportEnhanced({
               </button>
 
               <button
+                onClick={() => setShowRevisionModal(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-blue-600 bg-blue-900/30 text-blue-300 rounded-md hover:bg-blue-900/50 transition-all text-sm font-semibold"
+              >
+                <Mail size={16} />
+                Request Revisions
+              </button>
+
+              <button
                 onClick={() => setShowApprovalModal(true)}
                 className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-md hover:from-orange-700 hover:to-orange-800 transition-all text-sm font-bold shadow-lg"
               >
@@ -690,6 +700,37 @@ export default function AwardReportEnhanced({
           }}
           onToast={onToast}
           existingApprovalId={approvalData?.id || null}
+        />
+      )}
+
+      {/* Revision Request Modal */}
+      {showRevisionModal && currentProject && (
+        <RevisionRequestModal
+          projectId={projectId}
+          projectName={currentProject.name}
+          clientName={currentProject.client || undefined}
+          reportId={currentReportId || undefined}
+          suppliers={enhancedSuppliers.map(s => ({
+            quoteId: s.quoteId || '',
+            supplierName: s.supplierName,
+            coveragePercent: s.coveragePercent,
+            itemsQuoted: s.itemsQuoted,
+            totalItems: awardSummary?.totalSystems || 0,
+            gapsCount: (awardSummary?.totalSystems || 0) - s.itemsQuoted,
+            scopeGaps: s.scopeGaps?.map(gap => ({
+              system: gap.system || 'Unknown System',
+              category: gap.category,
+              itemsCount: gap.itemsCount || 1,
+              estimatedImpact: gap.estimatedImpact || 'Incomplete coverage',
+              details: gap.details || []
+            })) || []
+          }))}
+          onClose={() => setShowRevisionModal(false)}
+          onSuccess={(requestId) => {
+            setShowRevisionModal(false);
+            onToast?.('Revision requests created successfully', 'success');
+          }}
+          onToast={onToast}
         />
       )}
     </div>

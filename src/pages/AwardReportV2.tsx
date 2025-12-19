@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Award, FileText, Download, Printer, TrendingUp, AlertTriangle, CheckCircle, Info, Sparkles, Brain } from 'lucide-react';
+import { Award, FileText, Download, Printer, TrendingUp, AlertTriangle, CheckCircle, Info, Sparkles, Brain, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { t } from '../i18n';
 import * as XLSX from 'xlsx';
@@ -9,6 +9,7 @@ import ReportExportBar, { type ExportType } from '../components/ReportExportBar'
 import SupplierApprovalPanel from '../components/SupplierApprovalPanel';
 import RFIGenerator from '../components/RFIGenerator';
 import UnsuccessfulLettersGenerator from '../components/UnsuccessfulLettersGenerator';
+import RevisionRequestModal from '../components/RevisionRequestModal';
 import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
 
 interface SupplierScore {
@@ -77,6 +78,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
   const [isApproved, setIsApproved] = useState(false);
   const [quoteDate, setQuoteDate] = useState<string>('');
   const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
 
   useEffect(() => {
     if (projectId) {
