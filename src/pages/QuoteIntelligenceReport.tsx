@@ -91,6 +91,9 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
       // Get unique quote IDs from the analysis and pass to parent
       const uniqueQuoteIds = [...new Set(result.normalizedItems.map(item => item.quoteId))];
+      console.log('📤 [QuoteIntelligence] Passing selected quote IDs to parent:', uniqueQuoteIds);
+      console.log('📤 [QuoteIntelligence] Number of quotes selected:', uniqueQuoteIds.length);
+      console.log('📤 [QuoteIntelligence] Analysis included', result.quotesAnalyzed, 'quotes total');
       if (onQuotesSelected && uniqueQuoteIds.length > 0) {
         onQuotesSelected(uniqueQuoteIds);
       }

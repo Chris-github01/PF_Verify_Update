@@ -41,6 +41,8 @@ export async function analyzeQuoteIntelligenceHybrid(
   dashboardMode: DashboardMode = 'original',
   originalQuoteIdsForComparison?: string[]
 ): Promise<QuoteIntelligenceAnalysis> {
+  console.log('🔍 [QuoteIntelligence] Starting analysis:', { projectId, dashboardMode, originalQuoteIdsForComparison });
+
   let quotesData: QuoteData[] = [];
 
   // When in revisions mode with original quotes selected for comparison
@@ -69,6 +71,9 @@ export async function analyzeQuoteIntelligenceHybrid(
       ...(revisionsResult.data as QuoteData[] || []),
       ...(originalsResult.data as QuoteData[] || [])
     ];
+
+    console.log('📊 [QuoteIntelligence] Fetched revision quotes:', revisionsResult.data?.length);
+    console.log('📊 [QuoteIntelligence] Fetched original quotes:', originalsResult.data?.length);
   } else {
     // Standard mode: just filter by dashboard mode
     let query = supabase
@@ -83,13 +88,28 @@ export async function analyzeQuoteIntelligenceHybrid(
       query = query.gt('revision_number', 1);
     }
 
+    console.log('🔍 [QuoteIntelligence] Query params:', {
+      projectId,
+      is_latest: true,
+      revision_number: dashboardMode === 'original' ? '= 1' : '> 1'
+    });
+
     const { data: quotes, error: quotesError } = await query;
 
     if (quotesError) {
+      console.error('❌ [QuoteIntelligence] Query error:', quotesError);
       throw new Error(`Failed to fetch quotes: ${quotesError.message}`);
     }
 
     quotesData = quotes as QuoteData[] || [];
+    console.log('📊 [QuoteIntelligence] Fetched quotes:', quotes?.length);
+    console.log('📋 [QuoteIntelligence] Quote details:', quotes?.map(q => ({
+      id: q.id,
+      supplier: q.supplier_name,
+      revision: q.revision_number,
+      is_latest: q.is_latest,
+      items: q.items_count
+    })));
   }
 
   if (quotesData.length === 0) {
