@@ -82,12 +82,34 @@ Deno.serve(async (req: Request) => {
 
     const { data: project } = await supabase
       .from('projects')
-      .select('name, client, updated_at')
+      .select('name, client, updated_at, approved_quote_id')
       .eq('id', projectId)
       .maybeSingle();
 
     if (!project) {
       throw new Error('Project not found');
+    }
+
+    const approvedQuoteId = (project as any)?.approved_quote_id;
+    let approvedQuote: any = null;
+    let quoteItems: any[] = [];
+
+    if (approvedQuoteId) {
+      const { data: quote } = await supabase
+        .from('quotes')
+        .select('supplier_name, total_amount, updated_at')
+        .eq('id', approvedQuoteId)
+        .maybeSingle();
+
+      approvedQuote = quote;
+
+      const { data: items } = await supabase
+        .from('quote_items')
+        .select('scope_category, description, quantity, unit_rate, total')
+        .eq('quote_id', approvedQuoteId)
+        .limit(1000);
+
+      quoteItems = items || [];
     }
 
     const { data: awardReport } = await supabase
@@ -103,16 +125,53 @@ Deno.serve(async (req: Request) => {
       .select('*')
       .eq('project_id', projectId);
 
-    const { data: quoteItems } = await supabase
-      .from('quote_items')
-      .select('*')
-      .eq('project_id', projectId)
-      .limit(1000);
-
     const awardResult = awardReport?.result_json || {};
     const awardSummary = awardResult.awardSummary || {};
     const bestSupplier = awardSummary.suppliers?.[0] || {};
     const recommendations = awardSummary.recommendations || [];
+
+    const supplierName = approvedQuote?.supplier_name || bestSupplier.supplierName || 'TBC';
+    const totalAmount = approvedQuote?.total_amount || bestSupplier.adjustedTotal || 0;
+
+    const scopeSystemsMap = new Map<string, any>();
+    quoteItems.forEach((item: any) => {
+      const category = item.scope_category || 'Other Systems';
+      if (!scopeSystemsMap.has(category)) {
+        scopeSystemsMap.set(category, {
+          service_type: category,
+          coverage: 'full',
+          item_count: 0,
+          details: []
+        });
+      }
+      const system = scopeSystemsMap.get(category)!;
+      system.item_count += 1;
+      if (system.details.length < 5 && item.description) {
+        system.details.push(item.description);
+      }
+    });
+
+    const scopeSystems = Array.from(scopeSystemsMap.values());
+    const totalItems = scopeSystems.reduce((sum, sys) => sum + sys.item_count, 0);
+    scopeSystems.forEach(system => {
+      system.percentage = totalItems > 0 ? (system.item_count / totalItems) * 100 : 0;
+    });
+
+    if (mode === 'junior_pack') {
+      const htmlContent = generateJuniorPackHTML(project.name, project.client || 'TBC', supplierName, scopeSystems);
+      return new Response(
+        JSON.stringify({ html: htmlContent }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (mode === 'senior_report') {
+      const htmlContent = generateSeniorReportHTML(project.name, project.client || 'TBC', supplierName, totalAmount, scopeSystems);
+      return new Response(
+        JSON.stringify({ html: htmlContent }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const packData: HandoverPackData = {
       mode: mode as 'site' | 'commercial',
