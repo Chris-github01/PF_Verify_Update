@@ -174,6 +174,20 @@ export default function AwardReportEnhanced({
     const lowestPrice = Math.min(...prices);
     const highestPrice = Math.max(...prices);
     const maxRisk = Math.max(...suppliers.map(s => s.riskScore));
+    const minRisk = Math.min(...suppliers.map(s => s.riskScore));
+
+    // Debug logging for scoring
+    console.log('📊 Award Scoring Debug:', {
+      supplierCount: suppliers.length,
+      priceRange: { lowest: lowestPrice, highest: highestPrice, average: averagePrice },
+      riskRange: { min: minRisk, max: maxRisk },
+      suppliers: suppliers.map(s => ({
+        name: s.supplierName,
+        price: s.adjustedTotal,
+        riskScore: s.riskScore,
+        coverage: s.coveragePercent
+      }))
+    });
 
     const enhanced = suppliers.map((supplier) => {
       // Calculate scores (0-10)
@@ -181,6 +195,17 @@ export default function AwardReportEnhanced({
       const complianceScore = calculateComplianceScore(supplier.riskScore, maxRisk);
       const coverageScore = calculateCoverageScore(supplier.coveragePercent);
       const riskScore = calculateRiskMitigationScore(supplier.riskScore, maxRisk);
+
+      // Debug individual supplier scoring
+      console.log(`📊 ${supplier.supplierName} scores:`, {
+        priceScore: priceScore.toFixed(2),
+        complianceScore: complianceScore.toFixed(2),
+        coverageScore: coverageScore.toFixed(2),
+        riskScore: riskScore.toFixed(2),
+        rawPrice: supplier.adjustedTotal,
+        rawRiskScore: supplier.riskScore,
+        coverage: supplier.coveragePercent
+      });
 
       // Calculate weighted total (0-100)
       const weightedTotal = calculateWeightedTotal(

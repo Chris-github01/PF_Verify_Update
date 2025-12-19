@@ -90,9 +90,22 @@ export function calculateVariancePercent(supplierPrice: number, averagePrice: nu
  * Uses inverse linear scaling
  */
 export function calculatePriceScore(price: number, lowestPrice: number, highestPrice: number): number {
+  // Edge case: if all prices are the same, everyone gets full marks
   if (highestPrice === lowestPrice) return 10;
+
+  // Edge case: if price is lowest, give full marks
+  if (price === lowestPrice) return 10;
+
+  // Edge case: if price is highest, give minimum score (but not zero for single item difference)
+  if (price === highestPrice && highestPrice > lowestPrice) {
+    // Give at least 2.0 if there are only minor differences
+    const range = highestPrice - lowestPrice;
+    const avgPrice = (highestPrice + lowestPrice) / 2;
+    if (range / avgPrice < 0.05) return 8; // Within 5% of average
+  }
+
   const normalized = (price - lowestPrice) / (highestPrice - lowestPrice);
-  return 10 - (normalized * 10);
+  return Math.max(0, 10 - (normalized * 10));
 }
 
 /**
@@ -100,9 +113,20 @@ export function calculatePriceScore(price: number, lowestPrice: number, highestP
  * Based on risk factors and quality indicators
  */
 export function calculateComplianceScore(rawRiskScore: number, maxRisk: number): number {
+  // Edge case: no risk anywhere, everyone gets full marks
   if (maxRisk === 0) return 10;
+
+  // Edge case: if this supplier has no missing items, full marks
+  if (rawRiskScore === 0) return 10;
+
+  // Edge case: very low risk overall (1-3 items), be more lenient
+  if (maxRisk <= 3) {
+    const penalty = (rawRiskScore / maxRisk) * 2; // Max 2 point penalty
+    return Math.max(8, 10 - penalty);
+  }
+
   const normalized = Math.min(rawRiskScore / maxRisk, 1);
-  return 10 - (normalized * 5); // Cap at 50% reduction
+  return Math.max(5, 10 - (normalized * 5)); // Cap at 50% reduction, minimum 5.0
 }
 
 /**
@@ -118,9 +142,20 @@ export function calculateCoverageScore(coveragePercent: number): number {
  * This inverts the raw risk score for display purposes
  */
 export function calculateRiskMitigationScore(rawRiskScore: number, maxRisk: number): number {
+  // Edge case: no risk anywhere, everyone gets full marks
   if (maxRisk === 0) return 10;
+
+  // Edge case: if this supplier has no missing items, full marks
+  if (rawRiskScore === 0) return 10;
+
+  // Edge case: if this supplier has the max risk but it's only a few items, don't penalize too harshly
+  if (rawRiskScore === maxRisk && maxRisk <= 3) {
+    // With only 1-3 missing items max, give partial credit
+    return Math.max(7, 10 - (maxRisk * 1.5)); // Gentler penalty for small numbers
+  }
+
   const normalized = Math.min(rawRiskScore / maxRisk, 1);
-  return 10 - (normalized * 10);
+  return Math.max(0, 10 - (normalized * 10));
 }
 
 /**
