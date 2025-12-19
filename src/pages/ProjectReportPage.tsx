@@ -201,10 +201,10 @@ export default function ProjectReportPage({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full bg-slate-900">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading report...</p>
+          <p className="text-slate-300">Loading report...</p>
         </div>
       </div>
     );
@@ -212,59 +212,59 @@ export default function ProjectReportPage({
 
   if (hasReport === false) {
     return (
-      <div className="p-8">
+      <div className="p-8 bg-slate-900 min-h-screen">
         <div className="max-w-3xl mx-auto">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <div className="text-sm text-gray-500 mb-1">
+              <div className="text-sm text-slate-400 mb-1">
                 Projects &gt; {projectName} &gt; Report
               </div>
-              <h1 className="text-3xl font-bold text-gray-900">{projectName} – Report</h1>
-              <p className="text-gray-600 mt-1">Award Recommendation & Itemised Comparison</p>
+              <h1 className="text-3xl font-bold text-white">{projectName} – Report</h1>
+              <p className="text-slate-300 mt-1">Award Recommendation & Itemised Comparison</p>
             </div>
             <button
               onClick={onNavigateToHub}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-md transition-colors"
             >
               <ExternalLink size={16} />
               View all project reports
             </button>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-12 text-center">
+            <FileText className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-white mb-2">
               No Report Generated Yet
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-slate-300 mb-6">
               To generate an award recommendation report, complete the workflow steps and click the button below.
             </p>
             <div className="space-y-3 text-left max-w-md mx-auto">
               <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+                <div className="w-6 h-6 bg-orange-600/20 text-orange-400 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
                   1
                 </div>
                 <div>
-                  <div className="font-medium text-gray-900">Import Quotes</div>
-                  <div className="text-sm text-gray-600">Upload supplier quotes for analysis</div>
+                  <div className="font-medium text-white">Import Quotes</div>
+                  <div className="text-sm text-slate-400">Upload supplier quotes for analysis</div>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+                <div className="w-6 h-6 bg-orange-600/20 text-orange-400 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
                   2
                 </div>
                 <div>
-                  <div className="font-medium text-gray-900">Review & Clean</div>
-                  <div className="text-sm text-gray-600">Normalize and validate quote data</div>
+                  <div className="font-medium text-white">Review & Clean</div>
+                  <div className="text-sm text-slate-400">Normalize and validate quote data</div>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+                <div className="w-6 h-6 bg-orange-600/20 text-orange-400 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
                   3
                 </div>
                 <div>
-                  <div className="font-medium text-gray-900">Scope Matrix</div>
-                  <div className="text-sm text-gray-600">Compare suppliers and generate report</div>
+                  <div className="font-medium text-white">Scope Matrix</div>
+                  <div className="text-sm text-slate-400">Compare suppliers and generate report</div>
                 </div>
               </div>
             </div>
@@ -287,20 +287,20 @@ export default function ProjectReportPage({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-slate-800 border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm text-gray-500 mb-1">
+            <div className="text-sm text-slate-400 mb-1">
               Projects &gt; {projectName} &gt; Report
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">{projectName} – Report</h1>
-            <p className="text-sm text-gray-600 mt-1">
+            <h1 className="text-2xl font-bold text-white">{projectName} – Report</h1>
+            <p className="text-sm text-slate-300 mt-1">
               Award Recommendation & Itemised Comparison generated by VerifyTrade
             </p>
           </div>
           <button
             onClick={onNavigateToHub}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-md transition-colors"
           >
             <ExternalLink size={16} />
             View all project reports
