@@ -200,10 +200,10 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      alert('Senior Project Team Overview generated! Open the HTML file and use Print to PDF to save.');
+      alert('Senior Project Team Pack generated! Open the HTML file and use Print to PDF to save.');
     } catch (error) {
       console.error('Export error:', error);
-      alert('Could not generate Senior Report. Please try again.');
+      alert('Could not generate Senior Pack. Please try again.');
     } finally {
       setGeneratingSenior(false);
     }
@@ -279,7 +279,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
                   className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Briefcase size={16} />
-                  {generatingSenior ? 'Generating...' : 'Generate Senior Report'}
+                  {generatingSenior ? 'Generating...' : 'Generate Senior Pack'}
                 </button>
               </div>
             )}
