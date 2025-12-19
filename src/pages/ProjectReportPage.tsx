@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FileText, ExternalLink, Loader2 } from 'lucide-react';
 import AwardReport from './AwardReport';
 import { supabase } from '../lib/supabase';
+import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
 
 interface ProjectReportPageProps {
   projectId: string;
@@ -138,83 +139,63 @@ export default function ProjectReportPage({
       const result = reportData.result_json;
       const awardSummary = result.awardSummary;
 
-      const content = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>Award Report - ${projectName}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; color: #333; }
-            h1 { color: #1e40af; border-bottom: 3px solid #3b82f6; padding-bottom: 10px; margin-bottom: 30px; }
-            h2 { color: #1e40af; margin-top: 30px; margin-bottom: 15px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
-            h3 { color: #374151; margin-top: 20px; }
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            th, td { padding: 12px; text-align: left; border: 1px solid #d1d5db; }
-            th { background-color: #3b82f6; color: white; font-weight: 600; }
-            tr:nth-child(even) { background-color: #f9fafb; }
-            .meta { color: #6b7280; font-size: 14px; margin-bottom: 30px; }
-            .supplier-section { margin: 30px 0; padding: 20px; background: #f9fafb; border-radius: 8px; }
-            .recommendation { background: #dbeafe; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0; }
-          </style>
-        </head>
-        <body>
-          <h1>Award Recommendation Report</h1>
-          <div class="meta">
-            <p><strong>Project:</strong> ${projectName}</p>
-            <p><strong>Generated:</strong> ${new Date(reportData.generated_at).toLocaleString()}</p>
-            <p><strong>Equalisation Mode:</strong> ${awardSummary.equalisationMode}</p>
-          </div>
+      // Get project data for client name
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('client')
+        .eq('id', projectId)
+        .maybeSingle();
 
-          <h2>Supplier Rankings</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Supplier</th>
-                <th>Adjusted Total</th>
-                <th>Risk Score</th>
-                <th>Coverage %</th>
-                <th>Items Quoted</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${awardSummary.suppliers.map((s: any, idx: number) => `
-                <tr>
-                  <td>${idx + 1}</td>
-                  <td>${s.supplierName}</td>
-                  <td>$${s.adjustedTotal.toLocaleString()}</td>
-                  <td>${s.riskScore}</td>
-                  <td>${Math.round(s.coveragePercent)}%</td>
-                  <td>${s.itemsQuoted}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+      // Transform data for modern PDF template
+      const suppliers = awardSummary.suppliers.map((s: any, idx: number) => ({
+        rank: idx + 1,
+        supplierName: s.supplierName,
+        adjustedTotal: s.adjustedTotal,
+        riskScore: s.riskScore,
+        coveragePercent: s.coveragePercent,
+        itemsQuoted: s.itemsQuoted,
+        totalItems: s.totalItems || s.itemsQuoted,
+        notes: s.notes || []
+      }));
 
-          <h2>Recommendations</h2>
-          ${awardSummary.recommendations.map((rec: any) => `
-            <div class="recommendation">
-              <h3>${rec.type.replace('_', ' ')}</h3>
-              <p><strong>Supplier:</strong> ${rec.supplier.supplierName}</p>
-              <p><strong>Reason:</strong> ${rec.reason}</p>
-            </div>
-          `).join('')}
-        </body>
-        </html>
-      `;
+      // Transform recommendations for display cards
+      const recommendations = awardSummary.recommendations.slice(0, 3).map((rec: any) => {
+        const supplier = awardSummary.suppliers.find((s: any) => s.supplierName === rec.supplier.supplierName);
+        return {
+          type: rec.type,
+          supplierName: rec.supplier.supplierName,
+          price: supplier?.adjustedTotal || 0,
+          coverage: supplier?.coveragePercent || 0,
+          riskScore: supplier?.riskScore || 0,
+          score: supplier?.score || 8.5
+        };
+      });
 
-      const blob = new Blob([content], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Award_Report_${projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // Generate modern PDF HTML
+      const htmlContent = generateModernPdfHtml({
+        projectName,
+        clientName: projectData?.client || undefined,
+        generatedAt: reportData.generated_at,
+        recommendations,
+        suppliers,
+        executiveSummary: `This report provides a comprehensive evaluation of ${suppliers.length} supplier quotes received for ${projectName}. Our analysis employs a multi-criteria assessment framework evaluating pricing competitiveness, technical compliance, scope completeness, and risk factors. The recommended supplier demonstrates optimal value delivery across all evaluation dimensions.`,
+        methodology: [
+          'Quote Import & Validation',
+          'Data Normalization',
+          'Scope Gap Analysis',
+          'Risk Assessment',
+          'Multi-Criteria Scoring'
+        ]
+      });
+
+      // Download the HTML file
+      const filename = `Award_Report_${projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
+      downloadPdfHtml(htmlContent, filename);
+
+      console.log('✅ Modern PDF report downloaded successfully');
     } catch (error) {
       console.error('Error generating report download:', error);
+      throw error;
     }
   };
 

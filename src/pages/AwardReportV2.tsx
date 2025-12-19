@@ -9,6 +9,7 @@ import ReportExportBar, { type ExportType } from '../components/ReportExportBar'
 import SupplierApprovalPanel from '../components/SupplierApprovalPanel';
 import RFIGenerator from '../components/RFIGenerator';
 import UnsuccessfulLettersGenerator from '../components/UnsuccessfulLettersGenerator';
+import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
 
 interface SupplierScore {
   supplierName: string;
@@ -284,166 +285,137 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
   };
 
   const handleExportPDF = () => {
-    const reportElement = document.getElementById('printable-report');
-    if (!reportElement || !reportData) return;
+    if (!reportData) return;
 
-    const clonedReport = reportElement.cloneNode(true) as HTMLElement;
+    // Transform suppliers data for modern PDF template
+    const suppliers = reportData.suppliers.map(s => ({
+      rank: s.rank,
+      supplierName: s.supplierName,
+      adjustedTotal: s.price,
+      riskScore: s.riskScore,
+      coveragePercent: s.coveragePercent,
+      itemsQuoted: s.itemsQuoted,
+      totalItems: s.totalItems,
+      weightedScore: s.weightedScore,
+      notes: s.notes
+    }));
 
-    const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Award Report - ${reportData.projectName}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-      line-height: 1.6;
-      color: #1f2937;
-      background: white;
-      padding: 0;
-    }
-    .bg-white { background: white; }
-    .card {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 32px;
-      margin-bottom: 24px;
-    }
-    .page-break {
-      page-break-after: always;
-      break-after: page;
-    }
-    .text-center { text-align: center; }
-    .py-16 { padding-top: 64px; padding-bottom: 64px; }
-    .w-20 { width: 80px; }
-    .h-20 { height: 80px; }
-    .bg-blue-600/20 { background-color: #dbeafe; }
-    .rounded-full { border-radius: 9999px; }
-    .flex { display: flex; }
-    .items-center { align-items: center; }
-    .justify-center { justify-content: center; }
-    .mx-auto { margin-left: auto; margin-right: auto; }
-    .mb-6 { margin-bottom: 24px; }
-    .mb-4 { margin-bottom: 16px; }
-    .mb-8 { margin-bottom: 32px; }
-    .mb-2 { margin-bottom: 8px; }
-    .mt-1 { margin-top: 4px; }
-    .mt-2 { margin-top: 8px; }
-    .mt-4 { margin-top: 16px; }
-    .mt-6 { margin-top: 24px; }
-    .mt-12 { margin-top: 48px; }
-    .gap-3 { gap: 12px; }
-    .gap-4 { gap: 16px; }
-    .gap-6 { gap: 24px; }
-    .text-4xl { font-size: 36px; line-height: 40px; }
-    .text-3xl { font-size: 30px; line-height: 36px; }
-    .text-2xl { font-size: 24px; line-height: 32px; }
-    .text-xl { font-size: 20px; line-height: 28px; }
-    .text-lg { font-size: 18px; line-height: 28px; }
-    .text-sm { font-size: 14px; line-height: 20px; }
-    .font-bold { font-weight: 700; }
-    .font-semibold { font-weight: 600; }
-    .font-medium { font-weight: 500; }
-    .text-slate-100 { color: #111827; }
-    .text-gray-800 { color: #1f2937; }
-    .text-slate-300 { color: #374151; }
-    .text-slate-400 { color: #4b5563; }
-    .text-slate-400 { color: #6b7280; }
-    .text-blue-200 { color: #1e3a8a; }
-    .text-blue-300 { color: #1e40af; }
-    .text-blue-300 { color: #1d4ed8; }
-    .text-blue-400 { color: #2563eb; }
-    .w-10 { width: 40px; }
-    .h-10 { height: 40px; }
-    .w-6 { width: 24px; }
-    .h-6 { height: 24px; }
-    .bg-blue-900/20 { background-color: #eff6ff; }
-    .border-2 { border-width: 2px; }
-    .border-blue-600 { border-color: #2563eb; }
-    .rounded-lg { border-radius: 8px; }
-    .px-8 { padding-left: 32px; padding-right: 32px; }
-    .py-4 { padding-top: 16px; padding-bottom: 16px; }
-    .p-4 { padding: 16px; }
-    .p-6 { padding: 24px; }
-    .inline-block { display: inline-block; }
-    .prose { max-width: 65ch; }
-    .max-w-none { max-width: none; }
-    .leading-relaxed { line-height: 1.625; }
-    .grid { display: grid; }
-    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .bg-slate-700/50 { background-color: #f9fafb; }
-    .bg-blue-900/20 { background-color: #eff6ff; }
-    .bg-green-900/20 { background-color: #f0fdf4; }
-    .bg-yellow-900/20 { background-color: #fefce8; }
-    .bg-red-900/20 { background-color: #fef2f2; }
-    .border-l-4 { border-left-width: 4px; }
-    .border-blue-600 { border-color: #2563eb; }
-    .border-green-500 { border-color: #16a34a; }
-    .border-yellow-500 { border-color: #ca8a04; }
-    .border-red-500 { border-color: #dc2626; }
-    .rounded-r-lg { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
-    .space-y-4 > * + * { margin-top: 16px; }
-    .space-y-6 > * + * { margin-top: 24px; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 16px 0;
-      font-size: 14px;
-    }
-    th, td {
-      padding: 12px;
-      text-align: left;
-      border: 1px solid #d1d5db;
-    }
-    th {
-      background-color: #3b82f6;
-      color: white;
-      font-weight: 600;
-    }
-    tbody tr:nth-child(even) {
-      background-color: #f9fafb;
-    }
-    svg {
-      fill: currentColor;
-    }
-    @page {
-      size: A4;
-      margin: 15mm;
-    }
-    @media print {
-      body {
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
-      }
-      .page-break {
-        page-break-after: always;
-      }
-    }
-  </style>
-</head>
-<body>
-  ${clonedReport.outerHTML}
-</body>
-</html>`;
+    // Create recommendation cards (Best Value, Lowest Risk, Balanced)
+    const recommendations = [
+      {
+        type: 'best_value' as const,
+        supplierName: reportData.recommendedSupplier.supplierName,
+        price: reportData.recommendedSupplier.price,
+        coverage: reportData.recommendedSupplier.coveragePercent,
+        riskScore: reportData.recommendedSupplier.riskScore,
+        score: reportData.recommendedSupplier.weightedScore
+      },
+      // Find lowest risk supplier
+      ...(() => {
+        const lowestRisk = [...reportData.suppliers].sort((a, b) => a.riskScore - b.riskScore)[0];
+        return lowestRisk ? [{
+          type: 'lowest_risk' as const,
+          supplierName: lowestRisk.supplierName,
+          price: lowestRisk.price,
+          coverage: lowestRisk.coveragePercent,
+          riskScore: lowestRisk.riskScore,
+          score: lowestRisk.weightedScore
+        }] : [];
+      })(),
+      // Find balanced choice (middle of the pack in overall score)
+      ...(() => {
+        const sorted = [...reportData.suppliers].sort((a, b) => b.weightedScore - a.weightedScore);
+        const balanced = sorted[Math.floor(sorted.length / 2)] || sorted[0];
+        return balanced ? [{
+          type: 'balanced' as const,
+          supplierName: balanced.supplierName,
+          price: balanced.price,
+          coverage: balanced.coveragePercent,
+          riskScore: balanced.riskScore,
+          score: balanced.weightedScore
+        }] : [];
+      })()
+    ].slice(0, 3);
 
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
+    // Generate additional sections
+    const additionalSections = [];
 
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Award_Report_${reportData.projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Add Award Rationale section if available
+    if (reportData.awardRationale) {
+      additionalSections.push({
+        title: 'Award Rationale',
+        content: `<div style="line-height: 1.8; color: #374151;">${reportData.awardRationale.replace(/\n/g, '<br>')}</div>`
+      });
+    }
 
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+    // Add Conditions of Award if available
+    if (reportData.conditionsOfAward && reportData.conditionsOfAward.length > 0) {
+      additionalSections.push({
+        title: 'Conditions of Award',
+        content: `
+          <ul style="padding-left: 24px; line-height: 1.8; color: #374151;">
+            ${reportData.conditionsOfAward.map(condition => `<li style="margin-bottom: 8px;">${condition}</li>`).join('')}
+          </ul>
+        `
+      });
+    }
 
-    onToast?.('Report downloaded. Open the HTML file and use your browser\'s "Print to PDF" to save as PDF.', 'success');
+    // Add Key Risks section
+    const topSuppliers = reportData.suppliers.slice(0, 3);
+    const allRisks = topSuppliers.flatMap(s => s.risks || []).filter(Boolean);
+    if (allRisks.length > 0) {
+      additionalSections.push({
+        title: 'Key Risks & Clarifications',
+        content: `
+          <div style="line-height: 1.8;">
+            ${topSuppliers.map(s => {
+              const risks = s.risks || [];
+              const clarifications = s.clarifications || [];
+              if (risks.length === 0 && clarifications.length === 0) return '';
+              return `
+                <div style="margin-bottom: 24px;">
+                  <h4 style="color: #111827; font-weight: 600; margin-bottom: 8px;">${s.supplierName}</h4>
+                  ${risks.length > 0 ? `
+                    <div style="color: #dc2626; font-size: 14px; margin-bottom: 8px;">
+                      <strong>Risks:</strong> ${risks.join(', ')}
+                    </div>
+                  ` : ''}
+                  ${clarifications.length > 0 ? `
+                    <div style="color: #d97706; font-size: 14px;">
+                      <strong>Clarifications:</strong> ${clarifications.join(', ')}
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            }).filter(Boolean).join('')}
+          </div>
+        `
+      });
+    }
+
+    // Generate modern PDF HTML
+    const htmlContent = generateModernPdfHtml({
+      projectName: reportData.projectName,
+      clientName: reportData.clientName || undefined,
+      generatedAt: reportData.generatedAt,
+      recommendations,
+      suppliers,
+      executiveSummary: reportData.executiveSummary,
+      methodology: [
+        'Quote Import & Validation',
+        'Data Normalization',
+        'Scope Gap Analysis',
+        'Risk Assessment',
+        'Multi-Criteria Scoring'
+      ],
+      additionalSections
+    });
+
+    // Download the HTML file
+    const filename = `Award_Report_${reportData.projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
+    downloadPdfHtml(htmlContent, filename);
+
+    onToast?.('Modern PDF report downloaded! Open the HTML file and use "Print to PDF" to save as PDF.', 'success');
   };
 
   const handleExportExcel = () => {
