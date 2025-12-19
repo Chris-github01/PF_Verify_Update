@@ -135,7 +135,7 @@ export default function AppBar({
           )}
 
           {currentProjectId && (
-            <div className="hidden xl:flex">
+            <div className="hidden md:flex">
               <TradeModuleBadge trade={currentProjectTrade} compact />
             </div>
           )}

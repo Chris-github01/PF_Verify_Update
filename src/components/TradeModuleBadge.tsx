@@ -93,7 +93,7 @@ export default function TradeModuleBadge({ trade, compact = false }: TradeModule
     return (
       <div className="flex items-center gap-1.5">
         <div
-          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${module.specificBorder} ${module.specificBg} ${module.specificColor}`}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm transition-colors ${module.specificBorder} ${module.specificBg} ${module.specificColor}`}
         >
           {module.icon}
           <span>{module.specificModule}</span>
