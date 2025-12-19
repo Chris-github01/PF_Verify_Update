@@ -21,6 +21,39 @@ export interface SeniorReportData {
     mitigation: string;
     severity: 'high' | 'medium' | 'low';
   }>;
+  organisationLogoUrl?: string;
+}
+
+const VERIFYTRADE_ORANGE = '#f97316';
+const VERIFYTRADE_ORANGE_LIGHT = '#fed7aa';
+const VERIFYTRADE_ORANGE_DARK = '#ea580c';
+
+/**
+ * Generate Logo Section
+ */
+function generateLogoSection(organisationLogoUrl?: string): string {
+  if (organisationLogoUrl) {
+    return `
+      <div class="logo-section">
+        <img
+          src="${organisationLogoUrl}"
+          alt="Organisation Logo"
+          style="max-width: 140px; max-height: 52px; object-fit: contain;"
+        />
+        <div style="border-left: 2px solid #e5e7eb; height: 52px; margin: 0 12px;"></div>
+        <div class="logo-text">VerifyTrade</div>
+      </div>`;
+  } else {
+    return `
+      <div class="logo-section">
+        <div class="logo-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+        </div>
+        <div class="logo-text">VerifyTrade</div>
+      </div>`;
+  }
 }
 
 export function generateSeniorReportHTML(data: SeniorReportData): string {
@@ -57,11 +90,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Senior Project Team Overview - ${data.projectName}</title>
   <style>
-    @page {
-      size: A4 landscape;
-      margin: 15mm;
-    }
-
+    /* === RESET & BASE STYLES === */
     * {
       margin: 0;
       padding: 0;
@@ -69,81 +98,221 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-size: 10pt;
-      line-height: 1.4;
-      color: #1e293b;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Helvetica Neue', Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #1f2937;
       background: white;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    .header {
-      background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
-      color: white;
-      padding: 20px 30px;
-      margin-bottom: 20px;
-      border-radius: 8px;
+    /* === PAGE LAYOUT === */
+    @page {
+      size: A4;
+      margin: 20mm 15mm;
     }
 
-    .header h1 {
-      font-size: 22pt;
-      margin-bottom: 6px;
+    .page {
+      page-break-after: always;
+      padding: 40px;
     }
 
-    .header p {
-      font-size: 11pt;
-      opacity: 0.95;
+    .page:last-child {
+      page-break-after: auto;
     }
 
-    .executive-summary {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
+    /* === HEADER & FOOTER === */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid ${VERIFYTRADE_ORANGE};
+    }
+
+    .logo-section {
+      display: flex;
+      align-items: center;
       gap: 12px;
-      margin-bottom: 20px;
     }
 
-    .summary-card {
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      padding: 12px;
+    .logo-icon {
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, ${VERIFYTRADE_ORANGE} 0%, ${VERIFYTRADE_ORANGE_DARK} 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 8px rgba(249, 115, 22, 0.25);
     }
 
-    .summary-label {
-      font-size: 8pt;
-      color: #64748b;
+    .logo-text {
+      font-size: 26px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.5px;
+    }
+
+    .generated-by {
+      text-align: right;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .generated-by strong {
+      color: ${VERIFYTRADE_ORANGE};
+      font-weight: 600;
+    }
+
+    footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    /* === COVER PAGE === */
+    .cover-page {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      min-height: 80vh;
+    }
+
+    h1 {
+      font-size: 46px;
+      font-weight: 800;
+      color: #111827;
+      letter-spacing: -1.2px;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      font-size: 22px;
+      color: #6b7280;
+      font-weight: 400;
+      margin-bottom: 48px;
+    }
+
+    /* === TYPOGRAPHY === */
+    h2 {
+      font-size: 30px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.5px;
+      margin-bottom: 28px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #f3f4f6;
+    }
+
+    h3 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 18px;
+    }
+
+    /* === PROJECT DETAILS CARD === */
+    .project-details-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 32px;
+      margin: 40px 0;
+      text-align: left;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .project-details-card .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .project-details-card .detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .project-details-card .detail-label {
+      font-weight: 600;
+      color: #6b7280;
+      font-size: 13px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+    }
+
+    .project-details-card .detail-value {
       font-weight: 600;
-      margin-bottom: 4px;
+      color: #111827;
+      font-size: 15px;
     }
 
-    .summary-value {
-      font-size: 18pt;
-      color: #7c3aed;
-      font-weight: 700;
+    /* === METRICS CARDS === */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin: 32px 0;
     }
 
+    .stat-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .stat-card-value {
+      font-size: 32px;
+      font-weight: 800;
+      color: ${VERIFYTRADE_ORANGE};
+      margin-bottom: 8px;
+    }
+
+    .stat-card-label {
+      font-size: 13px;
+      color: #6b7280;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* === CONTENT GRID === */
     .content-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      margin-bottom: 20px;
+      gap: 24px;
+      margin-bottom: 32px;
     }
 
     .card {
       background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 15px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 28px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
 
-    .card h2 {
-      font-size: 13pt;
-      color: #7c3aed;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 2px solid #e2e8f0;
+    .card h3 {
+      margin-bottom: 20px;
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
     }
 
     .pie-chart-container {
@@ -183,27 +352,53 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       color: #1e293b;
     }
 
+    /* === MODERN TABLE === */
+    .table-container {
+      margin: 24px 0;
+      overflow: hidden;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
+      font-size: 13px;
     }
 
-    th {
-      background: #f1f5f9;
-      color: #475569;
-      font-size: 9pt;
+    thead {
+      background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+    }
+
+    thead th {
+      padding: 16px 12px;
       text-align: left;
-      padding: 8px;
-      border-bottom: 2px solid #cbd5e1;
+      font-weight: 700;
+      font-size: 12px;
+      color: white;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      font-weight: 600;
+      border: none;
     }
 
-    td {
-      padding: 8px;
-      border-bottom: 1px solid #e2e8f0;
-      font-size: 9pt;
+    tbody tr {
+      border-bottom: 1px solid #f3f4f6;
+      transition: background 0.2s ease;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #f9fafb;
+    }
+
+    tbody tr:hover {
+      background: #f3f4f6;
+    }
+
+    tbody td {
+      padding: 14px 12px;
+      color: #374151;
+      border: none;
     }
 
     .term-name {
@@ -255,127 +450,185 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       color: #16a34a;
     }
 
+    /* === COST BREAKDOWN === */
     .cost-breakdown {
-      background: #f8fafc;
-      padding: 12px;
-      border-radius: 6px;
-      margin-top: 10px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      margin-top: 24px;
     }
 
     .cost-row {
       display: flex;
       justify-content: space-between;
-      padding: 6px 0;
-      border-bottom: 1px solid #e2e8f0;
+      padding: 12px 0;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 14px;
     }
 
     .cost-row:last-child {
       border-bottom: none;
-      padding-top: 10px;
-      margin-top: 6px;
-      border-top: 2px solid #7c3aed;
+      padding-top: 16px;
+      margin-top: 8px;
+      border-top: 2px solid ${VERIFYTRADE_ORANGE};
       font-weight: 700;
     }
 
     .cost-label {
-      color: #475569;
+      color: #6b7280;
     }
 
     .cost-value {
-      color: #1e293b;
-      font-weight: 600;
+      color: #111827;
+      font-weight: 700;
     }
 
-    .footer {
-      margin-top: 20px;
-      padding-top: 12px;
-      border-top: 2px solid #e2e8f0;
-      font-size: 8pt;
-      color: #64748b;
-      text-align: center;
-    }
-
-    .full-width {
-      grid-column: 1 / -1;
-    }
-
+    /* === PRINT STYLES === */
     @media print {
       body {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
       }
+
+      .page-break {
+        page-break-after: always;
+        break-after: page;
+      }
+
+      table {
+        page-break-inside: avoid;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Senior Project Team Overview</h1>
-    <p>Executive Summary & Commercial Dashboard</p>
-  </div>
+  <!-- COVER PAGE -->
+  <div class="page cover-page">
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+      <h1 style="text-align: center;">Senior Project Team Overview</h1>
+      <div class="subtitle" style="text-align: center;">Executive Summary & Commercial Dashboard</div>
 
-  <div class="executive-summary">
-    <div class="summary-card">
-      <div class="summary-label">Contract Value</div>
-      <div class="summary-value">$${(data.totalAmount / 1000).toFixed(0)}k</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-label">Retention</div>
-      <div class="summary-value">$${(data.retentionAmount / 1000).toFixed(0)}k</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-label">Net Payable</div>
-      <div class="summary-value">$${(data.netAmount / 1000).toFixed(0)}k</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-label">Service Types</div>
-      <div class="summary-value">${data.scopeSystems.length}</div>
-    </div>
-  </div>
-
-  <div class="content-grid">
-    <div class="card">
-      <h2>Scope Distribution by Service Type</h2>
-      <div class="pie-chart-container">
-        ${pieChartSVG}
+      <div class="project-details-card">
+        <div class="detail-row">
+          <span class="detail-label">Project</span>
+          <span class="detail-value">${data.projectName}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Client</span>
+          <span class="detail-value">${data.projectClient}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Subcontractor</span>
+          <span class="detail-value">${data.supplierName}</span>
+        </div>
       </div>
-      <div class="legend">
-        ${data.scopeSystems.map((system, idx) => `
-          <div class="legend-item">
-            <div class="legend-color" style="background-color: ${getChartColor(idx)}"></div>
-            <div class="legend-label">${system.service_type}</div>
-            <div class="legend-percentage">${system.percentage.toFixed(1)}%</div>
+
+      <div class="stats-grid" style="margin-top: 40px;">
+        <div class="stat-card">
+          <div class="stat-card-value">$${(data.totalAmount / 1000).toFixed(0)}k</div>
+          <div class="stat-card-label">Contract Value</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value">$${(data.retentionAmount / 1000).toFixed(0)}k</div>
+          <div class="stat-card-label">Retention</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value">$${(data.netAmount / 1000).toFixed(0)}k</div>
+          <div class="stat-card-label">Net Payable</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-value">${data.scopeSystems.length}</div>
+          <div class="stat-card-label">Service Types</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 60px;">
+        ${generateLogoSection(data.organisationLogoUrl)}
+        <div style="font-size: 13px; color: #6b7280; margin-top: 12px; text-align: center;">
+          Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </div>
+      </div>
+    </div>
+
+    <footer style="text-align: right; margin-top: auto;">
+      <div style="color: ${VERIFYTRADE_ORANGE}; font-weight: 600;">Generated by VerifyTrade</div>
+    </footer>
+  </div>
+
+  <!-- FINANCIAL & SCOPE BREAKDOWN PAGE -->
+  <div class="page page-break">
+    <header>
+      ${generateLogoSection(data.organisationLogoUrl)}
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    <div class="content-grid">
+      <div class="card">
+        <h3>Scope Distribution by Service Type</h3>
+        <div class="pie-chart-container">
+          ${pieChartSVG}
+        </div>
+        <div class="legend">
+          ${data.scopeSystems.map((system, idx) => `
+            <div class="legend-item">
+              <div class="legend-color" style="background-color: ${getChartColor(idx)}"></div>
+              <div class="legend-label">${system.service_type}</div>
+              <div class="legend-percentage">${system.percentage.toFixed(1)}%</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Financial Breakdown</h3>
+        <div class="cost-breakdown">
+          <div class="cost-row">
+            <span class="cost-label">Total Contract Value</span>
+            <span class="cost-value">$${data.totalAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span>
           </div>
-        `).join('')}
+          <div class="cost-row">
+            <span class="cost-label">Less: Retention (3%)</span>
+            <span class="cost-value" style="color: #f59e0b;">-$${data.retentionAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div class="cost-row">
+            <span class="cost-label">Net Amount Payable</span>
+            <span class="cost-value" style="color: #16a34a;">$${data.netAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <h2>Financial Breakdown</h2>
-      <div class="cost-breakdown">
-        <div class="cost-row">
-          <span class="cost-label">Total Contract Value</span>
-          <span class="cost-value">$${data.totalAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span>
-        </div>
-        <div class="cost-row">
-          <span class="cost-label">Less: Retention (3%)</span>
-          <span class="cost-value" style="color: #f59e0b;">-$${data.retentionAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span>
-        </div>
-        <div class="cost-row">
-          <span class="cost-label">Net Amount Payable</span>
-          <span class="cost-value" style="color: #16a34a;">$${data.netAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span>
-        </div>
+    <div style="margin-top: 32px;">
+      <h3>Key Commercial Terms</h3>
+      <div class="table-container">
+        <table>
+          <tbody>
+            ${keyTermsHTML}
+          </tbody>
+        </table>
       </div>
-
-      <h2 style="margin-top: 15px;">Key Commercial Terms</h2>
-      <table>
-        <tbody>
-          ${keyTermsHTML}
-        </tbody>
-      </table>
     </div>
 
-    <div class="card full-width">
-      <h2>Risk Register & Mitigations</h2>
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page 2</div>
+    </footer>
+  </div>
+
+  <!-- RISK REGISTER PAGE -->
+  <div class="page page-break">
+    <header>
+      ${generateLogoSection(data.organisationLogoUrl)}
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    <h2>Risk Register & Mitigations</h2>
+    <div class="table-container">
       <table>
         <thead>
           <tr>
@@ -389,15 +642,17 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         </tbody>
       </table>
     </div>
-  </div>
 
-  <div class="footer">
-    <p>Generated by VerifyTrade - Contract Manager | ${new Date().toLocaleDateString('en-NZ', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })}</p>
-    <p>This document contains commercial and sensitive information. Distribution restricted to authorized project team members only.</p>
+    <div style="margin-top: 40px; padding: 24px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; text-align: center;">
+      <p style="font-size: 12px; color: #6b7280; line-height: 1.7;">
+        <strong style="color: #111827;">Confidential:</strong> This document contains commercial and sensitive information. Distribution restricted to authorized project team members only.
+      </p>
+    </div>
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page 3</div>
+    </footer>
   </div>
 </body>
 </html>

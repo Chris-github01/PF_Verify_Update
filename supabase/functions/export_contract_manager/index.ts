@@ -83,12 +83,32 @@ Deno.serve(async (req: Request) => {
 
     const { data: project } = await supabase
       .from('projects')
-      .select('name, client, updated_at, approved_quote_id')
+      .select('name, client, updated_at, approved_quote_id, organisation_id')
       .eq('id', projectId)
       .maybeSingle();
 
     if (!project) {
       throw new Error('Project not found');
+    }
+
+    // Get organisation info and logo
+    let organisationLogoUrl: string | undefined;
+    if ((project as any).organisation_id) {
+      const { data: org } = await supabase
+        .from('organisations')
+        .select('logo_url')
+        .eq('id', (project as any).organisation_id)
+        .maybeSingle();
+
+      if (org?.logo_url) {
+        const { data: urlData } = supabase.storage
+          .from('organisation-logos')
+          .getPublicUrl(org.logo_url);
+
+        if (urlData?.publicUrl) {
+          organisationLogoUrl = urlData.publicUrl;
+        }
+      }
     }
 
     const approvedQuoteId = (project as any)?.approved_quote_id;
@@ -159,7 +179,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (mode === 'junior_pack') {
-      const htmlContent = generateJuniorPackHTML(project.name, project.client || 'TBC', supplierName, scopeSystems);
+      const htmlContent = generateJuniorPackHTML(project.name, project.client || 'TBC', supplierName, scopeSystems, organisationLogoUrl);
       return new Response(
         JSON.stringify({ html: htmlContent }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -167,7 +187,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (mode === 'senior_report') {
-      const htmlContent = generateSeniorReportHTML(project.name, project.client || 'TBC', supplierName, totalAmount, scopeSystems);
+      const htmlContent = generateSeniorReportHTML(project.name, project.client || 'TBC', supplierName, totalAmount, scopeSystems, organisationLogoUrl);
       return new Response(
         JSON.stringify({ html: htmlContent }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
