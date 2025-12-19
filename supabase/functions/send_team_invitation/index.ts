@@ -148,9 +148,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Invitation sent successfully",
-        // In development, return the URL for testing
-        inviteUrl: Deno.env.get('ENVIRONMENT') === 'development' ? inviteUrl : undefined
+        message: "Invitation sent successfully"
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
