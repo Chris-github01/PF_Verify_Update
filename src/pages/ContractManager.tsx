@@ -395,10 +395,63 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 }
 
 function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo | null; projectInfo: ProjectInfo | null }) {
+  const [retentionPercentage, setRetentionPercentage] = useState<number>(3.0);
+  const [mainContractor, setMainContractor] = useState<string>('');
+  const [paymentTerms, setPaymentTerms] = useState<string>('20th following month, 22 working days');
+  const [liquidatedDamages, setLiquidatedDamages] = useState<string>('None specified');
+  const [isEditing, setIsEditing] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    loadContractSettings();
+  }, [projectInfo?.id]);
+
+  const loadContractSettings = async () => {
+    if (!projectInfo?.id) return;
+
+    try {
+      const { data } = await supabase
+        .from('projects')
+        .select('retention_percentage, main_contractor_name, payment_terms, liquidated_damages')
+        .eq('id', projectInfo.id)
+        .maybeSingle();
+
+      if (data) {
+        setRetentionPercentage(data.retention_percentage ?? 3.0);
+        setMainContractor(data.main_contractor_name || '');
+        setPaymentTerms(data.payment_terms || '20th following month, 22 working days');
+        setLiquidatedDamages(data.liquidated_damages || 'None specified');
+      }
+    } catch (error) {
+      console.error('Error loading contract settings:', error);
+    }
+  };
+
+  const saveField = async (field: string, value: string | number) => {
+    if (!projectInfo?.id) return;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ [field]: value })
+        .eq('id', projectInfo.id);
+
+      if (error) throw error;
+      setIsEditing(null);
+    } catch (error) {
+      console.error('Error saving field:', error);
+      alert('Failed to save changes');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const totalAmount = awardInfo?.total_amount || 0;
-  const retentionRate = 0.03;
+  const retentionRate = retentionPercentage / 100;
   const retentionAmount = totalAmount * retentionRate;
   const netAmount = totalAmount - retentionAmount;
+  const netPercentage = 100 - retentionPercentage;
 
   return (
     <div className="space-y-8">
@@ -421,9 +474,44 @@ function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo |
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Main Contractor</label>
-            <div className="text-xl text-white font-semibold">TBC</div>
+            {isEditing === 'main_contractor' ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={mainContractor}
+                  onChange={(e) => setMainContractor(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white"
+                  placeholder="Enter main contractor name"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveField('main_contractor_name', mainContractor);
+                    if (e.key === 'Escape') setIsEditing(null);
+                  }}
+                />
+                <button
+                  onClick={() => saveField('main_contractor_name', mainContractor)}
+                  disabled={isSaving}
+                  className="p-2 text-green-400 hover:text-green-300"
+                >
+                  <Save size={18} />
+                </button>
+                <button onClick={() => setIsEditing(null)} className="p-2 text-slate-400 hover:text-slate-300">
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="text-xl text-white font-semibold">{mainContractor || 'TBC'}</div>
+                <button
+                  onClick={() => setIsEditing('main_contractor')}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-blue-400 hover:text-blue-300 transition-opacity"
+                >
+                  <Edit2 size={16} />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
@@ -431,46 +519,161 @@ function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo |
             <div className="text-xl text-white font-semibold">{projectInfo?.client || 'TBC'}</div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Payment Terms</label>
-            <div className="text-base text-slate-300">20th following month, 22 working days</div>
+            {isEditing === 'payment_terms' ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={paymentTerms}
+                  onChange={(e) => setPaymentTerms(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                  placeholder="Enter payment terms"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveField('payment_terms', paymentTerms);
+                    if (e.key === 'Escape') setIsEditing(null);
+                  }}
+                />
+                <button
+                  onClick={() => saveField('payment_terms', paymentTerms)}
+                  disabled={isSaving}
+                  className="p-2 text-green-400 hover:text-green-300"
+                >
+                  <Save size={18} />
+                </button>
+                <button onClick={() => setIsEditing(null)} className="p-2 text-slate-400 hover:text-slate-300">
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="text-base text-slate-300">{paymentTerms}</div>
+                <button
+                  onClick={() => setIsEditing('payment_terms')}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-blue-400 hover:text-blue-300 transition-opacity"
+                >
+                  <Edit2 size={16} />
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Liquidated Damages</label>
-            <div className="text-base text-slate-300">None specified</div>
+            {isEditing === 'liquidated_damages' ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={liquidatedDamages}
+                  onChange={(e) => setLiquidatedDamages(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                  placeholder="Enter liquidated damages"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveField('liquidated_damages', liquidatedDamages);
+                    if (e.key === 'Escape') setIsEditing(null);
+                  }}
+                />
+                <button
+                  onClick={() => saveField('liquidated_damages', liquidatedDamages)}
+                  disabled={isSaving}
+                  className="p-2 text-green-400 hover:text-green-300"
+                >
+                  <Save size={18} />
+                </button>
+                <button onClick={() => setIsEditing(null)} className="p-2 text-slate-400 hover:text-slate-300">
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="text-base text-slate-300">{liquidatedDamages}</div>
+                <button
+                  onClick={() => setIsEditing('liquidated_damages')}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-blue-400 hover:text-blue-300 transition-opacity"
+                >
+                  <Edit2 size={16} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 rounded-xl border border-slate-700/50 p-6 shadow-lg">
-        <h4 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-          <BarChart3 size={20} className="text-orange-500" />
-          Financial Breakdown
-        </h4>
+        <div className="flex items-center justify-between mb-6">
+          <h4 className="text-lg font-bold text-white flex items-center gap-2">
+            <BarChart3 size={20} className="text-orange-500" />
+            Financial Breakdown
+          </h4>
+          <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-2 rounded-lg border border-slate-700/50">
+            <label className="text-sm text-slate-400 font-medium">Retention:</label>
+            {isEditing === 'retention' ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={retentionPercentage}
+                  onChange={(e) => setRetentionPercentage(parseFloat(e.target.value) || 0)}
+                  className="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-sm"
+                  step="0.5"
+                  min="0"
+                  max="100"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveField('retention_percentage', retentionPercentage);
+                    if (e.key === 'Escape') setIsEditing(null);
+                  }}
+                />
+                <span className="text-white font-medium">%</span>
+                <button
+                  onClick={() => saveField('retention_percentage', retentionPercentage)}
+                  disabled={isSaving}
+                  className="p-1 text-green-400 hover:text-green-300"
+                >
+                  <Save size={16} />
+                </button>
+                <button onClick={() => setIsEditing(null)} className="p-1 text-slate-400 hover:text-slate-300">
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold">{retentionPercentage}%</span>
+                <button
+                  onClick={() => setIsEditing('retention')}
+                  className="p-1 text-blue-400 hover:text-blue-300"
+                  title="Edit retention percentage"
+                >
+                  <Edit2 size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="space-y-5">
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-300 font-medium">Net Payable (97%)</span>
+              <span className="text-slate-300 font-medium">Net Payable ({netPercentage.toFixed(1)}%)</span>
               <span className="text-white font-semibold">
                 ${netAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div className="w-full bg-slate-900/80 rounded-full h-4 overflow-hidden border border-slate-700/50">
-              <div className="bg-gradient-to-r from-green-500 to-green-600 h-full rounded-full shadow-lg" style={{ width: '97%' }} />
+              <div className="bg-gradient-to-r from-green-500 to-green-600 h-full rounded-full shadow-lg" style={{ width: `${netPercentage}%` }} />
             </div>
           </div>
 
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-300 font-medium">Retention Held (3%)</span>
+              <span className="text-slate-300 font-medium">Retention Held ({retentionPercentage}%)</span>
               <span className="text-orange-400 font-semibold">
                 ${retentionAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div className="w-full bg-slate-900/80 rounded-full h-4 overflow-hidden border border-slate-700/50">
-              <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-full rounded-full shadow-lg" style={{ width: '3%' }} />
+              <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-full rounded-full shadow-lg" style={{ width: `${retentionPercentage}%` }} />
             </div>
           </div>
 
@@ -485,9 +688,9 @@ function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo |
         </div>
       </div>
 
-      <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl p-4 text-sm text-blue-300">
-        <AlertCircle size={16} className="inline mr-2" />
-        These values will be refined as Contract Manager is integrated with your commercial data.
+      <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-4 text-sm text-green-300">
+        <CheckCircle size={16} className="inline mr-2" />
+        Financial settings are now editable. Hover over fields to edit or adjust the retention percentage above.
       </div>
     </div>
   );
