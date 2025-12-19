@@ -125,7 +125,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
                 <RefreshCw size={13} />
               </span>
-              <span className="flex-1 text-left">Revisions & RFIs</span>
+              <span className="flex-1 text-left">Revised Quotes</span>
               {dashboardMode === 'revisions' && (
                 <span className="h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_12px_rgba(192,132,252,0.8)]" />
               )}
