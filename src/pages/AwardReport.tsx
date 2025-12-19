@@ -6,6 +6,7 @@ import type { EqualisationMode } from '../types/equalisation.types';
 import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
 import type { DashboardMode } from '../App';
+import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
 
 interface Project {
   id: string;
@@ -347,7 +348,90 @@ export default function AwardReport({
 
   const handlePrint = () => {
     setShowExportDropdown(false);
-    window.print();
+
+    if (!awardSummary || !currentProject) {
+      onToast?.('Report data not available', 'error');
+      return;
+    }
+
+    try {
+      // Transform suppliers data for modern PDF template
+      const suppliers = awardSummary.suppliers.map((s, idx) => ({
+        rank: idx + 1,
+        supplierName: s.supplierName,
+        adjustedTotal: s.price,
+        riskScore: s.riskScore,
+        coveragePercent: s.coveragePercent,
+        itemsQuoted: s.itemsQuoted,
+        totalItems: s.totalItems,
+        weightedScore: s.weightedScore,
+        notes: s.risks && s.risks.length > 0 ? s.risks : undefined
+      }));
+
+      // Create recommendation cards (Best Value, Lowest Risk, Balanced)
+      const recommendations = [
+        {
+          type: 'best_value' as const,
+          supplierName: awardSummary.recommendedSupplier.supplierName,
+          price: awardSummary.recommendedSupplier.price,
+          coverage: awardSummary.recommendedSupplier.coveragePercent,
+          riskScore: awardSummary.recommendedSupplier.riskScore,
+          score: awardSummary.recommendedSupplier.weightedScore
+        },
+        // Find lowest risk supplier
+        ...(() => {
+          const lowestRisk = [...awardSummary.suppliers].sort((a, b) => a.riskScore - b.riskScore)[0];
+          return lowestRisk ? [{
+            type: 'lowest_risk' as const,
+            supplierName: lowestRisk.supplierName,
+            price: lowestRisk.price,
+            coverage: lowestRisk.coveragePercent,
+            riskScore: lowestRisk.riskScore,
+            score: lowestRisk.weightedScore
+          }] : [];
+        })(),
+        // Find balanced choice (middle of the pack in overall score)
+        ...(() => {
+          const sorted = [...awardSummary.suppliers].sort((a, b) => b.weightedScore - a.weightedScore);
+          const balanced = sorted[Math.floor(sorted.length / 2)] || sorted[0];
+          return balanced ? [{
+            type: 'balanced' as const,
+            supplierName: balanced.supplierName,
+            price: balanced.price,
+            coverage: balanced.coveragePercent,
+            riskScore: balanced.riskScore,
+            score: balanced.weightedScore
+          }] : [];
+        })()
+      ].slice(0, 3);
+
+      // Generate modern PDF HTML
+      const htmlContent = generateModernPdfHtml({
+        projectName: currentProject.name,
+        clientName: currentProject.client || undefined,
+        generatedAt: reportTimestamp || new Date().toISOString(),
+        recommendations,
+        suppliers,
+        executiveSummary: awardSummary.executiveSummary,
+        methodology: [
+          'Quote Import & Validation',
+          'Data Normalization',
+          'Scope Gap Analysis',
+          'Risk Assessment',
+          'Multi-Criteria Scoring'
+        ],
+        additionalSections: []
+      });
+
+      // Download the HTML file
+      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
+      downloadPdfHtml(htmlContent, filename);
+
+      onToast?.('Modern PDF report downloaded! Open the HTML file and use "Print to PDF" to save as PDF.', 'success');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      onToast?.('Failed to generate PDF report', 'error');
+    }
   };
 
   const handleApproveQuote = async (supplierName: string) => {
