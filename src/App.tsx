@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Sparkles, AlertTriangle, X } from 'lucide-react';
 import { isImpersonating, stopImpersonation } from './lib/admin/adminApi';
-import TradeUpsellBanner from './components/TradeUpsellBanner';
 import Sidebar, { SidebarTab } from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
 import AppBar from './components/AppBar';
@@ -943,13 +942,6 @@ function AppContent() {
                   Exit Admin Mode
                 </button>
               </div>
-            )}
-
-            {!isInAdminMode && orgLicensing && orgLicensing.licensed_trades && (
-              <TradeUpsellBanner
-                currentTrades={orgLicensing.licensed_trades}
-                subscriptionStatus={orgLicensing.subscription_status}
-              />
             )}
 
             {!isInAdminMode && currentOrganisation?.id && (
