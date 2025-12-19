@@ -1,4 +1,4 @@
-import { X, Award, TrendingUp, AlertTriangle, CheckCircle2, DollarSign, BarChart3, PieChart } from 'lucide-react';
+import { X, Award, AlertTriangle, CheckCircle2, DollarSign, BarChart3, PieChart } from 'lucide-react';
 import type { EnhancedSupplierMetrics } from '../../lib/reports/awardReportEnhancements';
 import { formatCurrency, formatPercent } from '../../lib/reports/awardReportEnhancements';
 
@@ -97,7 +97,7 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
               <DollarSign className="w-5 h-5 text-green-500" />
               Pricing Analysis
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <div className="text-slate-400 text-sm mb-1">Price per System</div>
                 <div className="text-white text-xl font-semibold">{formatCurrency(supplier.normalizedPricePerSystem)}</div>
@@ -109,10 +109,6 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
                 }`}>
                   {supplier.variancePercent > 0 ? '+' : ''}{supplier.variancePercent.toFixed(1)}%
                 </div>
-              </div>
-              <div>
-                <div className="text-slate-400 text-sm mb-1">Estimated Full Scope</div>
-                <div className="text-white text-xl font-semibold">{formatCurrency(supplier.estimatedFullCost)}</div>
               </div>
             </div>
           </div>
@@ -150,28 +146,34 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
             </div>
           </div>
 
-          {/* Risk Factors */}
+          {/* Risk Assessment */}
           <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700 mb-6">
             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-yellow-500" />
               Risk Assessment
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-red-400">{supplier.riskFactors.redCells}</div>
-                <div className="text-slate-400 text-xs mt-1">Red Flags</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center p-4 bg-slate-800/50 rounded-lg">
+                <div className={`text-3xl font-bold mb-2 ${
+                  supplier.riskMitigationScore >= 8 ? 'text-green-400' :
+                  supplier.riskMitigationScore >= 6 ? 'text-blue-400' :
+                  supplier.riskMitigationScore >= 4 ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  {supplier.riskMitigationScore.toFixed(1)}/10
+                </div>
+                <div className="text-slate-400 text-sm">Risk Mitigation Score</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-yellow-400">{supplier.riskFactors.amberCells}</div>
-                <div className="text-slate-400 text-xs mt-1">Amber Warnings</div>
+              <div className="text-center p-4 bg-slate-800/50 rounded-lg">
+                <div className="text-3xl font-bold text-orange-400 mb-2">
+                  {supplier.scopeGaps?.length || 0}
+                </div>
+                <div className="text-slate-400 text-sm">Identified Gaps</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-400">{supplier.riskFactors.missingScope}</div>
-                <div className="text-slate-400 text-xs mt-1">Missing Items</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-400">{supplier.riskFactors.lowConfidenceItems}</div>
-                <div className="text-slate-400 text-xs mt-1">Low Confidence</div>
+              <div className="text-center p-4 bg-slate-800/50 rounded-lg">
+                <div className="text-3xl font-bold text-blue-400 mb-2">
+                  {supplier.complianceScore.toFixed(1)}/10
+                </div>
+                <div className="text-slate-400 text-sm">Compliance Score</div>
               </div>
             </div>
           </div>
