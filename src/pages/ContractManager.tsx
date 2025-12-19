@@ -502,7 +502,29 @@ function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo |
   );
 }
 
+interface QuoteItemWithCategory {
+  id: string;
+  description: string;
+  scope_category: string | null;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+}
+
 function ScopeSystemsTab({ projectId, scopeSystems }: { projectId: string; scopeSystems: ScopeSystem[] }) {
+  const [systems, setSystems] = useState<ScopeSystem[]>(scopeSystems);
+  const [editingCategoryOld, setEditingCategoryOld] = useState<string | null>(null);
+  const [editingCategoryNew, setEditingCategoryNew] = useState('');
+  const [showRecategorizeModal, setShowRecategorizeModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryItems, setCategoryItems] = useState<QuoteItemWithCategory[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [updatingCategory, setUpdatingCategory] = useState(false);
+
+  useEffect(() => {
+    setSystems(scopeSystems);
+  }, [scopeSystems]);
+
   const getCoverageBadge = (coverage: 'full' | 'partial' | 'none') => {
     const styles = {
       full: 'bg-green-900/30 text-green-400 border-green-700',
@@ -516,21 +538,170 @@ function ScopeSystemsTab({ projectId, scopeSystems }: { projectId: string; scope
     );
   };
 
+  const handleRenameCategory = async () => {
+    if (!editingCategoryOld || !editingCategoryNew.trim()) return;
+
+    setUpdatingCategory(true);
+    try {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('approved_quote_id')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (!project?.approved_quote_id) return;
+
+      const { error } = await supabase
+        .from('quote_items')
+        .update({ scope_category: editingCategoryNew })
+        .eq('quote_id', project.approved_quote_id)
+        .eq('scope_category', editingCategoryOld);
+
+      if (error) throw error;
+
+      // Update local state
+      setSystems(systems.map(sys =>
+        sys.service_type === editingCategoryOld
+          ? { ...sys, service_type: editingCategoryNew }
+          : sys
+      ));
+
+      setEditingCategoryOld(null);
+      setEditingCategoryNew('');
+
+      // Refresh the page data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error renaming category:', error);
+      alert('Failed to rename category');
+    } finally {
+      setUpdatingCategory(false);
+    }
+  };
+
+  const handleOpenRecategorize = async (category: string) => {
+    setSelectedCategory(category);
+    setShowRecategorizeModal(true);
+    setLoadingItems(true);
+
+    try {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('approved_quote_id')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (!project?.approved_quote_id) return;
+
+      const { data: items } = await supabase
+        .from('quote_items')
+        .select('id, description, scope_category, quantity, unit_price, total_price')
+        .eq('quote_id', project.approved_quote_id)
+        .eq('scope_category', category);
+
+      setCategoryItems(items || []);
+    } catch (error) {
+      console.error('Error loading items:', error);
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  const handleRecategorizeItem = async (itemId: string, newCategory: string) => {
+    try {
+      const { error } = await supabase
+        .from('quote_items')
+        .update({ scope_category: newCategory })
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      // Remove from current list
+      setCategoryItems(categoryItems.filter(item => item.id !== itemId));
+
+      alert('Item recategorized successfully. Refresh to see changes.');
+    } catch (error) {
+      console.error('Error recategorizing item:', error);
+      alert('Failed to recategorize item');
+    }
+  };
+
   return (
     <div className="space-y-8">
-      <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-        <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full"></div>
-        Scope & Systems
-      </h3>
+      <div>
+        <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+          <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full"></div>
+          Scope & Systems
+        </h3>
+        <p className="text-slate-400 text-sm">Organize quote items into service categories</p>
+      </div>
 
-      {scopeSystems.length > 0 ? (
+      {systems.length > 0 ? (
         <div className="space-y-4">
-          {scopeSystems.map((system, idx) => (
-            <div key={idx} className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 rounded-xl border border-slate-700/50 p-6 hover:border-slate-600 transition-all shadow-lg">
+          {systems.map((system, idx) => (
+            <div key={idx} className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 rounded-xl border border-slate-700/50 p-6 hover:border-slate-600 transition-all shadow-lg group">
               <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h4 className="text-lg font-bold text-white mb-1">{system.service_type}</h4>
-                  <p className="text-sm text-slate-400">{system.item_count} line items</p>
+                <div className="flex-1">
+                  {editingCategoryOld === system.service_type ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingCategoryNew}
+                        onChange={(e) => setEditingCategoryNew(e.target.value)}
+                        className="bg-slate-900 border border-slate-700 rounded px-3 py-1 text-white text-lg font-bold"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameCategory();
+                          if (e.key === 'Escape') {
+                            setEditingCategoryOld(null);
+                            setEditingCategoryNew('');
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={handleRenameCategory}
+                        disabled={updatingCategory}
+                        className="p-2 text-green-400 hover:text-green-300 transition-colors"
+                        title="Save"
+                      >
+                        <Save size={18} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingCategoryOld(null);
+                          setEditingCategoryNew('');
+                        }}
+                        className="p-2 text-slate-400 hover:text-slate-300 transition-colors"
+                        title="Cancel"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-lg font-bold text-white">{system.service_type}</h4>
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                        <button
+                          onClick={() => {
+                            setEditingCategoryOld(system.service_type);
+                            setEditingCategoryNew(system.service_type);
+                          }}
+                          className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                          title="Rename category"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleOpenRecategorize(system.service_type)}
+                          className="p-1 text-orange-400 hover:text-orange-300 transition-colors"
+                          title="Manage items"
+                        >
+                          <PieChart size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-sm text-slate-400 mt-1">{system.item_count} line items</p>
                 </div>
                 {getCoverageBadge(system.coverage)}
               </div>
@@ -565,10 +736,78 @@ function ScopeSystemsTab({ projectId, scopeSystems }: { projectId: string; scope
         </div>
       )}
 
-      <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl p-4 text-sm text-blue-300">
-        <AlertCircle size={16} className="inline mr-2" />
-        Service types are auto-categorized from quote line items. Use scope_category field for custom grouping.
+      <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-4 text-sm text-green-300">
+        <CheckCircle size={16} className="inline mr-2" />
+        Categories are now editable. Hover over a category to rename or manage its items.
       </div>
+
+      {/* Recategorize Modal */}
+      {showRecategorizeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Manage Items in "{selectedCategory}"</h3>
+                  <p className="text-sm text-slate-400 mt-1">Reassign items to different categories</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowRecategorizeModal(false);
+                    setSelectedCategory(null);
+                    setCategoryItems([]);
+                  }}
+                  className="p-2 text-slate-400 hover:text-slate-300 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingItems ? (
+                <div className="text-center text-slate-400 py-8">Loading items...</div>
+              ) : categoryItems.length > 0 ? (
+                <div className="space-y-3">
+                  {categoryItems.map((item) => (
+                    <div key={item.id} className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <p className="text-white font-medium mb-1">{item.description}</p>
+                          <p className="text-sm text-slate-400">
+                            Qty: {item.quantity} × ${item.unit_price?.toFixed(2)} = ${item.total_price?.toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value && confirm('Move this item to the selected category?')) {
+                                handleRecategorizeItem(item.id, e.target.value);
+                              }
+                            }}
+                            className="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm text-white"
+                            defaultValue=""
+                          >
+                            <option value="">Move to...</option>
+                            {systems.filter(s => s.service_type !== selectedCategory).map(s => (
+                              <option key={s.service_type} value={s.service_type}>
+                                {s.service_type}
+                              </option>
+                            ))}
+                            <option value="NEW_CATEGORY">+ New Category</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-slate-400 py-8">No items in this category</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
