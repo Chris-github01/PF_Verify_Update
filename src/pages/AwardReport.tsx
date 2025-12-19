@@ -6,7 +6,7 @@ import type { EqualisationMode } from '../types/equalisation.types';
 import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
 import type { DashboardMode } from '../App';
-import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
+import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import ApprovalModal from '../components/ApprovalModal';
 import type { EnhancedSupplierMetrics } from '../lib/reports/awardReportEnhancements';
 
@@ -571,10 +571,10 @@ export default function AwardReport({
         organisationLogoUrl
       });
 
-      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
-      downloadPdfHtml(htmlContent, filename);
+      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      generatePdfWithPrint(htmlContent, filename);
 
-      onToast?.('Modern PDF report downloaded! Open the HTML file and use "Print to PDF" to save as PDF.', 'success');
+      onToast?.('PDF print dialog opened! Choose "Save as PDF" as your printer destination.', 'success');
     } catch (error) {
       console.error('Error generating PDF:', error);
       onToast?.('Failed to generate PDF report', 'error');

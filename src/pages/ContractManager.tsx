@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { useOrganisation } from '../lib/organisationContext';
 import type { DashboardMode } from '../App';
 
@@ -139,19 +140,11 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
       const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
       const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
-      const filename = `JuniorSiteTeamPack_${projectName}_${timestamp}.html`;
+      const filename = `JuniorSiteTeamPack_${projectName}_${timestamp}.pdf`;
 
-      const blob = new Blob([result.html], { type: 'text/html' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      generatePdfWithPrint(result.html, filename);
 
-      alert('Junior Site Team Handover Pack generated! Open the HTML file and use Print to PDF to save.');
+      alert('Junior Site Team Handover Pack generated! Print dialog opened - choose "Save as PDF" as your printer destination.');
     } catch (error) {
       console.error('Export error:', error);
       alert('Could not generate Junior Pack. Please try again.');
@@ -188,19 +181,11 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
       const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
       const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
-      const filename = `SeniorProjectOverview_${projectName}_${timestamp}.html`;
+      const filename = `SeniorProjectOverview_${projectName}_${timestamp}.pdf`;
 
-      const blob = new Blob([result.html], { type: 'text/html' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      generatePdfWithPrint(result.html, filename);
 
-      alert('Senior Project Team Pack generated! Open the HTML file and use Print to PDF to save.');
+      alert('Senior Project Team Pack generated! Print dialog opened - choose "Save as PDF" as your printer destination.');
     } catch (error) {
       console.error('Export error:', error);
       alert('Could not generate Senior Pack. Please try again.');

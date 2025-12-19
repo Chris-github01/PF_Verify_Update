@@ -6,7 +6,7 @@ import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
 import ApprovalModal from '../components/ApprovalModal';
 import RevisionRequestModal from '../components/RevisionRequestModal';
-import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
+import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import EnhancedSupplierTable from '../components/award/EnhancedSupplierTable';
 import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdown';
 import CoverageBreakdownChart from '../components/award/CoverageBreakdownChart';
@@ -381,6 +381,37 @@ export default function AwardReportEnhanced({
     if (!currentProject || !awardSummary) return;
 
     try {
+      // Fetch organization logo if available
+      let organisationLogoUrl: string | undefined = undefined;
+      if ((currentProject as any).organisation_id) {
+        const { data: orgData } = await supabase
+          .from('organisations')
+          .select('logo_url')
+          .eq('id', (currentProject as any).organisation_id)
+          .maybeSingle();
+
+        if (orgData?.logo_url) {
+          const { data: urlData } = supabase.storage
+            .from('organisation-logos')
+            .getPublicUrl(orgData.logo_url);
+
+          if (urlData?.publicUrl) {
+            try {
+              const response = await fetch(urlData.publicUrl);
+              const blob = await response.blob();
+              const reader = new FileReader();
+              const dataUrl = await new Promise<string>((resolve) => {
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+              organisationLogoUrl = dataUrl;
+            } catch (err) {
+              console.error('Error loading organization logo:', err);
+            }
+          }
+        }
+      }
+
       // Transform suppliers to match PDF template format
       const suppliers = enhancedSuppliers.map((s, idx) => ({
         rank: idx + 1,
@@ -470,6 +501,7 @@ export default function AwardReportEnhanced({
         generatedAt: new Date().toLocaleDateString(),
         recommendations,
         suppliers,
+        organisationLogoUrl,
         executiveSummary: `This report provides a comprehensive evaluation of ${suppliers.length} supplier quotes received for ${currentProject.name}. Our analysis employs a multi-criteria assessment framework evaluating pricing competitiveness, technical compliance, scope completeness, and risk factors. The recommended supplier demonstrates optimal value delivery across all evaluation dimensions.`,
         methodology: [
           'Quote Import & Validation',
@@ -481,10 +513,10 @@ export default function AwardReportEnhanced({
         additionalSections
       });
 
-      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
-      downloadPdfHtml(htmlContent, filename);
+      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      generatePdfWithPrint(htmlContent, filename);
 
-      onToast?.('PDF report downloaded! Open the HTML file in your browser and use "Print to PDF" to save as PDF.', 'success');
+      onToast?.('PDF print dialog opened! Choose "Save as PDF" as your printer destination.', 'success');
     } catch (error) {
       console.error('Error generating PDF:', error);
       onToast?.('Failed to generate PDF report', 'error');

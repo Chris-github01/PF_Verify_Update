@@ -1171,3 +1171,37 @@ export function downloadPdfHtml(htmlContent: string, filename: string): void {
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/**
+ * Generate PDF by opening HTML in new window with auto-print dialog
+ * This provides a seamless UX - opens report and immediately shows print-to-PDF dialog
+ */
+export function generatePdfWithPrint(htmlContent: string, filename: string): void {
+  // Add auto-print script to the HTML
+  const htmlWithAutoPrint = htmlContent.replace(
+    '</body>',
+    `
+    <script>
+      // Auto-trigger print dialog when page loads
+      window.onload = function() {
+        setTimeout(function() {
+          window.print();
+        }, 500);
+      };
+    </script>
+    </body>
+    `
+  );
+
+  // Open in new window
+  const printWindow = window.open('', '_blank', 'width=1200,height=800');
+  if (printWindow) {
+    printWindow.document.write(htmlWithAutoPrint);
+    printWindow.document.close();
+    printWindow.document.title = filename.replace('.html', '');
+  } else {
+    // Fallback to download if popup blocked
+    console.warn('Popup blocked. Falling back to HTML download.');
+    downloadPdfHtml(htmlContent, filename);
+  }
+}

@@ -10,7 +10,7 @@ import SupplierApprovalPanel from '../components/SupplierApprovalPanel';
 import RFIGenerator from '../components/RFIGenerator';
 import UnsuccessfulLettersGenerator from '../components/UnsuccessfulLettersGenerator';
 import RevisionRequestModal from '../components/RevisionRequestModal';
-import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
+import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 
 interface SupplierScore {
   supplierName: string;
@@ -344,21 +344,59 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
     window.print();
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!reportData) return;
 
-    // Transform suppliers data for modern PDF template
-    const suppliers = reportData.suppliers.map(s => ({
-      rank: s.rank,
-      supplierName: s.supplierName,
-      adjustedTotal: s.price,
-      riskScore: s.riskScore,
-      coveragePercent: s.coveragePercent,
-      itemsQuoted: s.itemsQuoted,
-      totalItems: s.totalItems,
-      weightedScore: s.weightedScore,
-      notes: s.notes
-    }));
+    try {
+      // Fetch organization logo if available
+      let organisationLogoUrl: string | undefined = undefined;
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('organisation_id')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (projectData?.organisation_id) {
+        const { data: orgData } = await supabase
+          .from('organisations')
+          .select('logo_url')
+          .eq('id', projectData.organisation_id)
+          .maybeSingle();
+
+        if (orgData?.logo_url) {
+          const { data: urlData } = supabase.storage
+            .from('organisation-logos')
+            .getPublicUrl(orgData.logo_url);
+
+          if (urlData?.publicUrl) {
+            try {
+              const response = await fetch(urlData.publicUrl);
+              const blob = await response.blob();
+              const reader = new FileReader();
+              const dataUrl = await new Promise<string>((resolve) => {
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+              organisationLogoUrl = dataUrl;
+            } catch (err) {
+              console.error('Error loading organization logo:', err);
+            }
+          }
+        }
+      }
+
+      // Transform suppliers data for modern PDF template
+      const suppliers = reportData.suppliers.map(s => ({
+        rank: s.rank,
+        supplierName: s.supplierName,
+        adjustedTotal: s.price,
+        riskScore: s.riskScore,
+        coveragePercent: s.coveragePercent,
+        itemsQuoted: s.itemsQuoted,
+        totalItems: s.totalItems,
+        weightedScore: s.weightedScore,
+        notes: s.notes
+      }));
 
     // Create recommendation cards (Best Value, Lowest Risk, Balanced)
     const recommendations = [
@@ -489,29 +527,34 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
       });
     }
 
-    // Generate modern PDF HTML
-    const htmlContent = generateModernPdfHtml({
-      projectName: reportData.projectName,
-      clientName: reportData.clientName || undefined,
-      generatedAt: reportData.generatedAt,
-      recommendations,
-      suppliers,
-      executiveSummary: reportData.executiveSummary,
-      methodology: [
-        'Quote Import & Validation',
-        'Data Normalization',
-        'Scope Gap Analysis',
-        'Risk Assessment',
-        'Multi-Criteria Scoring'
-      ],
-      additionalSections
-    });
+      // Generate modern PDF HTML
+      const htmlContent = generateModernPdfHtml({
+        projectName: reportData.projectName,
+        clientName: reportData.clientName || undefined,
+        generatedAt: reportData.generatedAt,
+        recommendations,
+        suppliers,
+        organisationLogoUrl,
+        executiveSummary: reportData.executiveSummary,
+        methodology: [
+          'Quote Import & Validation',
+          'Data Normalization',
+          'Scope Gap Analysis',
+          'Risk Assessment',
+          'Multi-Criteria Scoring'
+        ],
+        additionalSections
+      });
 
-    // Download the HTML file
-    const filename = `Award_Report_${reportData.projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.html`;
-    downloadPdfHtml(htmlContent, filename);
+      // Generate PDF with auto-print dialog
+      const filename = `Award_Report_${reportData.projectName.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      generatePdfWithPrint(htmlContent, filename);
 
-    onToast?.('Modern PDF report downloaded! Open the HTML file and use "Print to PDF" to save as PDF.', 'success');
+      onToast?.('PDF print dialog opened! Choose "Save as PDF" as your printer destination.', 'success');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      onToast?.('Failed to generate PDF report', 'error');
+    }
   };
 
   const handleExportExcel = () => {
