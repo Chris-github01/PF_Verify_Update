@@ -577,12 +577,13 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     const rowMap = new Map<string, MatrixRow>();
 
     filteredData.forEach(row => {
-      const key = `${row.systemId}|${row.systemLabel}`;
+      // Use only systemId as key to avoid duplicate rows for same system with different labels
+      const key = row.systemId;
 
       if (!rowMap.has(key)) {
         rowMap.set(key, {
           systemId: row.systemId,
-          systemLabel: row.systemLabel,
+          systemLabel: row.systemLabel || row.systemId,
           section: row.section,
           service: row.service,
           subclass: row.subclass,
@@ -616,8 +617,11 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         cell.totalQuantity = newQty;
         cell.totalValue = newTotal;
         cell.componentCount = (cell.componentCount || 0) + 1;
+
+        // Recalculate weighted average unit rate
         cell.unitRate = newQty > 0 ? newTotal / newQty : cell.unitRate;
 
+        // Recalculate variance and flag based on new aggregated rate
         if (row.modelRate !== null && cell.unitRate > 0) {
           const variance = ((cell.unitRate - row.modelRate) / row.modelRate) * 100;
           cell.variancePct = variance;
@@ -1481,17 +1485,33 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               </tr>
             </thead>
             <tbody>
-              {matrixRows.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-700/30">
-                  <td className="px-3 py-2 text-sm font-medium text-slate-100 border border-slate-700 sticky left-0 bg-slate-800/60 z-10">
-                    <div className="flex flex-col">
-                      <span className="font-semibold">{row.systemLabel}</span>
-                      {row.systemId !== row.systemLabel && (
-                        <span className="text-xs text-slate-400">{row.systemId}</span>
-                      )}
-                    </div>
-                  </td>
-                  {suppliers.map(supplier => {
+              {matrixRows.map((row, idx) => {
+                const supplierCount = Object.keys(row.cells).length;
+                const isSingleSupplier = supplierCount === 1;
+
+                return (
+                  <tr key={idx} className="hover:bg-slate-700/30">
+                    <td className="px-3 py-2 text-sm font-medium text-slate-100 border border-slate-700 sticky left-0 bg-slate-800/60 z-10">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{row.systemLabel}</span>
+                          {isSingleSupplier && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 rounded">
+                              SINGLE
+                            </span>
+                          )}
+                          {supplierCount > 1 && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 rounded">
+                              {supplierCount} SUPPLIERS
+                            </span>
+                          )}
+                        </div>
+                        {row.systemId !== row.systemLabel && (
+                          <span className="text-xs text-slate-400">{row.systemId}</span>
+                        )}
+                      </div>
+                    </td>
+                    {suppliers.map(supplier => {
                     const cell = row.cells[supplier];
                     if (!cell) {
                       return (
@@ -1544,7 +1564,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                     );
                   })}
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
