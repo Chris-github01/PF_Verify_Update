@@ -81,18 +81,18 @@ export default function ProjectDashboard({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+        <div className="bg-slate-800/60 rounded-lg p-6 border border-slate-700">
           <div className="flex items-center gap-3 mb-2">
             <FileText className="text-blue-400" size={24} />
             <h3 className="text-lg font-semibold text-white">Quotes</h3>
           </div>
           <p className="text-3xl font-bold text-white">{stats.quoteCount}</p>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-slate-400 mt-1">
             from {stats.supplierCount} {stats.supplierCount === 1 ? 'supplier' : 'suppliers'}
           </p>
         </div>
 
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+        <div className="bg-slate-800/60 rounded-lg p-6 border border-slate-700">
           <div className="flex items-center gap-3 mb-2">
             <TrendingUp className="text-green-400" size={24} />
             <h3 className="text-lg font-semibold text-white">Total Value</h3>
@@ -100,10 +100,10 @@ export default function ProjectDashboard({
           <p className="text-3xl font-bold text-white">
             ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
-          <p className="text-sm text-gray-400 mt-1">Combined quote value</p>
+          <p className="text-sm text-slate-400 mt-1">Combined quote value</p>
         </div>
 
-        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+        <div className="bg-slate-800/60 rounded-lg p-6 border border-slate-700">
           <div className="flex items-center gap-3 mb-2">
             <FolderOpen className="text-purple-400" size={24} />
             <h3 className="text-lg font-semibold text-white">Report Status</h3>
@@ -122,16 +122,16 @@ export default function ProjectDashboard({
             )}
           </div>
           {stats.reportGeneratedAt && (
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-slate-400 mt-1">
               Last generated {new Date(stats.reportGeneratedAt).toLocaleDateString()}
             </p>
           )}
         </div>
       </div>
 
-      <div className="bg-white/5 backdrop-blur-sm rounded-lg p-8 border border-white/10">
+      <div className="bg-slate-800/60 rounded-lg p-8 border border-slate-700">
         <h3 className="text-xl font-semibold text-white mb-4">Getting Started</h3>
-        <div className="space-y-3 text-gray-300">
+        <div className="space-y-3 text-slate-300">
           <p>1. Import quotes from your suppliers using the Import tab</p>
           <p>2. Review and clean the imported data</p>
           <p>3. Analyze quotes using the Scope Matrix and other analysis tools</p>

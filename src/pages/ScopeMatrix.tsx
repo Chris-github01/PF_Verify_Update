@@ -993,10 +993,10 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           </div>
 
           {availableQuotes.length > readyQuotes.length && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+            <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/30 rounded-lg text-sm">
               <div className="flex items-start gap-2">
-                <Info size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
-                <div className="text-blue-800">
+                <Info size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="text-blue-300">
                   {availableQuotes.length - readyQuotes.length} quote(s) are not ready for comparison.
                   Fix imports in <a href="#/import-quotes" className="underline font-medium">Import Quotes</a> or{' '}
                   <a href="#/review-clean" className="underline font-medium">Review & Clean</a>.
@@ -1103,7 +1103,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             <div className="mt-6 pt-6 border-t border-gray-200">
               <button
                 onClick={() => setShowOriginalSelector(!showOriginalSelector)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium mb-3"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-colors text-sm font-medium mb-3 border border-blue-500/30"
               >
                 <GitCompare size={16} />
                 Compare with Original Quotes
@@ -1166,7 +1166,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               <button
                 onClick={handleGenerateMatrix}
                 disabled={(selectedQuoteIds.length + selectedOriginalQuoteIds.length) < 2 || isGenerating}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-sm"
               >
                 {isGenerating ? 'Building Matrix...' : 'Generate Scope Matrix'}
               </button>
@@ -1296,7 +1296,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         <div className="flex items-center gap-4">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors text-black font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 rounded-md hover:bg-slate-600 transition-colors text-white font-medium"
           >
             <Filter size={18} />
             Filters
@@ -1320,7 +1320,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           <button
             onClick={() => setShowSuggestedSystems(true)}
             disabled={suggestions.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
           >
             <Lightbulb size={18} />
             Suggested Systems

@@ -141,22 +141,22 @@ function AttributesCell({
       {hasNewMapping ? (
         <div className="flex flex-wrap gap-1">
           {mappedServiceType && (
-            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-semibold break-words">
+            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold break-words border border-blue-500/30">
               {mappedServiceType}
             </span>
           )}
           {mappedSystem && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-semibold break-words">
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold break-words border border-emerald-500/30">
               {mappedSystem}
             </span>
           )}
           {mappedPenetration && (
-            <span className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-900 font-semibold break-words">
+            <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-semibold break-words border border-pink-500/30">
               {mappedPenetration}
             </span>
           )}
           {typeof mappingConfidence === "number" && (
-            <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-900 font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-200 font-semibold border border-slate-600">
               {(mappingConfidence * 100).toFixed(0)}%
             </span>
           )}
@@ -849,7 +849,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
   const getConfidenceBadge = (confidence?: number) => {
     if (confidence === undefined || confidence === 0) {
       return (
-        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-slate-700 text-slate-300 border border-slate-600">
           Not analysed
         </span>
       );
@@ -858,9 +858,9 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
     const color = getConfidenceColor(confidence);
     const label = getConfidenceLabel(confidence);
     const colorClasses = {
-      green: 'bg-green-100 text-green-800',
-      amber: 'bg-yellow-100 text-yellow-800',
-      red: 'bg-red-100 text-red-800',
+      green: 'bg-green-500/20 text-green-300 border border-green-500/30',
+      amber: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30',
+      red: 'bg-red-500/20 text-red-300 border border-red-500/30',
     };
 
     return (
@@ -906,12 +906,12 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
   return (
     <div className="space-y-6">
       {showReconciliationAlert && selectedQuoteData && (
-        <div className="bg-red-50 border-2 border-red-400 rounded-lg p-4">
+        <div className="bg-red-500/20 border-2 border-red-500/50 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <AlertCircle size={24} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle size={24} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h4 className="font-bold text-red-900 text-lg">⚠️ Totals Reconciliation Failed</h4>
-              <p className="text-red-800 mt-1">{selectedQuoteData.reconciliation_notes}</p>
+              <h4 className="font-bold text-red-300 text-lg">⚠️ Totals Reconciliation Failed</h4>
+              <p className="text-red-300 mt-1">{selectedQuoteData.reconciliation_notes}</p>
               <p className="text-red-700 mt-2 text-sm">
                 <strong>Variance:</strong> {((selectedQuoteData.reconciliation_variance || 0) * 100).toFixed(2)}%
                 {selectedQuoteData.quoted_total && (
@@ -923,7 +923,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                   </>
                 )}
               </p>
-              <p className="text-red-800 mt-3 font-medium">
+              <p className="text-red-300 mt-3 font-medium">
                 This quote requires manual review. Possible causes: column swap, missing items, or incorrect extraction.
               </p>
             </div>
@@ -933,9 +933,9 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
 
       {message && (
         <div className={`p-4 rounded-md ${
-          message.type === 'success' ? 'bg-green-50 text-green-800' :
-          message.type === 'error' ? 'bg-red-50 text-red-800' :
-          'bg-blue-50 text-blue-800'
+          message.type === 'success' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
+          message.type === 'error' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+          'bg-blue-500/20 text-blue-300 border border-blue-500/30'
         }`}>
           <div className="flex items-start gap-2">
             <AlertCircle size={18} className="mt-0.5 flex-shrink-0" />
@@ -990,7 +990,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                           e.stopPropagation();
                           deleteQuote(quote.id);
                         }}
-                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-500/100/10 rounded transition-colors"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -999,7 +999,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                       <span className="text-lg font-bold text-slate-100">
                         ${quote.total_amount.toLocaleString()}
                       </span>
-                      <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-300">
+                      <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-500/20 text-green-300 border border-green-500/30">
                         Ready
                       </span>
                     </div>
@@ -1124,13 +1124,13 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                               <div className="flex items-center justify-end gap-2">
                                 <button
                                   onClick={() => saveEdit(item.id)}
-                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                  className="p-1 text-green-400 hover:bg-green-500/10 rounded"
                                 >
                                   <Check size={18} />
                                 </button>
                                 <button
                                   onClick={cancelEdit}
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                  className="p-1 text-red-400 hover:bg-red-500/10 rounded"
                                 >
                                   <X size={18} />
                                 </button>
@@ -1146,7 +1146,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                   normalizedDescription={item.normalized_description}
                                 />
                                 {needsQuantity(item) && (
-                                  <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 whitespace-nowrap">
+                                  <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 whitespace-nowrap">
                                     Needs quantity
                                   </span>
                                 )}
@@ -1189,10 +1189,10 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                       )}
                                     </div>
                                     {item.system_confidence !== undefined && (
-                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded ${
-                                        item.system_confidence >= 0.7 ? 'bg-green-100 text-green-800' :
-                                        item.system_confidence >= 0.5 ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-red-100 text-red-800'
+                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded border ${
+                                        item.system_confidence >= 0.7 ? 'bg-green-500/20 text-green-300 border-green-500/30' :
+                                        item.system_confidence >= 0.5 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' :
+                                        'bg-red-500/20 text-red-300 border-red-500/30'
                                       }`}>
                                         {Math.round(item.system_confidence * 100)}%
                                       </span>
@@ -1232,7 +1232,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                       {item.missed_factors && JSON.parse(item.missed_factors).length > 0 && (
                                         <div>
                                           <div className="font-medium text-red-700 mb-1">Missed:</div>
-                                          <ul className="list-disc list-inside text-red-600 space-y-0.5">
+                                          <ul className="list-disc list-inside text-red-400 space-y-0.5">
                                             {JSON.parse(item.missed_factors).map((factor: string, idx: number) => (
                                               <li key={idx}>{factor}</li>
                                             ))}
@@ -1252,7 +1252,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                 {issues.length > 0 && (
                                   <button
                                     onClick={() => setShowIssues(showIssues === item.id ? null : item.id)}
-                                    className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
+                                    className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
                                   >
                                     <AlertCircle size={12} />
                                     {issues.length} issue{issues.length !== 1 ? 's' : ''}
@@ -1260,7 +1260,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                 )}
                               </div>
                               {showIssues === item.id && issues.length > 0 && (
-                                <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-800">
+                                <div className="mt-2 p-2 bg-red-500/20 rounded text-xs text-red-300 border border-red-500/30">
                                   <ul className="list-disc list-inside space-y-1">
                                     {issues.map((issue, idx) => (
                                       <li key={idx}>{issue}</li>
@@ -1272,10 +1272,10 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                             <td className="px-4 py-3">
                               <button
                                 onClick={() => toggleExclude(item.id, item.is_excluded)}
-                                className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                                className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
                                   item.is_excluded
-                                    ? 'bg-red-100 text-red-800 hover:bg-red-200'
-                                    : 'bg-green-100 text-green-800 hover:bg-green-200'
+                                    ? 'bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30'
+                                    : 'bg-green-500/20 text-green-300 border-green-500/30 hover:bg-green-500/30'
                                 }`}
                               >
                                 {item.is_excluded ? 'Excluded' : 'Included'}
@@ -1291,7 +1291,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                 </button>
                                 <button
                                   onClick={() => deleteItem(item.id)}
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                  className="p-1 text-red-400 hover:bg-red-500/10 rounded"
                                 >
                                   <Trash2 size={16} />
                                 </button>
