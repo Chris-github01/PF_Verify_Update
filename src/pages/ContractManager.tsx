@@ -384,7 +384,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-8 shadow-xl">
               {activeTab === 'summary' && <ContractSummaryTab awardInfo={awardInfo} projectInfo={projectInfo} />}
               {activeTab === 'scope' && <ScopeSystemsTab projectId={projectId} scopeSystems={scopeSystems} />}
-              {activeTab === 'inclusions' && <InclusionsExclusionsTab />}
+              {activeTab === 'inclusions' && <InclusionsExclusionsTab projectId={projectId} />}
               {activeTab === 'allowances' && <AllowancesTab projectId={projectId} />}
               {activeTab === 'variations' && <VariationsLogTab />}
               {activeTab === 'onboarding' && isApproved && (
@@ -573,74 +573,426 @@ function ScopeSystemsTab({ projectId, scopeSystems }: { projectId: string; scope
   );
 }
 
-function InclusionsExclusionsTab() {
+interface Inclusion {
+  id: string;
+  description: string;
+  sort_order: number;
+}
+
+interface Exclusion {
+  id: string;
+  description: string;
+  sort_order: number;
+}
+
+function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
+  const [inclusions, setInclusions] = useState<Inclusion[]>([]);
+  const [exclusions, setExclusions] = useState<Exclusion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingInclusionId, setEditingInclusionId] = useState<string | null>(null);
+  const [editingExclusionId, setEditingExclusionId] = useState<string | null>(null);
+  const [editInclusionText, setEditInclusionText] = useState('');
+  const [editExclusionText, setEditExclusionText] = useState('');
+  const [isAddingInclusion, setIsAddingInclusion] = useState(false);
+  const [isAddingExclusion, setIsAddingExclusion] = useState(false);
+  const [newInclusionText, setNewInclusionText] = useState('');
+  const [newExclusionText, setNewExclusionText] = useState('');
+
+  useEffect(() => {
+    loadInclusionsExclusions();
+  }, [projectId]);
+
+  const loadInclusionsExclusions = async () => {
+    try {
+      const { data: inclusionsData } = await supabase
+        .from('contract_inclusions')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('sort_order');
+
+      const { data: exclusionsData } = await supabase
+        .from('contract_exclusions')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('sort_order');
+
+      setInclusions(inclusionsData || []);
+      setExclusions(exclusionsData || []);
+    } catch (error) {
+      console.error('Error loading inclusions/exclusions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveInclusion = async () => {
+    if (!editingInclusionId) return;
+
+    try {
+      const { error } = await supabase
+        .from('contract_inclusions')
+        .update({ description: editInclusionText })
+        .eq('id', editingInclusionId);
+
+      if (error) throw error;
+
+      await loadInclusionsExclusions();
+      setEditingInclusionId(null);
+      setEditInclusionText('');
+    } catch (error) {
+      console.error('Error updating inclusion:', error);
+      alert('Failed to update inclusion');
+    }
+  };
+
+  const handleSaveExclusion = async () => {
+    if (!editingExclusionId) return;
+
+    try {
+      const { error } = await supabase
+        .from('contract_exclusions')
+        .update({ description: editExclusionText })
+        .eq('id', editingExclusionId);
+
+      if (error) throw error;
+
+      await loadInclusionsExclusions();
+      setEditingExclusionId(null);
+      setEditExclusionText('');
+    } catch (error) {
+      console.error('Error updating exclusion:', error);
+      alert('Failed to update exclusion');
+    }
+  };
+
+  const handleAddInclusion = async () => {
+    if (!newInclusionText.trim()) return;
+
+    try {
+      const maxSort = Math.max(...inclusions.map(i => i.sort_order), 0);
+
+      const { error } = await supabase
+        .from('contract_inclusions')
+        .insert({
+          project_id: projectId,
+          description: newInclusionText,
+          sort_order: maxSort + 1
+        });
+
+      if (error) throw error;
+
+      await loadInclusionsExclusions();
+      setIsAddingInclusion(false);
+      setNewInclusionText('');
+    } catch (error) {
+      console.error('Error adding inclusion:', error);
+      alert('Failed to add inclusion');
+    }
+  };
+
+  const handleAddExclusion = async () => {
+    if (!newExclusionText.trim()) return;
+
+    try {
+      const maxSort = Math.max(...exclusions.map(e => e.sort_order), 0);
+
+      const { error } = await supabase
+        .from('contract_exclusions')
+        .insert({
+          project_id: projectId,
+          description: newExclusionText,
+          sort_order: maxSort + 1
+        });
+
+      if (error) throw error;
+
+      await loadInclusionsExclusions();
+      setIsAddingExclusion(false);
+      setNewExclusionText('');
+    } catch (error) {
+      console.error('Error adding exclusion:', error);
+      alert('Failed to add exclusion');
+    }
+  };
+
+  const handleDeleteInclusion = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this inclusion?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('contract_inclusions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await loadInclusionsExclusions();
+    } catch (error) {
+      console.error('Error deleting inclusion:', error);
+      alert('Failed to delete inclusion');
+    }
+  };
+
+  const handleDeleteExclusion = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this exclusion?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('contract_exclusions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await loadInclusionsExclusions();
+    } catch (error) {
+      console.error('Error deleting exclusion:', error);
+      alert('Failed to delete exclusion');
+    }
+  };
+
+  if (loading) {
+    return <div className="text-slate-400">Loading inclusions and exclusions...</div>;
+  }
+
   return (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-white mb-6">Inclusions & Exclusions</h3>
+      <div>
+        <h3 className="text-lg font-semibold text-white mb-2">Inclusions & Exclusions</h3>
+        <p className="text-slate-400 text-sm">Define what's included and excluded in the contract scope</p>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-6">
-          <h4 className="text-base font-semibold text-green-400 mb-4 flex items-center gap-2">
-            <CheckCircle size={18} />
-            Inclusions
-          </h4>
-          <ul className="space-y-3 text-sm text-slate-300">
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-1">•</span>
-              <span>All passive fire stopping to service penetrations as per fire engineering report and drawings.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-1">•</span>
-              <span>Intumescent coatings to structural steel members identified as requiring FRR.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-1">•</span>
-              <span>Supply of QA documentation including labels, photos, and PS3.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-1">•</span>
-              <span>All materials, labour, and equipment necessary to complete the works.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-500 mt-1">•</span>
-              <span>Site-specific SWMS and induction for all personnel.</span>
-            </li>
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="text-green-500" size={20} />
+              <h4 className="text-base font-semibold text-white">Inclusions</h4>
+            </div>
+            <button
+              onClick={() => setIsAddingInclusion(true)}
+              className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-all"
+            >
+              <Plus size={14} />
+              Add
+            </button>
+          </div>
+
+          <ul className="space-y-3">
+            {isAddingInclusion && (
+              <li className="flex items-start gap-2 bg-slate-800/50 p-3 rounded border border-slate-700">
+                <textarea
+                  value={newInclusionText}
+                  onChange={(e) => setNewInclusionText(e.target.value)}
+                  placeholder="Enter inclusion description..."
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white resize-none"
+                  rows={2}
+                  autoFocus
+                />
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={handleAddInclusion}
+                    className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                    title="Save"
+                  >
+                    <Save size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsAddingInclusion(false);
+                      setNewInclusionText('');
+                    }}
+                    className="p-1 text-slate-400 hover:text-slate-300 transition-colors"
+                    title="Cancel"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </li>
+            )}
+
+            {inclusions.map((item) => (
+              <li key={item.id} className="flex items-start gap-3 group">
+                {editingInclusionId === item.id ? (
+                  <>
+                    <span className="text-green-500 mt-2">•</span>
+                    <textarea
+                      value={editInclusionText}
+                      onChange={(e) => setEditInclusionText(e.target.value)}
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white resize-none"
+                      rows={2}
+                      autoFocus
+                    />
+                    <div className="flex flex-col gap-1 mt-1">
+                      <button
+                        onClick={handleSaveInclusion}
+                        className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                        title="Save"
+                      >
+                        <Save size={16} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingInclusionId(null);
+                          setEditInclusionText('');
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-300 transition-colors"
+                        title="Cancel"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-green-500 mt-0.5">•</span>
+                    <span className="flex-1 text-sm text-slate-300">{item.description}</span>
+                    <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                      <button
+                        onClick={() => {
+                          setEditingInclusionId(item.id);
+                          setEditInclusionText(item.description);
+                        }}
+                        className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                        title="Edit"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteInclusion(item.id)}
+                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+
+            {inclusions.length === 0 && !isAddingInclusion && (
+              <li className="text-sm text-slate-500 italic">No inclusions added yet</li>
+            )}
           </ul>
         </div>
 
-        <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-6">
-          <h4 className="text-base font-semibold text-red-400 mb-4 flex items-center gap-2">
-            <AlertCircle size={18} />
-            Exclusions
-          </h4>
-          <ul className="space-y-3 text-sm text-slate-300">
-            <li className="flex items-start gap-2">
-              <span className="text-red-500 mt-1">•</span>
-              <span>Remediation of pre-existing, non-compliant fire stopping.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-red-500 mt-1">•</span>
-              <span>Temporary services penetrations.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-red-500 mt-1">•</span>
-              <span>Access equipment and out-of-hours work unless specifically agreed.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-red-500 mt-1">•</span>
-              <span>Works to penetrations not shown on drawings or schedules.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-red-500 mt-1">•</span>
-              <span>Delays caused by incomplete services installations or lack of access.</span>
-            </li>
+        <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="text-red-500" size={20} />
+              <h4 className="text-base font-semibold text-white">Exclusions</h4>
+            </div>
+            <button
+              onClick={() => setIsAddingExclusion(true)}
+              className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-all"
+            >
+              <Plus size={14} />
+              Add
+            </button>
+          </div>
+
+          <ul className="space-y-3">
+            {isAddingExclusion && (
+              <li className="flex items-start gap-2 bg-slate-800/50 p-3 rounded border border-slate-700">
+                <textarea
+                  value={newExclusionText}
+                  onChange={(e) => setNewExclusionText(e.target.value)}
+                  placeholder="Enter exclusion description..."
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm text-white resize-none"
+                  rows={2}
+                  autoFocus
+                />
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={handleAddExclusion}
+                    className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                    title="Save"
+                  >
+                    <Save size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsAddingExclusion(false);
+                      setNewExclusionText('');
+                    }}
+                    className="p-1 text-slate-400 hover:text-slate-300 transition-colors"
+                    title="Cancel"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </li>
+            )}
+
+            {exclusions.map((item) => (
+              <li key={item.id} className="flex items-start gap-3 group">
+                {editingExclusionId === item.id ? (
+                  <>
+                    <span className="text-red-500 mt-2">•</span>
+                    <textarea
+                      value={editExclusionText}
+                      onChange={(e) => setEditExclusionText(e.target.value)}
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white resize-none"
+                      rows={2}
+                      autoFocus
+                    />
+                    <div className="flex flex-col gap-1 mt-1">
+                      <button
+                        onClick={handleSaveExclusion}
+                        className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                        title="Save"
+                      >
+                        <Save size={16} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingExclusionId(null);
+                          setEditExclusionText('');
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-300 transition-colors"
+                        title="Cancel"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-red-500 mt-0.5">•</span>
+                    <span className="flex-1 text-sm text-slate-300">{item.description}</span>
+                    <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                      <button
+                        onClick={() => {
+                          setEditingExclusionId(item.id);
+                          setEditExclusionText(item.description);
+                        }}
+                        className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                        title="Edit"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteExclusion(item.id)}
+                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+
+            {exclusions.length === 0 && !isAddingExclusion && (
+              <li className="text-sm text-slate-500 italic">No exclusions added yet</li>
+            )}
           </ul>
         </div>
       </div>
 
-      <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 text-sm text-blue-300">
-        <AlertCircle size={16} className="inline mr-2" />
-        Inclusions and exclusions will later be editable and exported as part of the Handover Pack.
+      <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4 text-sm text-green-300">
+        <CheckCircle size={16} className="inline mr-2" />
+        Inclusions and exclusions are now editable and will be automatically included in exported Handover Packs.
       </div>
     </div>
   );

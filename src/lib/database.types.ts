@@ -109,6 +109,58 @@ export interface Database {
           created_by?: string | null
         }
       }
+      contract_inclusions: {
+        Row: {
+          id: string
+          project_id: string
+          description: string
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          description: string
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          description?: string
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      contract_exclusions: {
+        Row: {
+          id: string
+          project_id: string
+          description: string
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          description: string
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          description?: string
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
       letters_of_intent: {
         Row: {
           id: string

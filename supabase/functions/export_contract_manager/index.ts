@@ -152,6 +152,18 @@ Deno.serve(async (req: Request) => {
       .eq('project_id', projectId)
       .order('sort_order');
 
+    const { data: inclusionsData } = await supabase
+      .from('contract_inclusions')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('sort_order');
+
+    const { data: exclusionsData } = await supabase
+      .from('contract_exclusions')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('sort_order');
+
     const awardResult = awardReport?.result_json || {};
     const awardSummary = awardResult.awardSummary || {};
     const bestSupplier = awardSummary.suppliers?.[0] || {};
@@ -241,20 +253,8 @@ Deno.serve(async (req: Request) => {
         locations: sys.typical_locations || 'See scope matrix',
         included: sys.is_included ? 'Yes' : 'No'
       })),
-      inclusions: [
-        'All passive fire stopping to service penetrations as per fire engineering report and drawings.',
-        'Intumescent coatings to structural steel members identified as requiring FRR.',
-        'Supply of QA documentation including labels, photos, and PS3.',
-        'All materials, labour, and equipment necessary to complete the works.',
-        'Site-specific SWMS and induction for all personnel.'
-      ],
-      exclusions: [
-        'Remediation of pre-existing, non-compliant fire stopping.',
-        'Temporary services penetrations.',
-        'Access equipment and out-of-hours work unless specifically agreed.',
-        'Works to penetrations not shown on drawings or schedules.',
-        'Delays caused by incomplete services installations or lack of access.'
-      ],
+      inclusions: (inclusionsData || []).map(i => i.description),
+      exclusions: (exclusionsData || []).map(e => e.description),
       assumptions: [
         'All penetrations are accessible without scaffolding or EWP.',
         'Services installations are complete prior to fire stopping works.',
