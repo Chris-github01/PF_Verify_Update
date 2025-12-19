@@ -19,11 +19,12 @@ interface ApprovalModalProps {
 
 const OVERRIDE_REASONS = [
   { value: 'past_relationship', label: 'Past Relationship' },
-  { value: 'not_variation_hungry', label: 'Not Variation Hungry' },
+  { value: 'not_variation_hungry', label: 'Does not actively pursue variations' },
   { value: 'proven_performance', label: 'Proven Performance' },
   { value: 'local_presence', label: 'Local Presence' },
   { value: 'schedule_certainty', label: 'Schedule Certainty' },
   { value: 'capacity_availability', label: 'Capacity & Availability' },
+  { value: 'multiple_reasons', label: 'Multiple reasons (select below)' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -41,6 +42,7 @@ export default function ApprovalModal({
 }: ApprovalModalProps) {
   const [selectedSupplier, setSelectedSupplier] = useState<string>(aiRecommendedSupplier.supplierName);
   const [overrideReason, setOverrideReason] = useState<string>('');
+  const [selectedMultipleReasons, setSelectedMultipleReasons] = useState<string[]>([]);
   const [overrideDetail, setOverrideDetail] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCloseScoreWarning, setShowCloseScoreWarning] = useState(false);
@@ -49,6 +51,7 @@ export default function ApprovalModal({
     if (isOpen) {
       setSelectedSupplier(aiRecommendedSupplier.supplierName);
       setOverrideReason('');
+      setSelectedMultipleReasons([]);
       setOverrideDetail('');
 
       // Check if scores are close (within 10 points)
@@ -90,6 +93,11 @@ export default function ApprovalModal({
       return;
     }
 
+    if (isOverride && overrideReason === 'multiple_reasons' && selectedMultipleReasons.length === 0) {
+      onToast?.('Please select at least one reason when choosing "Multiple reasons"', 'error');
+      return;
+    }
+
     if (isOverride && !overrideDetail.trim()) {
       onToast?.('Please provide detailed explanation for the override', 'error');
       return;
@@ -117,6 +125,13 @@ export default function ApprovalModal({
       let approvalData;
       let approvalError;
 
+      // Determine the final override reason category to save
+      const finalOverrideReason = isOverride
+        ? overrideReason === 'multiple_reasons'
+          ? selectedMultipleReasons.join(', ')
+          : overrideReason
+        : null;
+
       const approvalRecord = {
         award_report_id: reportId,
         project_id: projectId,
@@ -125,7 +140,7 @@ export default function ApprovalModal({
         final_approved_supplier: selectedSupplier,
         final_approved_quote_id: quoteData?.id || null,
         is_override: isOverride,
-        override_reason_category: isOverride ? overrideReason : null,
+        override_reason_category: finalOverrideReason,
         override_reason_detail: isOverride ? overrideDetail : null,
         approved_by_user_id: user.id,
         weighted_score_difference: scoreDifference,
@@ -371,7 +386,13 @@ export default function ApprovalModal({
                 </label>
                 <select
                   value={overrideReason}
-                  onChange={(e) => setOverrideReason(e.target.value)}
+                  onChange={(e) => {
+                    setOverrideReason(e.target.value);
+                    // Reset multiple selections when changing primary reason
+                    if (e.target.value !== 'multiple_reasons') {
+                      setSelectedMultipleReasons([]);
+                    }
+                  }}
                   className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                   required
                 >
@@ -383,6 +404,42 @@ export default function ApprovalModal({
                   ))}
                 </select>
               </div>
+
+              {/* Multiple Reasons Checkboxes */}
+              {overrideReason === 'multiple_reasons' && (
+                <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-4">
+                  <label className="block text-sm font-semibold text-slate-300 mb-3">
+                    Select all applicable reasons *
+                  </label>
+                  <div className="space-y-2">
+                    {OVERRIDE_REASONS.filter(r => r.value !== 'multiple_reasons' && r.value !== 'other').map((reason) => (
+                      <label
+                        key={reason.value}
+                        className="flex items-center gap-3 p-2 rounded hover:bg-slate-700/50 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedMultipleReasons.includes(reason.value)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedMultipleReasons([...selectedMultipleReasons, reason.value]);
+                            } else {
+                              setSelectedMultipleReasons(selectedMultipleReasons.filter(r => r !== reason.value));
+                            }
+                          }}
+                          className="w-4 h-4 text-yellow-600 bg-slate-700 border-slate-500 rounded focus:ring-yellow-500 focus:ring-2"
+                        />
+                        <span className="text-sm text-slate-300">{reason.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {selectedMultipleReasons.length > 0 && (
+                    <p className="text-xs text-green-400 mt-3">
+                      {selectedMultipleReasons.length} reason{selectedMultipleReasons.length !== 1 ? 's' : ''} selected
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold text-slate-300 mb-2">
