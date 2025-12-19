@@ -7,12 +7,15 @@ import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
 import type { DashboardMode } from '../App';
 import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
+import ApprovalModal from '../components/ApprovalModal';
+import type { EnhancedSupplierMetrics } from '../lib/reports/awardReportEnhancements';
 
 interface Project {
   id: string;
   name: string;
   client: string | null;
   approved_quote_id: string | null;
+  organisation_id: string;
 }
 
 interface AwardReportProps {
@@ -46,6 +49,8 @@ export default function AwardReport({
   const [quotesMap, setQuotesMap] = useState<Map<string, string>>(new Map());
   const [showMethodology, setShowMethodology] = useState(false);
   const [actionChecklist, setActionChecklist] = useState<Record<string, boolean>>({});
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [selectedSupplierForApproval, setSelectedSupplierForApproval] = useState<string | null>(null);
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
   const moreDropdownRef = useRef<HTMLDivElement>(null);
@@ -76,7 +81,7 @@ export default function AwardReport({
     try {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, client, approved_quote_id')
+        .select('id, name, client, approved_quote_id, organisation_id')
         .eq('id', projectId)
         .maybeSingle();
 
@@ -462,47 +467,24 @@ export default function AwardReport({
     }
   };
 
-  const handleApproveQuote = async (supplierName: string) => {
-    const quoteId = quotesMap.get(supplierName);
-    if (!quoteId) {
-      onToast?.('Quote not found', 'error');
-      return;
+  const handleApproveQuote = (supplierName: string) => {
+    setSelectedSupplierForApproval(supplierName);
+    setShowApprovalModal(true);
+  };
+
+  const handleApprovalComplete = async () => {
+    setShowApprovalModal(false);
+    setSelectedSupplierForApproval(null);
+
+    // Reload the project info to get updated approval status
+    await loadProjectInfo();
+
+    // Optionally reload the report
+    if (currentReportId) {
+      await loadSavedReport(currentReportId);
     }
 
-    try {
-      const { error: projectError } = await supabase
-        .from('projects')
-        .update({
-          approved_quote_id: quoteId,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', projectId);
-
-      if (projectError) {
-        throw new Error(projectError.message);
-      }
-
-      const { error: quoteError } = await supabase
-        .from('quotes')
-        .update({
-          status: 'accepted',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', quoteId);
-
-      if (quoteError) {
-        throw new Error(quoteError.message);
-      }
-
-      onToast?.(`Approved ${supplierName}`, 'success');
-
-      if (currentProject) {
-        setCurrentProject({ ...currentProject, approved_quote_id: quoteId });
-      }
-    } catch (error: any) {
-      console.error('Error approving quote:', error);
-      onToast?.(error.message || 'Failed to approve quote', 'error');
-    }
+    onToast?.('Award approved successfully', 'success');
   };
 
   if (loading) {
@@ -1273,6 +1255,50 @@ export default function AwardReport({
           )}
         </div>
       </div>
+
+      {/* Approval Modal */}
+      {showApprovalModal && currentReportId && awardSummary && currentProject && selectedSupplierForApproval && (
+        <ApprovalModal
+          isOpen={showApprovalModal}
+          onClose={() => {
+            setShowApprovalModal(false);
+            setSelectedSupplierForApproval(null);
+          }}
+          reportId={currentReportId}
+          projectId={projectId}
+          organisationId={currentProject.organisation_id}
+          aiRecommendedSupplier={{
+            supplierName: selectedSupplierForApproval,
+            adjustedTotal: awardSummary.suppliers.find(s => s.supplierName === selectedSupplierForApproval)?.adjustedTotal || 0,
+            itemsQuoted: awardSummary.suppliers.find(s => s.supplierName === selectedSupplierForApproval)?.itemsQuoted || 0,
+            totalItems: awardSummary.suppliers.find(s => s.supplierName === selectedSupplierForApproval)?.totalItems || 0,
+            coveragePercent: awardSummary.suppliers.find(s => s.supplierName === selectedSupplierForApproval)?.coveragePercent || 0,
+            systemsCovered: awardSummary.suppliers.find(s => s.supplierName === selectedSupplierForApproval)?.systemsCovered || 0,
+            riskScore: awardSummary.suppliers.find(s => s.supplierName === selectedSupplierForApproval)?.riskScore || 0,
+            priceScore: 0,
+            complianceScore: 0,
+            coverageScore: 0,
+            riskMitigationScore: 0,
+            weightedTotal: 0,
+          } as EnhancedSupplierMetrics}
+          allSuppliers={awardSummary.suppliers.map(s => ({
+            supplierName: s.supplierName,
+            adjustedTotal: s.adjustedTotal,
+            itemsQuoted: s.itemsQuoted,
+            totalItems: s.totalItems,
+            coveragePercent: s.coveragePercent,
+            systemsCovered: s.systemsCovered,
+            riskScore: s.riskScore,
+            priceScore: 0,
+            complianceScore: 0,
+            coverageScore: 0,
+            riskMitigationScore: 0,
+            weightedTotal: 0,
+          } as EnhancedSupplierMetrics))}
+          onApprovalComplete={handleApprovalComplete}
+          onToast={onToast}
+        />
+      )}
     </div>
   );
 }
