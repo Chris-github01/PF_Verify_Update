@@ -34,6 +34,7 @@ interface ModernPdfOptions {
   methodology?: string[];
   additionalSections?: Array<{ title: string; content: string }>;
   organisationLogoUrl?: string;
+  renderMode?: 'screen' | 'pdf';
 }
 
 const VERIFYTRADE_ORANGE = '#f97316';
@@ -53,7 +54,8 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     executiveSummary,
     methodology,
     additionalSections,
-    organisationLogoUrl
+    organisationLogoUrl,
+    renderMode = 'screen'
   } = options;
 
   const totalSystems = suppliers[0]?.totalItems || 0;
@@ -87,17 +89,50 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     /* === PAGE LAYOUT === */
     @page {
       size: A4;
-      margin: 20mm 15mm;
+      margin: ${renderMode === 'pdf' ? '12mm 12mm 14mm 12mm' : '20mm 15mm'};
+    }
+
+    * {
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
     }
 
     .page {
       page-break-after: always;
-      min-height: 100vh;
+      min-height: ${renderMode === 'pdf' ? 'auto' : '100vh'};
       padding: 40px;
     }
 
     .page:last-child {
       page-break-after: auto;
+    }
+
+    .avoid-break {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .page-break {
+      break-before: page;
+      page-break-before: always;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    table {
+      break-inside: auto;
+    }
+
+    tr {
+      break-inside: avoid;
+      break-after: auto;
+    }
+
+    thead {
+      display: table-header-group;
     }
 
     /* === HEADER & FOOTER === */

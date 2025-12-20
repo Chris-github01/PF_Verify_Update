@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen, FileSpreadsheet, MoreVertical, Tag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
+import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { useOrganisation } from '../lib/organisationContext';
 import { exportTagsClarificationsToExcel } from '../lib/export/tagsExcelExport';
 import type { DashboardMode } from '../App';
@@ -92,6 +93,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   const [scopeSystems, setScopeSystems] = useState<ScopeSystem[]>([]);
   const [generatingJunior, setGeneratingJunior] = useState(false);
   const [generatingSenior, setGeneratingSenior] = useState(false);
+  const [generatingJuniorPdf, setGeneratingJuniorPdf] = useState(false);
+  const [generatingSeniorPdf, setGeneratingSeniorPdf] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
   const { currentOrganisation } = useOrganisation();
 
@@ -240,6 +243,98 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       alert('Could not generate Junior Pack. Please try again.');
     } finally {
       setGeneratingJunior(false);
+    }
+  };
+
+  const handleGenerateJuniorPdf = async () => {
+    if (!awardInfo) return;
+
+    setGeneratingJuniorPdf(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          mode: 'junior_pack'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const result = await response.json();
+
+      const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
+      const filename = `JuniorSiteTeamPack_${projectName}`;
+
+      await generateAndDownloadPdf({
+        htmlContent: result.html,
+        filename,
+        projectName: projectInfo?.name,
+        contractNumber: undefined,
+        reportType: 'Site Team Pack',
+        useTestMode: import.meta.env.DEV
+      });
+
+      alert('Site Team Pack PDF downloaded successfully!');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+    } finally {
+      setGeneratingJuniorPdf(false);
+    }
+  };
+
+  const handleGenerateSeniorPdf = async () => {
+    if (!awardInfo) return;
+
+    setGeneratingSeniorPdf(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          mode: 'senior_report'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const result = await response.json();
+
+      const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
+      const filename = `SeniorProjectOverview_${projectName}`;
+
+      await generateAndDownloadPdf({
+        htmlContent: result.html,
+        filename,
+        projectName: projectInfo?.name,
+        contractNumber: undefined,
+        reportType: 'Senior Management Pack',
+        useTestMode: import.meta.env.DEV
+      });
+
+      alert('Senior Management Pack PDF downloaded successfully!');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+    } finally {
+      setGeneratingSeniorPdf(false);
     }
   };
 
@@ -434,8 +529,12 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
                   scopeSystems={scopeSystems}
                   generatingJunior={generatingJunior}
                   generatingSenior={generatingSenior}
+                  generatingJuniorPdf={generatingJuniorPdf}
+                  generatingSeniorPdf={generatingSeniorPdf}
                   onGenerateJunior={handleGenerateJuniorPack}
                   onGenerateSenior={handleGenerateSeniorReport}
+                  onGenerateJuniorPdf={handleGenerateJuniorPdf}
+                  onGenerateSeniorPdf={handleGenerateSeniorPdf}
                 />
               )}
             </div>
@@ -3442,8 +3541,12 @@ interface SiteHandoverTabProps {
   scopeSystems: ScopeSystem[];
   generatingJunior: boolean;
   generatingSenior: boolean;
+  generatingJuniorPdf: boolean;
+  generatingSeniorPdf: boolean;
   onGenerateJunior: () => void;
   onGenerateSenior: () => void;
+  onGenerateJuniorPdf: () => void;
+  onGenerateSeniorPdf: () => void;
 }
 
 function SiteHandoverTab({
@@ -3452,8 +3555,12 @@ function SiteHandoverTab({
   scopeSystems,
   generatingJunior,
   generatingSenior,
+  generatingJuniorPdf,
+  generatingSeniorPdf,
   onGenerateJunior,
-  onGenerateSenior
+  onGenerateSenior,
+  onGenerateJuniorPdf,
+  onGenerateSeniorPdf
 }: SiteHandoverTabProps) {
   return (
     <div className="space-y-8">
@@ -3520,14 +3627,24 @@ function SiteHandoverTab({
             </div>
           )}
 
-          <button
-            onClick={onGenerateJunior}
-            disabled={generatingJunior || !awardInfo}
-            className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-          >
-            <Download size={20} />
-            {generatingJunior ? 'Generating...' : 'Generate Site Team Pack'}
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={onGenerateJunior}
+              disabled={generatingJunior || !awardInfo}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-sm"
+            >
+              <Download size={18} />
+              {generatingJunior ? 'Generating...' : 'HTM Export'}
+            </button>
+            <button
+              onClick={onGenerateJuniorPdf}
+              disabled={generatingJuniorPdf || !awardInfo}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-sm"
+            >
+              <FileText size={18} />
+              {generatingJuniorPdf ? 'Generating...' : 'Download PDF'}
+            </button>
+          </div>
         </div>
 
         {/* Senior Management Pack */}
@@ -3586,14 +3703,24 @@ function SiteHandoverTab({
             </div>
           )}
 
-          <button
-            onClick={onGenerateSenior}
-            disabled={generatingSenior || !awardInfo}
-            className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-          >
-            <Download size={20} />
-            {generatingSenior ? 'Generating...' : 'Generate Senior Management Pack'}
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={onGenerateSenior}
+              disabled={generatingSenior || !awardInfo}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-sm"
+            >
+              <Download size={18} />
+              {generatingSenior ? 'Generating...' : 'HTM Export'}
+            </button>
+            <button
+              onClick={onGenerateSeniorPdf}
+              disabled={generatingSeniorPdf || !awardInfo}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-sm"
+            >
+              <FileText size={18} />
+              {generatingSeniorPdf ? 'Generating...' : 'Download PDF'}
+            </button>
+          </div>
         </div>
       </div>
 
