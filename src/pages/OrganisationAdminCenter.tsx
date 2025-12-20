@@ -10,18 +10,21 @@ import {
   Archive,
   Share2,
   Mail,
-  AlertCircle
+  AlertCircle,
+  Zap
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
 import TeamMembersPanel from '../components/admin/TeamMembersPanel';
 import OrganisationAnalytics from '../components/admin/OrganisationAnalytics';
 import InviteTeamMemberModal from '../components/admin/InviteTeamMemberModal';
+import CreateUserDirectlyModal from '../components/admin/CreateUserDirectlyModal';
 
 export default function OrganisationAdminCenter() {
   const { currentOrganisation } = useOrganisation();
   const [activeTab, setActiveTab] = useState<'overview' | 'team' | 'analytics'>('overview');
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -144,13 +147,25 @@ export default function OrganisationAdminCenter() {
               Manage your team, track usage, and configure settings for {currentOrganisation.name}
             </p>
           </div>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <UserPlus size={20} />
-            Invite Team Member
-          </button>
+          <div className="flex items-center gap-3">
+            {isPlatformAdmin && (
+              <button
+                onClick={() => setShowCreateUserModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                title="God Mode: Create user without signup"
+              >
+                <Zap size={20} />
+                Create User
+              </button>
+            )}
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <UserPlus size={20} />
+              Invite Team Member
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -332,6 +347,19 @@ export default function OrganisationAdminCenter() {
           onClose={() => setShowInviteModal(false)}
           onSuccess={() => {
             setShowInviteModal(false);
+            loadStats();
+          }}
+        />
+      )}
+
+      {/* Create User Directly Modal (God Mode) */}
+      {showCreateUserModal && isPlatformAdmin && (
+        <CreateUserDirectlyModal
+          organisationId={currentOrganisation.id}
+          organisationName={currentOrganisation.name}
+          onClose={() => setShowCreateUserModal(false)}
+          onSuccess={() => {
+            setShowCreateUserModal(false);
             loadStats();
           }}
         />
