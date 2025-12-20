@@ -57,12 +57,44 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
           </div>
           Coverage Breakdown: {supplier.supplierName}
         </h3>
-        <p className="text-slate-400 mt-2 text-sm">
-          Systems covered by major category ({supplier.systemsCovered} of {supplier.totalSystems} total)
-        </p>
+        <div className="mt-3 space-y-1">
+          <p className="text-slate-300 text-sm font-medium">
+            Coverage: {supplier.itemsQuoted || supplier.systemsCovered} of {supplier.totalSystems} line items ({supplier.coveragePercent.toFixed(1)}%)
+          </p>
+          <p className="text-slate-400 text-sm">
+            Total Quantity: {supplier.systemsCovered.toLocaleString()} units across all items
+          </p>
+          <p className="text-slate-400 text-sm">
+            Average Unit Cost: {formatCurrency(supplier.normalizedPricePerSystem)} per unit
+          </p>
+        </div>
       </div>
 
       <div className="p-6">
+        {/* Pricing Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+            <div className="text-xs text-slate-400 mb-1">Total Price</div>
+            <div className="text-lg font-bold text-green-400">{formatCurrency(supplier.totalPrice)}</div>
+          </div>
+          <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+            <div className="text-xs text-slate-400 mb-1">Total Quantity</div>
+            <div className="text-lg font-bold text-blue-400">{supplier.systemsCovered.toLocaleString()}</div>
+            <div className="text-xs text-slate-500">units</div>
+          </div>
+          <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+            <div className="text-xs text-slate-400 mb-1">Unit Cost</div>
+            <div className="text-lg font-bold text-orange-400">{formatCurrency(supplier.normalizedPricePerSystem)}</div>
+            <div className="text-xs text-slate-500">per unit</div>
+          </div>
+        </div>
+
+        {/* Systems Coverage Section */}
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold text-slate-300 mb-1">Line Item Coverage by Category</h4>
+          <p className="text-xs text-slate-500">Breakdown of quoted items across system categories</p>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Pie Chart */}
           <div className="relative max-w-[200px] mx-auto lg:mx-0">
@@ -129,7 +161,7 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
                   ></div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-slate-200 truncate">{category.category}</div>
-                    <div className="text-xs text-slate-400">{category.count} systems</div>
+                    <div className="text-xs text-slate-400">{category.count} line items</div>
                   </div>
                 </div>
                 <div className="text-right ml-4">
