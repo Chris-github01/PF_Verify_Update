@@ -76,11 +76,48 @@ function extractFRR(text: string): string | undefined {
 }
 
 function extractService(lowerText: string): string | undefined {
+  // CRITICAL: Service classification rules based on actual trade practices
+  // This determines which trade is responsible for the installation
+
+  // 1. Electrical - Cable infrastructure and electrical penetrations
+  if (lowerText.includes('cable bundle') ||
+      lowerText.includes('cable tray') ||
+      lowerText.includes('bus duct') ||
+      lowerText.includes('electrical conduit')) {
+    return 'Electrical';
+  }
+
+  // 2. Fire - Pipe penetrations (steel, sprinkler, alarm cables)
+  if (lowerText.includes('steel pipe') ||
+      lowerText.includes('sprinkler pipe') ||
+      lowerText.includes('alarm cable')) {
+    return 'Fire';
+  }
+
+  // 3. Plumbing - Fire stopping products and plastic pipes
+  if (lowerText.includes('fire collar') ||
+      lowerText.includes('rokwrap') ||
+      lowerText.includes('mastic') ||
+      lowerText.includes('pvc pipe') ||
+      lowerText.includes('pex pipe') ||
+      lowerText.includes('hdpe pipe')) {
+    return 'Plumbing';
+  }
+
+  // 4. Mechanical - Ductwork and HVAC
+  if (lowerText.includes('mechanical duct') ||
+      lowerText.includes('duct') ||
+      lowerText.includes('hvac') ||
+      lowerText.includes('ventilation') ||
+      lowerText.includes('air conditioning')) {
+    return 'Mechanical';
+  }
+
+  // Legacy fallback keywords (less specific)
   const serviceKeywords = {
-    'Electrical': ['electrical', 'electric', 'power', 'cable', 'wiring', 'conduit'],
-    'Mechanical': ['mechanical', 'hvac', 'duct', 'ducting', 'ventilation', 'air conditioning'],
-    'Fire': ['fire', 'sprinkler', 'fire protection'],
-    'Plumbing': ['plumbing', 'pipe', 'piping', 'water', 'drainage', 'sewer'],
+    'Electrical': ['electrical', 'electric', 'power', 'wiring'],
+    'Fire': ['fire protection', 'fire stopping', 'fire rated'],
+    'Plumbing': ['plumbing', 'water', 'drainage', 'sewer'],
     'Data': ['data', 'telecom', 'communication', 'network', 'fibre', 'fiber'],
     'Gas': ['gas', 'natural gas', 'lpg'],
   };
