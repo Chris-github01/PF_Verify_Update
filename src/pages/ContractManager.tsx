@@ -81,7 +81,7 @@ interface ComplianceDocument {
   verified_at: string | null;
 }
 
-type TabId = 'summary' | 'scope' | 'inclusions' | 'allowances' | 'variations' | 'onboarding' | 'handover';
+type TabId = 'summary' | 'scope' | 'inclusions' | 'allowances' | 'onboarding' | 'handover';
 
 export default function ContractManager({ projectId, onNavigateBack, dashboardMode = 'original' }: ContractManagerProps) {
   const [activeTab, setActiveTab] = useState<TabId>('summary');
@@ -288,7 +288,6 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
     { id: 'scope' as TabId, label: 'Scope & Systems', icon: CheckCircle },
     { id: 'inclusions' as TabId, label: 'Inclusions & Exclusions', icon: FileCheck },
     { id: 'allowances' as TabId, label: 'Allowances', icon: FileText },
-    { id: 'variations' as TabId, label: 'Variations Log', icon: AlertCircle },
   ];
 
   const tabs = isApproved
@@ -418,7 +417,6 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
               {activeTab === 'scope' && <ScopeSystemsTab projectId={projectId} scopeSystems={scopeSystems} />}
               {activeTab === 'inclusions' && <InclusionsExclusionsTab projectId={projectId} />}
               {activeTab === 'allowances' && <AllowancesTab projectId={projectId} />}
-              {activeTab === 'variations' && <VariationsLogTab />}
               {activeTab === 'onboarding' && isApproved && (
                 <OnboardingTab
                   projectId={projectId}
@@ -2034,17 +2032,6 @@ function AllowancesTab({ projectId }: { projectId: string }) {
   );
 }
 
-function VariationsLogTab() {
-  return (
-    <div className="text-center py-12">
-      <AlertCircle className="mx-auto text-slate-500 mb-4" size={48} />
-      <h3 className="text-xl font-bold text-white mb-2">Variations Log</h3>
-      <p className="text-slate-400">
-        Track proposed and approved variations here in a future update.
-      </p>
-    </div>
-  );
-}
 
 interface OnboardingTabProps {
   projectId: string;
@@ -2054,11 +2041,13 @@ interface OnboardingTabProps {
 }
 
 function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl }: OnboardingTabProps) {
-  const [currentStep, setCurrentStep] = useState<'loi' | 'compliance' | 'handover'>('loi');
+  const [currentStep, setCurrentStep] = useState<'loi' | 'compliance' | 'prelet'>('loi');
   const [loi, setLoi] = useState<LetterOfIntent | null>(null);
   const [loadingLoi, setLoadingLoi] = useState(true);
   const [complianceDocs, setComplianceDocs] = useState<ComplianceDocument[]>([]);
   const [loadingCompliance, setLoadingCompliance] = useState(true);
+  const [preletAppendix, setPreletAppendix] = useState<any>(null);
+  const [loadingPrelet, setLoadingPrelet] = useState(true);
 
   useEffect(() => {
     loadOnboardingData();
@@ -2085,18 +2074,29 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
         .order('uploaded_at', { ascending: false });
 
       setComplianceDocs((complianceData || []) as any);
+
+      const { data: preletData } = await supabase
+        .from('prelet_appendix')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      if (preletData) {
+        setPreletAppendix(preletData);
+      }
     } catch (error) {
       console.error('Error loading onboarding data:', error);
     } finally {
       setLoadingLoi(false);
       setLoadingCompliance(false);
+      setLoadingPrelet(false);
     }
   };
 
   const steps = [
     { id: 'loi', label: 'Letter of Intent', icon: FileText, completed: loi !== null },
     { id: 'compliance', label: 'Compliance Documents', icon: Shield, completed: complianceDocs.length > 0 },
-    { id: 'handover', label: 'Handover Packs', icon: Download, completed: false }
+    { id: 'prelet', label: 'Pre-let Minute Appendix', icon: FileCheck, completed: preletAppendix !== null }
   ];
 
   return (
@@ -2170,8 +2170,14 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
             onDocsUpdated={loadOnboardingData}
           />
         )}
-        {currentStep === 'handover' && (
-          <HandoverStep projectId={projectId} awardInfo={awardInfo} />
+        {currentStep === 'prelet' && (
+          <PreletAppendixStep
+            projectId={projectId}
+            awardInfo={awardInfo}
+            scopeSystems={scopeSystems}
+            existingAppendix={preletAppendix}
+            onAppendixUpdated={loadOnboardingData}
+          />
         )}
       </div>
     </div>
