@@ -22,6 +22,10 @@ interface AwardInfo {
   supplier_name: string;
   total_amount: number;
   awarded_date?: string;
+  supplier_contact?: string | null;
+  supplier_email?: string | null;
+  supplier_phone?: string | null;
+  supplier_address?: string | null;
 }
 
 interface ScopeSystem {
@@ -49,6 +53,8 @@ interface LetterOfIntent {
   supplier_name: string;
   supplier_contact: string | null;
   supplier_email: string | null;
+  supplier_phone?: string | null;
+  supplier_address?: string | null;
   scope_summary: string;
   service_types: string[];
   target_start_date: string | null;
@@ -108,15 +114,49 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       if (approvedQuoteId) {
         const { data: approvedQuote } = await supabase
           .from('quotes')
-          .select('supplier_name, total_amount, updated_at')
+          .select('supplier_name, total_amount, updated_at, organisation_id')
           .eq('id', approvedQuoteId)
           .maybeSingle();
 
         if (approvedQuote) {
+          // Try to find supplier details from suppliers table
+          let supplierContact = null;
+          let supplierEmail = null;
+          let supplierPhone = null;
+          let supplierAddress = null;
+
+          if (approvedQuote.organisation_id) {
+            const { data: supplier } = await supabase
+              .from('suppliers')
+              .select('contact_name, contact_email, contact_phone, address, notes')
+              .eq('organisation_id', approvedQuote.organisation_id)
+              .ilike('name', approvedQuote.supplier_name)
+              .maybeSingle();
+
+            if (supplier) {
+              supplierContact = supplier.contact_name;
+              supplierEmail = supplier.contact_email;
+              supplierPhone = supplier.contact_phone;
+              supplierAddress = supplier.address;
+
+              // Fallback: Try to extract contact name from notes if not in contact_name field
+              if (!supplierContact && supplier.notes) {
+                const contactMatch = supplier.notes.match(/contact:\s*([^\n]+)/i);
+                if (contactMatch) {
+                  supplierContact = contactMatch[1].trim();
+                }
+              }
+            }
+          }
+
           setAwardInfo({
             supplier_name: approvedQuote.supplier_name,
             total_amount: approvedQuote.total_amount || 0,
-            awarded_date: approvedQuote.updated_at
+            awarded_date: approvedQuote.updated_at,
+            supplier_contact: supplierContact,
+            supplier_email: supplierEmail,
+            supplier_phone: supplierPhone,
+            supplier_address: supplierAddress
           });
 
           // Show Onboarding tab whenever there's an approved quote
@@ -1933,13 +1973,28 @@ function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, exis
   const [confirmedNonBinding, setConfirmedNonBinding] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [formData, setFormData] = useState({
-    supplier_contact: '',
-    supplier_email: '',
+    supplier_contact: awardInfo?.supplier_contact || '',
+    supplier_email: awardInfo?.supplier_email || '',
+    supplier_phone: awardInfo?.supplier_phone || '',
+    supplier_address: awardInfo?.supplier_address || '',
     scope_summary: `Fire protection and passive fire stopping works for ${awardInfo?.supplier_name || 'project'}`,
     target_start_date: '',
     target_completion_date: '',
     custom_terms: ''
   });
+
+  // Update form data when awardInfo changes
+  useEffect(() => {
+    if (awardInfo && !existingLoi) {
+      setFormData(prev => ({
+        ...prev,
+        supplier_contact: awardInfo.supplier_contact || prev.supplier_contact,
+        supplier_email: awardInfo.supplier_email || prev.supplier_email,
+        supplier_phone: awardInfo.supplier_phone || prev.supplier_phone,
+        supplier_address: awardInfo.supplier_address || prev.supplier_address
+      }));
+    }
+  }, [awardInfo, existingLoi]);
 
   const handleGenerate = async () => {
     if (!confirmedNonBinding) {
@@ -1956,6 +2011,8 @@ function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, exis
         supplier_name: awardInfo?.supplier_name || 'TBC',
         supplier_contact: formData.supplier_contact,
         supplier_email: formData.supplier_email,
+        supplier_phone: formData.supplier_phone || null,
+        supplier_address: formData.supplier_address || null,
         scope_summary: formData.scope_summary,
         service_types: serviceTypes,
         target_start_date: formData.target_start_date || null,
@@ -2063,7 +2120,7 @@ function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, exis
                 type="text"
                 value={formData.supplier_contact}
                 onChange={(e) => setFormData({ ...formData, supplier_contact: e.target.value })}
-                placeholder="John Smith"
+                placeholder="John Smith - Operations Manager"
                 className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
               />
             </div>
@@ -2074,6 +2131,26 @@ function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, exis
                 value={formData.supplier_email}
                 onChange={(e) => setFormData({ ...formData, supplier_email: e.target.value })}
                 placeholder="john@supplier.com"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Phone Number</label>
+              <input
+                type="tel"
+                value={formData.supplier_phone}
+                onChange={(e) => setFormData({ ...formData, supplier_phone: e.target.value })}
+                placeholder="+61 400 000 000"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Supplier Address</label>
+              <input
+                type="text"
+                value={formData.supplier_address}
+                onChange={(e) => setFormData({ ...formData, supplier_address: e.target.value })}
+                placeholder="123 Main St, City"
                 className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
               />
             </div>
@@ -2180,9 +2257,27 @@ function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, exis
               <div className="text-white font-medium">{existingLoi.supplier_name}</div>
             </div>
             <div>
-              <div className="text-slate-400">Contact</div>
+              <div className="text-slate-400">Contact Person</div>
               <div className="text-white">{existingLoi.supplier_contact || 'N/A'}</div>
             </div>
+            <div>
+              <div className="text-slate-400">Email</div>
+              <div className="text-white text-sm">{existingLoi.supplier_email || 'N/A'}</div>
+            </div>
+            <div>
+              <div className="text-slate-400">Phone</div>
+              <div className="text-white text-sm">{existingLoi.supplier_phone || awardInfo?.supplier_phone || 'N/A'}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 text-sm">
+            <div>
+              <div className="text-slate-400">Address</div>
+              <div className="text-white text-sm">{existingLoi.supplier_address || awardInfo?.supplier_address || 'N/A'}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-sm mt-4">
             <div>
               <div className="text-slate-400">Target Start</div>
               <div className="text-white">
@@ -2569,8 +2664,10 @@ function generateLOIHtml(loi: LetterOfIntent, awardInfo: AwardInfo | null, logoU
 
       <div class="section">
         <div class="section-title">To: ${loi.supplier_name}</div>
+        ${loi.supplier_address ? `<p>${loi.supplier_address}</p>` : ''}
         ${loi.supplier_contact ? `<p><strong>Attention:</strong> ${loi.supplier_contact}</p>` : ''}
         ${loi.supplier_email ? `<p><strong>Email:</strong> ${loi.supplier_email}</p>` : ''}
+        ${loi.supplier_phone ? `<p><strong>Phone:</strong> ${loi.supplier_phone}</p>` : ''}
       </div>
 
       <div class="section">
