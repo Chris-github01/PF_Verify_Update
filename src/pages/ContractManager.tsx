@@ -2985,10 +2985,48 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
 
     setGenerating(true);
     try {
-      alert('Document generation feature coming soon!');
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          mode: 'prelet_appendix'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const result = await response.json();
+
+      const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
+      const projectName = awardInfo?.project_name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
+      const filename = `PreletAppendix_${projectName}_${timestamp}`;
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Please allow popups for this site');
+        return;
+      }
+
+      printWindow.document.write(result.html);
+      printWindow.document.close();
+
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+
+      alert('Pre-let Appendix document generated successfully!');
     } catch (error) {
       console.error('Generation error:', error);
-      alert('Failed to generate appendix document');
+      alert('Failed to generate appendix document: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setGenerating(false);
     }

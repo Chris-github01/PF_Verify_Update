@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { generateJuniorPackHTML, generateSeniorReportHTML } from './generators.ts';
+import { generateJuniorPackHTML, generateSeniorReportHTML, generatePreletAppendixHTML } from './generators.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -280,6 +280,31 @@ Deno.serve(async (req: Request) => {
           awardReport: awardResult
         }
       );
+      return new Response(
+        JSON.stringify({ html: htmlContent }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (mode === 'prelet_appendix') {
+      const { data: appendixData } = await supabase
+        .from('prelet_appendix')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      if (!appendixData) {
+        throw new Error('No pre-let appendix found for this project');
+      }
+
+      const htmlContent = generatePreletAppendixHTML(
+        project.name,
+        supplierName,
+        totalAmount,
+        appendixData,
+        organisationLogoUrl
+      );
+
       return new Response(
         JSON.stringify({ html: htmlContent }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
