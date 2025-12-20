@@ -195,14 +195,19 @@ export default function InviteTeamMemberModal({ organisationId, onClose, onSucce
               onChange={(e) => setRole(e.target.value as 'member' | 'admin')}
               className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
+              <option value="member">Member - Can work on projects</option>
+              <option value="admin">Admin - Can access Admin Center and manage team</option>
             </select>
-            <p className="text-xs text-slate-400 mt-1">
-              {role === 'admin'
-                ? 'Admins can manage team members and settings'
-                : 'Members can access and work on projects'}
-            </p>
+            <div className="mt-2 p-3 bg-slate-700/50 rounded-lg">
+              <p className="text-xs text-slate-300 font-medium mb-1">
+                {role === 'admin' ? '✅ Admin Access' : '👤 Member Access'}
+              </p>
+              <p className="text-xs text-slate-400">
+                {role === 'admin'
+                  ? 'Can access Admin Center, invite team members, and manage organization settings'
+                  : 'Can work on projects but cannot access Admin Center or invite members'}
+              </p>
+            </div>
           </div>
 
           <div className="bg-slate-700/50 rounded-lg p-4">
