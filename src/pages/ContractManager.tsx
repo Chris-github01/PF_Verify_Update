@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen, FileSpreadsheet, MoreVertical, Tag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { useOrganisation } from '../lib/organisationContext';
+import { exportTagsClarificationsToExcel } from '../lib/export/tagsExcelExport';
 import type { DashboardMode } from '../App';
 
 interface ContractManagerProps {
@@ -1287,10 +1288,23 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
   const [isAddingExclusion, setIsAddingExclusion] = useState(false);
   const [newInclusionText, setNewInclusionText] = useState('');
   const [newExclusionText, setNewExclusionText] = useState('');
+  const [tagsClarifications, setTagsClarifications] = useState<any[]>([]);
+  const [loadingTags, setLoadingTags] = useState(true);
+  const [projectName, setProjectName] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [showTagsSection, setShowTagsSection] = useState(false);
 
   useEffect(() => {
-    loadInclusionsExclusions();
+    loadAllData();
   }, [projectId]);
+
+  const loadAllData = async () => {
+    await Promise.all([
+      loadInclusionsExclusions(),
+      loadTagsClarifications(),
+      loadProjectInfo()
+    ]);
+  };
 
   const loadInclusionsExclusions = async () => {
     try {
@@ -1312,6 +1326,55 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
       console.error('Error loading inclusions/exclusions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTagsClarifications = async () => {
+    try {
+      const { data } = await supabase
+        .from('contract_tags_clarifications')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('sort_order');
+
+      setTagsClarifications(data || []);
+    } catch (error) {
+      console.error('Error loading tags & clarifications:', error);
+    } finally {
+      setLoadingTags(false);
+    }
+  };
+
+  const loadProjectInfo = async () => {
+    try {
+      const { data } = await supabase
+        .from('projects')
+        .select('name')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (data) {
+        setProjectName(data.name);
+      }
+    } catch (error) {
+      console.error('Error loading project info:', error);
+    }
+  };
+
+  const handleExportTags = async () => {
+    if (tagsClarifications.length === 0) {
+      alert('No tags or clarifications to export');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      await exportTagsClarificationsToExcel(projectId, projectName);
+    } catch (error: any) {
+      console.error('Export error:', error);
+      alert(error.message || 'Failed to export tags & clarifications');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -1445,9 +1508,20 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-white mb-2">Inclusions & Exclusions</h3>
-        <p className="text-slate-400 text-sm">Define what's included and excluded in the contract scope</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-2">Inclusions & Exclusions</h3>
+          <p className="text-slate-400 text-sm">Define what's included and excluded in the contract scope</p>
+        </div>
+        <button
+          onClick={handleExportTags}
+          disabled={tagsClarifications.length === 0 || exporting}
+          title={tagsClarifications.length === 0 ? 'No tags or clarifications to export' : 'Export Tags & Clarifications (Excel)'}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-all"
+        >
+          <FileSpreadsheet size={16} />
+          {exporting ? 'Exporting...' : 'Export Tags & Clarifications (Excel)'}
+        </button>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -1678,6 +1752,104 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
             )}
           </ul>
         </div>
+      </div>
+
+      <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Tag className="text-amber-500" size={20} />
+            <h4 className="text-base font-semibold text-white">Tags & Clarifications</h4>
+            <span className="px-2 py-0.5 bg-slate-800 rounded text-xs text-slate-400">
+              {tagsClarifications.length} items
+            </span>
+          </div>
+          <button
+            onClick={() => setShowTagsSection(!showTagsSection)}
+            className="flex items-center gap-2 px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm transition-all"
+          >
+            {showTagsSection ? 'Hide' : 'Show'} Tags
+            <ChevronRight size={14} className={`transition-transform ${showTagsSection ? 'rotate-90' : ''}`} />
+          </button>
+        </div>
+
+        {showTagsSection && (
+          <div className="space-y-4">
+            {loadingTags ? (
+              <div className="text-slate-400 text-sm">Loading tags & clarifications...</div>
+            ) : tagsClarifications.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">
+                <Tag size={48} className="mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No tags or clarifications yet</p>
+                <p className="text-xs mt-1">Tags will appear here when created</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700 text-left">
+                      <th className="py-2 px-3 text-slate-400 font-medium">Ref</th>
+                      <th className="py-2 px-3 text-slate-400 font-medium">Type</th>
+                      <th className="py-2 px-3 text-slate-400 font-medium">Title</th>
+                      <th className="py-2 px-3 text-slate-400 font-medium">Status</th>
+                      <th className="py-2 px-3 text-slate-400 font-medium">Cost Impact</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tagsClarifications.map((tag) => (
+                      <tr key={tag.id} className="border-b border-slate-800 hover:bg-slate-800/30">
+                        <td className="py-3 px-3 text-slate-300 font-mono text-xs">{tag.tag_ref}</td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            tag.tag_type === 'Risk' ? 'bg-red-900/30 text-red-400' :
+                            tag.tag_type === 'Hold Point' ? 'bg-orange-900/30 text-orange-400' :
+                            tag.tag_type === 'Assumption' ? 'bg-blue-900/30 text-blue-400' :
+                            'bg-slate-700 text-slate-300'
+                          }`}>
+                            {tag.tag_type}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-white">{tag.title}</td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            tag.status === 'Closed' ? 'bg-green-900/30 text-green-400' :
+                            tag.status === 'Agreed' ? 'bg-blue-900/30 text-blue-400' :
+                            tag.status === 'To Pre-let' ? 'bg-amber-900/30 text-amber-400' :
+                            'bg-slate-700 text-slate-400'
+                          }`}>
+                            {tag.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            tag.cost_impact === 'Variation Required' || tag.cost_impact === 'Confirmed' ? 'bg-red-900/30 text-red-400' :
+                            tag.cost_impact === 'Potential' ? 'bg-amber-900/30 text-amber-400' :
+                            'bg-slate-700 text-slate-400'
+                          }`}>
+                            {tag.cost_impact}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-4 border-t border-slate-700">
+              <p className="text-xs text-slate-400">
+                Use the export button above to download all tags & clarifications with full details for subcontractor review
+              </p>
+              <button
+                onClick={handleExportTags}
+                disabled={tagsClarifications.length === 0 || exporting}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-all"
+              >
+                <FileSpreadsheet size={14} />
+                Export to Excel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4 text-sm text-green-300">
