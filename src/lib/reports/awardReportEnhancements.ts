@@ -6,14 +6,14 @@
 export interface EnhancedSupplierMetrics {
   supplierName: string;
   totalPrice: number;
-  systemsCovered: number;
+  systemsCovered: number; // CRITICAL: This is total QUANTITY (sum of all quantities), NOT line items count
   totalSystems: number;
   coveragePercent: number;
   quoteId?: string;
-  itemsQuoted?: number;
+  itemsQuoted?: number; // Number of line items (for reference only)
 
   // NEW: Normalized metrics
-  normalizedPricePerSystem: number;
+  normalizedPricePerSystem: number; // Price divided by total QUANTITY (systemsCovered)
   variancePercent: number; // vs. average price
   varianceFromLowest: number;
 
@@ -70,7 +70,9 @@ export const DEFAULT_WEIGHTS: ScoringWeights = {
 };
 
 /**
- * Calculate normalized price per system covered
+ * Calculate normalized price per unit/quantity
+ * CRITICAL: systemsCovered should be the SUM of all quantities, NOT the count of line items
+ * Example: If quote has 3 line items with quantities [100, 50, 25], systemsCovered = 175
  */
 export function calculateNormalizedPrice(totalPrice: number, systemsCovered: number): number {
   if (systemsCovered === 0) return 0;

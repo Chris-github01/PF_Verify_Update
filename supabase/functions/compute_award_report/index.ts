@@ -248,6 +248,11 @@ Deno.serve(async (req: Request) => {
         sum + (row.suppliers[q.supplier_name]?.total || 0), 0
       );
 
+      // Calculate total quantity (sum of all quantities across all quoted items)
+      const totalQuantity = quotedItems.reduce((sum, row) =>
+        sum + (row.quantity || 0), 0
+      );
+
       const missingItems = comparisonData.length - quotedItems.length;
 
       return {
@@ -257,6 +262,7 @@ Deno.serve(async (req: Request) => {
         adjustedTotal: total,
         itemsQuoted: quotedItems.length,
         totalItems: comparisonData.length,
+        totalQuantity: totalQuantity, // NEW: Total sum of quantities for accurate per-unit pricing
         coveragePercent: Math.round((quotedItems.length / comparisonData.length) * 100),
         riskScore: missingItems,
         riskFactors: {

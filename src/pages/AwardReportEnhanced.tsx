@@ -232,16 +232,19 @@ export default function AwardReportEnhanced({
           suppliers: row.suppliers, // Include all supplier data for market rate calculation
         }));
 
+      // CRITICAL FIX: Use totalQuantity (sum of all quantities) instead of itemsQuoted (line items count)
+      const actualTotalQuantity = (supplier as any).totalQuantity || supplier.itemsQuoted;
+
       return {
         supplierName: supplier.supplierName,
         totalPrice: supplier.adjustedTotal,
-        systemsCovered: supplier.itemsQuoted,
+        systemsCovered: actualTotalQuantity, // FIXED: Use total quantity sum
         totalSystems: supplier.totalItems,
         coveragePercent: supplier.coveragePercent,
         quoteId: supplier.quoteId,
         itemsQuoted: supplier.itemsQuoted,
 
-        normalizedPricePerSystem: calculateNormalizedPrice(supplier.adjustedTotal, supplier.itemsQuoted),
+        normalizedPricePerSystem: calculateNormalizedPrice(supplier.adjustedTotal, actualTotalQuantity), // FIXED: Divide by total quantity
         variancePercent: calculateVariancePercent(supplier.adjustedTotal, averagePrice),
         varianceFromLowest: supplier.adjustedTotal - lowestPrice,
 
@@ -257,8 +260,8 @@ export default function AwardReportEnhanced({
         systemsBreakdown: generateSystemsBreakdown(supplierItems, supplier.totalItems),
         scopeGaps: estimateScopeGapCosts(
           missingItems,
-          supplier.itemsQuoted > 0 ? supplier.adjustedTotal / supplier.itemsQuoted : 0,
-          supplier.itemsQuoted,
+          actualTotalQuantity > 0 ? supplier.adjustedTotal / actualTotalQuantity : 0, // FIXED: Use total quantity for average rate
+          actualTotalQuantity,
           supplier.totalItems
         ),
 
