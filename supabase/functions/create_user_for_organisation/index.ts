@@ -95,7 +95,8 @@ Deno.serve(async (req: Request) => {
           .update({
             role,
             status: 'active',
-            archived_at: null
+            archived_at: null,
+            activated_at: new Date().toISOString()
           })
           .eq('id', existingMember.id);
 
@@ -108,7 +109,8 @@ Deno.serve(async (req: Request) => {
             organisation_id,
             user_id: userId,
             role,
-            status: 'active'
+            status: 'active',
+            activated_at: new Date().toISOString()
           });
 
         if (insertError) throw insertError;
@@ -138,7 +140,8 @@ Deno.serve(async (req: Request) => {
           organisation_id,
           user_id: userId,
           role,
-          status: 'active'
+          status: 'active',
+          activated_at: new Date().toISOString()
         });
 
       if (memberError) throw memberError;

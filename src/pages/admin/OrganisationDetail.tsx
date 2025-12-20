@@ -27,6 +27,7 @@ interface Member {
   role: string;
   status: string;
   activated_at: string | null;
+  archived_at?: string | null;
 }
 
 interface Project {
@@ -114,6 +115,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
         .from('organisation_members')
         .select('*')
         .eq('organisation_id', organisationId)
+        .is('archived_at', null)
         .order('activated_at', { ascending: false, nullsFirst: false });
 
       const membersWithDetails = await Promise.all(
@@ -496,7 +498,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
   };
 
   const seatsUsed = members.filter(
-    m => m.status === 'active' && ['owner', 'admin', 'member'].includes(m.role)
+    m => m.status === 'active' && ['owner', 'admin', 'member'].includes(m.role) && !m.archived_at
   ).length;
 
   if (loading) {
