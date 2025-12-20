@@ -16,6 +16,8 @@ interface ProjectInfo {
   name: string;
   client: string | null;
   updated_at: string;
+  organisation_id?: string;
+  created_by?: string;
 }
 
 interface AwardInfo {
@@ -101,7 +103,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
     try {
       const { data: project } = await supabase
         .from('projects')
-        .select('id, name, client, updated_at, approved_quote_id')
+        .select('id, name, client, updated_at, approved_quote_id, organisation_id, created_by')
         .eq('id', projectId)
         .maybeSingle();
 
@@ -411,7 +413,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             </div>
 
             <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-8 shadow-xl">
-              {activeTab === 'summary' && <ContractSummaryTab awardInfo={awardInfo} projectInfo={projectInfo} />}
+              {activeTab === 'summary' && <ContractSummaryTab awardInfo={awardInfo} projectInfo={projectInfo} organisationId={projectInfo?.organisation_id} />}
               {activeTab === 'scope' && <ScopeSystemsTab projectId={projectId} scopeSystems={scopeSystems} />}
               {activeTab === 'inclusions' && <InclusionsExclusionsTab projectId={projectId} />}
               {activeTab === 'allowances' && <AllowancesTab projectId={projectId} />}
@@ -464,17 +466,72 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   );
 }
 
-function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo | null; projectInfo: ProjectInfo | null }) {
+function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardInfo: AwardInfo | null; projectInfo: ProjectInfo | null; organisationId?: string }) {
   const [retentionPercentage, setRetentionPercentage] = useState<number>(3.0);
   const [mainContractor, setMainContractor] = useState<string>('');
   const [paymentTerms, setPaymentTerms] = useState<string>('20th following month, 22 working days');
   const [liquidatedDamages, setLiquidatedDamages] = useState<string>('None specified');
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [organisationName, setOrganisationName] = useState<string>('');
+  const [projectManager, setProjectManager] = useState<{ name: string; email: string } | null>(null);
 
   useEffect(() => {
-    loadContractSettings();
-  }, [projectInfo?.id]);
+    const loadAllDetails = async () => {
+      await loadOrganisationDetails();
+      await loadProjectManagerDetails();
+      await loadContractSettings();
+    };
+    loadAllDetails();
+  }, [projectInfo?.id, organisationId, projectInfo?.created_by]);
+
+  // Update main contractor when organisation name is loaded
+  useEffect(() => {
+    if (organisationName && !mainContractor) {
+      setMainContractor(organisationName);
+    }
+  }, [organisationName]);
+
+  const loadOrganisationDetails = async () => {
+    if (!organisationId) return;
+
+    try {
+      const { data } = await supabase
+        .from('organisations')
+        .select('name')
+        .eq('id', organisationId)
+        .maybeSingle();
+
+      if (data) {
+        setOrganisationName(data.name);
+      }
+    } catch (error) {
+      console.error('Error loading organisation details:', error);
+    }
+  };
+
+  const loadProjectManagerDetails = async () => {
+    if (!projectInfo?.created_by) return;
+
+    try {
+      // Use the get_user_details function to fetch user information
+      const { data, error } = await supabase.rpc('get_user_details', {
+        target_user_id: projectInfo.created_by
+      });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const user = data[0];
+        setProjectManager({
+          name: user.display_name || user.email?.split('@')[0] || 'Unknown',
+          email: user.email || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error loading project manager details:', error);
+    }
+  };
 
   const loadContractSettings = async () => {
     if (!projectInfo?.id) return;
@@ -488,7 +545,18 @@ function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo |
 
       if (data) {
         setRetentionPercentage(data.retention_percentage ?? 3.0);
-        setMainContractor(data.main_contractor_name || '');
+        // Use organisation name as default if main contractor is not set, and save it to database
+        const contractorName = data.main_contractor_name || organisationName || '';
+        setMainContractor(contractorName);
+
+        // If main contractor wasn't set but we have org name, save it
+        if (!data.main_contractor_name && organisationName) {
+          await supabase
+            .from('projects')
+            .update({ main_contractor_name: organisationName })
+            .eq('id', projectInfo.id);
+        }
+
         setPaymentTerms(data.payment_terms || '20th following month, 22 working days');
         setLiquidatedDamages(data.liquidated_damages || 'None specified');
       }
@@ -666,6 +734,24 @@ function ContractSummaryTab({ awardInfo, projectInfo }: { awardInfo: AwardInfo |
                   <Edit2 size={16} />
                 </button>
               </div>
+            )}
+          </div>
+
+          {/* Project Information */}
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Project Name</label>
+            <div className="text-xl text-white font-semibold">{projectInfo?.name || 'TBC'}</div>
+          </div>
+
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Project Manager</label>
+            {projectManager ? (
+              <div>
+                <div className="text-lg text-white font-semibold">{projectManager.name}</div>
+                <div className="text-sm text-slate-400 mt-1">{projectManager.email}</div>
+              </div>
+            ) : (
+              <div className="text-lg text-slate-500">Loading...</div>
             )}
           </div>
         </div>
