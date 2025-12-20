@@ -2661,167 +2661,421 @@ function ComplianceStep({ projectId, complianceDocs, onDocsUpdated }: Compliance
   );
 }
 
-interface HandoverStepProps {
+interface PreletAppendixStepProps {
   projectId: string;
   awardInfo: AwardInfo | null;
+  scopeSystems: ScopeSystem[];
+  existingAppendix: any;
+  onAppendixUpdated: () => void;
 }
 
-function HandoverStep({ projectId, awardInfo }: HandoverStepProps) {
-  const [generatingJunior, setGeneratingJunior] = useState(false);
-  const [generatingSenior, setGeneratingSenior] = useState(false);
+function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppendix, onAppendixUpdated }: PreletAppendixStepProps) {
+  const [editing, setEditing] = useState(!existingAppendix);
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [formData, setFormData] = useState({
+    scope_summary: existingAppendix?.scope_summary || '',
+    pricing_basis: existingAppendix?.pricing_basis || 'lump_sum',
+    inclusions: existingAppendix?.inclusions || [],
+    exclusions: existingAppendix?.exclusions || [],
+    commercial_assumptions: existingAppendix?.commercial_assumptions || [],
+    clarifications: existingAppendix?.clarifications || [],
+    known_risks: existingAppendix?.known_risks || []
+  });
 
-  const handleGenerateJuniorPack = async () => {
-    setGeneratingJunior(true);
+  const [newInclusion, setNewInclusion] = useState('');
+  const [newExclusion, setNewExclusion] = useState('');
+  const [newAssumption, setNewAssumption] = useState('');
+  const [newClarification, setNewClarification] = useState('');
+  const [newRisk, setNewRisk] = useState('');
+
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+      const dataToSave = {
+        project_id: projectId,
+        scope_summary: formData.scope_summary,
+        pricing_basis: formData.pricing_basis,
+        inclusions: formData.inclusions,
+        exclusions: formData.exclusions,
+        commercial_assumptions: formData.commercial_assumptions,
+        clarifications: formData.clarifications,
+        known_risks: formData.known_risks
+      };
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          mode: 'junior_pack'
-        })
-      });
+      if (existingAppendix) {
+        const { error } = await supabase
+          .from('prelet_appendix')
+          .update(dataToSave)
+          .eq('id', existingAppendix.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('prelet_appendix')
+          .insert(dataToSave);
+        if (error) throw error;
+      }
 
-      if (!response.ok) throw new Error('Export failed');
-
-      const result = await response.json();
-      const filename = `JuniorSiteTeamPack_${awardInfo?.supplier_name?.replace(/[^a-zA-Z0-9]/g, '_')}`;
-      generatePdfWithPrint(result.html, filename);
-
-      await supabase.rpc('log_onboarding_event', {
-        p_project_id: projectId,
-        p_event_type: 'handover_pack_generated',
-        p_event_data: { pack_type: 'junior' }
-      });
+      onAppendixUpdated();
+      setEditing(false);
+      alert('Pre-let Minute Appendix saved successfully!');
     } catch (error) {
-      console.error('Export error:', error);
-      alert('Failed to generate Junior Pack');
+      console.error('Save error:', error);
+      alert('Failed to save appendix');
     } finally {
-      setGeneratingJunior(false);
+      setSaving(false);
     }
   };
 
-  const handleGenerateSeniorPack = async () => {
-    setGeneratingSenior(true);
+  const handleFinalise = async () => {
+    if (!confirm('Once finalised, this appendix cannot be edited. Continue?')) return;
+
+    setSaving(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          mode: 'senior_report'
+      const { error } = await supabase
+        .from('prelet_appendix')
+        .update({
+          is_finalised: true,
+          finalised_at: new Date().toISOString(),
+          finalised_by: (await supabase.auth.getUser()).data.user?.id
         })
-      });
+        .eq('id', existingAppendix.id);
 
-      if (!response.ok) throw new Error('Export failed');
+      if (error) throw error;
 
-      const result = await response.json();
-      const filename = `SeniorManagementReport_${awardInfo?.supplier_name?.replace(/[^a-zA-Z0-9]/g, '_')}`;
-      generatePdfWithPrint(result.html, filename);
-
-      await supabase.rpc('log_onboarding_event', {
-        p_project_id: projectId,
-        p_event_type: 'handover_pack_generated',
-        p_event_data: { pack_type: 'senior' }
-      });
+      onAppendixUpdated();
+      alert('Pre-let Minute Appendix finalised!');
     } catch (error) {
-      console.error('Export error:', error);
-      alert('Failed to generate Senior Report');
+      console.error('Finalise error:', error);
+      alert('Failed to finalise appendix');
     } finally {
-      setGeneratingSenior(false);
+      setSaving(false);
     }
   };
+
+  const addItem = (type: 'inclusion' | 'exclusion' | 'assumption' | 'clarification' | 'risk', value: string) => {
+    if (!value.trim()) return;
+
+    if (type === 'inclusion') {
+      setFormData({ ...formData, inclusions: [...formData.inclusions, value] });
+      setNewInclusion('');
+    } else if (type === 'exclusion') {
+      setFormData({ ...formData, exclusions: [...formData.exclusions, value] });
+      setNewExclusion('');
+    } else if (type === 'assumption') {
+      setFormData({ ...formData, commercial_assumptions: [...formData.commercial_assumptions, value] });
+      setNewAssumption('');
+    } else if (type === 'clarification') {
+      setFormData({ ...formData, clarifications: [...formData.clarifications, value] });
+      setNewClarification('');
+    } else {
+      setFormData({ ...formData, known_risks: [...formData.known_risks, value] });
+      setNewRisk('');
+    }
+  };
+
+  const removeItem = (type: 'inclusion' | 'exclusion' | 'assumption' | 'clarification' | 'risk', index: number) => {
+    if (type === 'inclusion') {
+      setFormData({ ...formData, inclusions: formData.inclusions.filter((_, i) => i !== index) });
+    } else if (type === 'exclusion') {
+      setFormData({ ...formData, exclusions: formData.exclusions.filter((_, i) => i !== index) });
+    } else if (type === 'assumption') {
+      setFormData({ ...formData, commercial_assumptions: formData.commercial_assumptions.filter((_, i) => i !== index) });
+    } else if (type === 'clarification') {
+      setFormData({ ...formData, clarifications: formData.clarifications.filter((_, i) => i !== index) });
+    } else {
+      setFormData({ ...formData, known_risks: formData.known_risks.filter((_, i) => i !== index) });
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!existingAppendix?.is_finalised) {
+      alert('Please save and finalise the appendix before generating the document');
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      alert('Document generation feature coming soon!');
+    } catch (error) {
+      console.error('Generation error:', error);
+      alert('Failed to generate appendix document');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const isFinalised = existingAppendix?.is_finalised || false;
 
   return (
     <div className="space-y-6">
       <div>
-        <h4 className="text-xl font-bold text-white mb-2">Handover Packs</h4>
-        <p className="text-slate-400">Generate comprehensive handover documentation for different stakeholders</p>
+        <h4 className="text-xl font-bold text-white mb-2">Pre-let Minute Appendix</h4>
+        <p className="text-slate-400">
+          Capture subcontractor commercial and scope clarifications to append to main contractor's pre-letting minutes
+        </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="p-3 bg-blue-900/30 rounded-lg">
-              <Users className="text-blue-400" size={24} />
-            </div>
-            <div className="flex-1">
-              <h5 className="text-lg font-semibold text-white mb-2">Junior Site Team Pack</h5>
-              <p className="text-sm text-slate-400 mb-4">
-                Practical handover pack for site supervisors and foremen. Includes scope breakdown, site instructions, and safety requirements.
-              </p>
-              <ul className="text-sm text-slate-300 space-y-1 mb-4">
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-green-400" />
-                  Service types and scope details
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-green-400" />
-                  Site-specific requirements
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-green-400" />
-                  Quality checkpoints
-                </li>
-              </ul>
+      {isFinalised && (
+        <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4 text-sm text-green-300">
+          <CheckCircle size={16} className="inline mr-2" />
+          This appendix is finalised and read-only. Finalised on {new Date(existingAppendix.finalised_at).toLocaleDateString()}
+        </div>
+      )}
+
+      <div className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Priced Scope Summary (Plain English)</label>
+          <textarea
+            value={formData.scope_summary}
+            onChange={(e) => setFormData({ ...formData, scope_summary: e.target.value })}
+            rows={4}
+            placeholder="Describe the priced scope in plain English..."
+            disabled={isFinalised}
+            className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white disabled:opacity-50"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Pricing Basis</label>
+          <select
+            value={formData.pricing_basis}
+            onChange={(e) => setFormData({ ...formData, pricing_basis: e.target.value })}
+            disabled={isFinalised}
+            className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white disabled:opacity-50"
+          >
+            <option value="lump_sum">Lump Sum</option>
+            <option value="re_measurable">Re-measurable</option>
+            <option value="schedule_based">Schedule-based</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Explicit Inclusions</label>
+          <p className="text-xs text-slate-400 mb-2">What is explicitly included in the subcontractor's scope</p>
+          {!isFinalised && (
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newInclusion}
+                onChange={(e) => setNewInclusion(e.target.value)}
+                placeholder="Add inclusion..."
+                onKeyDown={(e) => e.key === 'Enter' && addItem('inclusion', newInclusion)}
+                className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+              />
               <button
-                onClick={handleGenerateJuniorPack}
-                disabled={generatingJunior}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-all disabled:opacity-50"
+                onClick={() => addItem('inclusion', newInclusion)}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-all text-sm"
               >
-                <Download size={16} />
-                {generatingJunior ? 'Generating...' : 'Generate Junior Pack'}
+                Add
               </button>
             </div>
+          )}
+          <div className="space-y-2">
+            {formData.inclusions.map((item, index) => (
+              <div key={index} className="flex items-center justify-between bg-green-900/20 border border-green-700/50 rounded p-3">
+                <span className="text-sm text-white">{item}</span>
+                {!isFinalised && (
+                  <button
+                    onClick={() => removeItem('inclusion', index)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="p-3 bg-orange-900/30 rounded-lg">
-              <Briefcase className="text-orange-400" size={24} />
-            </div>
-            <div className="flex-1">
-              <h5 className="text-lg font-semibold text-white mb-2">Senior Management Report</h5>
-              <p className="text-sm text-slate-400 mb-4">
-                Executive summary for senior project managers and stakeholders. Includes commercial overview and key risks.
-              </p>
-              <ul className="text-sm text-slate-300 space-y-1 mb-4">
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-green-400" />
-                  Commercial summary
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-green-400" />
-                  Risk assessment
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-green-400" />
-                  Program milestones
-                </li>
-              </ul>
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Explicit Exclusions</label>
+          <p className="text-xs text-slate-400 mb-2">What is explicitly excluded from the subcontractor's scope</p>
+          {!isFinalised && (
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newExclusion}
+                onChange={(e) => setNewExclusion(e.target.value)}
+                placeholder="Add exclusion..."
+                onKeyDown={(e) => e.key === 'Enter' && addItem('exclusion', newExclusion)}
+                className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+              />
               <button
-                onClick={handleGenerateSeniorPack}
-                disabled={generatingSenior}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-all disabled:opacity-50"
+                onClick={() => addItem('exclusion', newExclusion)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-all text-sm"
               >
-                <Download size={16} />
-                {generatingSenior ? 'Generating...' : 'Generate Senior Report'}
+                Add
               </button>
             </div>
+          )}
+          <div className="space-y-2">
+            {formData.exclusions.map((item, index) => (
+              <div key={index} className="flex items-center justify-between bg-red-900/20 border border-red-700/50 rounded p-3">
+                <span className="text-sm text-white">{item}</span>
+                {!isFinalised && (
+                  <button
+                    onClick={() => removeItem('exclusion', index)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Commercial Assumptions</label>
+          <p className="text-xs text-slate-400 mb-2">Assumptions impacting cost, access, staging, or hours</p>
+          {!isFinalised && (
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newAssumption}
+                onChange={(e) => setNewAssumption(e.target.value)}
+                placeholder="Add assumption..."
+                onKeyDown={(e) => e.key === 'Enter' && addItem('assumption', newAssumption)}
+                className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+              />
+              <button
+                onClick={() => addItem('assumption', newAssumption)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-all text-sm"
+              >
+                Add
+              </button>
+            </div>
+          )}
+          <div className="space-y-2">
+            {formData.commercial_assumptions.map((item, index) => (
+              <div key={index} className="flex items-center justify-between bg-slate-900/50 rounded p-3">
+                <span className="text-sm text-white">{item}</span>
+                {!isFinalised && (
+                  <button
+                    onClick={() => removeItem('assumption', index)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Subcontractor Clarifications</label>
+          <p className="text-xs text-slate-400 mb-2">Clarifications intended to remain part of the contract</p>
+          {!isFinalised && (
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newClarification}
+                onChange={(e) => setNewClarification(e.target.value)}
+                placeholder="Add clarification..."
+                onKeyDown={(e) => e.key === 'Enter' && addItem('clarification', newClarification)}
+                className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+              />
+              <button
+                onClick={() => addItem('clarification', newClarification)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-all text-sm"
+              >
+                Add
+              </button>
+            </div>
+          )}
+          <div className="space-y-2">
+            {formData.clarifications.map((item, index) => (
+              <div key={index} className="flex items-center justify-between bg-slate-900/50 rounded p-3">
+                <span className="text-sm text-white">{item}</span>
+                {!isFinalised && (
+                  <button
+                    onClick={() => removeItem('clarification', index)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Known Risks & Hold Points</label>
+          <p className="text-xs text-slate-400 mb-2">Known risks, exclusions, or hold points affecting scope or price</p>
+          {!isFinalised && (
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newRisk}
+                onChange={(e) => setNewRisk(e.target.value)}
+                placeholder="Add risk or hold point..."
+                onKeyDown={(e) => e.key === 'Enter' && addItem('risk', newRisk)}
+                className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+              />
+              <button
+                onClick={() => addItem('risk', newRisk)}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-all text-sm"
+              >
+                Add
+              </button>
+            </div>
+          )}
+          <div className="space-y-2">
+            {formData.known_risks.map((item, index) => (
+              <div key={index} className="flex items-center justify-between bg-slate-900/50 rounded p-3">
+                <span className="text-sm text-white">{item}</span>
+                {!isFinalised && (
+                  <button
+                    onClick={() => removeItem('risk', index)}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          {!isFinalised && (
+            <>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-all disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Draft'}
+              </button>
+              {existingAppendix && (
+                <button
+                  onClick={handleFinalise}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-all disabled:opacity-50"
+                >
+                  Finalise Appendix
+                </button>
+              )}
+            </>
+          )}
+          {isFinalised && (
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-all disabled:opacity-50"
+            >
+              <Download size={16} />
+              {generating ? 'Generating...' : 'Generate Appendix Document'}
+            </button>
+          )}
+        </div>
+
+        <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4 text-sm text-blue-300">
+          <FileCheck size={16} className="inline mr-2" />
+          This appendix will be attached to signed pre-letting minutes and read in conjunction with the main pre-letting minutes and subcontract agreement.
         </div>
       </div>
     </div>
