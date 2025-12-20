@@ -431,10 +431,6 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
           <span class="detail-value">${data.projectName}</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Client</span>
-          <span class="detail-value">${data.projectClient}</span>
-        </div>
-        <div class="detail-row">
           <span class="detail-label">Subcontractor</span>
           <span class="detail-value">${data.supplierName}</span>
         </div>

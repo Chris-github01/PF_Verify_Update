@@ -80,36 +80,47 @@ function extractService(lowerText: string): string | undefined {
   // This determines which trade is responsible for the installation
 
   // 1. Electrical - Cable infrastructure and electrical penetrations
+  //    Mastic on cables = Electrical
   if (lowerText.includes('cable bundle') ||
       lowerText.includes('cable tray') ||
       lowerText.includes('bus duct') ||
-      lowerText.includes('electrical conduit')) {
+      lowerText.includes('electrical conduit') ||
+      (lowerText.includes('mastic') && (lowerText.includes('cable') || lowerText.includes('tray')))) {
     return 'Electrical';
   }
 
-  // 2. Fire - Pipe penetrations (steel, sprinkler, alarm cables)
+  // 2. Fire - Pipe penetrations (steel, sprinkler, metal pipes)
+  //    Mastic on steel/metal pipes = Fire
   if (lowerText.includes('steel pipe') ||
+      lowerText.includes('metal pipe') ||
       lowerText.includes('sprinkler pipe') ||
-      lowerText.includes('alarm cable')) {
+      lowerText.includes('alarm cable') ||
+      (lowerText.includes('mastic') && (lowerText.includes('steel') || lowerText.includes('metal')))) {
     return 'Fire';
   }
 
-  // 3. Plumbing - Fire stopping products and plastic pipes
+  // 3. Plumbing - Fire stopping products on plastic pipes, collars
+  //    Mastic on PVC/plastic pipes = Plumbing
+  //    Rokwrap and Fire collars are always Plumbing
   if (lowerText.includes('fire collar') ||
       lowerText.includes('rokwrap') ||
-      lowerText.includes('mastic') ||
       lowerText.includes('pvc pipe') ||
       lowerText.includes('pex pipe') ||
-      lowerText.includes('hdpe pipe')) {
+      lowerText.includes('hdpe pipe') ||
+      lowerText.includes('copper pipe') ||
+      (lowerText.includes('mastic') && (lowerText.includes('pvc') || lowerText.includes('copper') ||
+       lowerText.includes('pex') || lowerText.includes('hdpe') || lowerText.includes('collar')))) {
     return 'Plumbing';
   }
 
   // 4. Mechanical - Ductwork and HVAC
+  //    Mastic on ducts = Mechanical
   if (lowerText.includes('mechanical duct') ||
-      lowerText.includes('duct') ||
+      (lowerText.includes('duct') && !lowerText.includes('bus')) ||
       lowerText.includes('hvac') ||
       lowerText.includes('ventilation') ||
-      lowerText.includes('air conditioning')) {
+      lowerText.includes('air conditioning') ||
+      (lowerText.includes('mastic') && lowerText.includes('duct') && !lowerText.includes('bus'))) {
     return 'Mechanical';
   }
 

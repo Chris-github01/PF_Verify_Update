@@ -111,7 +111,6 @@ export function generateJuniorPackHTML(
       <div class="subtitle" style="text-align: center;">Practical Guide for On-Site Installation & Quality Control</div>
       <div class="project-details-card">
         <div class="detail-row"><span class="detail-label">Project</span><span class="detail-value">${projectName}</span></div>
-        <div class="detail-row"><span class="detail-label">Client</span><span class="detail-value">${clientName}</span></div>
         <div class="detail-row"><span class="detail-label">Subcontractor</span><span class="detail-value">${supplierName}</span></div>
       </div>
       <div style="margin-top: 60px;">
@@ -248,7 +247,6 @@ export function generateSeniorReportHTML(
       <div class="subtitle" style="text-align: center;">Executive Summary & Commercial Dashboard</div>
       <div class="project-details-card">
         <div class="detail-row"><span class="detail-label">Project</span><span class="detail-value">${projectName}</span></div>
-        <div class="detail-row"><span class="detail-label">Client</span><span class="detail-value">${clientName}</span></div>
         <div class="detail-row"><span class="detail-label">Subcontractor</span><span class="detail-value">${supplierName}</span></div>
       </div>
       <div class="stats-grid" style="margin-top: 40px;">
