@@ -25,6 +25,7 @@ export default function OrganisationAdminCenter() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   useEffect(() => {
     if (currentOrganisation) {
@@ -39,6 +40,17 @@ export default function OrganisationAdminCenter() {
     const { data: session } = await supabase.auth.getSession();
     if (!session.session) return;
 
+    // Check if user is a platform admin
+    const { data: platformAdminData } = await supabase
+      .from('platform_admins')
+      .select('is_active')
+      .eq('user_id', session.session.user.id)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    setIsPlatformAdmin(!!platformAdminData);
+
+    // Check organisation role
     const { data } = await supabase
       .from('organisation_members')
       .select('role')
@@ -91,7 +103,7 @@ export default function OrganisationAdminCenter() {
     }
   };
 
-  const isAdmin = userRole === 'owner' || userRole === 'admin';
+  const isAdmin = isPlatformAdmin || userRole === 'owner' || userRole === 'admin';
 
   if (!currentOrganisation) {
     return (
@@ -107,7 +119,7 @@ export default function OrganisationAdminCenter() {
         <div className="text-center">
           <Shield className="mx-auto h-12 w-12 text-slate-400 mb-4" />
           <h2 className="text-2xl font-bold text-slate-300 mb-2">Admin Access Required</h2>
-          <p className="text-slate-500">Only organisation owners and admins can access this area.</p>
+          <p className="text-slate-500">Only platform admins, organisation owners, and organisation admins can access this area.</p>
         </div>
       </div>
     );
