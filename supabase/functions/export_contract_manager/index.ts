@@ -83,7 +83,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: project } = await supabase
       .from('projects')
-      .select('name, client, updated_at, approved_quote_id, organisation_id')
+      .select('name, client, updated_at, approved_quote_id, organisation_id, retention_percentage, main_contractor_name, payment_terms, liquidated_damages, project_manager_name, project_manager_email, project_manager_phone')
       .eq('id', projectId)
       .maybeSingle();
 
@@ -170,6 +170,13 @@ Deno.serve(async (req: Request) => {
     const supplierName = approvedQuote?.supplier_name || bestSupplier.supplierName || 'TBC';
     const totalAmount = approvedQuote?.total_amount || bestSupplier.adjustedTotal || 0;
 
+    const { data: supplierData } = await supabase
+      .from('suppliers')
+      .select('contact_name, contact_email, contact_phone, address')
+      .eq('organisation_id', (project as any).organisation_id)
+      .ilike('name', supplierName)
+      .maybeSingle();
+
     const scopeSystemsMap = new Map<string, any>();
     quoteItems.forEach((item: any) => {
       const category = item.scope_category || 'Other Systems';
@@ -252,7 +259,26 @@ Deno.serve(async (req: Request) => {
         scopeSystems,
         inclusions,
         exclusions,
-        organisationLogoUrl
+        organisationLogoUrl,
+        {
+          client: (project as any).client,
+          mainContractor: (project as any).main_contractor_name,
+          retentionPercentage: (project as any).retention_percentage || 3,
+          paymentTerms: (project as any).payment_terms,
+          liquidatedDamages: (project as any).liquidated_damages,
+          projectManager: {
+            name: (project as any).project_manager_name,
+            email: (project as any).project_manager_email,
+            phone: (project as any).project_manager_phone
+          },
+          supplier: {
+            contactName: supplierData?.contact_name,
+            contactEmail: supplierData?.contact_email,
+            contactPhone: supplierData?.contact_phone,
+            address: supplierData?.address
+          },
+          awardReport: awardResult
+        }
       );
       return new Response(
         JSON.stringify({ html: htmlContent }),

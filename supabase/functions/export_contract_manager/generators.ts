@@ -183,10 +183,20 @@ export function generateSeniorReportHTML(
   scopeSystems: any[],
   inclusions: string[],
   exclusions: string[],
-  organisationLogoUrl?: string
+  organisationLogoUrl?: string,
+  additionalData?: any
 ): string {
-  const retentionAmount = totalAmount * 0.03;
+  const retentionPercentage = additionalData?.retentionPercentage || 3;
+  const retentionAmount = totalAmount * (retentionPercentage / 100);
   const netAmount = totalAmount - retentionAmount;
+
+  const formatCurrency = (value: number) => {
+    return `$${value.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const awardSummary = additionalData?.awardReport?.awardSummary || {};
+  const suppliers = awardSummary.suppliers || [];
+  const benchmarkData = suppliers.length > 1 ? suppliers : [];
 
   const inclusionsHTML = inclusions.length > 0
     ? `<div style="margin-top: 24px;"><h3>Scope Inclusions</h3><ul style="list-style: disc; margin-left: 20px;">${inclusions.map(i => `<li style="margin: 8px 0;">${i}</li>`).join('')}</ul></div>`
@@ -273,7 +283,7 @@ export function generateSeniorReportHTML(
     .project-details-card .detail-value { font-weight: 600; color: #111827; font-size: 15px; }
     .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 32px 0; }
     .stat-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; }
-    .stat-card-value { font-size: 32px; font-weight: 800; color: ${VERIFYTRADE_ORANGE}; margin-bottom: 8px; }
+    .stat-card-value { font-size: 20px; font-weight: 800; color: ${VERIFYTRADE_ORANGE}; margin-bottom: 8px; line-height: 1.2; word-break: break-word; }
     .stat-card-label { font-size: 13px; color: #6b7280; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
     .content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
     .card { background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 28px; }
@@ -293,9 +303,9 @@ export function generateSeniorReportHTML(
         <div class="detail-row"><span class="detail-label">Subcontractor</span><span class="detail-value">${supplierName}</span></div>
       </div>
       <div class="stats-grid" style="margin-top: 40px;">
-        <div class="stat-card"><div class="stat-card-value">$${(totalAmount / 1000).toFixed(0)}k</div><div class="stat-card-label">Contract Value</div></div>
-        <div class="stat-card"><div class="stat-card-value">$${(retentionAmount / 1000).toFixed(0)}k</div><div class="stat-card-label">Retention</div></div>
-        <div class="stat-card"><div class="stat-card-value">$${(netAmount / 1000).toFixed(0)}k</div><div class="stat-card-label">Net Payable</div></div>
+        <div class="stat-card"><div class="stat-card-value">${formatCurrency(totalAmount)}</div><div class="stat-card-label">Contract Value</div></div>
+        <div class="stat-card"><div class="stat-card-value">${formatCurrency(retentionAmount)}</div><div class="stat-card-label">Retention (${retentionPercentage}%)</div></div>
+        <div class="stat-card"><div class="stat-card-value">${formatCurrency(netAmount)}</div><div class="stat-card-label">Net Payable</div></div>
         <div class="stat-card"><div class="stat-card-value">${scopeSystems.length}</div><div class="stat-card-label">Service Types</div></div>
       </div>
       <div style="margin-top: 60px;">
@@ -321,9 +331,9 @@ export function generateSeniorReportHTML(
         ${inclusionsHTML}
         ${exclusionsHTML}
         <div class="cost-breakdown">
-          <div class="cost-row"><span style="color: #6b7280;">Total Contract Value</span><span style="color: #111827; font-weight: 700;">$${totalAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span></div>
-          <div class="cost-row"><span style="color: #6b7280;">Less: Retention (3%)</span><span style="color: #f59e0b; font-weight: 700;">-$${retentionAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span></div>
-          <div class="cost-row"><span style="color: #6b7280;">Net Amount Payable</span><span style="color: #16a34a; font-weight: 700;">$${netAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span></div>
+          <div class="cost-row"><span style="color: #6b7280;">Total Contract Value</span><span style="color: #111827; font-weight: 700;">${formatCurrency(totalAmount)}</span></div>
+          <div class="cost-row"><span style="color: #6b7280;">Less: Retention (${retentionPercentage}%)</span><span style="color: #f59e0b; font-weight: 700;">-${formatCurrency(retentionAmount)}</span></div>
+          <div class="cost-row"><span style="color: #6b7280;">Net Amount Payable</span><span style="color: #16a34a; font-weight: 700;">${formatCurrency(netAmount)}</span></div>
         </div>
       </div>
     </div>
@@ -335,6 +345,197 @@ export function generateSeniorReportHTML(
     <h2 style="margin-bottom: 24px;">Detailed Scope Breakdown</h2>
     ${scopeDetailsHTML}
     <footer><div>© ${year} VerifyTrade. All rights reserved.</div><div>Page 3</div></footer>
+  </div>
+
+  <div class="page page-break">
+    <header>${generateLogoSection(organisationLogoUrl)}<div class="generated-by">Generated by <strong>VerifyTrade</strong></div></header>
+    <h2>Executive Contract Summary</h2>
+    <div style="display: grid; gap: 24px;">
+      <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px;">
+        <h3 style="color: ${VERIFYTRADE_ORANGE}; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">Project Information</h3>
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; font-size: 14px;">
+          ${additionalData?.client ? `<div style="color: #6b7280; font-weight: 600;">Client:</div><div style="color: #111827;">${additionalData.client}</div>` : ''}
+          ${additionalData?.mainContractor ? `<div style="color: #6b7280; font-weight: 600;">Main Contractor:</div><div style="color: #111827;">${additionalData.mainContractor}</div>` : ''}
+          ${additionalData?.projectManager?.name ? `<div style="color: #6b7280; font-weight: 600;">Project Manager:</div><div style="color: #111827;">${additionalData.projectManager.name}</div>` : ''}
+          ${additionalData?.projectManager?.email ? `<div style="color: #6b7280; font-weight: 600;">PM Email:</div><div style="color: #111827;">${additionalData.projectManager.email}</div>` : ''}
+          ${additionalData?.projectManager?.phone ? `<div style="color: #6b7280; font-weight: 600;">PM Phone:</div><div style="color: #111827;">${additionalData.projectManager.phone}</div>` : ''}
+        </div>
+      </div>
+
+      <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px;">
+        <h3 style="color: ${VERIFYTRADE_ORANGE}; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">Subcontractor Contact Details</h3>
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; font-size: 14px;">
+          <div style="color: #6b7280; font-weight: 600;">Company:</div><div style="color: #111827;">${supplierName}</div>
+          ${additionalData?.supplier?.contactName ? `<div style="color: #6b7280; font-weight: 600;">Contact Person:</div><div style="color: #111827;">${additionalData.supplier.contactName}</div>` : ''}
+          ${additionalData?.supplier?.contactEmail ? `<div style="color: #6b7280; font-weight: 600;">Email:</div><div style="color: #111827;">${additionalData.supplier.contactEmail}</div>` : ''}
+          ${additionalData?.supplier?.contactPhone ? `<div style="color: #6b7280; font-weight: 600;">Phone:</div><div style="color: #111827;">${additionalData.supplier.contactPhone}</div>` : ''}
+          ${additionalData?.supplier?.address ? `<div style="color: #6b7280; font-weight: 600;">Address:</div><div style="color: #111827;">${additionalData.supplier.address}</div>` : ''}
+        </div>
+      </div>
+
+      <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px;">
+        <h3 style="color: ${VERIFYTRADE_ORANGE}; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">Commercial Terms</h3>
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; font-size: 14px;">
+          <div style="color: #6b7280; font-weight: 600;">Contract Value:</div><div style="color: #111827; font-weight: 700;">${formatCurrency(totalAmount)}</div>
+          <div style="color: #6b7280; font-weight: 600;">Retention:</div><div style="color: #111827;">${retentionPercentage}% (${formatCurrency(retentionAmount)})</div>
+          ${additionalData?.paymentTerms ? `<div style="color: #6b7280; font-weight: 600;">Payment Terms:</div><div style="color: #111827;">${additionalData.paymentTerms}</div>` : ''}
+          ${additionalData?.liquidatedDamages ? `<div style="color: #6b7280; font-weight: 600;">Liquidated Damages:</div><div style="color: #111827;">${additionalData.liquidatedDamages}</div>` : ''}
+        </div>
+      </div>
+    </div>
+    <footer><div>© ${year} VerifyTrade. All rights reserved.</div><div>Page 4</div></footer>
+  </div>
+
+  ${benchmarkData.length > 1 ? `<div class="page page-break">
+    <header>${generateLogoSection(organisationLogoUrl)}<div class="generated-by">Generated by <strong>VerifyTrade</strong></div></header>
+    <h2>Commercial Analysis & Benchmarking</h2>
+    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+      <h3 style="color: #374151; margin-bottom: 16px;">Supplier Comparison</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="background: #e5e7eb;">
+            <th style="padding: 12px; text-align: left; border: 1px solid #d1d5db;">Supplier</th>
+            <th style="padding: 12px; text-align: right; border: 1px solid #d1d5db;">Total Price</th>
+            <th style="padding: 12px; text-align: right; border: 1px solid #d1d5db;">Coverage</th>
+            <th style="padding: 12px; text-align: right; border: 1px solid #d1d5db;">Weighted Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${benchmarkData.map((s: any, idx: number) => `
+            <tr style="background: ${idx === 0 ? '#d1fae5' : 'white'};">
+              <td style="padding: 12px; border: 1px solid #d1d5db; ${idx === 0 ? 'font-weight: 700;' : ''}">${s.supplierName || 'Unknown'}</td>
+              <td style="padding: 12px; text-align: right; border: 1px solid #d1d5db;">${formatCurrency(s.adjustedTotal || 0)}</td>
+              <td style="padding: 12px; text-align: right; border: 1px solid #d1d5db;">${(s.coverage || 0).toFixed(1)}%</td>
+              <td style="padding: 12px; text-align: right; border: 1px solid #d1d5db; ${idx === 0 ? 'font-weight: 700; color: #16a34a;' : ''}">${(s.weightedScore || 0).toFixed(2)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px;">
+      <h3 style="color: ${VERIFYTRADE_ORANGE}; margin-bottom: 16px;">Key Insights</h3>
+      <ul style="list-style: none; padding: 0; margin: 0;">
+        <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; display: flex; align-items: start;">
+          <span style="color: #16a34a; font-weight: 700; margin-right: 12px;">✓</span>
+          <span style="color: #374151;">Recommended supplier offers ${benchmarkData[0]?.coverage?.toFixed(1) || '0'}% scope coverage</span>
+        </li>
+        ${benchmarkData.length > 1 ? `<li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb; display: flex; align-items: start;">
+          <span style="color: #16a34a; font-weight: 700; margin-right: 12px;">✓</span>
+          <span style="color: #374151;">Price variance: ${formatCurrency(Math.abs((benchmarkData[0]?.adjustedTotal || 0) - (benchmarkData[benchmarkData.length - 1]?.adjustedTotal || 0)))} between highest and lowest</span>
+        </li>` : ''}
+        <li style="padding: 10px 0; display: flex; align-items: start;">
+          <span style="color: #16a34a; font-weight: 700; margin-right: 12px;">✓</span>
+          <span style="color: #374151;">Evaluation based on price, coverage, and quality factors</span>
+        </li>
+      </ul>
+    </div>
+    <footer><div>© ${year} VerifyTrade. All rights reserved.</div><div>Page 5</div></footer>
+  </div>` : ''}
+
+  <div class="page page-break">
+    <header>${generateLogoSection(organisationLogoUrl)}<div class="generated-by">Generated by <strong>VerifyTrade</strong></div></header>
+    <h2>Risk Assessment & Recommendations</h2>
+    <div style="display: grid; gap: 20px;">
+      <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 20px;">
+        <h3 style="color: #92400e; margin-bottom: 12px; font-size: 16px; font-weight: 700;">⚠ Key Commercial Risks</h3>
+        <ul style="list-style: none; padding: 0; margin: 0;">
+          ${exclusions.length > 0 ? `<li style="padding: 8px 0; color: #78350f; line-height: 1.6;"><strong>Scope Exclusions:</strong> ${exclusions.length} items excluded from quote - may result in variations</li>` : ''}
+          <li style="padding: 8px 0; color: #78350f; line-height: 1.6;"><strong>Retention:</strong> ${retentionPercentage}% retention (${formatCurrency(retentionAmount)}) held until practical completion</li>
+          ${scopeSystems.length < 3 ? `<li style="padding: 8px 0; color: #78350f; line-height: 1.6;"><strong>Limited Coverage:</strong> Quote covers ${scopeSystems.length} service types - verify completeness against drawings</li>` : ''}
+          ${!additionalData?.paymentTerms ? `<li style="padding: 8px 0; color: #78350f; line-height: 1.6;"><strong>Payment Terms:</strong> Confirm payment terms and milestone schedule with supplier</li>` : ''}
+        </ul>
+      </div>
+
+      <div style="background: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 0 8px 8px 0; padding: 20px;">
+        <h3 style="color: #1e3a8a; margin-bottom: 12px; font-size: 16px; font-weight: 700;">✓ Recommended Actions</h3>
+        <ol style="padding-left: 20px; margin: 0; color: #1e40af;">
+          <li style="padding: 8px 0; line-height: 1.6;">Review detailed scope breakdown with design team to confirm completeness</li>
+          <li style="padding: 8px 0; line-height: 1.6;">Verify subcontractor licenses, insurances, and track record for similar projects</li>
+          <li style="padding: 8px 0; line-height: 1.6;">Establish clear communication protocol and site coordination requirements</li>
+          <li style="padding: 8px 0; line-height: 1.6;">Schedule pre-start meeting to align on quality standards and documentation</li>
+          ${exclusions.length > 0 ? `<li style="padding: 8px 0; line-height: 1.6;">Clarify responsibility for ${exclusions.length} excluded items before contract award</li>` : ''}
+        </ol>
+      </div>
+
+      <div style="background: #d1fae5; border-left: 4px solid #10b981; border-radius: 0 8px 8px 0; padding: 20px;">
+        <h3 style="color: #065f46; margin-bottom: 12px; font-size: 16px; font-weight: 700;">💡 Practical Site Considerations</h3>
+        <ul style="list-style: none; padding: 0; margin: 0;">
+          <li style="padding: 8px 0; color: #047857; line-height: 1.6;"><strong>Access & Coordination:</strong> Confirm site access requirements and coordinate with other trades</li>
+          <li style="padding: 8px 0; color: #047857; line-height: 1.6;"><strong>Quality Control:</strong> Establish inspection checkpoints and documentation requirements (photos, compliance certs)</li>
+          <li style="padding: 8px 0; color: #047857; line-height: 1.6;"><strong>Material Lead Times:</strong> Confirm supply chain and lead times for specialized materials</li>
+          <li style="padding: 8px 0; color: #047857; line-height: 1.6;"><strong>Safety & Compliance:</strong> Ensure SWMS provided and site induction completed before start</li>
+        </ul>
+      </div>
+    </div>
+    <footer><div>© ${year} VerifyTrade. All rights reserved.</div><div>Page ${benchmarkData.length > 1 ? '6' : '5'}</div></footer>
+  </div>
+
+  <div class="page page-break">
+    <header>${generateLogoSection(organisationLogoUrl)}<div class="generated-by">Generated by <strong>VerifyTrade</strong></div></header>
+    <h2>Financial Breakdown & Cash Flow Forecast</h2>
+    <div style="display: grid; gap: 24px;">
+      <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px;">
+        <h3 style="color: ${VERIFYTRADE_ORANGE}; margin-bottom: 16px;">Contract Financial Summary</h3>
+        <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding: 12px 0; color: #6b7280;">Contract Sum</td>
+            <td style="padding: 12px 0; text-align: right; font-weight: 700; color: #111827;">${formatCurrency(totalAmount)}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding: 12px 0; color: #6b7280;">Less: Retention (${retentionPercentage}%)</td>
+            <td style="padding: 12px 0; text-align: right; color: #f59e0b; font-weight: 600;">-${formatCurrency(retentionAmount)}</td>
+          </tr>
+          <tr style="border-bottom: 2px solid ${VERIFYTRADE_ORANGE};">
+            <td style="padding: 12px 0; color: #6b7280; font-weight: 700;">Net Payable</td>
+            <td style="padding: 12px 0; text-align: right; font-weight: 700; color: #16a34a; font-size: 16px;">${formatCurrency(netAmount)}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding: 12px 0; color: #6b7280;">Retention Release (PC)</td>
+            <td style="padding: 12px 0; text-align: right; color: #3b82f6; font-weight: 600;">${formatCurrency(retentionAmount * 0.5)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 0; color: #6b7280;">Retention Release (Final)</td>
+            <td style="padding: 12px 0; text-align: right; color: #3b82f6; font-weight: 600;">${formatCurrency(retentionAmount * 0.5)}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px;">
+        <h3 style="color: #374151; margin-bottom: 16px;">Indicative Cash Flow Forecast</h3>
+        <p style="color: #6b7280; font-size: 13px; margin-bottom: 16px; line-height: 1.6;">Based on typical monthly progress claims. Actual payments subject to site progress and payment terms.</p>
+        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+          <thead>
+            <tr style="background: #e5e7eb; border-bottom: 2px solid #d1d5db;">
+              <th style="padding: 10px; text-align: left;">Period</th>
+              <th style="padding: 10px; text-align: right;">Progress %</th>
+              <th style="padding: 10px; text-align: right;">Claim Amount</th>
+              <th style="padding: 10px; text-align: right;">Cumulative</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${[15, 30, 25, 20, 10].map((percent, idx) => {
+              const periodAmount = (totalAmount * percent) / 100;
+              const cumulativePercent = [15, 45, 70, 90, 100][idx];
+              const cumulativeAmount = (totalAmount * cumulativePercent) / 100;
+              return `<tr style="border-bottom: 1px solid #e5e7eb;">
+                <td style="padding: 10px;">Month ${idx + 1}</td>
+                <td style="padding: 10px; text-align: right;">${percent}%</td>
+                <td style="padding: 10px; text-align: right;">${formatCurrency(periodAmount)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: 600;">${formatCurrency(cumulativeAmount)}</td>
+              </tr>`;
+            }).join('')}
+            <tr style="background: #f3f4f6; font-weight: 700;">
+              <td style="padding: 12px;">Total</td>
+              <td style="padding: 12px; text-align: right;">100%</td>
+              <td style="padding: 12px; text-align: right;">${formatCurrency(totalAmount)}</td>
+              <td style="padding: 12px; text-align: right; color: ${VERIFYTRADE_ORANGE};">${formatCurrency(totalAmount)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 12px; font-style: italic;">* Retention ${formatCurrency(retentionAmount)} to be released: 50% at Practical Completion, 50% at Final Completion</p>
+      </div>
+    </div>
+    <footer><div>© ${year} VerifyTrade. All rights reserved.</div><div>Page ${benchmarkData.length > 1 ? '7' : '6'}</div></footer>
   </div>
 </body>
 </html>`;
