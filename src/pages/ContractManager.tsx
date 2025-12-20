@@ -167,14 +167,15 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
         const { data: quoteItems } = await supabase
           .from('quote_items')
-          .select('scope_category, description, quantity, unit_price, total_price')
+          .select('scope_category, service, description, quantity, unit_price, total_price')
           .eq('quote_id', approvedQuoteId);
 
         if (quoteItems && quoteItems.length > 0) {
           const systemsMap = new Map<string, ScopeSystem>();
 
           quoteItems.forEach((item: any) => {
-            const category = item.scope_category || 'Other Systems';
+            // Use service field first, then scope_category, then default to "Other Systems"
+            const category = item.service?.trim() || item.scope_category || 'Other Systems';
             if (!systemsMap.has(category)) {
               systemsMap.set(category, {
                 service_type: category,
@@ -856,6 +857,7 @@ interface QuoteItemWithCategory {
   id: string;
   description: string;
   scope_category: string | null;
+  service?: string | null;
   quantity: number;
   unit_price: number;
   total_price: number;
@@ -943,13 +945,19 @@ function ScopeSystemsTab({ projectId, scopeSystems }: { projectId: string; scope
 
       if (!project?.approved_quote_id) return;
 
-      const { data: items } = await supabase
+      // Fetch all items and filter by service or scope_category
+      const { data: allItems } = await supabase
         .from('quote_items')
-        .select('id, description, scope_category, quantity, unit_price, total_price')
-        .eq('quote_id', project.approved_quote_id)
-        .eq('scope_category', category);
+        .select('id, description, scope_category, service, quantity, unit_price, total_price')
+        .eq('quote_id', project.approved_quote_id);
 
-      setCategoryItems(items || []);
+      // Filter items that match the category (checking both service and scope_category)
+      const matchingItems = allItems?.filter(item => {
+        const itemCategory = item.service?.trim() || item.scope_category || 'Other Systems';
+        return itemCategory === category;
+      }) || [];
+
+      setCategoryItems(matchingItems);
     } catch (error) {
       console.error('Error loading items:', error);
     } finally {
