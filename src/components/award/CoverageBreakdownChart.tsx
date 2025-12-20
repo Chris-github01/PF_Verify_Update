@@ -65,7 +65,7 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
       <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {/* Pie Chart */}
-          <div className="relative max-w-xs mx-auto lg:mx-0">
+          <div className="relative max-w-[200px] mx-auto lg:mx-0">
             <svg
               viewBox="0 0 100 100"
               className="w-full drop-shadow-lg"
@@ -92,17 +92,17 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
                 textAnchor="middle"
                 className="text-2xl font-bold"
                 fill="white"
-                fontSize="8"
+                fontSize="7"
               >
                 {supplier.coveragePercent.toFixed(0)}%
               </text>
               <text
                 x="50"
-                y="56"
+                y="55"
                 textAnchor="middle"
                 className="text-xs"
                 fill="#94a3b8"
-                fontSize="4"
+                fontSize="3.5"
               >
                 Coverage
               </text>

@@ -99,8 +99,9 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <div className="text-slate-400 text-sm mb-1">Price per System</div>
+                <div className="text-slate-400 text-sm mb-1">Price per Unit</div>
                 <div className="text-white text-xl font-semibold">{formatCurrency(supplier.normalizedPricePerSystem)}</div>
+                <div className="text-slate-500 text-xs mt-1">Based on {supplier.systemsCovered.toLocaleString()} total units</div>
               </div>
               <div>
                 <div className="text-slate-400 text-sm mb-1">Variance from Average</div>

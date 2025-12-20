@@ -49,7 +49,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                 Total Price
               </th>
               <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
-                Price/System
+                Price/Unit
               </th>
               <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
                 Variance %
@@ -122,7 +122,9 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     <div className="font-semibold text-slate-300">
                       {formatCurrency(supplier.normalizedPricePerSystem)}
                     </div>
-                    <div className="text-xs text-slate-500">per system</div>
+                    <div className="text-xs text-slate-500">
+                      avg per unit ({supplier.systemsCovered.toLocaleString()} units)
+                    </div>
                   </td>
 
                   <td className="px-6 py-4 text-right">

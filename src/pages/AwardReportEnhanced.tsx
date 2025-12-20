@@ -232,8 +232,21 @@ export default function AwardReportEnhanced({
           suppliers: row.suppliers, // Include all supplier data for market rate calculation
         }));
 
-      // CRITICAL FIX: Use totalQuantity (sum of all quantities) instead of itemsQuoted (line items count)
-      const actualTotalQuantity = (supplier as any).totalQuantity || supplier.itemsQuoted;
+      // CRITICAL FIX: Calculate total quantity from comparison data if not provided
+      // This is the sum of all quantities across all quoted items, NOT the line item count
+      let actualTotalQuantity = (supplier as any).totalQuantity;
+
+      if (!actualTotalQuantity || actualTotalQuantity === 0) {
+        // Fallback: Calculate from comparison data
+        actualTotalQuantity = comparisonData
+          .filter(row => row.suppliers[supplier.supplierName]?.unitPrice !== null)
+          .reduce((sum, row) => sum + (row.quantity || 0), 0);
+      }
+
+      // If still 0, use items count as last resort
+      if (actualTotalQuantity === 0) {
+        actualTotalQuantity = supplier.itemsQuoted || 1;
+      }
 
       return {
         supplierName: supplier.supplierName,
@@ -260,9 +273,9 @@ export default function AwardReportEnhanced({
         systemsBreakdown: generateSystemsBreakdown(supplierItems, supplier.totalItems),
         scopeGaps: estimateScopeGapCosts(
           missingItems,
-          actualTotalQuantity > 0 ? supplier.adjustedTotal / actualTotalQuantity : 0, // FIXED: Use total quantity for average rate
-          actualTotalQuantity,
-          supplier.totalItems
+          actualTotalQuantity > 0 ? supplier.adjustedTotal / actualTotalQuantity : 0, // Average rate per unit
+          supplier.itemsQuoted || actualTotalQuantity, // Line items covered
+          supplier.totalItems // Total line items
         ),
 
         rank: 0,
