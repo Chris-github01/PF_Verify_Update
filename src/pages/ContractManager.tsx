@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { useOrganisation } from '../lib/organisationContext';
@@ -79,7 +79,7 @@ interface ComplianceDocument {
   verified_at: string | null;
 }
 
-type TabId = 'summary' | 'scope' | 'inclusions' | 'allowances' | 'variations' | 'onboarding';
+type TabId = 'summary' | 'scope' | 'inclusions' | 'allowances' | 'variations' | 'onboarding' | 'handover';
 
 export default function ContractManager({ projectId, onNavigateBack, dashboardMode = 'original' }: ContractManagerProps) {
   const [activeTab, setActiveTab] = useState<TabId>('summary');
@@ -289,8 +289,27 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   ];
 
   const tabs = isApproved
-    ? [...baseTabs, { id: 'onboarding' as TabId, label: 'Subcontractor Onboarding', icon: UserCheck }]
+    ? [...baseTabs,
+       { id: 'onboarding' as TabId, label: 'Subcontractor Onboarding', icon: UserCheck },
+       { id: 'handover' as TabId, label: 'Site Handover', icon: PackageOpen }
+      ]
     : baseTabs;
+
+  const tabOrder: TabId[] = tabs.map(t => t.id);
+
+  const handleNextTab = () => {
+    const currentIndex = tabOrder.indexOf(activeTab);
+    if (currentIndex < tabOrder.length - 1) {
+      setActiveTab(tabOrder[currentIndex + 1]);
+    }
+  };
+
+  const handlePrevTab = () => {
+    const currentIndex = tabOrder.indexOf(activeTab);
+    if (currentIndex > 0) {
+      setActiveTab(tabOrder[currentIndex - 1]);
+    }
+  };
 
   if (loading) {
     return (
@@ -319,27 +338,6 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
                 Back to Dashboard
               </button>
             </div>
-
-            {hasAward && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleGenerateJuniorPack}
-                  disabled={generatingJunior}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium shadow-lg"
-                >
-                  <Users size={16} />
-                  {generatingJunior ? 'Generating...' : 'Junior Pack'}
-                </button>
-                <button
-                  onClick={handleGenerateSeniorReport}
-                  disabled={generatingSenior}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-md hover:from-orange-700 hover:to-orange-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium shadow-lg"
-                >
-                  <Briefcase size={16} />
-                  {generatingSenior ? 'Generating...' : 'Senior Pack'}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -426,6 +424,38 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
                   organisationLogoUrl={currentOrganisation?.logo_url || null}
                 />
               )}
+              {activeTab === 'handover' && isApproved && (
+                <SiteHandoverTab
+                  projectId={projectId}
+                  awardInfo={awardInfo}
+                  projectInfo={projectInfo}
+                  scopeSystems={scopeSystems}
+                  generatingJunior={generatingJunior}
+                  generatingSenior={generatingSenior}
+                  onGenerateJunior={handleGenerateJuniorPack}
+                  onGenerateSenior={handleGenerateSeniorReport}
+                />
+              )}
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex justify-between items-center mt-6">
+              <button
+                onClick={handlePrevTab}
+                disabled={tabOrder.indexOf(activeTab) === 0}
+                className="flex items-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-slate-700"
+              >
+                <ChevronLeft size={18} />
+                Previous
+              </button>
+              <button
+                onClick={handleNextTab}
+                disabled={tabOrder.indexOf(activeTab) === tabOrder.length - 1}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:from-orange-600"
+              >
+                Next
+                <ChevronRight size={18} />
+              </button>
             </div>
           </>
         )}
@@ -2733,4 +2763,193 @@ function generateLOIHtml(loi: LetterOfIntent, awardInfo: AwardInfo | null, logoU
     </body>
     </html>
   `;
+}
+
+interface SiteHandoverTabProps {
+  projectId: string;
+  awardInfo: AwardInfo | null;
+  projectInfo: ProjectInfo | null;
+  scopeSystems: ScopeSystem[];
+  generatingJunior: boolean;
+  generatingSenior: boolean;
+  onGenerateJunior: () => void;
+  onGenerateSenior: () => void;
+}
+
+function SiteHandoverTab({
+  awardInfo,
+  projectInfo,
+  scopeSystems,
+  generatingJunior,
+  generatingSenior,
+  onGenerateJunior,
+  onGenerateSenior
+}: SiteHandoverTabProps) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+          <div className="w-1 h-8 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full"></div>
+          Site Handover
+        </h3>
+        <p className="text-slate-400 text-sm">Generate comprehensive handover documentation for site teams and senior management</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Site Team Pack */}
+        <div className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 rounded-xl border border-blue-700/50 p-6 hover:border-blue-600/70 transition-all">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="p-3 bg-blue-600/20 rounded-lg border border-blue-600/30">
+              <Users size={28} className="text-blue-400" />
+            </div>
+            <div>
+              <h4 className="text-xl font-bold text-white mb-1">Site Team Pack</h4>
+              <p className="text-slate-400 text-sm">On-site operational documentation for construction teams</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 mb-6">
+            <div className="flex items-start gap-2 text-sm text-slate-300">
+              <CheckCircle size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+              <span>Scope of works breakdown by system</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-300">
+              <CheckCircle size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+              <span>Line item details with quantities and specifications</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-300">
+              <CheckCircle size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+              <span>Practical site-focused information</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-300">
+              <CheckCircle size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
+              <span>Subcontractor contact details</span>
+            </div>
+          </div>
+
+          {awardInfo && (
+            <div className="bg-slate-900/50 rounded-lg p-4 mb-6 border border-slate-700/50">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-slate-400 text-xs mb-1">Subcontractor</div>
+                  <div className="text-white font-medium">{awardInfo.supplier_name}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-xs mb-1">Project</div>
+                  <div className="text-white font-medium">{projectInfo?.name || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-xs mb-1">Systems</div>
+                  <div className="text-white font-medium">{scopeSystems.length} types</div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-xs mb-1">Contract Value</div>
+                  <div className="text-white font-medium">${awardInfo.total_amount.toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={onGenerateJunior}
+            disabled={generatingJunior || !awardInfo}
+            className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+          >
+            <Download size={20} />
+            {generatingJunior ? 'Generating...' : 'Generate Site Team Pack'}
+          </button>
+        </div>
+
+        {/* Senior Management Pack */}
+        <div className="bg-gradient-to-br from-orange-900/20 to-orange-800/10 rounded-xl border border-orange-700/50 p-6 hover:border-orange-600/70 transition-all">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="p-3 bg-orange-600/20 rounded-lg border border-orange-600/30">
+              <Briefcase size={28} className="text-orange-400" />
+            </div>
+            <div>
+              <h4 className="text-xl font-bold text-white mb-1">Senior Management Pack</h4>
+              <p className="text-slate-400 text-sm">Executive summary and commercial analysis</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 mb-6">
+            <div className="flex items-start gap-2 text-sm text-slate-300">
+              <CheckCircle size={16} className="text-orange-400 mt-0.5 flex-shrink-0" />
+              <span>Executive contract summary</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-300">
+              <CheckCircle size={16} className="text-orange-400 mt-0.5 flex-shrink-0" />
+              <span>Commercial analysis and benchmarking</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-300">
+              <CheckCircle size={16} className="text-orange-400 mt-0.5 flex-shrink-0" />
+              <span>Risk assessment and recommendations</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-300">
+              <CheckCircle size={16} className="text-orange-400 mt-0.5 flex-shrink-0" />
+              <span>Financial breakdown and forecasting</span>
+            </div>
+          </div>
+
+          {awardInfo && (
+            <div className="bg-slate-900/50 rounded-lg p-4 mb-6 border border-slate-700/50">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-slate-400 text-xs mb-1">Supplier</div>
+                  <div className="text-white font-medium">{awardInfo.supplier_name}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-xs mb-1">Client</div>
+                  <div className="text-white font-medium">{projectInfo?.client || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-xs mb-1">Award Date</div>
+                  <div className="text-white font-medium">
+                    {awardInfo.awarded_date ? new Date(awardInfo.awarded_date).toLocaleDateString() : 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-xs mb-1">Total Value</div>
+                  <div className="text-white font-medium">${awardInfo.total_amount.toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={onGenerateSenior}
+            disabled={generatingSenior || !awardInfo}
+            className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+          >
+            <Download size={20} />
+            {generatingSenior ? 'Generating...' : 'Generate Senior Management Pack'}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-blue-900/10 border border-blue-700/30 rounded-xl p-6">
+        <div className="flex items-start gap-3">
+          <div className="p-2 bg-blue-600/20 rounded-lg">
+            <FileText className="text-blue-400" size={20} />
+          </div>
+          <div className="flex-1">
+            <h5 className="text-white font-semibold mb-2">About Handover Packs</h5>
+            <p className="text-slate-400 text-sm leading-relaxed mb-3">
+              These comprehensive documents ensure smooth contract handover to site teams and management. Each pack is tailored to its audience:
+            </p>
+            <ul className="space-y-2 text-sm text-slate-400">
+              <li className="flex items-start gap-2">
+                <span className="text-blue-400">•</span>
+                <span><strong className="text-slate-300">Site Team Pack:</strong> Focused on practical execution with detailed scope, specifications, and contact information for on-site coordination.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-orange-400">•</span>
+                <span><strong className="text-slate-300">Senior Management Pack:</strong> High-level strategic overview with commercial analysis, risk assessment, and executive recommendations for decision-making.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
