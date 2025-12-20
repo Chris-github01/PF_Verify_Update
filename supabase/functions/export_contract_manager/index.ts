@@ -125,7 +125,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: items } = await supabase
         .from('quote_items')
-        .select('scope_category, description, quantity, unit_price, total_price')
+        .select('scope_category, description, quantity, unit, unit_price, total_price, frr, service, size, subclass, material, mapped_service_type, system_label')
         .eq('quote_id', approvedQuoteId)
         .limit(1000);
 
@@ -183,8 +183,31 @@ Deno.serve(async (req: Request) => {
       }
       const system = scopeSystemsMap.get(category)!;
       system.item_count += 1;
+
+      const detailParts: string[] = [];
+
       if (item.description) {
-        system.details.push(item.description);
+        detailParts.push(item.description);
+      }
+
+      const attributes: string[] = [];
+      if (item.frr) attributes.push(`FRR: ${item.frr}`);
+      if (item.service || item.mapped_service_type) {
+        attributes.push(`Service: ${item.service || item.mapped_service_type}`);
+      }
+      if (item.size) attributes.push(`Size: ${item.size}`);
+      if (item.subclass) attributes.push(`Type: ${item.subclass}`);
+      if (item.material) attributes.push(`Material: ${item.material}`);
+      if (item.quantity && item.unit) {
+        attributes.push(`Qty: ${item.quantity} ${item.unit}`);
+      }
+
+      if (attributes.length > 0) {
+        detailParts.push(`[${attributes.join(' | ')}]`);
+      }
+
+      if (detailParts.length > 0) {
+        system.details.push(detailParts.join(' '));
       }
     });
 
