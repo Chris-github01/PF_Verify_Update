@@ -183,7 +183,7 @@ Deno.serve(async (req: Request) => {
       }
       const system = scopeSystemsMap.get(category)!;
       system.item_count += 1;
-      if (system.details.length < 5 && item.description) {
+      if (item.description) {
         system.details.push(item.description);
       }
     });
