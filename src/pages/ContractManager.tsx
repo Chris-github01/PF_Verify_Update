@@ -475,7 +475,7 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [organisationName, setOrganisationName] = useState<string>('');
-  const [projectManager, setProjectManager] = useState<{ name: string; email: string } | null>(null);
+  const [projectManager, setProjectManager] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
 
   useEffect(() => {
     const loadAllDetails = async () => {
@@ -484,14 +484,7 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
       await loadContractSettings();
     };
     loadAllDetails();
-  }, [projectInfo?.id, organisationId, projectInfo?.created_by]);
-
-  // Update main contractor when organisation name is loaded
-  useEffect(() => {
-    if (organisationName && !mainContractor) {
-      setMainContractor(organisationName);
-    }
-  }, [organisationName]);
+  }, [projectInfo?.id, organisationId]);
 
   const loadOrganisationDetails = async () => {
     if (!organisationId) return;
@@ -512,21 +505,20 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
   };
 
   const loadProjectManagerDetails = async () => {
-    if (!projectInfo?.created_by) return;
+    if (!projectInfo?.id) return;
 
     try {
-      // Use the get_user_details function to fetch user information
-      const { data, error } = await supabase.rpc('get_user_details', {
-        target_user_id: projectInfo.created_by
-      });
+      const { data } = await supabase
+        .from('projects')
+        .select('project_manager_name, project_manager_email, project_manager_phone')
+        .eq('id', projectInfo.id)
+        .maybeSingle();
 
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const user = data[0];
+      if (data) {
         setProjectManager({
-          name: user.display_name || user.email?.split('@')[0] || 'Unknown',
-          email: user.email || ''
+          name: data.project_manager_name || '',
+          email: data.project_manager_email || '',
+          phone: data.project_manager_phone || ''
         });
       }
     } catch (error) {
@@ -538,31 +530,67 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
     if (!projectInfo?.id) return;
 
     try {
-      const { data } = await supabase
+      // Get both project settings and organisation name in one go
+      const { data: projectData } = await supabase
         .from('projects')
-        .select('retention_percentage, main_contractor_name, payment_terms, liquidated_damages')
+        .select('retention_percentage, main_contractor_name, payment_terms, liquidated_damages, organisation_id')
         .eq('id', projectInfo.id)
         .maybeSingle();
 
-      if (data) {
-        setRetentionPercentage(data.retention_percentage ?? 3.0);
-        // Use organisation name as default if main contractor is not set, and save it to database
-        const contractorName = data.main_contractor_name || organisationName || '';
-        setMainContractor(contractorName);
+      if (projectData) {
+        setRetentionPercentage(projectData.retention_percentage ?? 3.0);
 
-        // If main contractor wasn't set but we have org name, save it
-        if (!data.main_contractor_name && organisationName) {
-          await supabase
-            .from('projects')
-            .update({ main_contractor_name: organisationName })
-            .eq('id', projectInfo.id);
+        // If main_contractor_name is not set, load organisation name and use it
+        if (!projectData.main_contractor_name && projectData.organisation_id) {
+          const { data: orgData } = await supabase
+            .from('organisations')
+            .select('name')
+            .eq('id', projectData.organisation_id)
+            .maybeSingle();
+
+          if (orgData?.name) {
+            setMainContractor(orgData.name);
+            // Auto-save the organisation name as main contractor
+            await supabase
+              .from('projects')
+              .update({ main_contractor_name: orgData.name })
+              .eq('id', projectInfo.id);
+          } else {
+            setMainContractor('');
+          }
+        } else {
+          setMainContractor(projectData.main_contractor_name || '');
         }
 
-        setPaymentTerms(data.payment_terms || '20th following month, 22 working days');
-        setLiquidatedDamages(data.liquidated_damages || 'None specified');
+        setPaymentTerms(projectData.payment_terms || '20th following month, 22 working days');
+        setLiquidatedDamages(projectData.liquidated_damages || 'None specified');
       }
     } catch (error) {
       console.error('Error loading contract settings:', error);
+    }
+  };
+
+  const saveProjectManager = async () => {
+    if (!projectInfo?.id) return;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          project_manager_name: projectManager.name,
+          project_manager_email: projectManager.email,
+          project_manager_phone: projectManager.phone
+        })
+        .eq('id', projectInfo.id);
+
+      if (error) throw error;
+      setIsEditing(null);
+    } catch (error) {
+      console.error('Error saving project manager:', error);
+      alert('Failed to save project manager details');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -744,15 +772,82 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
             <div className="text-xl text-white font-semibold">{projectInfo?.name || 'TBC'}</div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Project Manager</label>
-            {projectManager ? (
-              <div>
-                <div className="text-lg text-white font-semibold">{projectManager.name}</div>
-                <div className="text-sm text-slate-400 mt-1">{projectManager.email}</div>
+            {isEditing === 'project_manager' ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={projectManager.name}
+                    onChange={(e) => setProjectManager({ ...projectManager, name: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                    placeholder="Enter project manager name"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={projectManager.email}
+                    onChange={(e) => setProjectManager({ ...projectManager, email: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                    placeholder="Enter email address"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={projectManager.phone}
+                    onChange={(e) => setProjectManager({ ...projectManager, phone: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                    placeholder="Enter phone number"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={saveProjectManager}
+                    disabled={isSaving}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium"
+                  >
+                    <Save size={14} />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsEditing(null);
+                      loadProjectManagerDetails();
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm"
+                  >
+                    <X size={14} />
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="text-lg text-slate-500">Loading...</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  {projectManager.name ? (
+                    <>
+                      <div className="text-lg text-white font-semibold">{projectManager.name}</div>
+                      {projectManager.email && <div className="text-sm text-slate-400 mt-1">{projectManager.email}</div>}
+                      {projectManager.phone && <div className="text-sm text-slate-400 mt-0.5">{projectManager.phone}</div>}
+                    </>
+                  ) : (
+                    <div className="text-lg text-slate-500">Not set</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => setIsEditing('project_manager')}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-blue-400 hover:text-blue-300 transition-opacity"
+                >
+                  <Edit2 size={16} />
+                </button>
+              </div>
             )}
           </div>
         </div>
