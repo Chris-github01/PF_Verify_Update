@@ -4,6 +4,8 @@
 
 A complete Tags & Clarifications management and Excel export system for the Contract Manager module. This feature enables comprehensive tracking and communication of commercial tags, assumptions, risks, and clarifications between Main Contractors and Subcontractors.
 
+**IMPORTANT:** The export automatically includes all Inclusions and Exclusions from the contract as clarifications (with references INC-001, INC-002, EXC-001, etc.) along with any manually created tags. This ensures complete scope communication to subcontractors.
+
 ---
 
 ## Features Implemented
@@ -38,6 +40,12 @@ A complete Tags & Clarifications management and Excel export system for the Cont
 - Library: `src/lib/export/tagsExcelExport.ts`
 - Format: `.xlsx` (Microsoft Excel)
 - Filename: `Tags_Clarifications_<ProjectName>_<ContractNo>_<YYYY-MM-DD>.xlsx`
+
+**Auto-Inclusion of Inclusions & Exclusions:**
+- All contract inclusions are auto-converted to "Clarification" type tags with reference INC-001, INC-002, etc.
+- All contract exclusions are auto-converted to "Clarification" type tags with reference EXC-001, EXC-002, etc.
+- Combined with manually created tags into single export
+- This ensures subcontractors receive complete scope definition in one file
 
 **Excel Features:**
 - **Formatted Headers:** Dark background with white text
@@ -94,9 +102,10 @@ Contract Manager → Inclusions & Exclusions Tab
 - Smaller, inline with guidance text
 - Same functionality as primary button
 
-**Empty State:**
-- Icon + message when no tags exist
-- Clear guidance: "Tags will appear here when created"
+**Empty States:**
+- **No data at all:** Shows empty state with guidance
+- **Only inclusions/exclusions (no tags):** Shows count and prompts to export
+- **Has tags:** Shows table with tag details
 
 ---
 
@@ -182,8 +191,8 @@ Contract Manager → Inclusions & Exclusions Tab
 - Project must belong to user's organization
 
 **Button States:**
-- **Enabled:** When tags exist
-- **Disabled:** When no tags exist (with tooltip)
+- **Enabled:** When any tags, inclusions, or exclusions exist
+- **Disabled:** When no data exists at all (with tooltip: "No tags, inclusions, or exclusions to export")
 - **Exporting:** Loading state during generation
 
 **Data Privacy:**

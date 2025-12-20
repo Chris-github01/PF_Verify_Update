@@ -1362,8 +1362,10 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
   };
 
   const handleExportTags = async () => {
-    if (tagsClarifications.length === 0) {
-      alert('No tags or clarifications to export');
+    const totalItems = tagsClarifications.length + inclusions.length + exclusions.length;
+
+    if (totalItems === 0) {
+      alert('No tags, inclusions, or exclusions to export');
       return;
     }
 
@@ -1506,6 +1508,9 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
     return <div className="text-slate-400">Loading inclusions and exclusions...</div>;
   }
 
+  const totalExportItems = tagsClarifications.length + inclusions.length + exclusions.length;
+  const hasExportData = totalExportItems > 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -1515,8 +1520,8 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
         </div>
         <button
           onClick={handleExportTags}
-          disabled={tagsClarifications.length === 0 || exporting}
-          title={tagsClarifications.length === 0 ? 'No tags or clarifications to export' : 'Export Tags & Clarifications (Excel)'}
+          disabled={!hasExportData || exporting}
+          title={!hasExportData ? 'No tags, inclusions, or exclusions to export' : 'Export Tags & Clarifications (Excel)'}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-all"
         >
           <FileSpreadsheet size={16} />
@@ -1760,14 +1765,14 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
             <Tag className="text-amber-500" size={20} />
             <h4 className="text-base font-semibold text-white">Tags & Clarifications</h4>
             <span className="px-2 py-0.5 bg-slate-800 rounded text-xs text-slate-400">
-              {tagsClarifications.length} items
+              {totalExportItems} total items ({tagsClarifications.length} tags, {inclusions.length} inclusions, {exclusions.length} exclusions)
             </span>
           </div>
           <button
             onClick={() => setShowTagsSection(!showTagsSection)}
             className="flex items-center gap-2 px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm transition-all"
           >
-            {showTagsSection ? 'Hide' : 'Show'} Tags
+            {showTagsSection ? 'Hide' : 'Show'} Details
             <ChevronRight size={14} className={`transition-transform ${showTagsSection ? 'rotate-90' : ''}`} />
           </button>
         </div>
@@ -1776,11 +1781,17 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
           <div className="space-y-4">
             {loadingTags ? (
               <div className="text-slate-400 text-sm">Loading tags & clarifications...</div>
-            ) : tagsClarifications.length === 0 ? (
+            ) : tagsClarifications.length === 0 && inclusions.length === 0 && exclusions.length === 0 ? (
               <div className="text-center py-8 text-slate-400">
                 <Tag size={48} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No tags or clarifications yet</p>
-                <p className="text-xs mt-1">Tags will appear here when created</p>
+                <p className="text-sm">No tags, inclusions, or exclusions yet</p>
+                <p className="text-xs mt-1">Add inclusions/exclusions above, or tags will appear here when created</p>
+              </div>
+            ) : tagsClarifications.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">
+                <CheckCircle size={48} className="mx-auto mb-2 opacity-50" />
+                <p className="text-sm">You have {inclusions.length} inclusions and {exclusions.length} exclusions ready to export</p>
+                <p className="text-xs mt-1">Click "Export to Excel" above to download all items for subcontractor review</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1837,11 +1848,11 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-700">
               <p className="text-xs text-slate-400">
-                Use the export button above to download all tags & clarifications with full details for subcontractor review
+                Export includes all tags, inclusions, and exclusions with full details for subcontractor review
               </p>
               <button
                 onClick={handleExportTags}
-                disabled={tagsClarifications.length === 0 || exporting}
+                disabled={!hasExportData || exporting}
                 className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-all"
               >
                 <FileSpreadsheet size={14} />
@@ -1854,7 +1865,7 @@ function InclusionsExclusionsTab({ projectId }: { projectId: string }) {
 
       <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4 text-sm text-green-300">
         <CheckCircle size={16} className="inline mr-2" />
-        Inclusions and exclusions are now editable and will be automatically included in exported Handover Packs.
+        Inclusions and exclusions are editable and will be automatically included in both the Tags & Clarifications Excel export and Handover Packs.
       </div>
     </div>
   );

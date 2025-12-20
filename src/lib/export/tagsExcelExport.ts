@@ -49,9 +49,17 @@ export async function exportTagsClarificationsToExcel(
       throw new Error('Failed to fetch tags and clarifications');
     }
 
-    if (!tags || tags.length === 0) {
-      throw new Error('No tags or clarifications to export');
-    }
+    const { data: inclusions } = await supabase
+      .from('contract_inclusions')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('sort_order', { ascending: true });
+
+    const { data: exclusions } = await supabase
+      .from('contract_exclusions')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('sort_order', { ascending: true });
 
     const { data: project } = await supabase
       .from('projects')
@@ -61,7 +69,67 @@ export async function exportTagsClarificationsToExcel(
 
     const mainContractor = project?.client || 'Main Contractor';
 
-    const userIds = tags
+    const allTags = [...(tags || [])];
+
+    if (inclusions && inclusions.length > 0) {
+      inclusions.forEach((inc: any, index: number) => {
+        allTags.push({
+          id: inc.id,
+          project_id: projectId,
+          tag_ref: `INC-${String(index + 1).padStart(3, '0')}`,
+          tag_type: 'Clarification',
+          title: 'Contract Inclusion',
+          description: inc.description,
+          linked_scope_ref: `INC-${String(index + 1).padStart(3, '0')}`,
+          origin: 'MC',
+          created_by: null,
+          created_date: inc.created_at || new Date().toISOString(),
+          resolution_required_at: 'Pre-let',
+          subcontractor_response: null,
+          subcontractor_position: null,
+          subcontractor_comment: null,
+          cost_impact: 'None',
+          programme_impact: 'None',
+          mc_response: null,
+          status: 'Open',
+          final_agreed_position: null,
+          sort_order: inc.sort_order
+        });
+      });
+    }
+
+    if (exclusions && exclusions.length > 0) {
+      exclusions.forEach((exc: any, index: number) => {
+        allTags.push({
+          id: exc.id,
+          project_id: projectId,
+          tag_ref: `EXC-${String(index + 1).padStart(3, '0')}`,
+          tag_type: 'Clarification',
+          title: 'Contract Exclusion',
+          description: exc.description,
+          linked_scope_ref: `EXC-${String(index + 1).padStart(3, '0')}`,
+          origin: 'MC',
+          created_by: null,
+          created_date: exc.created_at || new Date().toISOString(),
+          resolution_required_at: 'Pre-let',
+          subcontractor_response: null,
+          subcontractor_position: null,
+          subcontractor_comment: null,
+          cost_impact: 'None',
+          programme_impact: 'None',
+          mc_response: null,
+          status: 'Open',
+          final_agreed_position: null,
+          sort_order: exc.sort_order
+        });
+      });
+    }
+
+    if (allTags.length === 0) {
+      throw new Error('No tags, inclusions, or exclusions to export');
+    }
+
+    const userIds = allTags
       .map((t: any) => t.created_by)
       .filter((id: string | null) => id !== null);
 
@@ -85,7 +153,7 @@ export async function exportTagsClarificationsToExcel(
       }
     }
 
-    const excelData = tags.map((tag: any) => {
+    const excelData = allTags.map((tag: any) => {
       const createdBy = tag.created_by ? userEmailMap[tag.created_by] || 'Unknown' : 'System';
       const createdDate = tag.created_date
         ? new Date(tag.created_date).toLocaleDateString('en-NZ')
