@@ -185,12 +185,29 @@ export default function CoverageBreakdownChart({ supplier }: CoverageBreakdownCh
                 </div>
               ))}
             </div>
-            <div className="mt-3 p-3 bg-slate-700/30 rounded-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Total Estimated Gap Cost (20% markup):</span>
-                <span className="font-bold text-orange-400 text-base">
+            <div className="mt-3 p-4 bg-orange-900/20 border border-orange-600/30 rounded-lg">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <DollarSign className="w-4 h-4 text-orange-400" />
+                    <span className="text-sm font-semibold text-orange-300">Estimated Add-On Cost to Fill Gaps</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    This is the estimated cost to cover the missing scope items shown above.
+                    Calculated using market rates from other suppliers with a 20% markup for procurement and risk.
+                  </p>
+                </div>
+                <span className="font-bold text-orange-400 text-xl flex-shrink-0">
                   {formatCurrency(supplier.scopeGaps.reduce((sum, gap) => sum + gap.estimatedCost, 0))}
                 </span>
+              </div>
+              <div className="mt-3 pt-3 border-t border-orange-600/20">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Adjusted Total Price (Quote + Gaps):</span>
+                  <span className="font-semibold text-white">
+                    {formatCurrency(supplier.totalPrice + supplier.scopeGaps.reduce((sum, gap) => sum + gap.estimatedCost, 0))}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

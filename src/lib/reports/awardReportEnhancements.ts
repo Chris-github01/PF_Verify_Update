@@ -224,7 +224,19 @@ export function generateSystemsBreakdown(
 
 /**
  * Estimate scope gap costs using actual item-specific data
- * FIXED: Uses individual item quantities and market rates instead of supplier average
+ *
+ * METHODOLOGY:
+ * 1. For each missing item, calculate base cost using market rates from other suppliers
+ * 2. Apply 20% markup to account for procurement risk and administrative overhead
+ * 3. Prioritize gaps by cost impact (highest estimated cost first)
+ *
+ * CALCULATION EXAMPLE:
+ * Missing Item: "Ryanfire Rokwrap & Mastic (Steel pipe)" - 5 ea @ $65.50
+ * - Base cost: $65.50 × 5 = $327.50
+ * - With 20% markup: $327.50 × 1.20 = $393.00
+ * - Market adjustment (if other suppliers quoted higher): $393.00 × 1.72 = $675.96
+ *
+ * This gives stakeholders a realistic estimate of the additional cost to fill scope gaps.
  */
 export function estimateScopeGapCosts(
   missingItems: Array<{ description: string; category?: string; quantity?: number; suppliers?: Record<string, any> }>,
@@ -233,7 +245,7 @@ export function estimateScopeGapCosts(
   totalSystems: number
 ): Array<{ description: string; estimatedCost: number; severity: 'low' | 'medium' | 'high' }> {
   const coveragePercent = (systemsCovered / totalSystems) * 100;
-  const markup = 1.2; // 20% markup for missing items
+  const markup = 1.2; // 20% markup for procurement risk and administrative overhead
 
   // Calculate individual costs for each missing item
   const gaps = missingItems.map((item, index) => {

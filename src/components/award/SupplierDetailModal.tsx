@@ -222,11 +222,27 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
                   </div>
                 ))}
               </div>
-              <div className="mt-4 pt-4 border-t border-slate-700 flex items-center justify-between">
-                <span className="text-slate-400 text-sm">Total Gap Cost (with 20% markup):</span>
-                <span className="text-orange-400 font-bold text-lg">
-                  {formatCurrency(supplier.scopeGaps.reduce((sum, gap) => sum + gap.estimatedCost, 0))}
-                </span>
+              <div className="mt-4 pt-4 border-t border-slate-700">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <DollarSign className="w-4 h-4 text-orange-400" />
+                      <span className="text-sm font-semibold text-orange-300">Estimated Add-On Cost to Fill Gaps</span>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Estimated cost to cover missing scope items using market rates from competing suppliers with a 20% markup for procurement and risk.
+                    </p>
+                  </div>
+                  <span className="text-orange-400 font-bold text-xl flex-shrink-0">
+                    {formatCurrency(supplier.scopeGaps.reduce((sum, gap) => sum + gap.estimatedCost, 0))}
+                  </span>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-600 flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Adjusted Total (Quote + Gaps):</span>
+                  <span className="font-semibold text-white">
+                    {formatCurrency(supplier.totalPrice + supplier.scopeGaps.reduce((sum, gap) => sum + gap.estimatedCost, 0))}
+                  </span>
+                </div>
               </div>
             </div>
           )}
