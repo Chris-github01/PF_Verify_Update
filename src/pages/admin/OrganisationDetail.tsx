@@ -591,9 +591,8 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
+      <div className="space-y-6">
+        <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-slate-100">Plan & seats</h2>
               {!editMode ? (
@@ -695,7 +694,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
+        <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-100">Members</h2>
               <button
@@ -874,19 +873,16 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
               </table>
             </div>
           </div>
-        </div>
 
-        <div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
-            <h2 className="text-sm font-semibold text-slate-100 mb-3">Quick actions</h2>
-            <div className="space-y-2">
-              <button
-                onClick={() => navigator.clipboard.writeText(organisationId)}
-                className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/40 rounded-xl transition"
-              >
-                Copy organisation ID
-              </button>
-            </div>
+        <div className="rounded-xl border border-slate-700 bg-slate-900/40 shadow-lg p-4">
+          <h2 className="text-sm font-semibold text-slate-100 mb-3">Quick actions</h2>
+          <div className="space-y-2">
+            <button
+              onClick={() => navigator.clipboard.writeText(organisationId)}
+              className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/40 rounded-xl transition"
+            >
+              Copy organisation ID
+            </button>
           </div>
         </div>
       </div>

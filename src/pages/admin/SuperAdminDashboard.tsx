@@ -151,7 +151,7 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4">
           <div className="flex items-center gap-3">
             <Users className="text-gray-400" size={24} />
