@@ -121,25 +121,33 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
       const membersWithDetails = await Promise.all(
         (memberData || []).map(async (member) => {
           try {
-            const { data: profile } = await supabase
+            const { data: profile, error: profileError } = await supabase
               .rpc('get_user_details', { p_user_id: member.user_id })
               .maybeSingle();
 
+            if (profileError) {
+              console.error('Error fetching user details for', member.user_id, profileError);
+            }
+
+            const email = profile?.email || member.user_id || 'No email';
+            const fullName = profile?.full_name || email.split('@')[0];
+
             if (member.role === 'owner') {
-              setOwnerEmail(profile?.email || 'Unknown');
+              setOwnerEmail(email);
             }
 
             return {
               ...member,
-              email: profile?.email || 'Unknown',
-              full_name: profile?.full_name,
+              email,
+              full_name: fullName,
             };
           } catch (err) {
-            console.warn('Could not fetch user details:', err);
+            console.error('Could not fetch user details for', member.user_id, ':', err);
+            const fallbackEmail = member.user_id || 'No email';
             return {
               ...member,
-              email: 'Unknown',
-              full_name: undefined,
+              email: fallbackEmail,
+              full_name: fallbackEmail.substring(0, 8),
             };
           }
         })

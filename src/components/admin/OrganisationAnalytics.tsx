@@ -36,9 +36,13 @@ export default function OrganisationAnalytics({ organisationId }: OrganisationAn
         // Enrich with user and project details
         const enrichedActivities = await Promise.all(
           activities.map(async (activity) => {
-            const { data: userDetails } = await supabase.rpc('get_user_details', {
-              p_user_id: activity.user_id
-            });
+            const { data: userDetails, error: userError } = await supabase
+              .rpc('get_user_details', { p_user_id: activity.user_id })
+              .maybeSingle();
+
+            if (userError) {
+              console.error('Error fetching user details:', userError);
+            }
 
             let projectName = null;
             if (activity.project_id) {
@@ -52,7 +56,7 @@ export default function OrganisationAnalytics({ organisationId }: OrganisationAn
 
             return {
               ...activity,
-              user_email: userDetails?.email || 'Unknown',
+              user_email: userDetails?.email || activity.user_id || 'Unknown',
               project_name: projectName
             };
           })

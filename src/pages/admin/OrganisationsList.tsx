@@ -56,12 +56,18 @@ export default function OrganisationsList() {
             let ownerEmail = '';
             if (owner) {
               try {
-                const { data: profile } = await supabase
+                const { data: profile, error: profileError } = await supabase
                   .rpc('get_user_details', { p_user_id: owner.user_id })
                   .maybeSingle();
-                ownerEmail = profile?.email || '';
+
+                if (profileError) {
+                  console.error('Error fetching owner details:', profileError);
+                }
+
+                ownerEmail = profile?.email || owner.user_id || 'No email';
               } catch (err) {
-                console.warn('Could not fetch owner email:', err);
+                console.error('Could not fetch owner email:', err);
+                ownerEmail = owner.user_id || 'No email';
               }
             }
 

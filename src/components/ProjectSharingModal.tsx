@@ -55,12 +55,17 @@ export default function ProjectSharingModal({ projectId, projectName, organisati
       if (members) {
         const membersWithDetails = await Promise.all(
           members.map(async (member) => {
-            const { data: userDetails } = await supabase.rpc('get_user_details', {
-              p_user_id: member.user_id
-            });
+            const { data: userDetails, error: userError } = await supabase
+              .rpc('get_user_details', { p_user_id: member.user_id })
+              .maybeSingle();
+
+            if (userError) {
+              console.error('Error fetching user details:', userError);
+            }
+
             return {
               user_id: member.user_id,
-              email: userDetails?.email || 'Unknown',
+              email: userDetails?.email || member.user_id || 'No email',
               full_name: userDetails?.full_name || null
             };
           })
@@ -81,12 +86,17 @@ export default function ProjectSharingModal({ projectId, projectName, organisati
       if (shares) {
         const sharesWithDetails = await Promise.all(
           shares.map(async (share) => {
-            const { data: userDetails } = await supabase.rpc('get_user_details', {
-              p_user_id: share.shared_with_user_id
-            });
+            const { data: userDetails, error: userError } = await supabase
+              .rpc('get_user_details', { p_user_id: share.shared_with_user_id })
+              .maybeSingle();
+
+            if (userError) {
+              console.error('Error fetching shared user details:', userError);
+            }
+
             return {
               ...share,
-              shared_with_email: userDetails?.email || 'Unknown',
+              shared_with_email: userDetails?.email || share.shared_with_user_id || 'Unknown',
               shared_with_name: userDetails?.full_name || null
             };
           })

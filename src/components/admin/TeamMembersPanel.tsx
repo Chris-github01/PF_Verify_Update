@@ -82,29 +82,31 @@ export default function TeamMembersPanel({ organisationId, onInvite, onRefresh }
         // Get user details for each member
         const membersWithDetails = await Promise.all(
           members.map(async (member) => {
-            const { data: userData } = await supabase
-              .from('auth.users')
-              .select('email, raw_user_meta_data')
-              .eq('id', member.user_id)
-              .single();
+            try {
+              const { data: userDetails, error: userError } = await supabase
+                .rpc('get_user_details', { p_user_id: member.user_id })
+                .maybeSingle();
 
-            // Fallback to RPC if direct query fails
-            let email = userData?.email;
-            let full_name = userData?.raw_user_meta_data?.full_name;
+              if (userError) {
+                console.error('Error fetching user details for', member.user_id, userError);
+              }
 
-            if (!email) {
-              const { data: userDetails } = await supabase.rpc('get_user_details', {
-                p_user_id: member.user_id
-              });
-              email = userDetails?.email || 'Unknown';
-              full_name = userDetails?.full_name;
+              const email = userDetails?.email || member.user_id || 'No email';
+              const fullName = userDetails?.full_name || email.split('@')[0];
+
+              return {
+                ...member,
+                email,
+                full_name: fullName
+              };
+            } catch (err) {
+              console.error('Could not fetch user details for', member.user_id, err);
+              return {
+                ...member,
+                email: member.user_id || 'No email',
+                full_name: null
+              };
             }
-
-            return {
-              ...member,
-              email: email || 'Unknown',
-              full_name: full_name || null
-            };
           })
         );
 
@@ -139,14 +141,26 @@ export default function TeamMembersPanel({ organisationId, onInvite, onRefresh }
       if (invites) {
         const invitesWithDetails = await Promise.all(
           invites.map(async (invite) => {
-            const { data: inviterDetails } = await supabase.rpc('get_user_details', {
-              p_user_id: invite.invited_by_user_id
-            });
+            try {
+              const { data: inviterDetails, error: inviterError } = await supabase
+                .rpc('get_user_details', { p_user_id: invite.invited_by_user_id })
+                .maybeSingle();
 
-            return {
-              ...invite,
-              invited_by_email: inviterDetails?.email || 'Unknown'
-            };
+              if (inviterError) {
+                console.error('Error fetching inviter details:', inviterError);
+              }
+
+              return {
+                ...invite,
+                invited_by_email: inviterDetails?.email || invite.invited_by_user_id || 'Unknown'
+              };
+            } catch (err) {
+              console.error('Could not fetch inviter details:', err);
+              return {
+                ...invite,
+                invited_by_email: 'Unknown'
+              };
+            }
           })
         );
 
