@@ -68,7 +68,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
     <aside
       className={`${
         collapsed ? 'w-20' : 'w-64'
-      } hidden md:flex flex-col border-r border-slate-800 bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] transition-all duration-200 relative`}
+      } hidden md:flex flex-col border-r border-slate-800 bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] transition-all duration-200 fixed left-0 top-0 h-screen z-40`}
     >
       {/* Brand Header */}
       <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'} px-5 pt-5 pb-4`}>

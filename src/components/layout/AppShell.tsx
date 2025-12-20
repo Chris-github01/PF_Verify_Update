@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -7,11 +7,34 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, sidebar, topBar }: AppShellProps) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved === 'true';
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      setSidebarCollapsed(saved === 'true');
+    };
+
+    // Listen for storage changes
+    window.addEventListener('storage', handleStorageChange);
+
+    // Poll for changes (for same-tab updates)
+    const interval = setInterval(handleStorageChange, 100);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex">
+    <div className="min-h-screen bg-slate-950 text-slate-50">
       {sidebar}
 
-      <div className="flex-1 flex flex-col bg-slate-950">
+      <div className={`flex flex-col bg-slate-950 transition-all duration-200 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         {topBar}
 
         <main className="flex-1 overflow-y-auto">

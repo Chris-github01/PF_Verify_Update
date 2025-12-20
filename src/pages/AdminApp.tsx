@@ -102,8 +102,8 @@ export default function AdminApp() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
-      <aside className="w-64 border-r border-slate-800 bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex flex-col">
+    <div className="min-h-screen bg-slate-950">
+      <aside className="w-64 border-r border-slate-800 bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex flex-col fixed left-0 top-0 h-screen z-40">
         {/* Brand Header */}
         <div className="flex items-center gap-2 px-5 pt-5 pb-4">
           <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30 flex-shrink-0">
@@ -337,7 +337,7 @@ export default function AdminApp() {
         </div>
       </aside>
 
-      <div className="flex-1 overflow-auto bg-slate-950">
+      <div className="ml-64 overflow-auto bg-slate-950 min-h-screen">
         {renderContent()}
       </div>
     </div>
