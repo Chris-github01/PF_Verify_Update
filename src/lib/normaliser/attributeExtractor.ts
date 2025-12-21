@@ -79,12 +79,18 @@ function extractService(lowerText: string): string | undefined {
   // CRITICAL: Service classification rules based on actual trade practices
   // This determines which trade is responsible for the installation
 
-  // 1. Electrical - Cable infrastructure and electrical penetrations
+  // 1. Electrical - Cable infrastructure, electrical penetrations, and flush boxes
   //    Mastic on cables = Electrical
+  //    Flush boxes / Fire boxes for electrical outlets = Electrical
   if (lowerText.includes('cable bundle') ||
       lowerText.includes('cable tray') ||
       lowerText.includes('bus duct') ||
       lowerText.includes('electrical conduit') ||
+      lowerText.includes('fire box') ||
+      lowerText.includes('flush box') ||
+      lowerText.includes('acoustic putty pad') ||
+      lowerText.includes('powerpad') ||
+      lowerText.includes('power pad') ||
       (lowerText.includes('mastic') && (lowerText.includes('cable') || lowerText.includes('tray')))) {
     return 'Electrical';
   }
@@ -144,6 +150,7 @@ function extractService(lowerText: string): string | undefined {
 
 function extractSubclass(lowerText: string): string | undefined {
   const subclassKeywords = {
+    'Flush Box': ['flush box', 'fire box', 'acoustic putty pad', 'powerpad', 'power pad'],
     'Cables': ['cable', 'cabling', 'wire', 'wiring'],
     'Conduit': ['conduit', 'trunking'],
     'Ducts': ['duct', 'ducting'],
@@ -168,6 +175,12 @@ function extractSubclass(lowerText: string): string | undefined {
 }
 
 function extractMaterial(lowerText: string): string | undefined {
+  // Check for specific flush box materials first (more specific)
+  if (lowerText.includes('flush box') || lowerText.includes('fire box') ||
+      lowerText.includes('acoustic putty pad') || lowerText.includes('powerpad')) {
+    return 'intumescent pad';
+  }
+
   const materialKeywords = {
     'Steel': ['steel', 'galvanised', 'galvanized'],
     'PVC': ['pvc', 'polyvinyl'],

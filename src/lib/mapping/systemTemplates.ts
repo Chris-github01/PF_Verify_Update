@@ -75,6 +75,10 @@ export const SYSTEM_TEMPLATES: SystemTemplate[] = [
 
   { id: 'BOARD_120', label: 'Fire Rated Board (FRL 120)', frr: 120, frr_string: '-/120/30', subclass: 'Board' },
   { id: 'BOARD_90', label: 'Fire Rated Board (FRL 90)', frr: 90, frr_string: '-/90/30', subclass: 'Board' },
+
+  { id: 'FLUSH_BOX_60', label: 'Intumescent Flush Box (FRL 60)', service: 'Electrical', frr: 60, frr_string: '-/60/60', subclass: 'Flush Box' },
+  { id: 'FLUSH_BOX_90', label: 'Intumescent Flush Box (FRL 90)', service: 'Electrical', frr: 90, frr_string: '-/90/90', subclass: 'Flush Box' },
+  { id: 'FLUSH_BOX_120', label: 'Intumescent Flush Box (FRL 120)', service: 'Electrical', frr: 120, frr_string: '-/120/120', subclass: 'Flush Box' },
 ];
 
 export async function loadSystemTemplates(): Promise<SystemTemplate[]> {

@@ -560,6 +560,35 @@ export const PASSIVE_FIRE_ONTOLOGY: PassiveFireSystem[] = [
     keywords: ['board', 'seal', 'gypsum', 'calcium silicate']
   },
 
+  // INTUMESCENT FLUSH BOX - Electrical box seals
+  {
+    id: 'FLUSH_BOX_60',
+    label: 'Intumescent Flush Box (60min)',
+    category: 'penetration',
+    serviceType: 'electrical',
+    frr: 60,
+    material: 'intumescent pad',
+    keywords: ['flush box', 'fire box', 'acoustic putty pad', 'powerpad', 'power pad', 'electrical box', 'outlet box', '60min', 'ryanfire']
+  },
+  {
+    id: 'FLUSH_BOX_90',
+    label: 'Intumescent Flush Box (90min)',
+    category: 'penetration',
+    serviceType: 'electrical',
+    frr: 90,
+    material: 'intumescent pad',
+    keywords: ['flush box', 'fire box', 'acoustic putty pad', 'powerpad', 'power pad', 'electrical box', 'outlet box', '90min', 'ryanfire']
+  },
+  {
+    id: 'FLUSH_BOX_120',
+    label: 'Intumescent Flush Box (120min)',
+    category: 'penetration',
+    serviceType: 'electrical',
+    frr: 120,
+    material: 'intumescent pad',
+    keywords: ['flush box', 'fire box', 'acoustic putty pad', 'powerpad', 'power pad', 'electrical box', 'outlet box', '120min', '2hr', 'ryanfire']
+  },
+
   // ADDITIONAL & ANCILLARY
   {
     id: 'SEISMIC',

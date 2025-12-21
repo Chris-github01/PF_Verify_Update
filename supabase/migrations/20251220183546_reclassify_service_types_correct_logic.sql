@@ -16,14 +16,19 @@
     - Preserves original data (non-destructive)
 */
 
--- 1. ELECTRICAL - Cable bundles, Cable trays, Bus ducts
+-- 1. ELECTRICAL - Cable bundles, Cable trays, Bus ducts, Flush Boxes
 UPDATE quote_items
 SET service = 'Electrical'
 WHERE (
   LOWER(description) LIKE '%cable bundle%' OR
   LOWER(description) LIKE '%cable tray%' OR
   LOWER(description) LIKE '%bus duct%' OR
-  LOWER(description) LIKE '%electrical conduit%'
+  LOWER(description) LIKE '%electrical conduit%' OR
+  LOWER(description) LIKE '%fire box%' OR
+  LOWER(description) LIKE '%flush box%' OR
+  LOWER(description) LIKE '%acoustic putty pad%' OR
+  LOWER(description) LIKE '%powerpad%' OR
+  LOWER(description) LIKE '%power pad%'
 );
 
 -- 2. FIRE - Steel pipes, Sprinkler pipes, Alarm cables

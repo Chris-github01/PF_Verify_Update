@@ -28,6 +28,7 @@ function detectServiceTypeFromDescription(description: string): string {
   const upperDesc = description.toUpperCase();
 
   const patterns = [
+    { regex: /(FLUSH\s*BOX|FIRE\s*BOX|ACOUSTIC\s*PUTTY\s*PAD|POWERPAD|POWER\s*PAD)/i, type: 'Electrical Services - Intumescent Flush Box' },
     { regex: /FIRE\s*(STOP|SEAL|COLLAR|WRAP|BOARD|BATT)/i, type: 'Fire Protection Services - Fire Stopping' },
     { regex: /CABLE TRAY/i, type: 'Electrical Services - Cable Tray' },
     { regex: /CABLE BUNDLE/i, type: 'Electrical Services - Cable Bundle' },
