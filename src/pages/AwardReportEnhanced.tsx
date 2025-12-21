@@ -455,12 +455,20 @@ export default function AwardReportEnhanced({
       return;
     }
 
-    // Debug: Log the first comparison row to see structure
-    console.log('Comparison data sample:', {
-      totalRows: comparisonData.length,
-      firstRow: comparisonData[0],
-      suppliers: awardSummary.suppliers.map(s => s.supplierName)
-    });
+    // Check if data has required fields
+    const hasRequiredFields = comparisonData.length > 0 &&
+      comparisonData[0].suppliers &&
+      Object.values(comparisonData[0].suppliers).some((s: any) =>
+        s.quantity !== undefined || s.unit !== undefined
+      );
+
+    if (!hasRequiredFields) {
+      onToast?.(
+        'This award report was generated with an older version. Please click "Recalculate Award Report" to regenerate with all fields.',
+        'error'
+      );
+      return;
+    }
 
     try {
       const wb = XLSX.utils.book_new();
@@ -516,19 +524,6 @@ export default function AwardReportEnhanced({
         suppliers.forEach((supplier, supplierIdx) => {
           const supplierData = row.suppliers?.[supplier.supplierName];
 
-          // Debug logging for first 3 rows
-          if (dataRows.length < 3) {
-            console.log(`Row ${dataRows.length + 1}, Supplier ${supplier.supplierName}:`, {
-              supplierData: JSON.stringify(supplierData),
-              keys: supplierData ? Object.keys(supplierData) : [],
-              quantity: supplierData?.quantity,
-              unit: supplierData?.unit,
-              normalisedUnit: supplierData?.normalisedUnit,
-              unitPrice: supplierData?.unitPrice,
-              total: supplierData?.total
-            });
-          }
-
           if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
             // Better handling of values - show actual values even if 0 or empty string
             const qty = supplierData.quantity !== null && supplierData.quantity !== undefined
@@ -567,6 +562,12 @@ export default function AwardReportEnhanced({
         colWidths.push({ wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 });
       });
       ws['!cols'] = colWidths;
+
+      // IMPORTANT: Create fills for each supplier color
+      const fills = supplierColors.map(color => ({
+        patternType: 'solid',
+        fgColor: { rgb: color }
+      }));
 
       // Merge cells - only Item Description column (no baseline columns to merge)
       ws['!merges'] = [
@@ -676,7 +677,13 @@ export default function AwardReportEnhanced({
 
       const sanitizedProjectName = (currentProject?.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `Itemized_Comparison_${sanitizedProjectName}_${new Date().toISOString().split('T')[0]}.xlsx`;
-      XLSX.writeFile(wb, filename);
+
+      // Write with cellStyles option enabled to support colors and formatting
+      XLSX.writeFile(wb, filename, {
+        cellStyles: true,
+        bookSST: true,
+        bookType: 'xlsx'
+      });
 
       setShowExportDropdown(false);
       onToast?.('Itemized comparison exported successfully', 'success');
