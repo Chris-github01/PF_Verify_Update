@@ -114,7 +114,8 @@ export default function Login() {
         </div>
 
         <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl shadow-xl border border-slate-700/50 p-8">
-          {!isSignUp && (
+          {/* Google login temporarily hidden */}
+          {false && !isSignUp && (
             <>
               <button
                 onClick={handleGoogleLogin}
