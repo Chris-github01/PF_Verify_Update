@@ -6,7 +6,11 @@ export default {
   ],
   darkMode: 'class',
   theme: {
-    extend: {},
+    extend: {
+      spacing: {
+        '26': '6.5rem',
+      },
+    },
   },
   plugins: [],
 }

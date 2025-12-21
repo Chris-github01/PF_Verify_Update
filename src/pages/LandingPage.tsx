@@ -70,7 +70,52 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         </div>
       </nav>
 
-      <main className="pt-16">
+      {/* Breaking News Banner */}
+      <div className="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400">
+        <div className="flex items-center overflow-hidden h-10">
+          <div className="flex-shrink-0 bg-slate-900 px-4 py-2 h-full flex items-center font-bold text-xs sm:text-sm uppercase tracking-wider border-r-2 border-orange-400">
+            <Zap className="mr-2 animate-pulse" size={16} />
+            Coming Soon
+          </div>
+          <div className="flex-1 overflow-hidden relative">
+            <div className="animate-scroll-left flex items-center whitespace-nowrap">
+              <span className="inline-block px-8 text-sm font-semibold">
+                🔌 Electrical Verify+
+              </span>
+              <span className="inline-block px-2 text-slate-200">•</span>
+              <span className="inline-block px-8 text-sm font-semibold">
+                ❄️ HVAC Verify+
+              </span>
+              <span className="inline-block px-2 text-slate-200">•</span>
+              <span className="inline-block px-8 text-sm font-semibold">
+                🚿 Plumbing Verify+
+              </span>
+              <span className="inline-block px-2 text-slate-200">•</span>
+              <span className="inline-block px-8 text-sm font-semibold">
+                🚨 Active Fire Verify+
+              </span>
+              <span className="inline-block px-2 text-slate-200">•</span>
+              <span className="inline-block px-8 text-sm font-semibold">
+                🔌 Electrical Verify+
+              </span>
+              <span className="inline-block px-2 text-slate-200">•</span>
+              <span className="inline-block px-8 text-sm font-semibold">
+                ❄️ HVAC Verify+
+              </span>
+              <span className="inline-block px-2 text-slate-200">•</span>
+              <span className="inline-block px-8 text-sm font-semibold">
+                🚿 Plumbing Verify+
+              </span>
+              <span className="inline-block px-2 text-slate-200">•</span>
+              <span className="inline-block px-8 text-sm font-semibold">
+                🚨 Active Fire Verify+
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main className="pt-26">
         <section className="relative overflow-hidden py-12 sm:py-24 lg:py-32 min-h-[85vh] sm:min-h-[90vh] flex items-center">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="text-center max-w-5xl mx-auto">
