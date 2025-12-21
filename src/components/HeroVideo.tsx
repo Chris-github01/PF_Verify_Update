@@ -1,12 +1,17 @@
-import { Mail } from 'lucide-react';
+import { Mail, Upload } from 'lucide-react';
+import { useState } from 'react';
 
 interface HeroVideoProps {
   onBookDemo: () => void;
 }
 
 export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
+  const [videoError, setVideoError] = useState(false);
+  const [videoUrl] = useState('https://pub-4a052394260a4d93950fdab2b1ce9caa.r2.dev/verifyplus-explained.mp4');
+
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     console.error('Video loading error:', e);
+    setVideoError(true);
   };
 
   return (
@@ -30,24 +35,48 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
 
           {/* Video Player */}
           <div className="relative bg-black p-4">
-            <video
-              controls
-              playsInline
-              preload="auto"
-              crossOrigin="anonymous"
-              onError={handleVideoError}
-              style={{
-                width: '100%',
-                borderRadius: '18px',
-                background: '#000',
-                boxShadow: '0 30px 80px rgba(0,0,0,0.45)'
-              }}
-            >
-              <source
-                src="https://pub-4a052394260a4d93950fdab2b1ce9caa.r2.dev/verifyplus-explained.mp4"
-                type="video/mp4"
-              />
-            </video>
+            {videoError ? (
+              <div className="w-full aspect-video bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center border border-slate-700">
+                <div className="text-center p-8 max-w-lg">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-orange-500/20 rounded-full flex items-center justify-center">
+                    <Upload className="text-orange-400" size={32} />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-3">Video Setup Required</h3>
+                  <p className="text-sm text-slate-400 mb-4">
+                    Upload <code className="px-2 py-1 bg-slate-800 rounded text-orange-400">verifyplus-explained.mp4</code> to your Cloudflare R2 bucket
+                  </p>
+                  <p className="text-xs text-slate-500 mb-6">
+                    Current URL: {videoUrl}
+                  </p>
+                  <button
+                    onClick={onBookDemo}
+                    className="px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg"
+                  >
+                    Book a Live Demo Instead
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <video
+                controls
+                playsInline
+                preload="auto"
+                crossOrigin="anonymous"
+                onError={handleVideoError}
+                style={{
+                  width: '100%',
+                  borderRadius: '18px',
+                  background: '#000',
+                  boxShadow: '0 30px 80px rgba(0,0,0,0.45)'
+                }}
+              >
+                <source
+                  src={videoUrl}
+                  type="video/mp4"
+                />
+                Your browser does not support the video tag.
+              </video>
+            )}
           </div>
 
           {/* CTA Buttons */}
