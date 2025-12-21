@@ -32,6 +32,8 @@ export interface MatrixCell {
   quoteItemId: string;
   totalQuantity?: number;
   totalValue?: number;
+  unit?: string | null;
+  normalisedUnit?: string | null;
 }
 
 export interface MatrixRow {

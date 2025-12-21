@@ -301,126 +301,156 @@ export default function AwardReport({
     }
 
     try {
-      const templatePath = '/templates/Itemized_Comparison_Global_1.xlsx';
-      const response = await fetch(templatePath);
-
-      if (!response.ok) {
-        throw new Error('Failed to load template file');
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const wb = XLSX.read(arrayBuffer, { type: 'array', cellStyles: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-
-      ws['A2'] = { t: 's', v: `Project: ${currentProject?.name || projectId}` };
-      ws['A3'] = { t: 's', v: `Generated: ${new Date().toLocaleString()}` };
-
+      const wb = XLSX.utils.book_new();
       const suppliers = awardSummary.suppliers;
       const startCol = 3;
 
-      ws['!merges'] = [];
+      const supplierColors = [
+        'E8F5E9', 'FFF3E0', 'E3F2FD', 'FCE4EC', 'F3E5F5',
+        'FFF9C4', 'E0F2F1', 'FFEBEE', 'F1F8E9', 'FBE9E7',
+        'E8EAF6', 'F3E5F5', 'E0F7FA', 'FFF8E1', 'EFEBE9'
+      ];
 
-      for (let i = 0; i < suppliers.length; i++) {
-        const supplierCol = startCol + (i * 2);
-        const cellAddress = XLSX.utils.encode_cell({ r: 4, c: supplierCol });
+      const headerData: any[][] = [];
+      headerData.push(['Itemized Comparison - QS Standard']);
+      headerData.push([`Project: ${currentProject?.name || projectId}`]);
+      headerData.push([`Generated: ${new Date().toLocaleString()}`]);
+      headerData.push([]);
 
-        ws[cellAddress] = {
-          t: 's',
-          v: suppliers[i].supplierName,
-          s: ws[cellAddress]?.s || {}
-        };
+      const headerRow = ['Item Description', 'Qty', 'UOM'];
+      suppliers.forEach(supplier => {
+        headerRow.push(supplier.supplierName, '', '', '', '');
+      });
+      headerData.push(headerRow);
 
-        ws['!merges'].push({
-          s: { r: 4, c: supplierCol },
-          e: { r: 4, c: supplierCol + 1 }
-        });
+      const subHeaderRow = ['', '', ''];
+      suppliers.forEach(() => {
+        subHeaderRow.push('Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
+      });
+      headerData.push(subHeaderRow);
 
-        const unitRateCell = XLSX.utils.encode_cell({ r: 5, c: supplierCol });
-        const totalCell = XLSX.utils.encode_cell({ r: 5, c: supplierCol + 1 });
+      const dataRows: any[][] = [];
+      const supplierTotals: number[] = new Array(suppliers.length).fill(0);
 
-        ws[unitRateCell] = {
-          t: 's',
-          v: 'Unit Rate',
-          s: ws[unitRateCell]?.s || {}
-        };
-        ws[totalCell] = {
-          t: 's',
-          v: 'Total',
-          s: ws[totalCell]?.s || {}
-        };
-      }
-
-      const dataStartRow = 6;
-      const range = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 5, c: 2 } };
-
-      const supplierTotals = suppliers.map(() => 0);
-
-      comparisonData.forEach((row, idx) => {
-        const rowNum = dataStartRow + idx;
-
-        ws[XLSX.utils.encode_cell({ r: rowNum, c: 0 })] = {
-          t: 's',
-          v: row.description || ''
-        };
-        ws[XLSX.utils.encode_cell({ r: rowNum, c: 1 })] = {
-          t: 'n',
-          v: row.quantity || 0
-        };
-        ws[XLSX.utils.encode_cell({ r: rowNum, c: 2 })] = {
-          t: 's',
-          v: row.unit || ''
-        };
+      comparisonData.forEach((row) => {
+        const dataRow = [row.description || '', row.quantity || 0, row.unit || ''];
 
         suppliers.forEach((supplier, supplierIdx) => {
           const supplierData = row.suppliers?.[supplier.supplierName];
-          const unitRateCol = startCol + (supplierIdx * 2);
-          const totalCol = unitRateCol + 1;
 
           if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
-            ws[XLSX.utils.encode_cell({ r: rowNum, c: unitRateCol })] = {
-              t: 'n',
-              v: supplierData.unitPrice,
-              z: '"$"#,##0.00'
-            };
-            ws[XLSX.utils.encode_cell({ r: rowNum, c: totalCol })] = {
-              t: 'n',
-              v: supplierData.total,
-              z: '"$"#,##0.00'
-            };
+            dataRow.push(
+              supplierData.quantity ?? 'N/A',
+              supplierData.unit || 'N/A',
+              supplierData.normalisedUnit || 'N/A',
+              supplierData.unitPrice,
+              supplierData.total
+            );
             supplierTotals[supplierIdx] += supplierData.total || 0;
           } else {
-            ws[XLSX.utils.encode_cell({ r: rowNum, c: unitRateCol })] = {
-              t: 's',
-              v: 'N/A'
-            };
-            ws[XLSX.utils.encode_cell({ r: rowNum, c: totalCol })] = {
-              t: 's',
-              v: 'N/A'
-            };
+            dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }
         });
 
-        range.e.r = Math.max(range.e.r, rowNum);
-        range.e.c = Math.max(range.e.c, startCol + (suppliers.length * 2) - 1);
+        dataRows.push(dataRow);
       });
 
-      const subtotalRow = dataStartRow + comparisonData.length;
-      ws[XLSX.utils.encode_cell({ r: subtotalRow, c: 0 })] = {
-        t: 's',
-        v: 'Subtotals:'
-      };
+      const subtotalsRow = ['Subtotals:', '', ''];
+      suppliers.forEach((_, idx) => {
+        subtotalsRow.push('', '', '', '', supplierTotals[idx]);
+      });
+      dataRows.push(subtotalsRow);
 
-      suppliers.forEach((supplier, supplierIdx) => {
-        const totalCol = startCol + (supplierIdx * 2) + 1;
-        ws[XLSX.utils.encode_cell({ r: subtotalRow, c: totalCol })] = {
-          t: 'n',
-          v: supplierTotals[supplierIdx],
-          z: '$#,##0.00'
-        };
+      const allData = [...headerData, ...dataRows];
+      const ws = XLSX.utils.aoa_to_sheet(allData);
+
+      const colWidths = [{ wch: 50 }, { wch: 8 }, { wch: 10 }];
+      suppliers.forEach(() => {
+        colWidths.push({ wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 15 });
+      });
+      ws['!cols'] = colWidths;
+
+      ws['!merges'] = [
+        { s: { r: 4, c: 0 }, e: { r: 5, c: 0 } },
+        { s: { r: 4, c: 1 }, e: { r: 5, c: 1 } },
+        { s: { r: 4, c: 2 }, e: { r: 5, c: 2 } }
+      ];
+
+      suppliers.forEach((_, idx) => {
+        const startSupplierCol = startCol + (idx * 5);
+        ws['!merges'].push({
+          s: { r: 4, c: startSupplierCol },
+          e: { r: 4, c: startSupplierCol + 4 }
+        });
       });
 
-      range.e.r = Math.max(range.e.r, subtotalRow);
-      ws['!ref'] = XLSX.utils.encode_range(range);
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+      for (let R = 0; R <= range.e.r; R++) {
+        for (let C = 0; C <= range.e.c; C++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' };
+          if (!ws[cellAddress].s) ws[cellAddress].s = {};
+
+          if (R === 0) {
+            ws[cellAddress].s = {
+              font: { bold: true, sz: 14 },
+              alignment: { horizontal: 'left', vertical: 'center' }
+            };
+          }
+
+          if (R === 4 || R === 5) {
+            ws[cellAddress].s = {
+              font: { bold: true },
+              alignment: { horizontal: 'center', vertical: 'center' },
+              border: {
+                top: { style: 'thin', color: { rgb: '000000' } },
+                bottom: { style: 'thin', color: { rgb: '000000' } },
+                left: { style: 'thin', color: { rgb: '000000' } },
+                right: { style: 'thin', color: { rgb: '000000' } }
+              }
+            };
+
+            if (C >= startCol) {
+              const supplierIdx = Math.floor((C - startCol) / 5);
+              if (supplierIdx < supplierColors.length) {
+                ws[cellAddress].s.fill = { fgColor: { rgb: supplierColors[supplierIdx] } };
+              }
+            }
+          }
+
+          if (R > 5) {
+            if (C >= startCol) {
+              const supplierIdx = Math.floor((C - startCol) / 5);
+              if (supplierIdx < supplierColors.length) {
+                ws[cellAddress].s = {
+                  fill: { fgColor: { rgb: supplierColors[supplierIdx] } },
+                  alignment: { horizontal: 'right', vertical: 'center' },
+                  border: {
+                    top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                  }
+                };
+
+                if (typeof ws[cellAddress].v === 'number') {
+                  ws[cellAddress].z = '"$"#,##0.00';
+                }
+              }
+            }
+
+            if (R === range.e.r) {
+              ws[cellAddress].s = {
+                ...ws[cellAddress].s,
+                font: { bold: true }
+              };
+            }
+          }
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Itemized Comparison');
 
       const sanitizedProjectName = (currentProject?.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `Itemized_Comparison_${sanitizedProjectName}_${new Date().toISOString().split('T')[0]}.xlsx`;

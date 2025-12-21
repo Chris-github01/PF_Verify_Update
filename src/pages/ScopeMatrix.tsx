@@ -745,30 +745,35 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
 
       const wb = XLSX.utils.book_new();
 
-      const headerData: any[][] = [];
-      headerData.push(['Itemized Comparison', '', '', '', '', '', '']);
-      headerData.push([`Project: ${projectId || 'Unknown'}`, '', '', '', '', '', '']);
-      headerData.push([`Generated: ${new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}`, '', '', '', '', '', '']);
-      headerData.push(['', '', '', '', '', '', '']);
+      const supplierColors = [
+        'E8F5E9', 'FFF3E0', 'E3F2FD', 'FCE4EC', 'F3E5F5',
+        'FFF9C4', 'E0F2F1', 'FFEBEE', 'F1F8E9', 'FBE9E7',
+        'E8EAF6', 'F3E5F5', 'E0F7FA', 'FFF8E1', 'EFEBE9'
+      ];
 
-      const headerRow = ['Item Description', 'Qty', 'Unit'];
+      const headerData: any[][] = [];
+      headerData.push(['Itemized Comparison - QS Standard (System-Level)']);
+      headerData.push([`Project: ${projectId || 'Unknown'}`]);
+      headerData.push([`Generated: ${new Date().toLocaleString()}`]);
+      headerData.push([]);
+
+      const headerRow = ['System Description', 'Qty', 'UOM'];
       suppliers.forEach(supplier => {
-        headerRow.push(supplier, '');
+        headerRow.push(supplier, '', '', '', '');
       });
       headerData.push(headerRow);
 
       const subHeaderRow = ['', '', ''];
       suppliers.forEach(() => {
-        subHeaderRow.push('Unit Rate', 'Total');
+        subHeaderRow.push('Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
       });
       headerData.push(subHeaderRow);
 
       const dataRows: any[][] = [];
-
       const supplierTotals: number[] = new Array(suppliers.length).fill(0);
 
       matrixRows.forEach((row) => {
-        const dataRow = [row.systemLabel || row.systemId, '', ''];
+        const dataRow = [row.systemLabel || row.systemId, '', 'Mixed'];
 
         suppliers.forEach((supplier, supplierIdx) => {
           const cell = row.cells[supplier];
@@ -777,11 +782,18 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             const unitRate = cell.unitRate;
             const total = cell.totalValue !== undefined ? cell.totalValue :
                          (cell.totalQuantity && cell.unitRate ? cell.totalQuantity * cell.unitRate : 0);
+            const qty = cell.totalQuantity || 0;
 
-            dataRow.push(unitRate, total);
+            dataRow.push(
+              qty,
+              cell.unit || 'Mixed',
+              cell.normalisedUnit || 'Mixed',
+              unitRate,
+              total
+            );
             supplierTotals[supplierIdx] += total;
           } else {
-            dataRow.push('N/A', 'N/A');
+            dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }
         });
 
@@ -789,28 +801,17 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       });
 
       const subtotalsRow = ['Subtotals:', '', ''];
-      suppliers.forEach((supplier, idx) => {
-        subtotalsRow.push('', supplierTotals[idx]);
+      suppliers.forEach((_, idx) => {
+        subtotalsRow.push('', '', '', '', supplierTotals[idx]);
       });
       dataRows.push(subtotalsRow);
 
       const allData = [...headerData, ...dataRows];
       const ws = XLSX.utils.aoa_to_sheet(allData);
 
-      const supplierColors = [
-        { fgColor: { rgb: 'E8F5E9' } },
-        { fgColor: { rgb: 'FFF3E0' } },
-        { fgColor: { rgb: 'E3F2FD' } },
-        { fgColor: { rgb: 'FCE4EC' } },
-        { fgColor: { rgb: 'F3E5F5' } },
-        { fgColor: { rgb: 'FFF9C4' } },
-        { fgColor: { rgb: 'E0F2F1' } },
-        { fgColor: { rgb: 'FFEBEE' } }
-      ];
-
-      const colWidths = [{ wch: 50 }, { wch: 8 }, { wch: 8 }];
+      const colWidths = [{ wch: 50 }, { wch: 8 }, { wch: 10 }];
       suppliers.forEach(() => {
-        colWidths.push({ wch: 12 }, { wch: 15 });
+        colWidths.push({ wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 15 });
       });
       ws['!cols'] = colWidths;
 
@@ -820,11 +821,11 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         { s: { r: 4, c: 2 }, e: { r: 5, c: 2 } }
       ];
 
-      suppliers.forEach((supplier, idx) => {
-        const startCol = 3 + (idx * 2);
+      suppliers.forEach((_, idx) => {
+        const startSupplierCol = 3 + (idx * 5);
         ws['!merges'].push({
-          s: { r: 4, c: startCol },
-          e: { r: 4, c: startCol + 1 }
+          s: { r: 4, c: startSupplierCol },
+          e: { r: 4, c: startSupplierCol + 4 }
         });
       });
 
@@ -834,7 +835,6 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         for (let C = 0; C <= range.e.c; C++) {
           const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
           if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' };
-
           if (!ws[cellAddress].s) ws[cellAddress].s = {};
 
           if (R === 0) {
@@ -857,19 +857,19 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             };
 
             if (C >= 3) {
-              const supplierIdx = Math.floor((C - 3) / 2);
+              const supplierIdx = Math.floor((C - 3) / 5);
               if (supplierIdx < supplierColors.length) {
-                ws[cellAddress].s.fill = supplierColors[supplierIdx];
+                ws[cellAddress].s.fill = { fgColor: { rgb: supplierColors[supplierIdx] } };
               }
             }
           }
 
           if (R > 5) {
             if (C >= 3) {
-              const supplierIdx = Math.floor((C - 3) / 2);
+              const supplierIdx = Math.floor((C - 3) / 5);
               if (supplierIdx < supplierColors.length) {
                 ws[cellAddress].s = {
-                  fill: supplierColors[supplierIdx],
+                  fill: { fgColor: { rgb: supplierColors[supplierIdx] } },
                   alignment: { horizontal: 'right', vertical: 'center' },
                   border: {
                     top: { style: 'thin', color: { rgb: 'CCCCCC' } },

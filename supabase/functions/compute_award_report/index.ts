@@ -44,10 +44,33 @@ interface ComparisonRow {
     unitPrice: number | null;
     total: number | null;
     originalDescription: string;
+    quantity: number | null;
+    unit: string | null;
+    normalisedUnit: string | null;
   }>;
   matchStatus: string;
   matchConfidence: number;
   notes?: string;
+}
+
+function normalizeUnitDisplay(unit: string | null | undefined): string {
+  if (!unit) return "";
+
+  const unitLower = unit.toLowerCase().trim();
+  const unitMap: Record<string, string> = {
+    'ea': 'No',
+    'each': 'No',
+    'lm': 'm',
+    'sqm': 'm²',
+    'sq m': 'm²',
+    'sqm.': 'm²',
+    'm2': 'm²',
+    'cum': 'm³',
+    'cu m': 'm³',
+    'm3': 'm³',
+  };
+
+  return unitMap[unitLower] || unit;
 }
 
 Deno.serve(async (req: Request) => {
@@ -147,6 +170,9 @@ Deno.serve(async (req: Request) => {
         unitPrice: Number(baseItem.unit_price),
         total: Number(baseItem.total_price),
         originalDescription: baseItem.description,
+        quantity: Number(baseItem.quantity),
+        unit: baseItem.unit || "",
+        normalisedUnit: normalizeUnitDisplay(baseItem.unit),
       };
 
       for (let i = 1; i < quotesWithItems.length; i++) {
@@ -172,12 +198,18 @@ Deno.serve(async (req: Request) => {
             unitPrice: Number(matchedItem.unit_price),
             total: Number(matchedItem.total_price),
             originalDescription: matchedItem.description,
+            quantity: Number(matchedItem.quantity),
+            unit: matchedItem.unit || "",
+            normalisedUnit: normalizeUnitDisplay(matchedItem.unit),
           };
         } else {
           row.suppliers[otherQuote.supplier_name] = {
             unitPrice: null,
             total: null,
             originalDescription: "N/A",
+            quantity: null,
+            unit: null,
+            normalisedUnit: null,
           };
           row.matchStatus = "unmatched";
           row.notes = `No match found in ${otherQuote.supplier_name}`;
@@ -226,12 +258,18 @@ Deno.serve(async (req: Request) => {
             unitPrice: null,
             total: null,
             originalDescription: "N/A",
+            quantity: null,
+            unit: null,
+            normalisedUnit: null,
           };
 
           row.suppliers[otherQuote.supplier_name] = {
             unitPrice: Number(item.unit_price),
             total: Number(item.total_price),
             originalDescription: item.description,
+            quantity: Number(item.quantity),
+            unit: item.unit || "",
+            normalisedUnit: normalizeUnitDisplay(item.unit),
           };
 
           comparisonData.push(row);
