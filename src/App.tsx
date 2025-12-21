@@ -27,6 +27,7 @@ import CopilotDrawer from './components/CopilotDrawer';
 import TrialStatusBanner from './components/TrialStatusBanner';
 import Login from './pages/Login';
 import LandingPage from './pages/LandingPage';
+import VideoPage from './pages/VideoPage';
 import Pricing from './pages/Pricing';
 import TrialSignup from './pages/TrialSignup';
 import TrialExpired from './pages/TrialExpired';
@@ -758,6 +759,10 @@ function AppContent() {
 
   if (window.location.pathname === '/demo-login') {
     return <DemoLogin />;
+  }
+
+  if (window.location.pathname === '/video') {
+    return <VideoPage />;
   }
 
   if (!session) {

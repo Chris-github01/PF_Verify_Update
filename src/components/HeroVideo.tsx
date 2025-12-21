@@ -1,20 +1,12 @@
-import { useState } from 'react';
-import { Play, Mail, ExternalLink } from 'lucide-react';
+import { Play, Mail } from 'lucide-react';
 
 interface HeroVideoProps {
   onBookDemo: () => void;
 }
 
 export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
-  const [videoLoaded, setVideoLoaded] = useState(false);
-  const [iframeError, setIframeError] = useState(false);
-
-  const loadVideo = () => {
-    setVideoLoaded(true);
-  };
-
-  const openVimeoVideo = () => {
-    window.open('https://vimeo.com/1148392322', '_blank', 'noopener,noreferrer');
+  const navigateToVideo = () => {
+    window.location.href = '/video';
   };
 
   return (
@@ -36,71 +28,36 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
             </p>
           </div>
 
-          {/* Video Container */}
+          {/* Video Card */}
           <div className="relative bg-black overflow-hidden">
-            {!videoLoaded ? (
-              // Premium Poster with Play Button (Initial State)
-              <div className="relative pb-[56.25%] h-0">
-                <button
-                  onClick={loadVideo}
-                  className="absolute inset-0 w-full h-full group cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900"
-                  aria-label="Play the Verify+ overview video"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-                    {/* Subtle Glow Behind Play Button */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-32 h-32 sm:w-40 sm:h-40 bg-orange-500/20 rounded-full blur-3xl" />
-                    </div>
-
-                    {/* Play Button Overlay */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
-                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-orange-500 group-hover:bg-orange-600 flex items-center justify-center shadow-2xl transform group-hover:scale-110 transition-all duration-300">
-                        <Play size={40} className="text-white ml-1.5" fill="currentColor" />
-                      </div>
-                      <p className="mt-6 text-sm text-slate-300 font-medium">2:03 • Watch the full overview</p>
-                    </div>
-
-                    {/* Background Icon */}
-                    <div className="text-center z-0 px-4 pointer-events-none opacity-20">
-                      <Shield className="w-32 h-32 sm:w-40 sm:h-40 mx-auto text-orange-500" />
-                    </div>
+            <div className="relative pb-[56.25%] h-0">
+              <button
+                onClick={navigateToVideo}
+                className="absolute inset-0 w-full h-full group cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+                aria-label="Watch the Verify+ overview video"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+                  {/* Subtle Glow Behind Play Button */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-32 h-32 sm:w-40 sm:h-40 bg-orange-500/20 rounded-full blur-3xl" />
                   </div>
-                </button>
-              </div>
-            ) : (
-              // Vimeo Iframe (After Click)
-              <div className="relative">
-                <div className="relative pb-[56.25%] h-0">
-                  <iframe
-                    src="https://player.vimeo.com/video/1148392322?badge=0&autopause=0&player_id=0&app_id=58479"
-                    className="absolute top-0 left-0 w-full h-full"
-                    allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share"
-                    allowFullScreen
-                    onError={() => setIframeError(true)}
-                    title="Verify+ Explained"
-                    loading="lazy"
-                  />
+
+                  {/* Play Button Overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
+                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-orange-500 group-hover:bg-orange-600 flex items-center justify-center shadow-2xl transform group-hover:scale-110 transition-all duration-300">
+                      <Play size={40} className="text-white ml-1.5" fill="currentColor" />
+                    </div>
+                    <p className="mt-6 text-base sm:text-lg text-white font-semibold">Watch the 2-minute overview</p>
+                    <p className="mt-2 text-sm text-slate-400">See how we cut quote analysis from days to minutes</p>
+                  </div>
+
+                  {/* Background Icon */}
+                  <div className="text-center z-0 px-4 pointer-events-none opacity-20">
+                    <Shield className="w-32 h-32 sm:w-40 sm:h-40 mx-auto text-orange-500" />
+                  </div>
                 </div>
-
-                {/* Secondary Fallback Link (if iframe blocked) */}
-                {iframeError && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900/95">
-                    <div className="text-center px-6">
-                      <Shield className="w-16 h-16 mx-auto mb-4 text-orange-500" />
-                      <h3 className="text-xl font-bold text-white mb-3">Video Loading Issue</h3>
-                      <p className="text-slate-400 mb-6 text-sm">Unable to load the video player in this environment.</p>
-                      <button
-                        onClick={openVimeoVideo}
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg transition-colors shadow-lg"
-                      >
-                        <ExternalLink size={18} />
-                        Open on Vimeo
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              </button>
+            </div>
           </div>
 
           {/* CTA Buttons */}
@@ -126,7 +83,7 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
 
             {/* Trust Line */}
             <p className="text-center text-xs sm:text-sm text-slate-500">
-              Built for contractors, QS teams, engineers, and delivery managers across NZ & Australia.
+              Built for main contractors, QS teams, and delivery managers.
             </p>
           </div>
         </div>
