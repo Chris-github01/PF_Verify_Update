@@ -13,25 +13,29 @@ export interface UserPreferences {
  * Get user preferences for the current user
  */
 export async function getUserPreferences(): Promise<UserPreferences | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    console.warn('[UserPreferences] No authenticated user');
+    if (!user) {
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[UserPreferences] Could not fetch preferences (not critical):', error.message);
+      return null;
+    }
+
+    return data;
+  } catch (err) {
+    // Silently fail - preferences are not critical
     return null;
   }
-
-  const { data, error } = await supabase
-    .from('user_preferences')
-    .select('*')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (error) {
-    console.error('[UserPreferences] Error fetching preferences:', error);
-    return null;
-  }
-
-  return data;
 }
 
 /**

@@ -145,14 +145,13 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (!authLoading && session) {
+    if (!authLoading && session && currentOrganisation) {
       initializeApp();
     }
-  }, [authLoading, session]);
+  }, [authLoading, session, currentOrganisation]);
 
   useEffect(() => {
     if (currentOrganisation) {
-      initializeApp();
       loadOrgLicensing();
     }
   }, [currentOrganisation]);
@@ -223,8 +222,10 @@ function AppContent() {
   }, [projectId]);
 
 
+  // Load projects when organisation changes (but only if we don't have any yet)
+  // This prevents infinite loops by checking if projects are already loaded
   useEffect(() => {
-    if (allProjects.length === 0 && currentOrganisation) {
+    if (allProjects.length === 0 && currentOrganisation && !loading) {
       loadAllProjects();
     }
   }, [currentOrganisation]);
