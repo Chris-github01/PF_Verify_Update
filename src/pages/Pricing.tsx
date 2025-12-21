@@ -9,7 +9,7 @@ interface PricingProps {
 }
 
 export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: PricingProps) {
-  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('annual');
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annual'>('monthly');
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const [showDemoModal, setShowDemoModal] = useState(false);
 
