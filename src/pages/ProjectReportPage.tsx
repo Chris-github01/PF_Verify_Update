@@ -141,10 +141,10 @@ export default function ProjectReportPage({
       const result = reportData.result_json;
       const awardSummary = result.awardSummary;
 
-      // Get project data for client name
+      // Get project data for client name and approved quote
       const { data: projectData } = await supabase
         .from('projects')
-        .select('client')
+        .select('client, approved_quote_id')
         .eq('id', projectId)
         .maybeSingle();
 
@@ -180,6 +180,7 @@ export default function ProjectReportPage({
         generatedAt: reportData.generated_at,
         recommendations,
         suppliers,
+        approvedQuoteId: projectData?.approved_quote_id,
         executiveSummary: `This report provides a comprehensive evaluation of ${suppliers.length} supplier quotes received for ${projectName}. Our analysis employs a multi-criteria assessment framework evaluating pricing competitiveness, technical compliance, scope completeness, and risk factors. The recommended supplier demonstrates optimal value delivery across all evaluation dimensions.`,
         methodology: [
           'Quote Import & Validation',

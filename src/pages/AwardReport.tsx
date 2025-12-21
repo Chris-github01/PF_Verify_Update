@@ -540,6 +540,7 @@ export default function AwardReport({
         generatedAt: reportTimestamp || awardSummary.generatedAt || new Date().toISOString(),
         recommendations,
         suppliers,
+        approvedQuoteId: currentProject.approved_quote_id,
         executiveSummary: `Award recommendation analysis for ${currentProject.name}. Total systems analyzed: ${awardSummary.totalSystems}.`,
         methodology: [
           'Quote Import & Validation',

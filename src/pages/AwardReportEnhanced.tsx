@@ -485,7 +485,8 @@ export default function AwardReportEnhanced({
         itemsQuoted: s.itemsQuoted,
         totalItems: awardSummary.totalSystems,
         weightedScore: s.weightedTotal,
-        notes: []
+        notes: [],
+        quoteId: s.quoteId
       }));
 
       // Transform recommendations
@@ -565,6 +566,7 @@ export default function AwardReportEnhanced({
         recommendations,
         suppliers,
         organisationLogoUrl,
+        approvedQuoteId: currentProject.approved_quote_id,
         executiveSummary: `This report provides a comprehensive evaluation of ${suppliers.length} supplier quotes received for ${currentProject.name}. Our analysis employs a multi-criteria assessment framework evaluating pricing competitiveness, technical compliance, scope completeness, and risk factors. The recommended supplier demonstrates optimal value delivery across all evaluation dimensions.`,
         methodology: [
           'Quote Import & Validation',

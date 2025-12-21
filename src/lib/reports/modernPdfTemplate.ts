@@ -22,6 +22,7 @@ interface SupplierRow {
   totalItems: number;
   weightedScore?: number;
   notes?: string[];
+  quoteId?: string;
 }
 
 interface ModernPdfOptions {
@@ -35,6 +36,7 @@ interface ModernPdfOptions {
   additionalSections?: Array<{ title: string; content: string }>;
   organisationLogoUrl?: string;
   renderMode?: 'screen' | 'pdf';
+  approvedQuoteId?: string | null;
 }
 
 const VERIFYTRADE_ORANGE = '#f97316';
@@ -55,7 +57,8 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     methodology,
     additionalSections,
     organisationLogoUrl,
-    renderMode = 'screen'
+    renderMode = 'screen',
+    approvedQuoteId
   } = options;
 
   const totalSystems = suppliers[0]?.totalItems || 0;
@@ -699,6 +702,11 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
       color: #92400e;
     }
 
+    .action-tag.unsuccessful {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
     /* === CONTENT SECTIONS === */
     .content-section {
       margin: 40px 0;
@@ -1117,18 +1125,28 @@ function generateSupplierComparisonPage(options: ModernPdfOptions): string {
           </tr>
         </thead>
         <tbody>
-          ${suppliers.map((supplier, index) => `
-            <tr class="${supplier.rank === 1 ? 'rank-1' : ''}">
+          ${suppliers.map((supplier, index) => {
+            let statusTag = '<span class="action-tag pending">Pending</span>';
+            if (approvedQuoteId && supplier.quoteId) {
+              if (supplier.quoteId === approvedQuoteId) {
+                statusTag = '<span class="action-tag approved">Approved</span>';
+              } else {
+                statusTag = '<span class="action-tag unsuccessful">Unsuccessful</span>';
+              }
+            }
+            return `
+            <tr class="${supplier.quoteId === approvedQuoteId ? 'rank-1' : ''}">
               <td><strong>${supplier.supplierName}</strong></td>
               <td class="price-cell">$${supplier.adjustedTotal.toLocaleString()}</td>
               <td>${supplier.itemsQuoted} / ${supplier.totalItems}</td>
               <td>${supplier.coveragePercent.toFixed(1)}%</td>
               <td>${(10 - supplier.riskScore).toFixed(1)}/10</td>
               <td>
-                ${supplier.rank === 1 ? '<span class="action-tag approved">Approved</span>' : '<span class="action-tag pending">Pending</span>'}
+                ${statusTag}
               </td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     </div>
