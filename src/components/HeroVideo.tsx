@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Play, Mail } from 'lucide-react';
 
 interface HeroVideoProps {
@@ -6,14 +6,32 @@ interface HeroVideoProps {
 }
 
 export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
-  const [iframeError, setIframeError] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleIframeError = () => {
-    setIframeError(true);
+  useEffect(() => {
+    // Start timer: if iframe hasn't loaded within 1500ms, assume it's blocked
+    timerRef.current = setTimeout(() => {
+      setIsBlocked(true);
+    }, 1500);
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+  const handleIframeLoad = () => {
+    // Iframe loaded successfully, clear timer and ensure not blocked
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    setIsBlocked(false);
   };
 
   const openVimeoVideo = () => {
-    window.open('https://vimeo.com/1148392322', '_blank');
+    window.open('https://vimeo.com/1148392322', '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -36,41 +54,44 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
           </div>
 
           {/* Video Container */}
-          <div className="relative bg-black">
-            {!iframeError ? (
+          <div className="relative bg-black rounded-b-2xl overflow-hidden">
+            {!isBlocked ? (
               <div className="relative pb-[56.25%] h-0">
                 <iframe
-                  src="https://player.vimeo.com/video/1148392322"
+                  src="https://player.vimeo.com/video/1148392322?badge=0&autopause=0&player_id=0&app_id=58479"
                   className="absolute top-0 left-0 w-full h-full"
                   allow="autoplay; fullscreen; picture-in-picture"
                   allowFullScreen
-                  onError={handleIframeError}
-                  title="Verify+ — Commercial & Compliance Platform Overview"
+                  onLoad={handleIframeLoad}
+                  title="Verify+ Explained"
                   loading="lazy"
                 />
               </div>
             ) : (
-              // Fallback Poster with Play Button
-              <div
-                className="relative w-full cursor-pointer group"
-                style={{ paddingTop: '56.25%' }}
-                onClick={openVimeoVideo}
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-                  {/* Play Button Overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/30 transition-colors">
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-orange-500 hover:bg-orange-600 flex items-center justify-center shadow-2xl transform group-hover:scale-110 transition-transform">
-                      <Play size={32} className="text-white ml-1" fill="currentColor" />
+              // Premium Fallback with Play Button
+              <div className="relative pb-[56.25%] h-0">
+                <button
+                  onClick={openVimeoVideo}
+                  className="absolute inset-0 w-full h-full group cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+                  aria-label="Watch the Verify+ overview video (opens in a new tab)"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+                    {/* Play Button Overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/30 transition-colors">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-orange-500 group-hover:bg-orange-600 flex items-center justify-center shadow-2xl transform group-hover:scale-110 transition-transform">
+                        <Play size={32} className="text-white ml-1" fill="currentColor" />
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="text-center z-10 px-4 pointer-events-none">
+                      <Shield className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 text-orange-500" />
+                      <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">Verify+ Platform Demo</h3>
+                      <p className="text-sm sm:text-base text-slate-400 mb-2">Click to watch the full demonstration</p>
+                      <p className="text-xs text-slate-500 italic">Opens in a new tab</p>
                     </div>
                   </div>
-
-                  {/* Placeholder Content */}
-                  <div className="text-center z-10 px-4">
-                    <Shield className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 text-orange-500" />
-                    <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">Verify+ Platform Demo</h3>
-                    <p className="text-sm sm:text-base text-slate-400">Click to watch the full demonstration</p>
-                  </div>
-                </div>
+                </button>
               </div>
             )}
           </div>
