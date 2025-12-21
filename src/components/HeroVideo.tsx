@@ -27,12 +27,13 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
           {/* Video Player */}
           <div className="relative bg-black overflow-hidden">
             <video
-              className="w-full h-auto"
               controls
               playsInline
-              preload="metadata"
+              preload="auto"
               style={{
-                borderRadius: '0',
+                width: '100%',
+                borderRadius: '18px',
+                background: '#000',
                 boxShadow: '0 30px 80px rgba(0,0,0,0.45)'
               }}
             >
