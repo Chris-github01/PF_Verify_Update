@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import ApprovalModal from '../components/ApprovalModal';
 import RevisionRequestModal from '../components/RevisionRequestModal';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
@@ -471,11 +472,13 @@ export default function AwardReportEnhanced({
     }
 
     try {
-      const wb = XLSX.utils.book_new();
-      const suppliers = awardSummary.suppliers;
-      const startCol = 1; // Start at column B (index 1) - no baseline columns
+      // Use ExcelJS for proper color support
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Itemized Comparison');
 
-      // Soft pastel colors for visual distinction between suppliers
+      const suppliers = awardSummary.suppliers;
+
+      // Soft pastel colors for visual distinction between suppliers (hex without #)
       const supplierColors = [
         'E8F5E9', // Soft mint green
         'FFF3E0', // Soft peach
@@ -494,38 +497,49 @@ export default function AwardReportEnhanced({
         'F9FBE7'  // Soft olive
       ];
 
-      const headerData: any[][] = [];
-      headerData.push(['Itemized Comparison - QS Standard']);
-      headerData.push([`Project: ${currentProject?.name || projectId}`]);
-      headerData.push([`Generated: ${new Date().toLocaleString()}`]);
-      headerData.push([]);
+      // Add header rows
+      worksheet.addRow(['Itemized Comparison - QS Standard']);
+      worksheet.addRow([`Project: ${currentProject?.name || projectId}`]);
+      worksheet.addRow([`Generated: ${new Date().toLocaleString()}`]);
+      worksheet.addRow([]);
 
-      // Header row - just Item Description then supplier names (no baseline columns)
-      const headerRow = ['Item Description'];
-      suppliers.forEach(supplier => {
-        headerRow.push(supplier.supplierName, '', '', '', '');
+      // Header row 5 - supplier names
+      const supplierNameRow = worksheet.addRow(['Item Description', ...suppliers.flatMap(s => [s.supplierName, '', '', '', ''])]);
+
+      // Header row 6 - column labels
+      const columnHeaderRow = worksheet.addRow(['', ...suppliers.flatMap(() => ['Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total'])]);
+
+      // Set column widths
+      worksheet.getColumn(1).width = 50; // Item Description
+      for (let i = 2; i <= 1 + (suppliers.length * 5); i++) {
+        const colIdx = (i - 2) % 5;
+        if (colIdx === 0) worksheet.getColumn(i).width = 10;  // Qty
+        else if (colIdx === 1) worksheet.getColumn(i).width = 12; // UOM
+        else if (colIdx === 2) worksheet.getColumn(i).width = 12; // Norm UOM
+        else if (colIdx === 3) worksheet.getColumn(i).width = 12; // Unit Rate
+        else worksheet.getColumn(i).width = 15; // Total
+      }
+
+      // Merge cells for Item Description header
+      worksheet.mergeCells('A5:A6');
+
+      // Merge supplier name cells
+      suppliers.forEach((_, idx) => {
+        const startCol = 2 + (idx * 5);
+        const endCol = startCol + 4;
+        worksheet.mergeCells(5, startCol, 5, endCol);
       });
-      headerData.push(headerRow);
 
-      // Subheader row - 5 columns per supplier
-      const subHeaderRow = [''];
-      suppliers.forEach(() => {
-        subHeaderRow.push('Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
-      });
-      headerData.push(subHeaderRow);
-
-      const dataRows: any[][] = [];
       const supplierTotals: number[] = new Array(suppliers.length).fill(0);
 
+      // Add data rows
       comparisonData.forEach((row) => {
-        // Start with just the description - no baseline qty/unit columns
-        const dataRow = [row.description || ''];
+        const rowData = [row.description || ''];
 
         suppliers.forEach((supplier, supplierIdx) => {
           const supplierData = row.suppliers?.[supplier.supplierName];
 
           if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
-            // Better handling of values - show actual values even if 0 or empty string
             const qty = supplierData.quantity !== null && supplierData.quantity !== undefined
               ? supplierData.quantity
               : 'N/A';
@@ -536,154 +550,109 @@ export default function AwardReportEnhanced({
               ? supplierData.normalisedUnit
               : 'N/A';
 
-            dataRow.push(qty, unit, normUnit, supplierData.unitPrice, supplierData.total);
+            rowData.push(qty, unit, normUnit, supplierData.unitPrice, supplierData.total);
             supplierTotals[supplierIdx] += supplierData.total || 0;
           } else {
-            dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
+            rowData.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }
         });
 
-        dataRows.push(dataRow);
+        worksheet.addRow(rowData);
       });
 
-      // Subtotals row - just description column then supplier totals
-      const subtotalsRow = ['Subtotals:'];
-      suppliers.forEach((_, idx) => {
-        subtotalsRow.push('', '', '', '', supplierTotals[idx]);
-      });
-      dataRows.push(subtotalsRow);
+      // Add subtotals row
+      worksheet.addRow(subtotalsRow);
 
-      const allData = [...headerData, ...dataRows];
-      const ws = XLSX.utils.aoa_to_sheet(allData);
+      // Style header rows (rows 1-3)
+      worksheet.getRow(1).font = { bold: true, size: 14 };
+      worksheet.getRow(1).alignment = { horizontal: 'left', vertical: 'middle' };
 
-      // Column widths - no baseline columns, just item description then suppliers
-      const colWidths = [{ wch: 50 }]; // Item Description
-      suppliers.forEach(() => {
-        colWidths.push({ wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 });
-      });
-      ws['!cols'] = colWidths;
+      // Style supplier name headers (row 5) and column headers (row 6)
+      [5, 6].forEach(rowNum => {
+        const row = worksheet.getRow(rowNum);
+        row.font = { bold: true };
+        row.alignment = { horizontal: 'center', vertical: 'middle' };
+        row.eachCell((cell, colNumber) => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } }
+          };
 
-      // IMPORTANT: Create fills for each supplier color
-      const fills = supplierColors.map(color => ({
-        patternType: 'solid',
-        fgColor: { rgb: color }
-      }));
-
-      // Merge cells - only Item Description column (no baseline columns to merge)
-      ws['!merges'] = [
-        { s: { r: 4, c: 0 }, e: { r: 5, c: 0 } } // Merge Item Description header
-      ];
-
-      // Merge supplier name headers across their 5 columns
-      suppliers.forEach((_, idx) => {
-        const startSupplierCol = 1 + (idx * 5); // Start at column 1 (B), not 3
-        ws['!merges'].push({
-          s: { r: 4, c: startSupplierCol },
-          e: { r: 4, c: startSupplierCol + 4 }
+          // Apply colors to supplier columns (skip column A)
+          if (colNumber > 1) {
+            const supplierIdx = Math.floor((colNumber - 2) / 5);
+            if (supplierIdx < supplierColors.length) {
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF' + supplierColors[supplierIdx] }
+              };
+            }
+          }
         });
       });
 
-      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      // Style data rows (starting from row 7)
+      for (let rowNum = 7; rowNum <= worksheet.rowCount; rowNum++) {
+        const row = worksheet.getRow(rowNum);
+        const isSubtotalRow = rowNum === worksheet.rowCount;
 
-      for (let R = 0; R <= range.e.r; R++) {
-        for (let C = 0; C <= range.e.c; C++) {
-          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-          if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' };
-          if (!ws[cellAddress].s) ws[cellAddress].s = {};
-
-          if (R === 0) {
-            ws[cellAddress].s = {
-              font: { bold: true, sz: 14 },
-              alignment: { horizontal: 'left', vertical: 'center' }
+        row.eachCell((cell, colNumber) => {
+          // Item Description column
+          if (colNumber === 1) {
+            cell.alignment = { horizontal: 'left', vertical: 'middle' };
+            cell.border = {
+              top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+              left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+              bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+              right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
             };
-          }
+            if (isSubtotalRow) cell.font = { bold: true };
+          } else {
+            // Supplier columns
+            const supplierIdx = Math.floor((colNumber - 2) / 5);
+            const columnInSupplier = (colNumber - 2) % 5; // 0=Qty, 1=UOM, 2=NormUOM, 3=UnitRate, 4=Total
 
-          // Header rows (supplier names and column headers)
-          if (R === 4 || R === 5) {
-            ws[cellAddress].s = {
-              font: { bold: true },
-              alignment: { horizontal: 'center', vertical: 'center' },
-              border: {
-                top: { style: 'thin', color: { rgb: '000000' } },
-                bottom: { style: 'thin', color: { rgb: '000000' } },
-                left: { style: 'thin', color: { rgb: '000000' } },
-                right: { style: 'thin', color: { rgb: '000000' } }
-              }
-            };
-
-            // Apply supplier colors to header (skip column A)
-            if (C >= startCol) {
-              const supplierIdx = Math.floor((C - startCol) / 5);
-              if (supplierIdx < supplierColors.length) {
-                ws[cellAddress].s.fill = {
-                  patternType: 'solid',
-                  fgColor: { rgb: 'FF' + supplierColors[supplierIdx] }
-                };
-              }
-            }
-          }
-
-          // Data rows
-          if (R > 5) {
-            // Item Description column (A) - no color, left-aligned
-            if (C === 0) {
-              ws[cellAddress].s = {
-                alignment: { horizontal: 'left', vertical: 'center' },
-                border: {
-                  top: { style: 'thin', color: { rgb: 'CCCCCC' } },
-                  bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
-                  left: { style: 'thin', color: { rgb: 'CCCCCC' } },
-                  right: { style: 'thin', color: { rgb: 'CCCCCC' } }
-                }
+            if (supplierIdx < supplierColors.length) {
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF' + supplierColors[supplierIdx] }
               };
-            }
-            // Supplier data columns (B onwards)
-            else if (C >= startCol) {
-              const supplierIdx = Math.floor((C - startCol) / 5);
-              if (supplierIdx < supplierColors.length) {
-                ws[cellAddress].s = {
-                  fill: {
-                    patternType: 'solid',
-                    fgColor: { rgb: 'FF' + supplierColors[supplierIdx] }
-                  },
-                  alignment: { horizontal: 'right', vertical: 'center' },
-                  border: {
-                    top: { style: 'thin', color: { rgb: 'CCCCCC' } },
-                    bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
-                    left: { style: 'thin', color: { rgb: 'CCCCCC' } },
-                    right: { style: 'thin', color: { rgb: 'CCCCCC' } }
-                  }
-                };
-
-                // Format numbers as currency
-                if (typeof ws[cellAddress].v === 'number') {
-                  ws[cellAddress].z = '"$"#,##0.00';
-                }
-              }
-            }
-
-            // Subtotals row - make bold
-            if (R === range.e.r) {
-              ws[cellAddress].s = {
-                ...ws[cellAddress].s,
-                font: { bold: true }
+              cell.alignment = { horizontal: 'right', vertical: 'middle' };
+              cell.border = {
+                top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
               };
+
+              // Apply currency format only to Unit Rate and Total columns
+              if (typeof cell.value === 'number' && (columnInSupplier === 3 || columnInSupplier === 4)) {
+                cell.numFmt = '"$"#,##0.00';
+              }
+
+              if (isSubtotalRow) cell.font = { bold: true };
             }
           }
-        }
+        });
       }
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Itemized Comparison');
-
+      // Write file
+      const buffer = await workbook.xlsx.writeBuffer();
       const sanitizedProjectName = (currentProject?.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `Itemized_Comparison_${sanitizedProjectName}_${new Date().toISOString().split('T')[0]}.xlsx`;
 
-      // Write with cellStyles option enabled to support colors and formatting
-      XLSX.writeFile(wb, filename, {
-        cellStyles: true,
-        bookSST: true,
-        bookType: 'xlsx'
-      });
+      // Download the file
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      window.URL.revokeObjectURL(url);
 
       setShowExportDropdown(false);
       onToast?.('Itemized comparison exported successfully', 'success');
