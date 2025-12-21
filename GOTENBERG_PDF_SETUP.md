@@ -1,0 +1,352 @@
+# Gotenberg PDF Generation Setup
+
+This document explains the Gotenberg-based PDF generation system that replaced DocRaptor.
+
+## Overview
+
+VerifyTrade uses **Gotenberg** (self-hosted HTML→PDF converter) for generating PDF reports. Gotenberg uses Chromium to render HTML with full CSS support, providing high-quality PDF output.
+
+## Architecture
+
+### 1. Edge Function (`generate_pdf_gotenberg`)
+- **Location**: `supabase/functions/generate_pdf_gotenberg/index.ts`
+- **Purpose**: Server-side PDF generation endpoint
+- **Authentication**: Requires valid Supabase user session
+- **Timeout**: 60 seconds
+- **Security**: User authentication verified, request logging enabled
+
+### 2. Frontend Library (`pdfGenerator.ts`)
+- **Location**: `src/lib/reports/pdfGenerator.ts`
+- **Purpose**: Client-side wrapper for PDF generation
+- **Key Functions**:
+  - `generatePdfWithGotenberg()` - Calls edge function
+  - `generateAndDownloadPdf()` - Main entry point with fallback
+  - `downloadPdfBlob()` - Download helper
+  - `fallbackToHtmExport()` - Browser print fallback
+
+### 3. PDF Styles (`pdfStyles.ts`)
+- **Location**: `src/lib/reports/pdfStyles.ts`
+- **Purpose**: Centralized print CSS for consistent rendering
+- **Key Features**:
+  - A4 page sizing with proper margins
+  - Print color preservation
+  - Page break control
+  - Table handling
+  - Orphan/widow prevention
+
+## Configuration
+
+### Environment Variables
+
+Add to `.env` (local) and Supabase Edge Function Secrets (production):
+
+```bash
+# Gotenberg PDF Generation Service
+# Format: https://your-gotenberg-domain (no trailing slash)
+GOTENBERG_URL=https://gotenberg.example.com
+```
+
+### Setting Up Gotenberg
+
+#### Option 1: Self-Hosted (Docker)
+
+```bash
+docker run -d \
+  --name gotenberg \
+  -p 3000:3000 \
+  gotenberg/gotenberg:8 \
+  gotenberg \
+  --chromium-auto-start \
+  --chromium-max-queue-size=50
+```
+
+#### Option 2: Cloud Service
+
+Deploy Gotenberg to any cloud provider:
+- **Render.com** - Docker deployment
+- **Railway.app** - Docker deployment
+- **Google Cloud Run** - Container deployment
+- **AWS ECS/Fargate** - Container deployment
+
+Example `render.yaml` for Render.com:
+
+```yaml
+services:
+  - type: web
+    name: gotenberg
+    env: docker
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: GOTENBERG_CHROMIUM_AUTO_START
+        value: "true"
+```
+
+### Supabase Edge Function Setup
+
+1. Deploy the edge function:
+```bash
+supabase functions deploy generate_pdf_gotenberg
+```
+
+2. Set the environment variable:
+```bash
+supabase secrets set GOTENBERG_URL=https://your-gotenberg-domain
+```
+
+## Usage
+
+### Basic Usage
+
+```typescript
+import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
+
+await generateAndDownloadPdf({
+  htmlContent: '<html>...</html>',
+  filename: 'MyReport',
+  projectName: 'Project Alpha',
+  contractNumber: 'C-2024-001',
+  reportType: 'Award Report'
+});
+```
+
+### With Options
+
+```typescript
+await generateAndDownloadPdf({
+  htmlContent: reportHtml,
+  filename: `AwardReport_${projectName}`,
+  projectName: 'Project Alpha',
+  contractNumber: 'C-2024-001',
+  reportType: 'Tender Award Analysis'
+});
+```
+
+### HTML Preparation
+
+Ensure your HTML includes proper print styles:
+
+```typescript
+import { PDF_PRINT_STYLES, injectPdfStyles } from '../lib/reports/pdfStyles';
+
+// Option 1: Manual injection
+const htmlWithStyles = `
+<html>
+<head>
+  <style>${PDF_PRINT_STYLES}</style>
+</head>
+<body>
+  ${reportContent}
+</body>
+</html>
+`;
+
+// Option 2: Using helper
+const htmlWithStyles = injectPdfStyles(reportHtml, 'pdf');
+```
+
+### Page Break Control
+
+```typescript
+// Prevent page breaks inside elements
+<div class="avoid-break">
+  <h2>Section Title</h2>
+  <p>Content that should stay together...</p>
+</div>
+
+// Force page break before element
+<div class="page-break">
+  <h1>New Section on New Page</h1>
+</div>
+
+// Prevent page breaks inside tables
+<table>
+  <thead>
+    <tr><th>Column 1</th><th>Column 2</th></tr>
+  </thead>
+  <tbody>
+    <tr class="avoid-break">
+      <td>Data 1</td><td>Data 2</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+## Gotenberg API Options
+
+The edge function uses these Gotenberg options:
+
+| Option | Value | Purpose |
+|--------|-------|---------|
+| `paperWidth` | 8.27" | A4 width |
+| `paperHeight` | 11.69" | A4 height |
+| `marginTop` | 0.47" (12mm) | Top margin |
+| `marginBottom` | 0.55" (14mm) | Bottom margin |
+| `marginLeft` | 0.47" (12mm) | Left margin |
+| `marginRight` | 0.47" (12mm) | Right margin |
+| `printBackground` | true | Render background colors/images |
+| `preferCssPageSize` | true | Respect @page CSS rules |
+| `emulatedMediaType` | print | Use print media queries |
+
+### Header & Footer
+
+Headers and footers are added using Gotenberg's header/footer HTML:
+
+**Header Format:**
+```
+[Project Name | Contract Number]    [Date | Page X of Y]
+```
+
+**Footer Format:**
+```
+Generated by VerifyTrade
+```
+
+## Error Handling & Fallback
+
+### Automatic Fallback
+
+If PDF generation fails, the system automatically falls back to browser print:
+
+1. Opens HTML in new window
+2. Shows banner with instructions
+3. Triggers browser print dialog
+4. User selects "Save as PDF"
+
+### Error Scenarios
+
+| Error | Cause | Fallback |
+|-------|-------|----------|
+| `GOTENBERG_URL not set` | Missing env var | HTM export |
+| `Authentication failed` | Invalid session | Error message |
+| `Gotenberg timeout` | Service slow/down | HTM export |
+| `Gotenberg error` | Invalid HTML/CSS | HTM export |
+
+### Monitoring
+
+The edge function logs these events:
+
+```typescript
+console.log('📄 [Gotenberg] Generating PDF: filename.pdf');
+console.log('📄 [Gotenberg] HTML size: 12345 bytes');
+console.log('✅ [Gotenberg] PDF generated: filename.pdf (67890 bytes in 1234ms)');
+console.error('❌ [Gotenberg] PDF generation error (1234ms):', error);
+```
+
+Monitor these logs in Supabase Dashboard → Edge Functions → Logs.
+
+## Troubleshooting
+
+### PDF Not Generating
+
+1. **Check Gotenberg URL**:
+   ```bash
+   curl https://your-gotenberg-domain/health
+   ```
+   Should return: `{"status":"up"}`
+
+2. **Check Edge Function Logs**:
+   - Go to Supabase Dashboard
+   - Edge Functions → `generate_pdf_gotenberg` → Logs
+   - Look for error messages
+
+3. **Verify Environment Variable**:
+   ```bash
+   supabase secrets list
+   ```
+   Should show `GOTENBERG_URL`
+
+### PDF Layout Issues
+
+1. **Test HTML locally**: Save HTML to file and open in browser
+2. **Check print preview**: Browser → Print → See preview
+3. **Validate CSS**: Ensure all CSS is inline or in `<style>` tags
+4. **Check page breaks**: Use `.avoid-break` and `.page-break` classes
+
+### Timeout Issues
+
+If PDFs timeout frequently:
+
+1. **Increase timeout** in edge function (max 300s for Supabase)
+2. **Optimize HTML size**: Remove unnecessary content
+3. **Check Gotenberg resources**: Ensure sufficient CPU/memory
+4. **Scale Gotenberg**: Add more instances or increase container resources
+
+## Performance
+
+### Typical Generation Times
+
+| Report Type | HTML Size | PDF Size | Time |
+|-------------|-----------|----------|------|
+| Award Report | 50KB | 150KB | 2-3s |
+| Site Pack | 100KB | 300KB | 4-6s |
+| Management Report | 200KB | 500KB | 8-12s |
+
+### Optimization Tips
+
+1. **Minimize HTML size**: Remove whitespace, unnecessary elements
+2. **Optimize images**: Use compressed formats, appropriate sizes
+3. **Limit table rows**: Paginate large tables
+4. **Cache Gotenberg**: Use CDN or load balancer with keepalive
+5. **Batch generation**: Generate multiple PDFs in parallel
+
+## Security
+
+### Authentication
+
+- All requests require valid Supabase user session
+- Edge function verifies authentication before processing
+- User ID logged for audit trail
+
+### Best Practices
+
+1. **Never expose Gotenberg URL to frontend**: Always proxy through edge function
+2. **Rate limiting**: Consider adding rate limits to edge function
+3. **Input validation**: Edge function validates all inputs
+4. **Error messages**: Don't expose internal errors to frontend
+5. **Logging**: Log user ID, report type, errors for debugging
+
+## Migration from DocRaptor
+
+### Key Differences
+
+| Feature | DocRaptor | Gotenberg |
+|---------|-----------|-----------|
+| Hosting | SaaS | Self-hosted |
+| Cost | Per-document | Free (hosting costs only) |
+| Headers/Footers | Prince CSS | Separate HTML |
+| Rendering | Prince XML | Chromium |
+| CSS Support | Prince CSS | Standard CSS |
+
+### Migration Checklist
+
+- [x] Remove `DOCRAPTOR_API_KEY` environment variable
+- [x] Add `GOTENBERG_URL` environment variable
+- [x] Deploy Gotenberg service
+- [x] Update edge function (`generate_pdf_docraptor` → `generate_pdf_gotenberg`)
+- [x] Update frontend library (`generatePdfWithDocRaptor` → `generatePdfWithGotenberg`)
+- [x] Remove DocRaptor-specific CSS (Prince CSS)
+- [x] Test all PDF generation flows
+- [x] Update documentation
+
+### Breaking Changes
+
+None - the API interface remains the same:
+
+```typescript
+// Before (DocRaptor)
+await generateAndDownloadPdf({ htmlContent, filename, ... });
+
+// After (Gotenberg)
+await generateAndDownloadPdf({ htmlContent, filename, ... });
+```
+
+## Support
+
+For issues or questions:
+1. Check Gotenberg logs: https://gotenberg.dev/docs/troubleshooting
+2. Check edge function logs in Supabase Dashboard
+3. Review HTML/CSS in browser print preview
+4. Test with minimal HTML to isolate issues

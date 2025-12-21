@@ -1,6 +1,6 @@
 /**
  * Centralized PDF CSS Styles
- * Used across all report types for consistent DocRaptor rendering
+ * Used across all report types for consistent Gotenberg rendering
  */
 
 export const PDF_PRINT_STYLES = `

@@ -1,5 +1,5 @@
 /**
- * PDF Generation Utility using DocRaptor
+ * PDF Generation Utility using Gotenberg
  */
 
 import { supabase } from '../supabase';
@@ -10,7 +10,6 @@ export interface PdfGenerationOptions {
   projectName?: string;
   contractNumber?: string;
   reportType?: string;
-  useTestMode?: boolean;
 }
 
 export interface PdfGenerationResult {
@@ -21,14 +20,14 @@ export interface PdfGenerationResult {
 }
 
 /**
- * Generate PDF using DocRaptor edge function
+ * Generate PDF using Gotenberg edge function
  */
-export async function generatePdfWithDocRaptor(
+export async function generatePdfWithGotenberg(
   options: PdfGenerationOptions
 ): Promise<PdfGenerationResult> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate_pdf_docraptor`;
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate_pdf_gotenberg`;
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -142,7 +141,7 @@ export async function generateAndDownloadPdf(
   const today = new Date().toISOString().split('T')[0];
   const pdfFilename = `${options.filename}_${today}.pdf`;
 
-  const result = await generatePdfWithDocRaptor(options);
+  const result = await generatePdfWithGotenberg(options);
 
   if (result.success && result.blob) {
     downloadPdfBlob(result.blob, pdfFilename);
