@@ -5,6 +5,10 @@ interface HeroVideoProps {
 }
 
 export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    console.error('Video loading error:', e);
+  };
+
   return (
     <div className="w-full max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 mt-12 sm:mt-16">
       {/* Cinematic SaaS Card */}
@@ -25,11 +29,13 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
           </div>
 
           {/* Video Player */}
-          <div className="relative bg-black overflow-hidden">
+          <div className="relative bg-black p-4">
             <video
               controls
               playsInline
               preload="auto"
+              crossOrigin="anonymous"
+              onError={handleVideoError}
               style={{
                 width: '100%',
                 borderRadius: '18px',
@@ -41,7 +47,6 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
                 src="https://pub-4a052394260a4d93950fdab2b1ce9caa.r2.dev/verifyplus-explained.mp4"
                 type="video/mp4"
               />
-              Your browser does not support the video tag.
             </video>
           </div>
 
