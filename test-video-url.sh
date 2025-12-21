@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Test if video URL is accessible
-VIDEO_URL="https://pub-4a052394260a4d93950fdab2b1ce9caa.r2.dev/verifyplus-explained.mp4"
+VIDEO_URL="https://pub-4a052394260a4d93950fdab2b1ce9caa.r2.dev/Verify%2B%20Explained.mp4"
 
 echo "Testing video URL..."
 echo "URL: $VIDEO_URL"

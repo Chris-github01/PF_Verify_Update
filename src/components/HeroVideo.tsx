@@ -7,7 +7,7 @@ interface HeroVideoProps {
 
 export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
   const [videoError, setVideoError] = useState(false);
-  const [videoUrl] = useState('https://pub-4a052394260a4d93950fdab2b1ce9caa.r2.dev/verifyplus-explained.mp4');
+  const [videoUrl] = useState('https://pub-4a052394260a4d93950fdab2b1ce9caa.r2.dev/Verify%2B%20Explained.mp4');
 
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     console.error('Video loading error:', e);
