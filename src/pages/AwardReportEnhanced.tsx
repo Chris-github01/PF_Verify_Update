@@ -516,26 +516,32 @@ export default function AwardReportEnhanced({
         suppliers.forEach((supplier, supplierIdx) => {
           const supplierData = row.suppliers?.[supplier.supplierName];
 
-          // Debug logging for first row
-          if (supplierIdx === 0 && dataRows.length === 0) {
-            console.log('First row supplier data:', {
-              supplierName: supplier.supplierName,
-              supplierData,
-              hasUnitPrice: supplierData?.unitPrice !== null,
+          // Debug logging for first 3 rows
+          if (dataRows.length < 3) {
+            console.log(`Row ${dataRows.length + 1}, Supplier ${supplier.supplierName}:`, {
+              supplierData: JSON.stringify(supplierData),
+              keys: supplierData ? Object.keys(supplierData) : [],
               quantity: supplierData?.quantity,
               unit: supplierData?.unit,
-              normalisedUnit: supplierData?.normalisedUnit
+              normalisedUnit: supplierData?.normalisedUnit,
+              unitPrice: supplierData?.unitPrice,
+              total: supplierData?.total
             });
           }
 
           if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
-            dataRow.push(
-              supplierData.quantity ?? 'N/A',
-              supplierData.unit || 'N/A',
-              supplierData.normalisedUnit || 'N/A',
-              supplierData.unitPrice,
-              supplierData.total
-            );
+            // Better handling of values - show actual values even if 0 or empty string
+            const qty = supplierData.quantity !== null && supplierData.quantity !== undefined
+              ? supplierData.quantity
+              : 'N/A';
+            const unit = supplierData.unit !== null && supplierData.unit !== undefined && supplierData.unit !== ''
+              ? supplierData.unit
+              : 'N/A';
+            const normUnit = supplierData.normalisedUnit !== null && supplierData.normalisedUnit !== undefined && supplierData.normalisedUnit !== ''
+              ? supplierData.normalisedUnit
+              : 'N/A';
+
+            dataRow.push(qty, unit, normUnit, supplierData.unitPrice, supplierData.total);
             supplierTotals[supplierIdx] += supplierData.total || 0;
           } else {
             dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
@@ -608,7 +614,10 @@ export default function AwardReportEnhanced({
             if (C >= startCol) {
               const supplierIdx = Math.floor((C - startCol) / 5);
               if (supplierIdx < supplierColors.length) {
-                ws[cellAddress].s.fill = { fgColor: { rgb: supplierColors[supplierIdx] } };
+                ws[cellAddress].s.fill = {
+                  patternType: 'solid',
+                  fgColor: { rgb: 'FF' + supplierColors[supplierIdx] }
+                };
               }
             }
           }
@@ -632,7 +641,10 @@ export default function AwardReportEnhanced({
               const supplierIdx = Math.floor((C - startCol) / 5);
               if (supplierIdx < supplierColors.length) {
                 ws[cellAddress].s = {
-                  fill: { fgColor: { rgb: supplierColors[supplierIdx] } },
+                  fill: {
+                    patternType: 'solid',
+                    fgColor: { rgb: 'FF' + supplierColors[supplierIdx] }
+                  },
                   alignment: { horizontal: 'right', vertical: 'center' },
                   border: {
                     top: { style: 'thin', color: { rgb: 'CCCCCC' } },
