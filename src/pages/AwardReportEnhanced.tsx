@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import ApprovalModal from '../components/ApprovalModal';
 import RevisionRequestModal from '../components/RevisionRequestModal';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
+import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import EnhancedSupplierTable from '../components/award/EnhancedSupplierTable';
 import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdown';
 import CoverageBreakdownChart from '../components/award/CoverageBreakdownChart';
@@ -575,10 +576,16 @@ export default function AwardReportEnhanced({
         additionalSections
       });
 
-      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}`;
-      generatePdfWithPrint(htmlContent, filename);
+      const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}`;
 
-      onToast?.('Print window opened! In the print dialog, select "Save as PDF" or "Microsoft Print to PDF" as your destination.', 'success');
+      await generateAndDownloadPdf({
+        htmlContent,
+        filename,
+        projectName: currentProject.name,
+        reportType: 'Award Recommendation Report'
+      });
+
+      onToast?.('PDF downloaded successfully!', 'success');
     } catch (error) {
       console.error('Error generating PDF:', error);
       onToast?.('Failed to generate PDF report', 'error');

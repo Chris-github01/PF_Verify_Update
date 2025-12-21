@@ -22,7 +22,7 @@ export default function ReportExportBar({ onExport, availableTypes }: ReportExpo
       {availableTypes.includes('html') && (
         <button
           onClick={() => onExport('html')}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          className="hidden flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
         >
           <Download size={16} />
           Export PDF
