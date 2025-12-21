@@ -16,6 +16,21 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // SECURITY: Require authentication from existing platform admin
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Authentication required" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+
+    // Create client with service role for admin operations
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -26,6 +41,36 @@ Deno.serve(async (req: Request) => {
         }
       }
     );
+
+    // Verify the caller is authenticated
+    const { data: { user: caller }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !caller) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid token" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Verify the caller is an active platform admin
+    const { data: callerAdmin, error: adminCheckError } = await supabase
+      .from('platform_admins')
+      .select('id, is_active')
+      .eq('user_id', caller.id)
+      .eq('is_active', true)
+      .single();
+
+    if (adminCheckError || !callerAdmin) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: Platform admin access required" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     const { email, password, name } = await req.json();
 
@@ -93,13 +138,27 @@ Deno.serve(async (req: Request) => {
       });
 
     if (adminError) {
-      console.error('Failed to add platform admin role:', adminError);
+      throw new Error(`Failed to add platform admin role: ${adminError.message}`);
     }
+
+    // Log security event
+    await supabase.rpc('log_security_event', {
+      p_event_type: 'admin_creation',
+      p_severity: 'critical',
+      p_action: 'create_platform_admin',
+      p_resource_type: 'platform_admins',
+      p_resource_id: authUser.user.id,
+      p_details: {
+        created_by: caller.email,
+        new_admin_email: email.toLowerCase(),
+        new_admin_id: authUser.user.id
+      }
+    });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "User created successfully",
+        message: "Platform admin created successfully",
         userId: authUser.user.id,
         email: authUser.user.email
       }),

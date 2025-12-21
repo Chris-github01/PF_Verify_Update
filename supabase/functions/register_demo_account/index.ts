@@ -33,12 +33,11 @@ function generateSecureToken(): string {
 }
 
 function generatePassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
-  let password = '';
-  for (let i = 0; i < 16; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
+  // Use cryptographically secure random number generation
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+  const array = new Uint8Array(20);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => chars[byte % chars.length]).join('');
 }
 
 Deno.serve(async (req: Request) => {
@@ -67,6 +66,23 @@ Deno.serve(async (req: Request) => {
     if (!name || !email || !company) {
       return new Response(
         JSON.stringify({ error: "Name, email, and company are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Sanitize text inputs to prevent XSS
+    const sanitizedName = name.trim().slice(0, 100);
+    const sanitizedCompany = company.trim().slice(0, 200);
+    const sanitizedPhone = phone?.trim().slice(0, 50) || '';
+    const sanitizedRole = role?.trim().slice(0, 100) || 'Demo User';
+
+    // Validate lengths after sanitization
+    if (sanitizedName.length === 0 || sanitizedCompany.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Name and company cannot be empty" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -168,9 +184,9 @@ Deno.serve(async (req: Request) => {
       password: password,
       email_confirm: true,
       user_metadata: {
-        full_name: name,
-        company: company,
-        role: role || 'Demo User',
+        full_name: sanitizedName,
+        company: sanitizedCompany,
+        role: sanitizedRole,
         is_demo: true
       }
     });
@@ -186,7 +202,7 @@ Deno.serve(async (req: Request) => {
     const { data: org, error: orgError } = await supabase
       .from('organisations')
       .insert({
-        name: `${company} (Demo)`,
+        name: `${sanitizedCompany} (Demo)`,
         is_demo: true,
         created_at: new Date().toISOString()
       })
@@ -209,10 +225,10 @@ Deno.serve(async (req: Request) => {
         user_id: authUser.user.id,
         organisation_id: org.id,
         email: email.toLowerCase(),
-        full_name: name,
-        phone: phone || null,
-        company_name: company,
-        role: role || 'Demo User',
+        full_name: sanitizedName,
+        phone: sanitizedPhone || null,
+        company_name: sanitizedCompany,
+        role: sanitizedRole,
         quotes_processed: 0,
         quote_limit: 2,
         access_token: accessToken,
@@ -254,8 +270,8 @@ Deno.serve(async (req: Request) => {
       await supabase.functions.invoke('send_demo_email', {
         body: {
           email: email.toLowerCase(),
-          name,
-          company,
+          name: sanitizedName,
+          company: sanitizedCompany,
           token: accessToken,
           password,
           type: 'welcome'
