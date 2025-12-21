@@ -449,6 +449,176 @@ export default function AwardReportEnhanced({
     onToast?.('Excel exported successfully', 'success');
   };
 
+  const exportItemizedComparisonToExcel = async () => {
+    if (!awardSummary || comparisonData.length === 0) {
+      onToast?.('No itemized comparison data available to export.', 'error');
+      return;
+    }
+
+    try {
+      const wb = XLSX.utils.book_new();
+      const suppliers = awardSummary.suppliers;
+      const startCol = 3;
+
+      const supplierColors = [
+        'E8F5E9', 'FFF3E0', 'E3F2FD', 'FCE4EC', 'F3E5F5',
+        'FFF9C4', 'E0F2F1', 'FFEBEE', 'F1F8E9', 'FBE9E7',
+        'E8EAF6', 'F3E5F5', 'E0F7FA', 'FFF8E1', 'EFEBE9'
+      ];
+
+      const headerData: any[][] = [];
+      headerData.push(['Itemized Comparison - QS Standard']);
+      headerData.push([`Project: ${currentProject?.name || projectId}`]);
+      headerData.push([`Generated: ${new Date().toLocaleString()}`]);
+      headerData.push([]);
+
+      const headerRow = ['Item Description', 'Qty', 'UOM'];
+      suppliers.forEach(supplier => {
+        headerRow.push(supplier.supplierName, '', '', '', '');
+      });
+      headerData.push(headerRow);
+
+      const subHeaderRow = ['', '', ''];
+      suppliers.forEach(() => {
+        subHeaderRow.push('Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
+      });
+      headerData.push(subHeaderRow);
+
+      const dataRows: any[][] = [];
+      const supplierTotals: number[] = new Array(suppliers.length).fill(0);
+
+      comparisonData.forEach((row) => {
+        const dataRow = [row.description || '', row.quantity || 0, row.unit || ''];
+
+        suppliers.forEach((supplier, supplierIdx) => {
+          const supplierData = row.suppliers?.[supplier.supplierName];
+
+          if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
+            dataRow.push(
+              supplierData.quantity ?? 'N/A',
+              supplierData.unit || 'N/A',
+              supplierData.normalisedUnit || 'N/A',
+              supplierData.unitPrice,
+              supplierData.total
+            );
+            supplierTotals[supplierIdx] += supplierData.total || 0;
+          } else {
+            dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
+          }
+        });
+
+        dataRows.push(dataRow);
+      });
+
+      const subtotalsRow = ['Subtotals:', '', ''];
+      suppliers.forEach((_, idx) => {
+        subtotalsRow.push('', '', '', '', supplierTotals[idx]);
+      });
+      dataRows.push(subtotalsRow);
+
+      const allData = [...headerData, ...dataRows];
+      const ws = XLSX.utils.aoa_to_sheet(allData);
+
+      const colWidths = [{ wch: 50 }, { wch: 8 }, { wch: 10 }];
+      suppliers.forEach(() => {
+        colWidths.push({ wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 15 });
+      });
+      ws['!cols'] = colWidths;
+
+      ws['!merges'] = [
+        { s: { r: 4, c: 0 }, e: { r: 5, c: 0 } },
+        { s: { r: 4, c: 1 }, e: { r: 5, c: 1 } },
+        { s: { r: 4, c: 2 }, e: { r: 5, c: 2 } }
+      ];
+
+      suppliers.forEach((_, idx) => {
+        const startSupplierCol = startCol + (idx * 5);
+        ws['!merges'].push({
+          s: { r: 4, c: startSupplierCol },
+          e: { r: 4, c: startSupplierCol + 4 }
+        });
+      });
+
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+      for (let R = 0; R <= range.e.r; R++) {
+        for (let C = 0; C <= range.e.c; C++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' };
+          if (!ws[cellAddress].s) ws[cellAddress].s = {};
+
+          if (R === 0) {
+            ws[cellAddress].s = {
+              font: { bold: true, sz: 14 },
+              alignment: { horizontal: 'left', vertical: 'center' }
+            };
+          }
+
+          if (R === 4 || R === 5) {
+            ws[cellAddress].s = {
+              font: { bold: true },
+              alignment: { horizontal: 'center', vertical: 'center' },
+              border: {
+                top: { style: 'thin', color: { rgb: '000000' } },
+                bottom: { style: 'thin', color: { rgb: '000000' } },
+                left: { style: 'thin', color: { rgb: '000000' } },
+                right: { style: 'thin', color: { rgb: '000000' } }
+              }
+            };
+
+            if (C >= startCol) {
+              const supplierIdx = Math.floor((C - startCol) / 5);
+              if (supplierIdx < supplierColors.length) {
+                ws[cellAddress].s.fill = { fgColor: { rgb: supplierColors[supplierIdx] } };
+              }
+            }
+          }
+
+          if (R > 5) {
+            if (C >= startCol) {
+              const supplierIdx = Math.floor((C - startCol) / 5);
+              if (supplierIdx < supplierColors.length) {
+                ws[cellAddress].s = {
+                  fill: { fgColor: { rgb: supplierColors[supplierIdx] } },
+                  alignment: { horizontal: 'right', vertical: 'center' },
+                  border: {
+                    top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                    right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                  }
+                };
+
+                if (typeof ws[cellAddress].v === 'number') {
+                  ws[cellAddress].z = '"$"#,##0.00';
+                }
+              }
+            }
+
+            if (R === range.e.r) {
+              ws[cellAddress].s = {
+                ...ws[cellAddress].s,
+                font: { bold: true }
+              };
+            }
+          }
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Itemized Comparison');
+
+      const sanitizedProjectName = (currentProject?.name || 'Project').replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = `Itemized_Comparison_${sanitizedProjectName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      setShowExportDropdown(false);
+      onToast?.('Itemized comparison exported successfully', 'success');
+    } catch (error) {
+      console.error('Error exporting itemized comparison:', error);
+      onToast?.('Failed to export itemized comparison', 'error');
+    }
+  };
+
   const handlePrintPDF = async () => {
     if (!currentProject || !awardSummary) return;
 
@@ -674,8 +844,7 @@ export default function AwardReportEnhanced({
                       </button>
                       <button
                         onClick={() => {
-                          exportToExcel();
-                          setShowExportDropdown(false);
+                          exportItemizedComparisonToExcel();
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
                       >
