@@ -357,6 +357,13 @@ For issues or questions:
 
 ## Changelog
 
+### 2025-12-21 - Parser Fix (CRITICAL)
+- **FIXED:** Items with missing Material field now parse correctly
+- **FIXED:** Edge function no longer duplicates attributes for pre-formatted descriptions
+- **IMPROVED:** Parser now handles ANY combination of attributes in ANY order
+- **TESTED:** All 5 test cases pass including previously failing scenarios
+- See: `CONTRACT_MANAGER_PARSER_FIX.md` for complete details
+
 ### 2025-12-21 - Initial Implementation
 - Created unified print engine
 - Migrated all 3 pack types

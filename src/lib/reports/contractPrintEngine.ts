@@ -79,32 +79,56 @@ export interface ValidationResult {
 
 class ContractDataNormalizer {
   parseDetailString(detailStr: string): NormalizedLineItem {
-    const patterns = [
-      /^(.+?)\s*\[(?:FRR:\s*[^\|]*\s*\|\s*)?Service:\s*(.+?)\s*\|\s*(?:Size:\s*[^\|]*\s*\|\s*)?Type:\s*(.+?)\s*\|\s*Material:\s*(.+?)\s*\|\s*Qty:\s*(\d+(?:\.\d+)?)\s*(.+?)\]$/,
-      /^(.+?)\s*\[Service:\s*(.+?)\s*\|\s*Type:\s*(.+?)\s*\|\s*Material:\s*(.+?)\s*\|\s*Qty:\s*(\d+(?:\.\d+)?)\s*(.+?)\]$/,
-    ];
+    const bracketMatch = detailStr.match(/^(.+?)\s*\[(.+)\]$/);
 
-    for (const pattern of patterns) {
-      const match = detailStr.match(pattern);
-      if (match) {
-        return {
-          description: match[1].trim(),
-          service: match[2].trim(),
-          type: match[3].trim(),
-          material: match[4].trim(),
-          quantity: match[5].trim(),
-          unit: match[6].trim()
-        };
+    if (!bracketMatch) {
+      return {
+        description: detailStr,
+        service: '—',
+        type: '—',
+        material: '—',
+        quantity: '—',
+        unit: '—'
+      };
+    }
+
+    const description = bracketMatch[1].trim();
+    const attributesStr = bracketMatch[2];
+
+    const attributes: Record<string, string> = {};
+    const attrParts = attributesStr.split('|').map(p => p.trim());
+
+    attrParts.forEach(part => {
+      const colonIndex = part.indexOf(':');
+      if (colonIndex > 0) {
+        const key = part.substring(0, colonIndex).trim().toLowerCase();
+        const value = part.substring(colonIndex + 1).trim();
+        attributes[key] = value;
+      }
+    });
+
+    let quantity = '—';
+    let unit = '—';
+
+    if (attributes['qty']) {
+      const qtyMatch = attributes['qty'].match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
+      if (qtyMatch) {
+        quantity = qtyMatch[1];
+        unit = qtyMatch[2];
       }
     }
 
     return {
-      description: detailStr,
-      service: '—',
-      type: '—',
-      material: '—',
-      quantity: '—',
-      unit: '—'
+      description,
+      service: attributes['service'] || '—',
+      type: attributes['type'] || '—',
+      material: attributes['material'] || '—',
+      quantity,
+      unit,
+      notes: attributes['frr'] || attributes['size']
+        ? [attributes['frr'] && `FRR: ${attributes['frr']}`, attributes['size'] && `Size: ${attributes['size']}`]
+            .filter(Boolean).join(', ')
+        : undefined
     };
   }
 

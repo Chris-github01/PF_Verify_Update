@@ -95,6 +95,8 @@ bash apply-contract-manager.sh     # Should work
 3. **Single Source** - All 3 packs use same engine
 4. **Validated Output** - Automatic checks for empty pages/unparsed data
 5. **Safe Rollback** - One command to restore original
+6. **✨ NEW: Flexible Parser** - Handles ANY attribute combination (Material optional!)
+7. **✨ NEW: Smart Edge Function** - Detects pre-formatted vs plain descriptions
 
 ## 🚀 Ready to Use
 
