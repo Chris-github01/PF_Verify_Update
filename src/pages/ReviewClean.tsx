@@ -832,17 +832,67 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
   const deleteQuote = async (quoteId: string) => {
     if (!confirm('Are you sure you want to delete this entire quote?')) return;
 
-    const { error } = await supabase
-      .from('quotes')
-      .delete()
-      .eq('id', quoteId);
+    try {
+      // First, get the quote details before deletion
+      const { data: quoteToDelete, error: fetchError } = await supabase
+        .from('quotes')
+        .select('supplier_name, project_id, is_latest, created_at')
+        .eq('id', quoteId)
+        .single();
 
-    if (!error) {
+      if (fetchError || !quoteToDelete) {
+        console.error('Error fetching quote details:', fetchError);
+        alert('Failed to fetch quote details');
+        return;
+      }
+
+      // If this quote is marked as latest, find and update the previous quote from same supplier
+      if (quoteToDelete.is_latest) {
+        const { data: previousQuotes, error: prevError } = await supabase
+          .from('quotes')
+          .select('id')
+          .eq('supplier_name', quoteToDelete.supplier_name)
+          .eq('project_id', quoteToDelete.project_id)
+          .neq('id', quoteId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!prevError && previousQuotes && previousQuotes.length > 0) {
+          // Update the previous quote to be the latest
+          const { error: updateError } = await supabase
+            .from('quotes')
+            .update({ is_latest: true })
+            .eq('id', previousQuotes[0].id);
+
+          if (updateError) {
+            console.error('Error updating previous quote:', updateError);
+          }
+        }
+      }
+
+      // Now delete the quote
+      const { error: deleteError } = await supabase
+        .from('quotes')
+        .delete()
+        .eq('id', quoteId);
+
+      if (deleteError) {
+        console.error('Error deleting quote:', deleteError);
+        alert('Failed to delete quote');
+        return;
+      }
+
+      // Update UI state
       if (selectedQuote === quoteId) {
         setSelectedQuote(null);
         setItems([]);
       }
+
+      // Reload the quotes list
       loadQuotes();
+    } catch (error) {
+      console.error('Error in deleteQuote:', error);
+      alert('An unexpected error occurred while deleting the quote');
     }
   };
 

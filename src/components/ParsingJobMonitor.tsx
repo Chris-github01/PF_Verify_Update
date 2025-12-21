@@ -13,6 +13,7 @@ interface ParsingJob {
   quote_id: string | null;
   created_at: string;
   updated_at: string;
+  is_latest?: boolean; // Track if this job's quote is the latest
 }
 
 interface ParsingJobMonitorProps {
@@ -96,10 +97,11 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
         const quoteIds = jobsWithQuotes.map(job => job.quote_id);
         const { data: quotes } = await supabase
           .from('quotes')
-          .select('id, revision_number')
+          .select('id, revision_number, is_latest')
           .in('id', quoteIds);
 
         const quoteRevisionMap = new Map(quotes?.map(q => [q.id, q.revision_number]) || []);
+        const quoteLatestMap = new Map(quotes?.map(q => [q.id, q.is_latest]) || []);
 
         const filteredJobs = allJobs.filter(job => {
           if (!job.quote_id) return true; // Include jobs without quotes (pending/failed)
@@ -111,7 +113,10 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
           } else {
             return revisionNumber > 1;
           }
-        });
+        }).map(job => ({
+          ...job,
+          is_latest: job.quote_id ? quoteLatestMap.get(job.quote_id) || false : false
+        }));
 
         setJobs(filteredJobs.slice(0, 20) as ParsingJob[]);
       } else {
@@ -344,13 +349,13 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
         <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-5">
           <h3 className="text-lg font-semibold text-slate-100 mb-4">Successfully Imported Quotes</h3>
           <div className="space-y-2">
-            {successful.map((job, index) => (
+            {successful.map((job) => (
               <div key={job.id} className="flex items-center gap-3 py-2 px-3 hover:bg-slate-700/50 rounded-lg transition-colors">
                 <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-slate-100 text-sm">{job.supplier_name}</span>
-                    {index === 0 && (
+                    {job.is_latest && (
                       <span className="px-2 py-0.5 text-xs font-semibold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">
                         Latest
                       </span>
