@@ -81,6 +81,7 @@ function AppContent() {
   const effectiveIsMasterAdmin = isGodMode || isMasterAdmin;
   console.log('🎯 [App] Admin Status:', { isGodMode, isMasterAdmin, effectiveIsMasterAdmin, orgLoading, adminLoading });
   const initializingRef = useRef(false);
+  const initializedForOrgRef = useRef<string | null>(null);
 
   useEffect(() => {
     const loadTimeout = setTimeout(() => {
@@ -146,7 +147,10 @@ function AppContent() {
 
   useEffect(() => {
     if (!authLoading && session && currentOrganisation) {
-      initializeApp();
+      // Only initialize if we haven't initialized for this org yet, or if org changed
+      if (initializedForOrgRef.current !== currentOrganisation.id) {
+        initializeApp();
+      }
     }
   }, [authLoading, session, currentOrganisation]);
 
@@ -222,13 +226,8 @@ function AppContent() {
   }, [projectId]);
 
 
-  // Load projects when organisation changes (but only if we don't have any yet)
-  // This prevents infinite loops by checking if projects are already loaded
-  useEffect(() => {
-    if (allProjects.length === 0 && currentOrganisation && !loading) {
-      loadAllProjects();
-    }
-  }, [currentOrganisation]);
+  // Projects are loaded by initializeApp() - no separate effect needed
+  // Removed to prevent duplicate loadAllProjects() calls and loops
 
   const initializeApp = async () => {
     if (initializingRef.current) {
@@ -274,6 +273,10 @@ function AppContent() {
     } finally {
       setLoading(false);
       initializingRef.current = false;
+      // Mark this org as initialized
+      if (currentOrganisation) {
+        initializedForOrgRef.current = currentOrganisation.id;
+      }
     }
   };
 

@@ -273,6 +273,103 @@ To prevent similar loops in the future:
 
 ---
 
-**Status:** Fixed ✅
+## Additional Fix (2025-12-21)
+
+### The Problem (Second Loop)
+
+After the initial fix, the app was still looping due to:
+
+1. **Duplicate `loadAllProjects()` calls**
+   - Called inside `initializeApp()`
+   - Also called in a separate useEffect when `currentOrganisation` changed
+   - This caused redundant loads and potential loops
+
+2. **Re-initialization on every state change**
+   - The useEffect would run whenever `currentOrganisation` changed
+   - Even if already initialized for that org
+   - No tracking of which org was initialized
+
+### The Second Fix
+
+**1. Removed redundant useEffect:**
+```typescript
+// REMOVED: This was causing duplicate loadAllProjects() calls
+useEffect(() => {
+  if (allProjects.length === 0 && currentOrganisation && !loading) {
+    loadAllProjects();
+  }
+}, [currentOrganisation]);
+```
+
+**Why:** `initializeApp()` already calls `loadAllProjects()`, so this was redundant.
+
+**2. Added organization tracking:**
+```typescript
+const initializedForOrgRef = useRef<string | null>(null);
+
+useEffect(() => {
+  if (!authLoading && session && currentOrganisation) {
+    // Only initialize if we haven't initialized for this org yet
+    if (initializedForOrgRef.current !== currentOrganisation.id) {
+      initializeApp();
+    }
+  }
+}, [authLoading, session, currentOrganisation]);
+```
+
+**Why:** Prevents re-initialization when state changes but org hasn't changed.
+
+**3. Mark org as initialized:**
+```typescript
+const initializeApp = async () => {
+  // ... initialization code ...
+
+  finally {
+    setLoading(false);
+    initializingRef.current = false;
+    // Mark this org as initialized
+    if (currentOrganisation) {
+      initializedForOrgRef.current = currentOrganisation.id;
+    }
+  }
+};
+```
+
+**Why:** Tracks which org has been initialized so we don't repeat unnecessarily.
+
+### Flow After Second Fix:
+
+```
+1. User logs in
+   ↓
+2. Session and currentOrganisation both ready
+   ↓
+3. Check: Is initializedForOrgRef === currentOrganisation.id?
+   - No → Call initializeApp() ONCE
+   - Yes → Skip (already initialized)
+   ↓
+4. initializeApp() runs:
+   - Loads all projects
+   - Restores last project
+   - Sets initializedForOrgRef to current org ID
+   ↓
+5. Future state changes don't trigger re-init
+   ↓
+6. User switches org → initializedForOrgRef !== new org ID
+   ↓
+7. Re-initialize for new org ✅
+```
+
+### Benefits:
+
+1. **No duplicate loads** - Projects loaded exactly once per org
+2. **No loops** - State changes don't trigger re-initialization
+3. **Smart org switching** - Re-initializes when org actually changes
+4. **Better performance** - Fewer database queries
+5. **Clearer intent** - Code explicitly tracks initialization state
+
+---
+
+**Status:** Fixed ✅ (Second iteration)
 **Build:** Successful ✅
 **Ready for testing:** Yes ✅
