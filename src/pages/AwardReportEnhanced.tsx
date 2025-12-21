@@ -455,6 +455,13 @@ export default function AwardReportEnhanced({
       return;
     }
 
+    // Debug: Log the first comparison row to see structure
+    console.log('Comparison data sample:', {
+      totalRows: comparisonData.length,
+      firstRow: comparisonData[0],
+      suppliers: awardSummary.suppliers.map(s => s.supplierName)
+    });
+
     try {
       const wb = XLSX.utils.book_new();
       const suppliers = awardSummary.suppliers;
@@ -508,6 +515,18 @@ export default function AwardReportEnhanced({
 
         suppliers.forEach((supplier, supplierIdx) => {
           const supplierData = row.suppliers?.[supplier.supplierName];
+
+          // Debug logging for first row
+          if (supplierIdx === 0 && dataRows.length === 0) {
+            console.log('First row supplier data:', {
+              supplierName: supplier.supplierName,
+              supplierData,
+              hasUnitPrice: supplierData?.unitPrice !== null,
+              quantity: supplierData?.quantity,
+              unit: supplierData?.unit,
+              normalisedUnit: supplierData?.normalisedUnit
+            });
+          }
 
           if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
             dataRow.push(
