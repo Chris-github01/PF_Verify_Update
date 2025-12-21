@@ -71,46 +71,48 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
       </nav>
 
       {/* Breaking News Banner */}
-      <div className="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400">
-        <div className="flex items-center overflow-hidden h-10">
-          <div className="flex-shrink-0 bg-slate-900 px-4 py-2 h-full flex items-center font-bold text-xs sm:text-sm uppercase tracking-wider border-r-2 border-orange-400">
-            <Zap className="mr-2 animate-pulse" size={16} />
-            Coming Soon
-          </div>
-          <div className="flex-1 overflow-hidden relative">
-            <div className="animate-scroll-left flex items-center whitespace-nowrap">
-              <span className="inline-block px-8 text-sm font-semibold">
-                🔌 Electrical Verify+
-              </span>
-              <span className="inline-block px-2 text-slate-200">•</span>
-              <span className="inline-block px-8 text-sm font-semibold">
-                ❄️ HVAC Verify+
-              </span>
-              <span className="inline-block px-2 text-slate-200">•</span>
-              <span className="inline-block px-8 text-sm font-semibold">
-                🚿 Plumbing Verify+
-              </span>
-              <span className="inline-block px-2 text-slate-200">•</span>
-              <span className="inline-block px-8 text-sm font-semibold">
-                🚨 Active Fire Verify+
-              </span>
-              <span className="inline-block px-2 text-slate-200">•</span>
-              <span className="inline-block px-8 text-sm font-semibold">
-                🔌 Electrical Verify+
-              </span>
-              <span className="inline-block px-2 text-slate-200">•</span>
-              <span className="inline-block px-8 text-sm font-semibold">
-                ❄️ HVAC Verify+
-              </span>
-              <span className="inline-block px-2 text-slate-200">•</span>
-              <span className="inline-block px-8 text-sm font-semibold">
-                🚿 Plumbing Verify+
-              </span>
-              <span className="inline-block px-2 text-slate-200">•</span>
-              <span className="inline-block px-8 text-sm font-semibold">
-                🚨 Active Fire Verify+
-              </span>
-            </div>
+      <div className="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400 overflow-hidden">
+        <div className="h-10 flex items-center">
+          <div className="animate-scroll-left flex items-center whitespace-nowrap">
+            <span className="inline-block px-6 text-sm font-bold">
+              Coming Soon!
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-semibold">
+              🔌 Electrical Verify+
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-semibold">
+              ❄️ HVAC Verify+
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-semibold">
+              🚿 Plumbing Verify+
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-semibold">
+              🚨 Active Fire Verify+
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-bold">
+              Coming Soon!
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-semibold">
+              🔌 Electrical Verify+
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-semibold">
+              ❄️ HVAC Verify+
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-semibold">
+              🚿 Plumbing Verify+
+            </span>
+            <span className="inline-block px-2 text-slate-200">•</span>
+            <span className="inline-block px-6 text-sm font-semibold">
+              🚨 Active Fire Verify+
+            </span>
           </div>
         </div>
       </div>
