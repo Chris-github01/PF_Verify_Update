@@ -240,23 +240,48 @@ export function generateSeniorReportHTML(
     </div>
   `).join('');
 
-  const scopeDetailsHTML = scopeSystems.map(sys => `
+  const scopeDetailsHTML = scopeSystems.map(sys => {
+    // Calculate grid dimensions: prefer 3 columns for readability
+    const itemsPerRow = 3;
+    const totalRows = Math.ceil(sys.details.length / itemsPerRow);
+
+    return `
     <div style="margin-bottom: 32px; page-break-inside: avoid;">
       <h3 style="color: ${VERIFYTRADE_ORANGE}; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb;">
-        ${sys.service_type} (${sys.item_count} items)
+        ${sys.service_type} (${sys.item_count} items) · ${totalRows} rows × ${itemsPerRow} columns
       </h3>
       <div style="background: #f9fafb; border-radius: 8px; padding: 16px;">
-        <ul style="list-style: none; padding: 0; margin: 0; column-count: 2; column-gap: 24px;">
+        <div style="
+          display: grid;
+          grid-template-columns: repeat(${itemsPerRow}, 1fr);
+          gap: 12px;
+          margin: 0;
+        ">
           ${sys.details.map((d: string) => `
-            <li style="padding: 6px 0; font-size: 13px; color: #374151; break-inside: avoid; position: relative; padding-left: 20px;">
-              <span style="position: absolute; left: 0; color: #10b981; font-weight: 700;">✓</span>
-              ${d}
-            </li>
+            <div style="
+              padding: 10px 12px;
+              background: white;
+              border: 1px solid #e5e7eb;
+              border-radius: 6px;
+              font-size: 13px;
+              color: #374151;
+              break-inside: avoid;
+              position: relative;
+              padding-left: 28px;
+              line-height: 1.5;
+              min-height: 40px;
+              display: flex;
+              align-items: center;
+            ">
+              <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #10b981; font-weight: 700; font-size: 14px;">✓</span>
+              <span>${d}</span>
+            </div>
           `).join('')}
-        </ul>
+        </div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   const year = new Date().getFullYear();
   const generatedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
