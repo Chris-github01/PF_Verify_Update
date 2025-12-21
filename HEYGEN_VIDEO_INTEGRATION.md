@@ -1,6 +1,6 @@
-# HeyGen Video Integration - Hero Section
+# Vimeo Video Integration - Hero Section
 
-Embedded HeyGen video in landing page hero section without uploading MP4 file (avoiding 5MB limit).
+Embedded Vimeo video in landing page hero section without uploading MP4 file (avoiding 5MB limit).
 
 ## Implementation Summary
 
@@ -11,10 +11,12 @@ Embedded HeyGen video in landing page hero section without uploading MP4 file (a
 **Features:**
 - Cinematic SaaS card design with premium styling
 - Responsive 16:9 video container
-- HeyGen iframe embed with proper permissions
+- Vimeo iframe embed with proper permissions
 - Graceful fallback for blocked iframes
 - CTA buttons (Book Demo + Email)
 - Trust line for credibility
+- Lazy loading for performance
+- Accessibility features (aria-label, title)
 
 ### Styling Details
 
@@ -36,8 +38,15 @@ Embedded HeyGen video in landing page hero section without uploading MP4 file (a
 - Poster placeholder with gradient background
 - Large play button (orange-500 with hover effects)
 - Shield icon and placeholder text
-- Clicking opens HeyGen link in new tab
+- Clicking opens Vimeo link in new tab
 - Smooth hover transitions
+
+**Accessibility & Performance:**
+- `loading="lazy"` - Lazy loads iframe for faster initial page load
+- `title="Verify+ Overview Video"` - Screen reader support
+- `aria-label="Verify+ Overview Video"` - Enhanced accessibility
+- `frameBorder="0"` - Clean iframe styling
+- Rounded corners on video container
 
 **CTA Buttons:**
 - Primary: "Book a Demo" (orange gradient, shadow effects)
@@ -91,19 +100,25 @@ CTA Buttons
 - All padding and font sizes scale appropriately
 - Touch-friendly button sizes (py-3.5)
 
-### HeyGen Video Details
+### Vimeo Video Details
 
-**URL:** `https://app.heygen.com/videos/e7d17a3778824da9afdc890f1ec97322`
+**Embed URL:** `https://player.vimeo.com/video/1148392322?h=fl`
+**Direct URL:** `https://vimeo.com/1148392322`
 
-**Iframe Permissions:**
+**Iframe Attributes:**
+- `src="https://player.vimeo.com/video/1148392322?h=fl"`
 - `allow="autoplay; fullscreen; picture-in-picture"`
-- `allowFullScreen` attribute
+- `allowFullScreen` - Enables fullscreen mode
+- `loading="lazy"` - Performance optimization
+- `title="Verify+ Overview Video"` - Accessibility
+- `aria-label="Verify+ Overview Video"` - Screen readers
+- `style={{ border: 0 }}` - Clean styling
 - No autoplay enabled (user-initiated)
 
 **Fallback Behavior:**
 - If iframe fails to load or is blocked by browser
 - Shows gradient poster with play button overlay
-- Clicking opens video in new tab
+- Clicking opens video in new tab (vimeo.com/1148392322)
 - Maintains visual consistency
 
 ### Button Actions
@@ -146,16 +161,18 @@ CTA Buttons
 ### File Size Considerations
 
 **No MP4 Upload:**
-- Video hosted on HeyGen (external)
+- Video hosted on Vimeo (external)
 - Iframe embed only (minimal code)
 - Component file: ~4KB
 - No impact on bundle size
 
 **Benefits:**
 - Avoids 5MB Bolt limit
-- Fast page load (lazy iframe)
-- HeyGen handles hosting, streaming, analytics
+- Fast page load (lazy iframe loading)
+- Vimeo handles hosting, streaming, analytics
 - Easy to update video without code changes
+- Professional video player with controls
+- Adaptive streaming for all devices
 
 ### Accessibility
 
@@ -190,13 +207,16 @@ CTA Buttons
 
 **Initial Load:**
 - Component renders immediately
-- Iframe lazy-loads video
+- Iframe lazy-loads video (loading="lazy")
 - No blocking requests
+- Improved Core Web Vitals
 
 **Video Loading:**
-- HeyGen handles progressive loading
+- Vimeo handles progressive loading
 - Adaptive streaming based on connection
+- Multiple quality options (auto-selected)
 - No impact on page metrics
+- Fast playback start
 
 ### Testing Checklist
 
@@ -222,24 +242,26 @@ CTA Buttons
 7. Custom controls overlay
 
 **Not Needed Now:**
-- Video analytics already handled by HeyGen
+- Video analytics already handled by Vimeo
 - Auto-play not recommended for UX
 - Thumbnail would add file size
-- Quality handled by HeyGen adaptive streaming
+- Quality handled by Vimeo adaptive streaming
 
 ### Troubleshooting
 
 **Video Not Loading:**
-1. Check HeyGen URL is correct
-2. Verify iframe not blocked by browser
+1. Check Vimeo URL is correct (1148392322)
+2. Verify iframe not blocked by browser/extensions
 3. Check network connection
 4. Try fallback (click poster)
+5. Check Vimeo video privacy settings (should be public)
 
 **Fallback Always Showing:**
 1. Check iframe onError handler
-2. Verify HeyGen video is public
+2. Verify Vimeo video is public/unlisted (not private)
 3. Test in different browser
 4. Check console for errors
+5. Disable ad blockers/privacy extensions
 
 **Mobile Layout Issues:**
 1. Verify responsive classes
@@ -249,6 +271,34 @@ CTA Buttons
 
 ### Support
 
-- HeyGen Video: [https://app.heygen.com/videos/e7d17a3778824da9afdc890f1ec97322](https://app.heygen.com/videos/e7d17a3778824da9afdc890f1ec97322)
-- Component: `src/components/HeroVideo.tsx`
-- Landing Page: `src/pages/LandingPage.tsx`
+- **Vimeo Video:** [https://vimeo.com/1148392322](https://vimeo.com/1148392322)
+- **Embed URL:** `https://player.vimeo.com/video/1148392322?h=fl`
+- **Component:** `src/components/HeroVideo.tsx`
+- **Landing Page:** `src/pages/LandingPage.tsx`
+
+### Why Vimeo?
+
+**Professional Features:**
+- High-quality video player
+- Adaptive streaming (auto-adjusts quality)
+- Fast loading & buffering
+- Professional playback controls
+- Privacy controls available
+- No YouTube branding/distractions
+- Analytics dashboard
+- Embeddable anywhere
+
+**Technical Benefits:**
+- CDN-delivered (fast worldwide)
+- Mobile-optimized
+- Accessibility features built-in
+- No cookies by default (privacy-friendly)
+- Works with ad blockers
+- Reliable uptime
+
+**Perfect for SaaS Landing Pages:**
+- Clean, professional appearance
+- No competing video recommendations
+- Brand-safe environment
+- Conversion-optimized player
+- Easy video updates

@@ -12,8 +12,8 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
     setIframeError(true);
   };
 
-  const openHeyGenVideo = () => {
-    window.open('https://app.heygen.com/videos/e7d17a3778824da9afdc890f1ec97322', '_blank');
+  const openVimeoVideo = () => {
+    window.open('https://vimeo.com/1148392322', '_blank');
   };
 
   return (
@@ -38,14 +38,17 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
           {/* Video Container */}
           <div className="relative bg-black">
             {!iframeError ? (
-              <div className="relative w-full" style={{ paddingTop: '56.25%' /* 16:9 Aspect Ratio */ }}>
+              <div className="relative w-full overflow-hidden rounded-b-2xl" style={{ paddingTop: '56.25%' /* 16:9 Aspect Ratio */ }}>
                 <iframe
-                  src="https://app.heygen.com/videos/e7d17a3778824da9afdc890f1ec97322"
+                  src="https://player.vimeo.com/video/1148392322?h=fl"
                   className="absolute top-0 left-0 w-full h-full"
                   allow="autoplay; fullscreen; picture-in-picture"
                   allowFullScreen
                   onError={handleIframeError}
-                  title="Verify+ Demo Video"
+                  title="Verify+ Overview Video"
+                  aria-label="Verify+ Overview Video"
+                  loading="lazy"
+                  style={{ border: 0 }}
                 />
               </div>
             ) : (
@@ -53,7 +56,7 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
               <div
                 className="relative w-full cursor-pointer group"
                 style={{ paddingTop: '56.25%' }}
-                onClick={openHeyGenVideo}
+                onClick={openVimeoVideo}
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
                   {/* Play Button Overlay */}
