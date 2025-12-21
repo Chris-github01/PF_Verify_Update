@@ -572,7 +572,10 @@ export default function AwardReportEnhanced({
         const row = worksheet.getRow(rowNum);
         row.font = { bold: true };
         row.alignment = { horizontal: 'center', vertical: 'middle' };
-        row.eachCell((cell, colNumber) => {
+
+        const totalCols = 1 + (suppliers.length * 5);
+        for (let colNum = 1; colNum <= totalCols; colNum++) {
+          const cell = row.getCell(colNum);
           cell.border = {
             top: { style: 'thin', color: { argb: 'FF000000' } },
             left: { style: 'thin', color: { argb: 'FF000000' } },
@@ -581,8 +584,8 @@ export default function AwardReportEnhanced({
           };
 
           // Apply colors to supplier columns (skip column A)
-          if (colNumber > 1) {
-            const supplierIdx = Math.floor((colNumber - 2) / 5);
+          if (colNum > 1) {
+            const supplierIdx = Math.floor((colNum - 2) / 5);
             if (supplierIdx < supplierColors.length) {
               cell.fill = {
                 type: 'pattern',
@@ -591,17 +594,20 @@ export default function AwardReportEnhanced({
               };
             }
           }
-        });
+        }
       });
 
       // Style data rows (starting from row 7)
+      const totalCols = 1 + (suppliers.length * 5);
       for (let rowNum = 7; rowNum <= worksheet.rowCount; rowNum++) {
         const row = worksheet.getRow(rowNum);
         const isSubtotalRow = rowNum === worksheet.rowCount;
 
-        row.eachCell((cell, colNumber) => {
+        for (let colNum = 1; colNum <= totalCols; colNum++) {
+          const cell = row.getCell(colNum);
+
           // Item Description column
-          if (colNumber === 1) {
+          if (colNum === 1) {
             cell.alignment = { horizontal: 'left', vertical: 'middle' };
             cell.border = {
               top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
@@ -612,8 +618,8 @@ export default function AwardReportEnhanced({
             if (isSubtotalRow) cell.font = { bold: true };
           } else {
             // Supplier columns
-            const supplierIdx = Math.floor((colNumber - 2) / 5);
-            const columnInSupplier = (colNumber - 2) % 5; // 0=Qty, 1=UOM, 2=NormUOM, 3=UnitRate, 4=Total
+            const supplierIdx = Math.floor((colNum - 2) / 5);
+            const columnInSupplier = (colNum - 2) % 5; // 0=Qty, 1=UOM, 2=NormUOM, 3=UnitRate, 4=Total
 
             if (supplierIdx < supplierColors.length) {
               cell.fill = {
@@ -637,7 +643,7 @@ export default function AwardReportEnhanced({
               if (isSubtotalRow) cell.font = { bold: true };
             }
           }
-        });
+        }
       }
 
       // Write file
@@ -658,7 +664,9 @@ export default function AwardReportEnhanced({
       onToast?.('Itemized comparison exported successfully', 'success');
     } catch (error) {
       console.error('Error exporting itemized comparison:', error);
-      onToast?.('Failed to export itemized comparison', 'error');
+      console.error('Error details:', error instanceof Error ? error.message : String(error));
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      onToast?.(`Failed to export: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
   };
 
