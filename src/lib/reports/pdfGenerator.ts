@@ -1,8 +1,12 @@
 /**
  * PDF Generation Utility using Gotenberg
+ *
+ * This module provides PDF generation with quality assurance checks
+ * to ensure clean, professional output without blank pages or layout issues.
  */
 
 import { supabase } from '../supabase';
+import { preparePdfContent } from './pdfQualityAssurance';
 
 export interface PdfGenerationOptions {
   htmlContent: string;
@@ -10,6 +14,7 @@ export interface PdfGenerationOptions {
   projectName?: string;
   contractNumber?: string;
   reportType?: string;
+  skipQualityCheck?: boolean; // Set to true to skip QA (not recommended)
 }
 
 export interface PdfGenerationResult {
@@ -21,11 +26,23 @@ export interface PdfGenerationResult {
 
 /**
  * Generate PDF using Gotenberg edge function
+ *
+ * Automatically runs quality assurance checks before generation to:
+ * - Remove empty sections that create blank pages
+ * - Fix excessive whitespace
+ * - Remove orphaned page breaks
+ * - Validate table structure
  */
 export async function generatePdfWithGotenberg(
   options: PdfGenerationOptions
 ): Promise<PdfGenerationResult> {
   try {
+    // Run QA checks on HTML content before generating PDF
+    const documentName = `${options.filename} - ${options.projectName || 'Report'}`;
+    const cleanedHtml = options.skipQualityCheck
+      ? options.htmlContent
+      : preparePdfContent(options.htmlContent, documentName);
+
     const { data: { session } } = await supabase.auth.getSession();
     const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate_pdf_gotenberg`;
 
@@ -35,7 +52,10 @@ export async function generatePdfWithGotenberg(
         'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(options),
+      body: JSON.stringify({
+        ...options,
+        htmlContent: cleanedHtml,
+      }),
     });
 
     if (!response.ok) {
@@ -60,7 +80,7 @@ export async function generatePdfWithGotenberg(
       return {
         success: false,
         error: errorData.message || 'Invalid response from server',
-        fallbackHtml: options.htmlContent
+        fallbackHtml: cleanedHtml
       };
     }
   } catch (error) {
@@ -68,7 +88,7 @@ export async function generatePdfWithGotenberg(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      fallbackHtml: options.htmlContent
+      fallbackHtml: options.skipQualityCheck ? options.htmlContent : cleanedHtml
     };
   }
 }
