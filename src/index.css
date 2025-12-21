@@ -18,6 +18,11 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html {
+  scroll-padding-top: 104px;
+  scroll-behavior: smooth;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -28,6 +33,7 @@ body {
   background-color: #020617;
   color: #e5e7eb;
   font-family: var(--pf-font-sans);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 #root {
