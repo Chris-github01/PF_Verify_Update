@@ -1,14 +1,10 @@
-import { Play, Mail } from 'lucide-react';
+import { Mail } from 'lucide-react';
 
 interface HeroVideoProps {
   onBookDemo: () => void;
 }
 
 export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
-  const navigateToVideo = () => {
-    window.location.href = '/video';
-  };
-
   return (
     <div className="w-full max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 mt-12 sm:mt-16">
       {/* Cinematic SaaS Card */}
@@ -28,36 +24,24 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
             </p>
           </div>
 
-          {/* Video Card */}
+          {/* Video Player */}
           <div className="relative bg-black overflow-hidden">
-            <div className="relative pb-[56.25%] h-0">
-              <button
-                onClick={navigateToVideo}
-                className="absolute inset-0 w-full h-full group cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900"
-                aria-label="Watch the Verify+ overview video"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-                  {/* Subtle Glow Behind Play Button */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-32 h-32 sm:w-40 sm:h-40 bg-orange-500/20 rounded-full blur-3xl" />
-                  </div>
-
-                  {/* Play Button Overlay */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
-                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-orange-500 group-hover:bg-orange-600 flex items-center justify-center shadow-2xl transform group-hover:scale-110 transition-all duration-300">
-                      <Play size={40} className="text-white ml-1.5" fill="currentColor" />
-                    </div>
-                    <p className="mt-6 text-base sm:text-lg text-white font-semibold">Watch the 2-minute overview</p>
-                    <p className="mt-2 text-sm text-slate-400">See how we cut quote analysis from days to minutes</p>
-                  </div>
-
-                  {/* Background Icon */}
-                  <div className="text-center z-0 px-4 pointer-events-none opacity-20">
-                    <Shield className="w-32 h-32 sm:w-40 sm:h-40 mx-auto text-orange-500" />
-                  </div>
-                </div>
-              </button>
-            </div>
+            <video
+              className="w-full h-auto"
+              controls
+              playsInline
+              preload="metadata"
+              style={{
+                borderRadius: '0',
+                boxShadow: '0 30px 80px rgba(0,0,0,0.45)'
+              }}
+            >
+              <source
+                src="https://pub-4a052394260a4d93950fdab2b1ce9caa.r2.dev/verifyplus-explained.mp4"
+                type="video/mp4"
+              />
+              Your browser does not support the video tag.
+            </video>
           </div>
 
           {/* CTA Buttons */}
@@ -89,25 +73,5 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
         </div>
       </div>
     </div>
-  );
-}
-
-// Shield icon component for fallback
-function Shield({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-      />
-    </svg>
   );
 }
