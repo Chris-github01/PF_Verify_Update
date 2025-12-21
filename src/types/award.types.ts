@@ -18,6 +18,7 @@ export interface SupplierAward {
   itemsQuoted: number;
   totalItems: number;
   notes: string[];
+  quoteId?: string;
 }
 
 export interface AwardRecommendation {
