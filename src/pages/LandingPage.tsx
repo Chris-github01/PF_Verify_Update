@@ -70,22 +70,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         </div>
       </nav>
 
-      {/* Coming Soon Banner */}
-      <div className="fixed top-16 left-0 right-0 bg-gradient-to-r from-blue-600 via-purple-600 to-orange-600 z-40 border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center justify-center gap-3">
-            <Zap className="text-white animate-pulse" size={20} />
-            <p className="text-white font-semibold text-sm sm:text-base text-center">
-              <span className="hidden sm:inline">Coming Soon: </span>
-              Electrical / HVAC / Plumbing / Active Fire Verify+
-              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded text-xs font-bold">Q1 2026</span>
-            </p>
-            <Zap className="text-white animate-pulse" size={20} />
-          </div>
-        </div>
-      </div>
-
-      <main className="pt-28">
+      <main className="pt-16">
         <section className="relative overflow-hidden py-12 sm:py-24 lg:py-32 min-h-[85vh] sm:min-h-[90vh] flex items-center">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="text-center max-w-5xl mx-auto">

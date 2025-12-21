@@ -124,9 +124,9 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 my-8 max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col">
-        <div className="relative bg-gradient-to-r from-orange-600 to-orange-500 p-6 flex-shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm">
+      <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 overflow-hidden">
+        <div className="relative bg-gradient-to-r from-orange-600 to-orange-500 p-6">
           <button
             onClick={handleCancel}
             disabled={loading}
@@ -141,7 +141,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {status !== 'idle' && (
             <div className={`flex items-start gap-3 p-4 rounded-lg ${
               status === 'success'
