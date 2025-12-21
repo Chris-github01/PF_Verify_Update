@@ -73,46 +73,32 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
       {/* Breaking News Banner */}
       <div className="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400 overflow-hidden">
         <div className="h-10 flex items-center">
-          <div className="animate-scroll-left flex items-center whitespace-nowrap">
-            <span className="inline-block px-6 text-sm font-bold">
-              Coming Soon!
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-semibold">
-              🔌 Electrical Verify+
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-semibold">
-              ❄️ HVAC Verify+
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-semibold">
-              🚿 Plumbing Verify+
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-semibold">
-              🚨 Active Fire Verify+
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-bold">
-              Coming Soon!
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-semibold">
-              🔌 Electrical Verify+
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-semibold">
-              ❄️ HVAC Verify+
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-semibold">
-              🚿 Plumbing Verify+
-            </span>
-            <span className="inline-block px-2 text-slate-200">•</span>
-            <span className="inline-block px-6 text-sm font-semibold">
-              🚨 Active Fire Verify+
-            </span>
+          <div className="animate-scroll-seamless flex items-center whitespace-nowrap">
+            {/* Repeat content 3 times for seamless loop */}
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex items-center">
+                <span className="inline-block px-6 text-sm font-bold">
+                  Coming Soon!
+                </span>
+                <span className="inline-block px-2 text-slate-200">•</span>
+                <span className="inline-block px-6 text-sm font-semibold">
+                  🔌 Electrical Verify+
+                </span>
+                <span className="inline-block px-2 text-slate-200">•</span>
+                <span className="inline-block px-6 text-sm font-semibold">
+                  ❄️ HVAC Verify+
+                </span>
+                <span className="inline-block px-2 text-slate-200">•</span>
+                <span className="inline-block px-6 text-sm font-semibold">
+                  🚿 Plumbing Verify+
+                </span>
+                <span className="inline-block px-2 text-slate-200">•</span>
+                <span className="inline-block px-6 text-sm font-semibold">
+                  🚨 Active Fire Verify+
+                </span>
+                <span className="inline-block px-2 text-slate-200">•</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -611,7 +597,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="relative overflow-hidden py-4 rounded-lg">
               <div className="flex animate-scroll whitespace-nowrap">
-                {[...comingSoonTrades, ...comingSoonTrades].map((trade, idx) => (
+                {[...comingSoonTrades, ...comingSoonTrades, ...comingSoonTrades].map((trade, idx) => (
                   <span key={idx} className="inline-block px-8 text-sm font-medium text-slate-500">
                     {trade}
                   </span>
@@ -1210,11 +1196,22 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
             transform: translateX(0);
           }
           100% {
-            transform: translateX(-50%);
+            transform: translateX(-33.333%);
+          }
+        }
+        @keyframes scroll-seamless {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-33.333%);
           }
         }
         .animate-scroll {
-          animation: scroll 30s linear infinite;
+          animation: scroll 25s linear infinite;
+        }
+        .animate-scroll-seamless {
+          animation: scroll-seamless 20s linear infinite;
         }
       `}</style>
     </div>
