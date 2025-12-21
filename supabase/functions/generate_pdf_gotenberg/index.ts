@@ -26,11 +26,25 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const gotenbergUrl = Deno.env.get('GOTENBERG_URL');
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Get Gotenberg URL from environment or system_config
+    let gotenbergUrl = Deno.env.get('GOTENBERG_URL');
+
     if (!gotenbergUrl) {
-      throw new Error('GOTENBERG_URL environment variable not set');
+      console.log('📄 [Gotenberg] GOTENBERG_URL not in env, checking system_config...');
+      const { data: configData } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'GOTENBERG_URL')
+        .single();
+
+      if (configData?.value) {
+        gotenbergUrl = configData.value;
+        console.log('📄 [Gotenberg] Using URL from system_config');
+      } else {
+        throw new Error('GOTENBERG_URL not found in environment or system_config');
+      }
     }
 
     // Authenticate request

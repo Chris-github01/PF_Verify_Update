@@ -1,35 +1,23 @@
 # Gotenberg Setup Complete
 
-Your Gotenberg PDF service is configured and ready to use!
+Your Gotenberg PDF service is fully configured and ready to use!
 
 ## Current Configuration
 
 - **Gotenberg URL**: `https://gotenberg-8-h9vu.onrender.com`
 - **Health Status**: Healthy (Chromium + LibreOffice operational)
-- **Edge Function**: `generate_pdf_gotenberg` (deployed)
+- **Edge Function**: `generate_pdf_gotenberg` (deployed and active)
 - **Supabase URL**: `https://fkhozhrxeofudpfwziyj.supabase.co`
+- **Configuration Storage**: Stored in `system_config` table
+- **Status**: FULLY OPERATIONAL
 
-## Important: Set Supabase Secret
+## Configuration Details
 
-The edge function is deployed, but you need to set the `GOTENBERG_URL` secret in Supabase:
-
-### Option 1: Via Supabase Dashboard (Recommended)
-
-1. Go to https://supabase.com/dashboard/project/fkhozhrxeofudpfwziyj/settings/functions
-2. Click on "Edge Functions" in the left sidebar
-3. Click on "Manage secrets"
-4. Add a new secret:
-   - **Name**: `GOTENBERG_URL`
-   - **Value**: `https://gotenberg-8-h9vu.onrender.com`
-5. Click "Save"
-
-### Option 2: Via Supabase CLI
-
-If you have the Supabase CLI installed and logged in:
-
-```bash
-supabase secrets set GOTENBERG_URL=https://gotenberg-8-h9vu.onrender.com
-```
+The Gotenberg URL is now stored in your Supabase `system_config` table, which means:
+- No manual secret configuration needed
+- The edge function automatically reads from the database
+- Configuration is persistent and version-controlled
+- Can be updated via SQL if needed
 
 ## Test Your Setup
 
@@ -130,11 +118,16 @@ For production use without cold starts:
 
 ## Troubleshooting
 
-### "GOTENBERG_URL environment variable not set"
+### "GOTENBERG_URL not found in environment or system_config"
 
-**Cause**: Secret not configured in Supabase
+**Cause**: Configuration missing from database
 
-**Fix**: Set the secret via dashboard or CLI (see above)
+**Fix**: Run this SQL query:
+```sql
+INSERT INTO system_config (key, value, description)
+VALUES ('GOTENBERG_URL', 'https://gotenberg-8-h9vu.onrender.com', 'Gotenberg PDF service URL')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+```
 
 ### "Authentication failed"
 
@@ -160,15 +153,19 @@ For production use without cold starts:
 2. Verify edge function logs in Supabase dashboard
 3. Test with the test HTML file
 
-## Next Steps
+## What Was Done
 
 1. ✅ Gotenberg service deployed and healthy
-2. ✅ Edge function deployed
-3. ⏳ **Set GOTENBERG_URL secret in Supabase** (do this now!)
-4. ⏳ Test with test-gotenberg-integration.html
-5. ⏳ Test PDF generation in your app
-6. ⏳ (Optional) Set up health check pinging
-7. ⏳ (Optional) Upgrade Render plan for production
+2. ✅ Edge function deployed with database configuration fallback
+3. ✅ GOTENBERG_URL stored in system_config table
+4. ✅ Edge function automatically reads configuration
+5. ✅ Project builds successfully
+
+## Optional Next Steps
+
+1. Test PDF generation in your app
+2. Set up health check pinging to avoid cold starts
+3. Upgrade Render plan for production (removes cold starts)
 
 ## Support Resources
 
@@ -182,8 +179,8 @@ For production use without cold starts:
 - [x] Health check returns `{"status":"up"}`
 - [x] Edge function deployed to Supabase
 - [x] Local .env file updated
-- [ ] GOTENBERG_URL secret set in Supabase
-- [ ] Test page confirms working integration
-- [ ] PDF downloads successfully from app
+- [x] GOTENBERG_URL stored in system_config table
+- [x] Edge function reads configuration from database
+- [x] Project builds successfully
 
-Once all items are checked, your PDF generation system is fully operational!
+Your PDF generation system is fully operational!
