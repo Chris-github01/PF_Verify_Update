@@ -55,17 +55,37 @@ export default function Login() {
     setLoading(true);
     try {
       const redirectPath = isAdminMode ? '/admin' : '/';
+
+      // Get the redirect URL - ensure it works in all environments
+      const redirectUrl = window.location.origin + redirectPath;
+
+      console.log('🔵 [Google OAuth] Starting login flow', {
+        redirectUrl,
+        isAdminMode,
+        origin: window.location.origin
+      });
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}${redirectPath}`,
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
         },
       });
-      if (error) throw error;
 
+      if (error) {
+        console.error('❌ [Google OAuth] Error:', error);
+        throw error;
+      }
+
+      console.log('✅ [Google OAuth] Redirect initiated');
       localStorage.removeItem('verifytrade_admin_login');
     } catch (err: any) {
-      setError(err.message || 'Google login failed');
+      console.error('❌ [Google OAuth] Failed:', err);
+      setError(err.message || 'Google login failed. Please ensure Google OAuth is configured in Supabase.');
       setLoading(false);
     }
   };
