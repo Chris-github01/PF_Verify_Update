@@ -38,17 +38,15 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
           {/* Video Container */}
           <div className="relative bg-black">
             {!iframeError ? (
-              <div className="relative w-full overflow-hidden rounded-b-2xl" style={{ paddingTop: '56.25%' /* 16:9 Aspect Ratio */ }}>
+              <div className="relative pb-[56.25%] h-0">
                 <iframe
-                  src="https://player.vimeo.com/video/1148392322?h=fl"
+                  src="https://player.vimeo.com/video/1148392322"
                   className="absolute top-0 left-0 w-full h-full"
                   allow="autoplay; fullscreen; picture-in-picture"
                   allowFullScreen
                   onError={handleIframeError}
-                  title="Verify+ Overview Video"
-                  aria-label="Verify+ Overview Video"
+                  title="Verify+ — Commercial & Compliance Platform Overview"
                   loading="lazy"
-                  style={{ border: 0 }}
                 />
               </div>
             ) : (
