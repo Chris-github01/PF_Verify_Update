@@ -1,6 +1,7 @@
 import { Shield, Upload, Cpu, Layers, Zap, FileText, BarChart3, Download, CheckCircle, ArrowRight, Target, AlertTriangle, Award, Users, Brain, Database, FileSearch, TrendingUp, ShieldAlert, Clock, Lock, Briefcase, BookOpen, HelpCircle, FileCode, LifeBuoy } from 'lucide-react';
 import { useState } from 'react';
 import DemoBookingModal from '../components/DemoBookingModal';
+import HeroVideo from '../components/HeroVideo';
 import PrivacyPolicy from './PrivacyPolicy';
 import TermsOfService from './TermsOfService';
 
@@ -99,7 +100,12 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <p className="text-sm sm:text-base md:text-lg text-slate-400 mb-8 sm:mb-12 max-w-3xl mx-auto px-4">
                 Built for Main Contractors & Quantity Surveyors across NZ & Australia who need defensible, risk-free awards
               </p>
+            </div>
 
+            {/* Hero Video */}
+            <HeroVideo onBookDemo={() => setShowDemoModal(true)} />
+
+            <div className="text-center max-w-5xl mx-auto mt-12 sm:mt-16">
               <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 mb-8 sm:mb-12 border border-slate-700/50 mx-2 sm:mx-0">
                 <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-slate-100 font-medium leading-relaxed">
                   Upload every supplier quote → Get a full audit report that tells you exactly who is <span className="font-bold text-red-400">under-scoping</span>, <span className="font-bold text-orange-400">over-pricing</span>, or taking <span className="font-bold text-red-400">unacceptable risk</span> — in under 30 minutes.
