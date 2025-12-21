@@ -146,11 +146,28 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    console.log('🔄 [App] useEffect [authLoading, session, currentOrganisation] triggered:', {
+      authLoading,
+      hasSession: !!session,
+      currentOrganisation: currentOrganisation?.name,
+      orgId: currentOrganisation?.id,
+      initializedForOrg: initializedForOrgRef.current
+    });
+
     if (!authLoading && session && currentOrganisation) {
       // Only initialize if we haven't initialized for this org yet, or if org changed
       if (initializedForOrgRef.current !== currentOrganisation.id) {
+        console.log('🎯 [App] Conditions met, calling initializeApp()');
         initializeApp();
+      } else {
+        console.log('ℹ️ [App] Already initialized for this org, skipping');
       }
+    } else {
+      console.log('⏳ [App] Waiting for conditions:', {
+        needsAuth: authLoading,
+        needsSession: !session,
+        needsOrg: !currentOrganisation
+      });
     }
   }, [authLoading, session, currentOrganisation]);
 
@@ -235,40 +252,57 @@ function AppContent() {
       return;
     }
 
+    console.log('🚀 [App] initializeApp starting for organisation:',
+      currentOrganisation?.name, currentOrganisation?.id);
+
     initializingRef.current = true;
     setLoading(true);
 
     try {
       // Load all projects first
+      console.log('📂 [App] Step 1: Loading projects...');
       await loadAllProjects();
 
       // Try to restore the last selected project from user preferences, then localStorage
+      console.log('📝 [App] Step 2: Restoring last project...');
       const prefs = await getUserPreferences();
       let savedProjectId = prefs?.last_project_id;
 
+      console.log('🔍 [App] User preferences last_project_id:', savedProjectId);
+
       if (!savedProjectId) {
         savedProjectId = localStorage.getItem('passivefire_current_project_id');
+        console.log('🔍 [App] localStorage project_id:', savedProjectId);
       }
 
       if (savedProjectId && currentOrganisation) {
+        console.log('🔍 [App] Verifying project', savedProjectId, 'belongs to org', currentOrganisation.id);
         // Verify the project exists and belongs to this organisation
-        const { data: project } = await supabase
+        const { data: project, error: projectError } = await supabase
           .from('projects')
           .select('id, name, client, reference')
           .eq('id', savedProjectId)
           .eq('organisation_id', currentOrganisation.id)
           .maybeSingle();
 
+        if (projectError) {
+          console.error('❌ [App] Error verifying project:', projectError);
+        }
+
         if (project) {
+          console.log('✅ [App] Restored project:', project.name, project.id);
           setProjectId(project.id);
           setProjectInfo(project);
           localStorage.setItem('passivefire_current_project_id', project.id);
         } else {
+          console.warn('⚠️ [App] Saved project not found or does not belong to current org');
           // Project doesn't exist or doesn't belong to this org, clear it
           localStorage.removeItem('passivefire_current_project_id');
           setProjectId(null);
           setProjectInfo(null);
         }
+      } else {
+        console.log('ℹ️ [App] No saved project to restore');
       }
     } finally {
       setLoading(false);
@@ -276,6 +310,9 @@ function AppContent() {
       // Mark this org as initialized
       if (currentOrganisation) {
         initializedForOrgRef.current = currentOrganisation.id;
+        console.log('✅ [App] initializeApp complete for org:', currentOrganisation.name);
+      } else {
+        console.warn('⚠️ [App] initializeApp complete but currentOrganisation is null');
       }
     }
   };
@@ -348,7 +385,15 @@ function AppContent() {
   };
 
   const loadAllProjects = async () => {
-    if (!currentOrganisation) return;
+    if (!currentOrganisation) {
+      console.warn('⚠️ [App] loadAllProjects called but currentOrganisation is not set yet');
+      console.log('🔍 [App] currentOrganisation state:', currentOrganisation);
+      console.log('🔍 [App] orgLoading:', orgLoading);
+      setAllProjects([]);
+      return;
+    }
+
+    console.log('📂 [App] Loading projects for organisation:', currentOrganisation.name, currentOrganisation.id);
 
     const { data: projects, error } = await supabase
       .from('projects')
@@ -357,9 +402,12 @@ function AppContent() {
       .order('updated_at', { ascending: false });
 
     if (error) {
-      console.error('Error loading projects:', error);
+      console.error('❌ [App] Error loading projects:', error);
+      setAllProjects([]);
       return;
     }
+
+    console.log('📊 [App] Loaded', projects?.length || 0, 'projects from database');
 
     if (projects) {
       const projectsWithReportStatus = await Promise.all(
@@ -409,6 +457,11 @@ function AppContent() {
       );
 
       setAllProjects(projectsWithReportStatus);
+      console.log('✅ [App] Set', projectsWithReportStatus.length, 'projects in state:',
+        projectsWithReportStatus.map(p => ({ id: p.id, name: p.name })));
+    } else {
+      console.log('📭 [App] No projects found');
+      setAllProjects([]);
     }
   };
 
