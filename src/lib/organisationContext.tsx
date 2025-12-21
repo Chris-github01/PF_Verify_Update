@@ -4,6 +4,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabase';
 import { getImpersonatedOrgId, isImpersonating } from './admin/adminApi';
+import { getUserPreferences, updateLastOrganisation } from './userPreferences';
 
 interface Organisation {
   id: string;
@@ -156,11 +157,25 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
       setOrganisations(allOrgs || []);
 
-      const savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
+      // Check user preferences first, then fall back to localStorage
+      const prefs = await getUserPreferences();
+      let savedOrgId = prefs?.last_organisation_id;
+
+      if (!savedOrgId) {
+        savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
+      }
+
       const savedOrg = allOrgs?.find((o: Organisation) => o.id === savedOrgId);
-      setCurrentOrganisation(savedOrg || allOrgs?.[0] || null);
-      if (!savedOrg && allOrgs?.[0]) {
-        localStorage.setItem('passivefire_current_organisation_id', allOrgs[0].id);
+      const orgToSet = savedOrg || allOrgs?.[0] || null;
+
+      setCurrentOrganisation(orgToSet);
+
+      if (orgToSet) {
+        localStorage.setItem('passivefire_current_organisation_id', orgToSet.id);
+        if (!savedOrg) {
+          // Save to preferences if we're setting a new default
+          await updateLastOrganisation(orgToSet.id);
+        }
       }
 
       setDebugInfo(debug);
@@ -232,20 +247,30 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
       setOrganisations(orgs);
       console.log('✅ [OrganisationContext] Successfully set', orgs.length, 'organisations in state');
 
-      const savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
+      // Check user preferences first, then fall back to localStorage
+      const prefs = await getUserPreferences();
+      let savedOrgId = prefs?.last_organisation_id;
+
+      if (!savedOrgId) {
+        savedOrgId = localStorage.getItem('passivefire_current_organisation_id');
+      }
+
       if (savedOrgId) {
         const savedOrg = orgs.find((o: Organisation) => o.id === savedOrgId);
         if (savedOrg) {
           setCurrentOrganisation(savedOrg);
+          localStorage.setItem('passivefire_current_organisation_id', savedOrg.id);
           console.log('🎯 [OrganisationContext] Restored saved org:', savedOrg.name);
         } else if (orgs.length > 0) {
           setCurrentOrganisation(orgs[0]);
           localStorage.setItem('passivefire_current_organisation_id', orgs[0].id);
+          await updateLastOrganisation(orgs[0].id);
           console.log('🎯 [OrganisationContext] Set first org as current:', orgs[0].name);
         }
       } else if (orgs.length > 0) {
         setCurrentOrganisation(orgs[0]);
         localStorage.setItem('passivefire_current_organisation_id', orgs[0].id);
+        await updateLastOrganisation(orgs[0].id);
         console.log('🎯 [OrganisationContext] Set first org as current:', orgs[0].name);
       }
     }
@@ -263,6 +288,10 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
     setCurrentOrganisation(org);
     if (org) {
       localStorage.setItem('passivefire_current_organisation_id', org.id);
+      // Save to user preferences in the background
+      updateLastOrganisation(org.id).catch(err => {
+        console.error('[OrganisationContext] Error saving org preference:', err);
+      });
     } else {
       localStorage.removeItem('passivefire_current_organisation_id');
     }

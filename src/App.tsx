@@ -40,6 +40,7 @@ import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
 import { toastStore } from './lib/toastStore';
+import { getUserPreferences, updateLastProject } from './lib/userPreferences';
 import type { Session } from '@supabase/supabase-js';
 
 interface ProjectInfo {
@@ -241,8 +242,14 @@ function AppContent() {
       // Load all projects first
       await loadAllProjects();
 
-      // Try to restore the last selected project from localStorage
-      const savedProjectId = localStorage.getItem('passivefire_current_project_id');
+      // Try to restore the last selected project from user preferences, then localStorage
+      const prefs = await getUserPreferences();
+      let savedProjectId = prefs?.last_project_id;
+
+      if (!savedProjectId) {
+        savedProjectId = localStorage.getItem('passivefire_current_project_id');
+      }
+
       if (savedProjectId && currentOrganisation) {
         // Verify the project exists and belongs to this organisation
         const { data: project } = await supabase
@@ -255,6 +262,7 @@ function AppContent() {
         if (project) {
           setProjectId(project.id);
           setProjectInfo(project);
+          localStorage.setItem('passivefire_current_project_id', project.id);
         } else {
           // Project doesn't exist or doesn't belong to this org, clear it
           localStorage.removeItem('passivefire_current_project_id');
@@ -277,6 +285,11 @@ function AppContent() {
       .from('projects')
       .update({ last_accessed_at: new Date().toISOString() })
       .eq('id', id);
+
+    // Save to user preferences in the background
+    updateLastProject(id, currentOrganisation?.id).catch(err => {
+      console.error('[App] Error saving project preference:', err);
+    });
 
     await loadProjectInfo(id);
   };
