@@ -103,11 +103,27 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     .page {
       page-break-after: always;
       min-height: ${renderMode === 'pdf' ? 'auto' : '100vh'};
-      padding: 40px;
+      padding: 40px 40px 80px 40px; /* Extra bottom padding for footer */
+      position: relative;
+      box-sizing: border-box;
     }
 
     .page:last-child {
       page-break-after: auto;
+    }
+
+    footer {
+      position: absolute;
+      bottom: 20px;
+      left: 40px;
+      right: 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #6b7280;
+      padding-top: 12px;
+      border-top: 1px solid #e5e7eb;
     }
 
     .avoid-break {

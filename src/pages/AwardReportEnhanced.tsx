@@ -561,6 +561,7 @@ export default function AwardReportEnhanced({
       });
 
       // Add subtotals row
+      const subtotalsRow = ['Subtotals:', ...suppliers.flatMap((_, idx) => ['', '', '', '', supplierTotals[idx]])];
       worksheet.addRow(subtotalsRow);
 
       // Style header rows (rows 1-3)
