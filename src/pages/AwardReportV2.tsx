@@ -386,7 +386,8 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         itemsQuoted: s.itemsQuoted,
         totalItems: s.totalItems,
         weightedScore: s.weightedScore,
-        notes: s.notes
+        notes: s.notes,
+        quoteId: s.quoteId
       }));
 
     // Create recommendation cards (Best Value, Lowest Risk, Balanced)

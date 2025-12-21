@@ -22,7 +22,7 @@ interface SupplierRow {
   totalItems: number;
   weightedScore?: number;
   notes?: string[];
-  quoteId?: string;
+  quoteId?: string | null;
 }
 
 interface ModernPdfOptions {
@@ -1098,7 +1098,7 @@ function generateRecommendationsPage(options: ModernPdfOptions): string {
  * Generate Supplier Comparison Page (Page 5)
  */
 function generateSupplierComparisonPage(options: ModernPdfOptions): string {
-  const { suppliers, organisationLogoUrl } = options;
+  const { suppliers, organisationLogoUrl, approvedQuoteId } = options;
   const totalItems = suppliers[0]?.totalItems || 0;
 
   return `

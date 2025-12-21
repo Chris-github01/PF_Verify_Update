@@ -484,7 +484,8 @@ export default function AwardReport({
         itemsQuoted: s.itemsQuoted,
         totalItems: s.totalItems,
         weightedScore: s.weightedScore,
-        notes: s.notes && s.notes.length > 0 ? s.notes : undefined
+        notes: s.notes && s.notes.length > 0 ? s.notes : undefined,
+        quoteId: s.quoteId
       }));
 
       let recommendations = [];
