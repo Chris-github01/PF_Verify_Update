@@ -660,7 +660,7 @@ export default function AwardReportEnhanced({
                 </button>
 
                 {showExportDropdown && (
-                  <div className="absolute right-0 mt-2 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50">
+                  <div className="absolute right-0 mt-2 w-64 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50">
                     <div className="py-1">
                       <button
                         onClick={() => {
@@ -670,7 +670,7 @@ export default function AwardReportEnhanced({
                         className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
                       >
                         <Printer size={16} />
-                        Export PDF
+                        Export Award Report
                       </button>
                       <button
                         onClick={() => {
@@ -680,7 +680,7 @@ export default function AwardReportEnhanced({
                         className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
                       >
                         <FileSpreadsheet size={16} />
-                        Export Excel
+                        Export Excel Supplier Comparison
                       </button>
                     </div>
                   </div>
