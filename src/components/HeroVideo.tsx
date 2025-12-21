@@ -26,7 +26,7 @@ export default function HeroVideo({ onBookDemo }: HeroVideoProps) {
           {/* Card Header */}
           <div className="px-6 sm:px-8 py-6 border-b border-slate-700/50">
             <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-              See Verify+ in Action
+              Why Verify+
             </h2>
             <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
               Trade scope analysis, compliance checks, and handover documentation — reduced from days to minutes.
