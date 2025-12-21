@@ -458,12 +458,25 @@ export default function AwardReportEnhanced({
     try {
       const wb = XLSX.utils.book_new();
       const suppliers = awardSummary.suppliers;
-      const startCol = 3;
+      const startCol = 1; // Start at column B (index 1) - no baseline columns
 
+      // Soft pastel colors for visual distinction between suppliers
       const supplierColors = [
-        'E8F5E9', 'FFF3E0', 'E3F2FD', 'FCE4EC', 'F3E5F5',
-        'FFF9C4', 'E0F2F1', 'FFEBEE', 'F1F8E9', 'FBE9E7',
-        'E8EAF6', 'F3E5F5', 'E0F7FA', 'FFF8E1', 'EFEBE9'
+        'E8F5E9', // Soft mint green
+        'FFF3E0', // Soft peach
+        'E3F2FD', // Soft sky blue
+        'FCE4EC', // Soft pink
+        'F3E5F5', // Soft lavender
+        'FFF9C4', // Soft yellow
+        'E0F2F1', // Soft teal
+        'FFEBEE', // Soft rose
+        'F1F8E9', // Soft lime
+        'FBE9E7', // Soft coral
+        'E8EAF6', // Soft periwinkle
+        'E0F7FA', // Soft cyan
+        'FFF8E1', // Soft cream
+        'EFEBE9', // Soft beige
+        'F9FBE7'  // Soft olive
       ];
 
       const headerData: any[][] = [];
@@ -472,13 +485,15 @@ export default function AwardReportEnhanced({
       headerData.push([`Generated: ${new Date().toLocaleString()}`]);
       headerData.push([]);
 
-      const headerRow = ['Item Description', 'Qty', 'UOM'];
+      // Header row - just Item Description then supplier names (no baseline columns)
+      const headerRow = ['Item Description'];
       suppliers.forEach(supplier => {
         headerRow.push(supplier.supplierName, '', '', '', '');
       });
       headerData.push(headerRow);
 
-      const subHeaderRow = ['', '', ''];
+      // Subheader row - 5 columns per supplier
+      const subHeaderRow = [''];
       suppliers.forEach(() => {
         subHeaderRow.push('Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
       });
@@ -488,7 +503,8 @@ export default function AwardReportEnhanced({
       const supplierTotals: number[] = new Array(suppliers.length).fill(0);
 
       comparisonData.forEach((row) => {
-        const dataRow = [row.description || '', row.quantity || 0, row.unit || ''];
+        // Start with just the description - no baseline qty/unit columns
+        const dataRow = [row.description || ''];
 
         suppliers.forEach((supplier, supplierIdx) => {
           const supplierData = row.suppliers?.[supplier.supplierName];
@@ -510,7 +526,8 @@ export default function AwardReportEnhanced({
         dataRows.push(dataRow);
       });
 
-      const subtotalsRow = ['Subtotals:', '', ''];
+      // Subtotals row - just description column then supplier totals
+      const subtotalsRow = ['Subtotals:'];
       suppliers.forEach((_, idx) => {
         subtotalsRow.push('', '', '', '', supplierTotals[idx]);
       });
@@ -519,20 +536,21 @@ export default function AwardReportEnhanced({
       const allData = [...headerData, ...dataRows];
       const ws = XLSX.utils.aoa_to_sheet(allData);
 
-      const colWidths = [{ wch: 50 }, { wch: 8 }, { wch: 10 }];
+      // Column widths - no baseline columns, just item description then suppliers
+      const colWidths = [{ wch: 50 }]; // Item Description
       suppliers.forEach(() => {
-        colWidths.push({ wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 15 });
+        colWidths.push({ wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 });
       });
       ws['!cols'] = colWidths;
 
+      // Merge cells - only Item Description column (no baseline columns to merge)
       ws['!merges'] = [
-        { s: { r: 4, c: 0 }, e: { r: 5, c: 0 } },
-        { s: { r: 4, c: 1 }, e: { r: 5, c: 1 } },
-        { s: { r: 4, c: 2 }, e: { r: 5, c: 2 } }
+        { s: { r: 4, c: 0 }, e: { r: 5, c: 0 } } // Merge Item Description header
       ];
 
+      // Merge supplier name headers across their 5 columns
       suppliers.forEach((_, idx) => {
-        const startSupplierCol = startCol + (idx * 5);
+        const startSupplierCol = 1 + (idx * 5); // Start at column 1 (B), not 3
         ws['!merges'].push({
           s: { r: 4, c: startSupplierCol },
           e: { r: 4, c: startSupplierCol + 4 }
@@ -554,6 +572,7 @@ export default function AwardReportEnhanced({
             };
           }
 
+          // Header rows (supplier names and column headers)
           if (R === 4 || R === 5) {
             ws[cellAddress].s = {
               font: { bold: true },
@@ -566,6 +585,7 @@ export default function AwardReportEnhanced({
               }
             };
 
+            // Apply supplier colors to header (skip column A)
             if (C >= startCol) {
               const supplierIdx = Math.floor((C - startCol) / 5);
               if (supplierIdx < supplierColors.length) {
@@ -574,8 +594,22 @@ export default function AwardReportEnhanced({
             }
           }
 
+          // Data rows
           if (R > 5) {
-            if (C >= startCol) {
+            // Item Description column (A) - no color, left-aligned
+            if (C === 0) {
+              ws[cellAddress].s = {
+                alignment: { horizontal: 'left', vertical: 'center' },
+                border: {
+                  top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                  bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                  left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                  right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                }
+              };
+            }
+            // Supplier data columns (B onwards)
+            else if (C >= startCol) {
               const supplierIdx = Math.floor((C - startCol) / 5);
               if (supplierIdx < supplierColors.length) {
                 ws[cellAddress].s = {
@@ -589,12 +623,14 @@ export default function AwardReportEnhanced({
                   }
                 };
 
+                // Format numbers as currency
                 if (typeof ws[cellAddress].v === 'number') {
                   ws[cellAddress].z = '"$"#,##0.00';
                 }
               }
             }
 
+            // Subtotals row - make bold
             if (R === range.e.r) {
               ws[cellAddress].s = {
                 ...ws[cellAddress].s,
