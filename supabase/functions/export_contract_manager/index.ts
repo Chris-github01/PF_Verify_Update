@@ -255,32 +255,38 @@ Deno.serve(async (req: Request) => {
 
     if (mode === 'junior_pack') {
       console.log('Generating junior pack for:', project.name, 'with', scopeSystems.length, 'systems');
-      const htmlContent = generateJuniorPackHTML(
-        project.name,
-        supplierName,
-        scopeSystems,
-        inclusions,
-        exclusions,
-        organisationLogoUrl
-      );
-      console.log('Junior pack HTML generated successfully, length:', htmlContent.length);
-      return new Response(
-        JSON.stringify({ html: htmlContent }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      try {
+        const htmlContent = generateJuniorPackHTML(
+          project.name,
+          supplierName,
+          scopeSystems,
+          inclusions,
+          exclusions,
+          organisationLogoUrl
+        );
+        console.log('Junior pack HTML generated successfully, length:', htmlContent.length);
+        return new Response(
+          JSON.stringify({ html: htmlContent }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (genError) {
+        console.error('Error in generateJuniorPackHTML:', genError);
+        throw new Error(`Failed to generate junior pack HTML: ${genError instanceof Error ? genError.message : String(genError)}`);
+      }
     }
 
     if (mode === 'senior_report') {
       console.log('Generating senior report for:', project.name, 'with', scopeSystems.length, 'systems');
-      const htmlContent = generateSeniorReportHTML(
-        project.name,
-        supplierName,
-        totalAmount,
-        scopeSystems,
-        inclusions,
-        exclusions,
-        organisationLogoUrl,
-        {
+      try {
+        const htmlContent = generateSeniorReportHTML(
+          project.name,
+          supplierName,
+          totalAmount,
+          scopeSystems,
+          inclusions,
+          exclusions,
+          organisationLogoUrl,
+          {
           client: (project as any).client,
           mainContractor: (project as any).main_contractor_name,
           retentionPercentage: (project as any).retention_percentage || 3,
@@ -304,6 +310,10 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ html: htmlContent }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+      } catch (genError) {
+        console.error('Error in generateSeniorReportHTML:', genError);
+        throw new Error(`Failed to generate senior report HTML: ${genError instanceof Error ? genError.message : String(genError)}`);
+      }
     }
 
     if (mode === 'prelet_appendix') {

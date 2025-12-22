@@ -319,10 +319,16 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       });
 
       if (!response.ok) {
-        throw new Error('Export failed');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Edge function error:', errorData);
+        throw new Error(errorData.error || errorData.details || `Export failed with status ${response.status}`);
       }
 
       const result = await response.json();
+
+      if (!result.html) {
+        throw new Error('No HTML content received from server');
+      }
 
       const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
       const filename = `JuniorSiteTeamPack_${projectName}`;
@@ -366,10 +372,16 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       });
 
       if (!response.ok) {
-        throw new Error('Export failed');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Edge function error:', errorData);
+        throw new Error(errorData.error || errorData.details || `Export failed with status ${response.status}`);
       }
 
       const result = await response.json();
+
+      if (!result.html) {
+        throw new Error('No HTML content received from server');
+      }
 
       const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
       const filename = `SeniorProjectOverview_${projectName}`;
