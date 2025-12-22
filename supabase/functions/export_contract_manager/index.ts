@@ -49,6 +49,19 @@ interface HandoverPackData {
     rate?: number;
     total?: number;
     notes?: string;
+    is_provisional?: boolean;
+    ps_type?: string;
+    ps_reason?: string;
+    ps_trigger?: string;
+    ps_approval_role?: string;
+    ps_evidence_required?: string;
+    ps_spend_method?: string;
+    ps_cap?: number;
+    ps_rate_basis?: string;
+    ps_spend_to_date?: number;
+    ps_conversion_rule?: string;
+    ps_status?: string;
+    ps_notes_internal?: string;
   }>;
   variations: Array<{
     number: string;

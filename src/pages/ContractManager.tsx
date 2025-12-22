@@ -5,6 +5,7 @@ import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { useOrganisation } from '../lib/organisationContext';
 import { exportTagsClarificationsToExcel } from '../lib/export/tagsExcelExport';
+import EnhancedAllowancesTab from '../components/EnhancedAllowancesTab';
 import type { DashboardMode } from '../App';
 
 interface ContractManagerProps {
@@ -50,6 +51,49 @@ interface Allowance {
   category: string;
   is_provisional: boolean;
   sort_order: number;
+  // PS Control fields
+  ps_type?: string | null;
+  ps_reason?: string | null;
+  ps_trigger?: string | null;
+  ps_approval_role?: string | null;
+  ps_evidence_required?: string | null;
+  ps_spend_method?: string | null;
+  ps_cap?: number | null;
+  ps_rate_basis?: string | null;
+  ps_spend_to_date?: number;
+  ps_conversion_rule?: string | null;
+  ps_status?: string | null;
+  ps_standardised?: boolean;
+  ps_notes_internal?: string | null;
+}
+
+interface Variation {
+  id: string;
+  project_id: string;
+  allowance_id?: string | null;
+  variation_number: string;
+  description: string;
+  amount: number;
+  status: string;
+  reference?: string | null;
+  evidence_notes?: string | null;
+  submitted_date?: string | null;
+  approved_date?: string | null;
+  created_at: string;
+}
+
+interface ProgressClaim {
+  id: string;
+  project_id: string;
+  allowance_id?: string | null;
+  claim_number: string;
+  description: string;
+  amount: number;
+  claim_date: string;
+  status: string;
+  reference?: string | null;
+  evidence_notes?: string | null;
+  created_at: string;
 }
 
 interface LetterOfIntent {
@@ -520,7 +564,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
               {activeTab === 'summary' && <ContractSummaryTab awardInfo={awardInfo} projectInfo={projectInfo} organisationId={projectInfo?.organisation_id} />}
               {activeTab === 'scope' && <ScopeSystemsTab projectId={projectId} scopeSystems={scopeSystems} />}
               {activeTab === 'inclusions' && <InclusionsExclusionsTab projectId={projectId} />}
-              {activeTab === 'allowances' && <AllowancesTab projectId={projectId} />}
+              {activeTab === 'allowances' && <EnhancedAllowancesTab projectId={projectId} />}
               {activeTab === 'onboarding' && isApproved && (
                 <OnboardingTab
                   projectId={projectId}

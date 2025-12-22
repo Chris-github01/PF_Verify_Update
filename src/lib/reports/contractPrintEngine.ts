@@ -32,6 +32,20 @@ export interface NormalizedAllowance {
   rate: number | null;
   total: number;
   notes: string | null;
+  is_provisional?: boolean;
+  ps_type?: string | null;
+  ps_reason?: string | null;
+  ps_trigger?: string | null;
+  ps_approval_role?: string | null;
+  ps_evidence_required?: string | null;
+  ps_spend_method?: string | null;
+  ps_cap?: number | null;
+  ps_rate_basis?: string | null;
+  ps_spend_to_date?: number;
+  ps_conversion_rule?: string | null;
+  ps_status?: string | null;
+  ps_standardised?: boolean;
+  ps_notes_internal?: string | null;
 }
 
 export interface ContractPackData {
@@ -173,7 +187,21 @@ class ContractDataNormalizer {
       unit: rawAllowance.unit || '',
       rate: rawAllowance.rate,
       total: rawAllowance.total || 0,
-      notes: rawAllowance.notes
+      notes: rawAllowance.notes,
+      is_provisional: rawAllowance.is_provisional || false,
+      ps_type: rawAllowance.ps_type,
+      ps_reason: rawAllowance.ps_reason,
+      ps_trigger: rawAllowance.ps_trigger,
+      ps_approval_role: rawAllowance.ps_approval_role,
+      ps_evidence_required: rawAllowance.ps_evidence_required,
+      ps_spend_method: rawAllowance.ps_spend_method,
+      ps_cap: rawAllowance.ps_cap,
+      ps_rate_basis: rawAllowance.ps_rate_basis,
+      ps_spend_to_date: rawAllowance.ps_spend_to_date || 0,
+      ps_conversion_rule: rawAllowance.ps_conversion_rule,
+      ps_status: rawAllowance.ps_status,
+      ps_standardised: rawAllowance.ps_standardised,
+      ps_notes_internal: rawAllowance.ps_notes_internal
     };
   }
 
