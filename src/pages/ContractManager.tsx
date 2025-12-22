@@ -3527,6 +3527,11 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
       const { data: { session } } = await supabase.auth.getSession();
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
 
+      console.log('Generating Pre-let Appendix for project:', projectId);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -3536,14 +3541,23 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         body: JSON.stringify({
           projectId,
           mode: 'prelet_appendix'
-        })
+        }),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error('Export failed');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Server error:', errorData);
+        throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
       const result = await response.json();
+
+      if (!result.html) {
+        throw new Error('No HTML content received from server');
+      }
 
       const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
       const projectName = awardInfo?.project_name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
@@ -3551,7 +3565,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
 
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
-        alert('Please allow popups for this site');
+        alert('Please allow popups for this site to generate the PDF');
         return;
       }
 
@@ -3562,10 +3576,22 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         printWindow.print();
       }, 500);
 
-      alert('Pre-let Appendix document generated successfully!');
+      alert('Pre-let Appendix document generated successfully! Use the print dialog to save as PDF.');
     } catch (error) {
       console.error('Generation error:', error);
-      alert('Failed to generate appendix document: ' + (error instanceof Error ? error.message : 'Unknown error'));
+
+      let errorMessage = 'Failed to generate appendix document';
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else {
+          errorMessage = `Failed to generate appendix document: ${error.message}`;
+        }
+      }
+
+      alert(errorMessage);
     } finally {
       setGenerating(false);
     }
