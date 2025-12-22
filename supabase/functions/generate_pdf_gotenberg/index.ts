@@ -175,43 +175,32 @@ Deno.serve(async (req: Request) => {
       page-break-inside: avoid;
     }
 
-    /* === HEADER & FOOTER STYLING === */
-    .pdf-header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 10mm;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 9pt;
-      color: #6b7280;
-      padding: 0 12mm;
-    }
-
-    .pdf-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 12mm;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 8pt;
-      color: #9ca3af;
-    }
-
+    /* === CONTENT CONTAINER === */
+    /* Note: Header/footer are handled natively by Gotenberg via headerHtml/footerHtml */
+    /* Do NOT use CSS fixed positioning for header/footer - it conflicts with Gotenberg */
     .pdf-content {
-      margin-top: 12mm;
-      margin-bottom: 14mm;
+      margin: 0;
+      padding: 0;
     }
 
     /* === PRINT-SPECIFIC UTILITIES === */
     @media print {
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      /* Remove viewport-based heights */
+      .page {
+        min-height: auto !important;
+        height: auto !important;
+      }
+
+      .page:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
+
       .no-print {
         display: none !important;
       }
@@ -228,6 +217,12 @@ Deno.serve(async (req: Request) => {
       li {
         break-inside: avoid;
         page-break-inside: avoid;
+      }
+
+      /* Keep recommendation cards together */
+      .recommendation-card, .supplier-card {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
       }
     }
 

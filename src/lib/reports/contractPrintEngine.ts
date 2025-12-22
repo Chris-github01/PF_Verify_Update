@@ -266,7 +266,7 @@ class ContractPDFLayout {
       .page {
         padding: 20px 32px 60px 32px;
         position: relative;
-        min-height: 240mm;
+        min-height: auto;
         box-sizing: border-box;
       }
 
@@ -590,6 +590,32 @@ class ContractPDFLayout {
         body {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
+          margin: 0 !important;
+          padding-top: 0 !important;
+          padding-bottom: 22mm !important; /* Reserve space for fixed footer */
+        }
+
+        /* Remove fixed heights in print mode */
+        .page {
+          min-height: auto !important;
+          height: auto !important;
+        }
+
+        .page:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
+        }
+
+        /* Ensure system cards don't break */
+        .system-card {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+
+        /* Keep allowance sections together */
+        .allowance-section, .ps-card {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
         }
       }
     `;

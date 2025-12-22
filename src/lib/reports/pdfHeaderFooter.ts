@@ -165,7 +165,7 @@ export function wrapContentWithHeaderFooter(
 
   return `
     ${header}
-    <div class="pdf-content" style="min-height: calc(100vh - 120px); padding-bottom: 60px;">
+    <div class="pdf-content" style="padding-bottom: 60px;">
       ${content}
     </div>
     ${footer}

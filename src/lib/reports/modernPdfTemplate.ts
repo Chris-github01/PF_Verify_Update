@@ -793,6 +793,21 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
       body {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      /* Remove viewport-based heights in print */
+      .page {
+        min-height: auto !important;
+        height: auto !important;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .page:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
       }
 
       .page-break {
@@ -800,12 +815,27 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
         break-after: page;
       }
 
+      /* Ensure proper table pagination */
       table {
         page-break-inside: avoid;
+        break-inside: avoid;
       }
 
-      .recommendation-card {
+      tr {
         page-break-inside: avoid;
+        break-inside: avoid;
+      }
+
+      /* Keep cards together */
+      .recommendation-card, .card, .section-card {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+
+      /* Prevent orphaned headings */
+      h1, h2, h3, h4, h5, h6 {
+        page-break-after: avoid;
+        break-after: avoid;
       }
     }
   </style>
