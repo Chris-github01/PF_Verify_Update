@@ -10,6 +10,7 @@ export interface ComparisonRow {
   systemLabel?: string;
   section?: string;
   service?: string;
+  scope_category?: string;
   subclass?: string;
   category?: string;
   frr?: string;
@@ -55,6 +56,7 @@ export interface MatrixRow {
   systemLabel: string;
   section?: string;
   service?: string;
+  scope_category?: string;
   subclass?: string;
   frr?: string;
   sizeBucket?: string;

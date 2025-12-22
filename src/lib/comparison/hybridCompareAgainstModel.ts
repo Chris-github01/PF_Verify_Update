@@ -18,6 +18,7 @@ interface NormalisedLine {
   section?: string;
   service?: string;
   serviceType?: string;
+  scope_category?: string;
   subclass?: string;
   frr?: string;
   size?: string;
@@ -60,6 +61,7 @@ export async function compareAgainstModelHybrid(
         systemLabel: 'Unmapped Items',
         section: line.section,
         service: line.service || line.serviceType,
+        scope_category: line.scope_category,
         subclass: line.subclass,
         frr: line.frr,
         sizeBucket: line.size,
@@ -91,6 +93,7 @@ export async function compareAgainstModelHybrid(
         systemLabel: 'Unmapped Items',
         section: line.section,
         service: line.service || line.serviceType,
+        scope_category: line.scope_category,
         subclass: line.subclass,
         frr: line.frr,
         sizeBucket: line.size,
@@ -143,6 +146,7 @@ export async function compareAgainstModelHybrid(
       systemLabel: mapping.systemLabel || '',
       section: line.section,
       service: line.service || line.serviceType,
+      scope_category: line.scope_category,
       subclass: line.subclass,
       frr: line.frr,
       sizeBucket: line.size,
