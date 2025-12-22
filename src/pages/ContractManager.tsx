@@ -140,6 +140,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   const [generatingJuniorPdf, setGeneratingJuniorPdf] = useState(false);
   const [generatingSeniorPdf, setGeneratingSeniorPdf] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
+  const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | undefined>(undefined);
   const { currentOrganisation } = useOrganisation();
 
   useEffect(() => {
@@ -157,6 +158,26 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
       if (project) {
         setProjectInfo(project);
+
+        // Fetch organisation logo if organisation_id exists
+        if (project.organisation_id) {
+          const { data: orgData } = await supabase
+            .from('organisations')
+            .select('logo_url')
+            .eq('id', project.organisation_id)
+            .maybeSingle();
+
+          if (orgData?.logo_url) {
+            // Convert storage path to public URL
+            const { data: publicUrlData } = supabase.storage
+              .from('organisation-logos')
+              .getPublicUrl(orgData.logo_url);
+
+            if (publicUrlData?.publicUrl) {
+              setOrganisationLogoUrl(publicUrlData.publicUrl);
+            }
+          }
+        }
       }
 
       const approvedQuoteId = (project as any)?.approved_quote_id;
@@ -409,7 +430,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             exclusions: exclusionsList,
             safetyNotes: defaultData.safetyNotes || [],
             checklists: defaultData.checklists || [],
-            organisationLogoUrl: undefined,
+            organisationLogoUrl: organisationLogoUrl,
             supplierContact: awardInfo.supplier_contact,
             supplierEmail: awardInfo.supplier_email,
             supplierPhone: awardInfo.supplier_phone,
@@ -535,7 +556,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             { term: 'Liquidated Damages', value: 'As per main contract' }
           ],
           risks: [],
-          organisationLogoUrl: undefined
+          organisationLogoUrl: organisationLogoUrl
         };
 
         htmlContent = generateSeniorReportHTML(seniorData);
