@@ -372,10 +372,16 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           const { generateJuniorPackHTML, getDefaultJuniorPackData } = await import('../lib/handover/juniorPackGenerator');
 
           console.log('Fetching quote items for line item details...');
+          const approvedQuoteId = (projectInfo as any)?.approved_quote_id;
+
+          if (!approvedQuoteId) {
+            throw new Error('No approved quote found for this project');
+          }
+
           const { data: quoteItemsData } = await supabase
             .from('quote_items')
             .select('description, service, material, quantity, unit, subclass')
-            .eq('quote_id', (project as any)?.approved_quote_id);
+            .eq('quote_id', approvedQuoteId);
 
           const lineItems = (quoteItemsData || []).map((item: any) => ({
             description: item.description || 'N/A',
