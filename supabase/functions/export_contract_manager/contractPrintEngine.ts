@@ -836,6 +836,16 @@ class ContractPackBuilder {
 
     const year = new Date().getFullYear();
 
+    // Helper to format item with optional reference
+    const formatItem = (item: any) => {
+      const text = typeof item === 'string' ? item : item.text || item;
+      const reference = typeof item === 'object' ? item.reference : null;
+      if (reference) {
+        return `${text} <span style="background: #e5e7eb; color: #374151; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-family: monospace; font-weight: 600;">Ref: ${reference}</span>`;
+      }
+      return text;
+    };
+
     return `
       <div class="page">
         <header>
@@ -846,7 +856,7 @@ class ContractPackBuilder {
           <h2>Scope Inclusions</h2>
           <ul class="checklist">
             ${data.inclusions.map(inc => `
-              <li><input type="checkbox" disabled> ${inc}</li>
+              <li><input type="checkbox" disabled> ${formatItem(inc)}</li>
             `).join('')}
           </ul>
         ` : ''}
@@ -856,7 +866,7 @@ class ContractPackBuilder {
             <h3>Not Included in Scope</h3>
             <ul style="list-style: none; padding: 0;">
               ${data.exclusions.map(exc => `
-                <li class="safety-item">${exc}</li>
+                <li class="safety-item">${formatItem(exc)}</li>
               `).join('')}
             </ul>
           </div>
@@ -1187,10 +1197,89 @@ class ContractPackBuilder {
       'lump_sum': 'Lump Sum',
       'schedule_of_rates': 'Schedule of Rates',
       'cost_plus': 'Cost Plus',
-      'unit_rates': 'Unit Rates'
+      'unit_rates': 'Unit Rates',
+      're_measurable': 'Re-measurable',
+      'schedule_based': 'Schedule-based'
     };
 
     const pricingBasisLabel = pricingBasisLabels[appendixData.pricing_basis] || 'Lump Sum';
+
+    // Build Awarded Quote Overview section
+    const awardOverviewHtml = appendixData.awarded_subcontractor ? `
+      <div style="background: #fffbeb; border: 2px solid #fbbf24; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+        <h3 style="color: ${VERIFYTRADE_ORANGE}; margin-top: 0; display: flex; align-items: center; gap: 8px;">
+          <span>📋</span> Awarded Quote Overview
+          <span style="background: ${VERIFYTRADE_ORANGE}; color: white; font-size: 10px; padding: 4px 8px; border-radius: 4px; font-weight: 700;">IMMUTABLE SNAPSHOT</span>
+        </h3>
+        <p style="color: #78350f; font-size: 12px; margin-bottom: 16px; font-style: italic;">
+          Auto-populated from Award Report. Locked at finalization as immutable record.
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 4px;">Awarded Subcontractor</div>
+            <div style="color: #111827; font-weight: 700;">${appendixData.awarded_subcontractor}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 4px;">Award Date</div>
+            <div style="color: #111827;">${appendixData.award_date ? new Date(appendixData.award_date).toLocaleDateString('en-NZ') : 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 4px;">Total (ex GST)</div>
+            <div style="color: #111827; font-weight: 700;">${formatCurrency(appendixData.awarded_total_ex_gst || 0)}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 4px;">Total (inc GST)</div>
+            <div style="color: #111827; font-weight: 700;">${formatCurrency(appendixData.awarded_total_inc_gst || 0)}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 4px;">Pricing Basis</div>
+            <div style="color: #111827;">${pricingBasisLabels[appendixData.awarded_pricing_basis] || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 4px;">Award Status</div>
+            <div style="color: #16a34a; font-weight: 600;">${appendixData.award_status || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 4px;">Quote Reference</div>
+            <div style="color: #111827; font-family: monospace;">${appendixData.quote_reference || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 4px;">Quote Revision</div>
+            <div style="color: #111827; font-family: monospace;">${appendixData.quote_revision || 'N/A'}</div>
+          </div>
+        </div>
+        ${appendixData.scope_summary_snapshot ? `
+          <div style="border-top: 1px solid #fbbf24; padding-top: 16px; margin-top: 16px;">
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 8px;">Scope Summary</div>
+            <div style="color: #374151; line-height: 1.6;">${appendixData.scope_summary_snapshot}</div>
+          </div>
+        ` : ''}
+        ${appendixData.systems_snapshot && appendixData.systems_snapshot.length > 0 ? `
+          <div style="border-top: 1px solid #fbbf24; padding-top: 16px; margin-top: 16px;">
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 8px;">Systems Included</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              ${appendixData.systems_snapshot.map((sys: any) => `
+                <span style="background: #fed7aa; padding: 6px 12px; border-radius: 6px; font-size: 12px; color: #78350f;">
+                  ${sys.service_type} (${sys.item_count} items)
+                </span>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        ${appendixData.attachments_snapshot && appendixData.attachments_snapshot.length > 0 ? `
+          <div style="border-top: 1px solid #fbbf24; padding-top: 16px; margin-top: 16px;">
+            <div style="font-size: 11px; color: #78350f; text-transform: uppercase; margin-bottom: 8px;">Attachments</div>
+            <ul style="list-style: none; padding: 0; margin: 0;">
+              ${appendixData.attachments_snapshot.map((att: any) => `
+                <li style="color: #374151; font-size: 13px; margin-bottom: 4px;">
+                  📄 ${att.name} ${att.type ? `<span style="color: #78350f; font-size: 11px;">(${att.type})</span>` : ''}
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    ` : '';
 
     return `
       ${this.buildCoverPage(data, 'prelet_appendix')}
@@ -1199,6 +1288,7 @@ class ContractPackBuilder {
           ${this.layout.generateLogoSection(data.organisationLogoUrl)}
           <div class="generated-by">Generated by <strong>VerifyTrade</strong><br/>${generatedDate}</div>
         </header>
+        ${awardOverviewHtml}
         <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-left: 4px solid ${VERIFYTRADE_ORANGE}; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
           <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px;">
             <div style="font-weight: 600; color: #6b7280;">Project:</div>

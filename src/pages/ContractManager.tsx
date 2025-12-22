@@ -3269,6 +3269,8 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
   const [editing, setEditing] = useState(!existingAppendix);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [awardOverview, setAwardOverview] = useState<any>(null);
+  const [loadingAward, setLoadingAward] = useState(true);
   const [formData, setFormData] = useState({
     scope_summary: existingAppendix?.scope_summary || '',
     pricing_basis: existingAppendix?.pricing_basis || 'lump_sum',
@@ -3280,10 +3282,103 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
   });
 
   const [newInclusion, setNewInclusion] = useState('');
+  const [newInclusionRef, setNewInclusionRef] = useState('');
   const [newExclusion, setNewExclusion] = useState('');
+  const [newExclusionRef, setNewExclusionRef] = useState('');
   const [newAssumption, setNewAssumption] = useState('');
+  const [newAssumptionRef, setNewAssumptionRef] = useState('');
   const [newClarification, setNewClarification] = useState('');
+  const [newClarificationRef, setNewClarificationRef] = useState('');
   const [newRisk, setNewRisk] = useState('');
+  const [newRiskRef, setNewRiskRef] = useState('');
+
+  // Fetch award overview from approved quote
+  useEffect(() => {
+    const fetchAwardOverview = async () => {
+      if (existingAppendix?.awarded_subcontractor) {
+        // Already has snapshot, use it
+        setAwardOverview({
+          awarded_subcontractor: existingAppendix.awarded_subcontractor,
+          awarded_total_ex_gst: existingAppendix.awarded_total_ex_gst,
+          awarded_total_inc_gst: existingAppendix.awarded_total_inc_gst,
+          awarded_pricing_basis: existingAppendix.awarded_pricing_basis,
+          award_date: existingAppendix.award_date,
+          award_status: existingAppendix.award_status,
+          quote_reference: existingAppendix.quote_reference,
+          quote_revision: existingAppendix.quote_revision,
+          quote_id: existingAppendix.quote_id,
+          award_report_id: existingAppendix.award_report_id,
+          scope_summary_snapshot: existingAppendix.scope_summary_snapshot,
+          systems_snapshot: existingAppendix.systems_snapshot,
+          attachments_snapshot: existingAppendix.attachments_snapshot
+        });
+        setLoadingAward(false);
+        return;
+      }
+
+      // Fetch from approved quote
+      try {
+        const { data: project } = await supabase
+          .from('projects')
+          .select('approved_quote_id, client, main_contractor')
+          .eq('id', projectId)
+          .single();
+
+        if (!project?.approved_quote_id) {
+          setLoadingAward(false);
+          return;
+        }
+
+        const { data: quote } = await supabase
+          .from('quotes')
+          .select('id, supplier_id, total_amount, file_url, created_at, suppliers(name)')
+          .eq('id', project.approved_quote_id)
+          .single();
+
+        const { data: awardReport } = await supabase
+          .from('award_reports')
+          .select('id, created_at')
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (quote) {
+          const totalExGst = quote.total_amount || 0;
+          const totalIncGst = totalExGst * 1.15; // Assuming 15% GST
+
+          setAwardOverview({
+            awarded_subcontractor: quote.suppliers?.name || awardInfo?.supplier_name || 'Unknown',
+            awarded_total_ex_gst: totalExGst,
+            awarded_total_inc_gst: totalIncGst,
+            awarded_pricing_basis: 'lump_sum', // Default, can be enhanced
+            award_date: quote.created_at,
+            award_status: 'Approved',
+            quote_reference: `Q-${quote.id.slice(0, 8).toUpperCase()}`,
+            quote_revision: '1.0',
+            quote_id: quote.id,
+            award_report_id: awardReport?.id,
+            scope_summary_snapshot: awardInfo?.summary || 'See scope systems below',
+            systems_snapshot: scopeSystems.map(s => ({
+              service_type: s.service_type,
+              item_count: s.item_count,
+              coverage: s.coverage
+            })),
+            attachments_snapshot: [
+              { name: 'Awarded Quote', type: 'quote_pdf', url: quote.file_url },
+              { name: 'Award Report', type: 'award_report', id: awardReport?.id }
+            ].filter(a => a.url || a.id)
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching award overview:', error);
+      } finally {
+        setLoadingAward(false);
+      }
+    };
+
+    fetchAwardOverview();
+  }, [projectId, existingAppendix, awardInfo, scopeSystems]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -3324,23 +3419,43 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
   };
 
   const handleFinalise = async () => {
-    if (!confirm('Once finalised, this appendix cannot be edited. Continue?')) return;
+    if (!confirm('Once finalised, this appendix cannot be edited. The award overview will be locked as an immutable snapshot. Continue?')) return;
 
     setSaving(true);
     try {
+      // Prepare finalization data with award snapshot
+      const finalizationData: any = {
+        is_finalised: true,
+        finalised_at: new Date().toISOString(),
+        finalised_by: (await supabase.auth.getUser()).data.user?.id
+      };
+
+      // Snapshot award overview if available
+      if (awardOverview) {
+        finalizationData.awarded_subcontractor = awardOverview.awarded_subcontractor;
+        finalizationData.awarded_total_ex_gst = awardOverview.awarded_total_ex_gst;
+        finalizationData.awarded_total_inc_gst = awardOverview.awarded_total_inc_gst;
+        finalizationData.awarded_pricing_basis = awardOverview.awarded_pricing_basis;
+        finalizationData.award_date = awardOverview.award_date;
+        finalizationData.award_status = awardOverview.award_status;
+        finalizationData.quote_reference = awardOverview.quote_reference;
+        finalizationData.quote_revision = awardOverview.quote_revision;
+        finalizationData.quote_id = awardOverview.quote_id;
+        finalizationData.award_report_id = awardOverview.award_report_id;
+        finalizationData.scope_summary_snapshot = awardOverview.scope_summary_snapshot;
+        finalizationData.systems_snapshot = awardOverview.systems_snapshot;
+        finalizationData.attachments_snapshot = awardOverview.attachments_snapshot;
+      }
+
       const { error } = await supabase
         .from('prelet_appendix')
-        .update({
-          is_finalised: true,
-          finalised_at: new Date().toISOString(),
-          finalised_by: (await supabase.auth.getUser()).data.user?.id
-        })
+        .update(finalizationData)
         .eq('id', existingAppendix.id);
 
       if (error) throw error;
 
       onAppendixUpdated();
-      alert('Pre-let Minute Appendix finalised!');
+      alert('Pre-let Minute Appendix finalised with immutable award snapshot!');
     } catch (error) {
       console.error('Finalise error:', error);
       alert('Failed to finalise appendix');
@@ -3349,24 +3464,41 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
     }
   };
 
-  const addItem = (type: 'inclusion' | 'exclusion' | 'assumption' | 'clarification' | 'risk', value: string) => {
+  const addItem = (type: 'inclusion' | 'exclusion' | 'assumption' | 'clarification' | 'risk', value: string, reference?: string) => {
     if (!value.trim()) return;
 
+    // Create item object with optional reference
+    const item: any = typeof value === 'string' ? { text: value } : value;
+    if (reference && reference.trim()) {
+      item.reference = reference.trim();
+      // Detect reference type
+      if (reference.toUpperCase().startsWith('TAG-')) {
+        item.reference_type = 'tag';
+      } else if (reference.toUpperCase().startsWith('ARD-') || reference.toUpperCase().startsWith('AWD-')) {
+        item.reference_type = 'award_line';
+      }
+    }
+
     if (type === 'inclusion') {
-      setFormData({ ...formData, inclusions: [...formData.inclusions, value] });
+      setFormData({ ...formData, inclusions: [...formData.inclusions, item] });
       setNewInclusion('');
+      setNewInclusionRef('');
     } else if (type === 'exclusion') {
-      setFormData({ ...formData, exclusions: [...formData.exclusions, value] });
+      setFormData({ ...formData, exclusions: [...formData.exclusions, item] });
       setNewExclusion('');
+      setNewExclusionRef('');
     } else if (type === 'assumption') {
-      setFormData({ ...formData, commercial_assumptions: [...formData.commercial_assumptions, value] });
+      setFormData({ ...formData, commercial_assumptions: [...formData.commercial_assumptions, item] });
       setNewAssumption('');
+      setNewAssumptionRef('');
     } else if (type === 'clarification') {
-      setFormData({ ...formData, clarifications: [...formData.clarifications, value] });
+      setFormData({ ...formData, clarifications: [...formData.clarifications, item] });
       setNewClarification('');
+      setNewClarificationRef('');
     } else {
-      setFormData({ ...formData, known_risks: [...formData.known_risks, value] });
+      setFormData({ ...formData, known_risks: [...formData.known_risks, item] });
       setNewRisk('');
+      setNewRiskRef('');
     }
   };
 
@@ -3457,6 +3589,98 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         </div>
       )}
 
+      {/* Awarded Quote Overview - Read-only, Auto-populated */}
+      {awardOverview && (
+        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
+          <h5 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <FileCheck size={20} className="text-orange-500" />
+            Awarded Quote Overview
+            {isFinalised && (
+              <span className="text-xs bg-orange-900/30 text-orange-400 px-2 py-1 rounded">IMMUTABLE SNAPSHOT</span>
+            )}
+          </h5>
+          <p className="text-xs text-slate-400 mb-4">
+            Auto-populated from Award Report. {isFinalised ? 'This snapshot is locked and cannot be changed.' : 'Will be locked upon finalization.'}
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs text-slate-400 mb-1">Awarded Subcontractor</div>
+              <div className="text-sm text-white font-medium">{awardOverview.awarded_subcontractor}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">Award Date</div>
+              <div className="text-sm text-white">{awardOverview.award_date ? new Date(awardOverview.award_date).toLocaleDateString() : 'N/A'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">Total (ex GST)</div>
+              <div className="text-sm text-white font-medium">${awardOverview.awarded_total_ex_gst?.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">Total (inc GST)</div>
+              <div className="text-sm text-white font-medium">${awardOverview.awarded_total_inc_gst?.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">Pricing Basis</div>
+              <div className="text-sm text-white capitalize">{awardOverview.awarded_pricing_basis?.replace(/_/g, ' ') || 'N/A'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">Award Status</div>
+              <div className="text-sm text-green-400">{awardOverview.award_status}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">Quote Reference</div>
+              <div className="text-sm text-white font-mono">{awardOverview.quote_reference}</div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">Quote Revision</div>
+              <div className="text-sm text-white font-mono">{awardOverview.quote_revision}</div>
+            </div>
+          </div>
+
+          {awardOverview.scope_summary_snapshot && (
+            <div className="mt-4 pt-4 border-t border-slate-700">
+              <div className="text-xs text-slate-400 mb-2">Scope Summary</div>
+              <div className="text-sm text-white">{awardOverview.scope_summary_snapshot}</div>
+            </div>
+          )}
+
+          {awardOverview.systems_snapshot && awardOverview.systems_snapshot.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-700">
+              <div className="text-xs text-slate-400 mb-2">Systems Included</div>
+              <div className="flex flex-wrap gap-2">
+                {awardOverview.systems_snapshot.map((sys: any, idx: number) => (
+                  <div key={idx} className="bg-slate-700/50 px-3 py-1 rounded text-xs text-white">
+                    {sys.service_type} ({sys.item_count} items)
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {awardOverview.attachments_snapshot && awardOverview.attachments_snapshot.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-700">
+              <div className="text-xs text-slate-400 mb-2">Attachments</div>
+              <div className="space-y-2">
+                {awardOverview.attachments_snapshot.map((att: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-2 text-sm">
+                    <FileCheck size={14} className="text-slate-400" />
+                    <span className="text-white">{att.name}</span>
+                    {att.type && <span className="text-xs text-slate-500">({att.type})</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {loadingAward && (
+        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 text-center">
+          <div className="text-slate-400">Loading award overview...</div>
+        </div>
+      )}
+
       <div className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">Priced Scope Summary (Plain English)</label>
@@ -3488,37 +3712,56 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
           <label className="block text-sm font-medium text-slate-300 mb-2">Explicit Inclusions</label>
           <p className="text-xs text-slate-400 mb-2">What is explicitly included in the subcontractor's scope</p>
           {!isFinalised && (
-            <div className="flex gap-2 mb-3">
+            <div className="space-y-2 mb-3">
               <input
                 type="text"
                 value={newInclusion}
                 onChange={(e) => setNewInclusion(e.target.value)}
                 placeholder="Add inclusion..."
-                onKeyDown={(e) => e.key === 'Enter' && addItem('inclusion', newInclusion)}
-                className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && !newInclusionRef && addItem('inclusion', newInclusion, newInclusionRef)}
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm"
               />
-              <button
-                onClick={() => addItem('inclusion', newInclusion)}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-all text-sm"
-              >
-                Add
-              </button>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newInclusionRef}
+                  onChange={(e) => setNewInclusionRef(e.target.value)}
+                  placeholder="Optional ref (TAG-XXX, ARD-XXX)..."
+                  onKeyDown={(e) => e.key === 'Enter' && addItem('inclusion', newInclusion, newInclusionRef)}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-xs"
+                />
+                <button
+                  onClick={() => addItem('inclusion', newInclusion, newInclusionRef)}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-all text-sm"
+                >
+                  Add
+                </button>
+              </div>
             </div>
           )}
           <div className="space-y-2">
-            {formData.inclusions.map((item, index) => (
-              <div key={index} className="flex items-center justify-between bg-green-900/20 border border-green-700/50 rounded p-3">
-                <span className="text-sm text-white">{item}</span>
-                {!isFinalised && (
-                  <button
-                    onClick={() => removeItem('inclusion', index)}
-                    className="text-red-400 hover:text-red-300"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
+            {formData.inclusions.map((item, index) => {
+              const itemText = typeof item === 'string' ? item : item.text;
+              const itemRef = typeof item === 'object' ? item.reference : null;
+              return (
+                <div key={index} className="flex items-center justify-between bg-green-900/20 border border-green-700/50 rounded p-3">
+                  <div className="flex-1">
+                    <span className="text-sm text-white">{itemText}</span>
+                    {itemRef && (
+                      <span className="ml-2 text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded font-mono">Ref: {itemRef}</span>
+                    )}
+                  </div>
+                  {!isFinalised && (
+                    <button
+                      onClick={() => removeItem('inclusion', index)}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
