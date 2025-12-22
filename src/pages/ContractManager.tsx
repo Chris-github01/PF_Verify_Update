@@ -3867,10 +3867,18 @@ function SiteHandoverTab({
             <button
               onClick={onGenerateJuniorPdf}
               disabled={generatingJuniorPdf || !awardInfo}
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-sm"
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-sm relative overflow-hidden"
             >
+              {generatingJuniorPdf && (
+                <div className="absolute inset-0 bg-green-800/50 flex items-center justify-center">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span className="text-white font-medium">Processing...</span>
+                  </div>
+                </div>
+              )}
               <FileText size={18} />
-              {generatingJuniorPdf ? 'Generating...' : 'Download PDF'}
+              Download PDF
             </button>
           </div>
         </div>
@@ -3943,10 +3951,18 @@ function SiteHandoverTab({
             <button
               onClick={onGenerateSeniorPdf}
               disabled={generatingSeniorPdf || !awardInfo}
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-sm"
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-sm relative overflow-hidden"
             >
+              {generatingSeniorPdf && (
+                <div className="absolute inset-0 bg-green-800/50 flex items-center justify-center">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span className="text-white font-medium">Processing...</span>
+                  </div>
+                </div>
+              )}
               <FileText size={18} />
-              {generatingSeniorPdf ? 'Generating...' : 'Download PDF'}
+              Download PDF
             </button>
           </div>
         </div>
