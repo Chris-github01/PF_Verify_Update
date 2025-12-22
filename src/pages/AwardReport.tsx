@@ -319,13 +319,13 @@ export default function AwardReport({
 
       const headerRow = ['Item Description', 'Qty', 'UOM'];
       suppliers.forEach(supplier => {
-        headerRow.push(supplier.supplierName, '', '', '', '');
+        headerRow.push(supplier.supplierName, '', '', '', '', '', '');
       });
       headerData.push(headerRow);
 
       const subHeaderRow = ['', '', ''];
       suppliers.forEach(() => {
-        subHeaderRow.push('Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
+        subHeaderRow.push('SERVICE TYPE', 'TYPE', 'Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
       });
       headerData.push(subHeaderRow);
 
@@ -340,6 +340,8 @@ export default function AwardReport({
 
           if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
             dataRow.push(
+              (row as any).service || (row as any).systemLabel || 'N/A',
+              (row as any).category || (row as any).subclass || 'N/A',
               supplierData.quantity ?? 'N/A',
               supplierData.unit || 'N/A',
               supplierData.normalisedUnit || 'N/A',
@@ -348,7 +350,7 @@ export default function AwardReport({
             );
             supplierTotals[supplierIdx] += supplierData.total || 0;
           } else {
-            dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
+            dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }
         });
 
@@ -357,7 +359,7 @@ export default function AwardReport({
 
       const subtotalsRow = ['Subtotals:', '', ''];
       suppliers.forEach((_, idx) => {
-        subtotalsRow.push('', '', '', '', supplierTotals[idx]);
+        subtotalsRow.push('', '', '', '', '', '', supplierTotals[idx]);
       });
       dataRows.push(subtotalsRow);
 
@@ -366,7 +368,7 @@ export default function AwardReport({
 
       const colWidths = [{ wch: 50 }, { wch: 8 }, { wch: 10 }];
       suppliers.forEach(() => {
-        colWidths.push({ wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 15 });
+        colWidths.push({ wch: 15 }, { wch: 15 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 15 });
       });
       ws['!cols'] = colWidths;
 
@@ -377,10 +379,10 @@ export default function AwardReport({
       ];
 
       suppliers.forEach((_, idx) => {
-        const startSupplierCol = startCol + (idx * 5);
+        const startSupplierCol = startCol + (idx * 7);
         ws['!merges'].push({
           s: { r: 4, c: startSupplierCol },
-          e: { r: 4, c: startSupplierCol + 4 }
+          e: { r: 4, c: startSupplierCol + 6 }
         });
       });
 
@@ -412,7 +414,7 @@ export default function AwardReport({
             };
 
             if (C >= startCol) {
-              const supplierIdx = Math.floor((C - startCol) / 5);
+              const supplierIdx = Math.floor((C - startCol) / 7);
               if (supplierIdx < supplierColors.length) {
                 ws[cellAddress].s.fill = { fgColor: { rgb: supplierColors[supplierIdx] } };
               }
@@ -421,7 +423,7 @@ export default function AwardReport({
 
           if (R > 5) {
             if (C >= startCol) {
-              const supplierIdx = Math.floor((C - startCol) / 5);
+              const supplierIdx = Math.floor((C - startCol) / 7);
               if (supplierIdx < supplierColors.length) {
                 ws[cellAddress].s = {
                   fill: { fgColor: { rgb: supplierColors[supplierIdx] } },
