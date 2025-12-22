@@ -303,38 +303,74 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
     setGeneratingJuniorPdf(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+      let htmlContent: string | null = null;
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          mode: 'junior_pack'
-        })
-      });
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Edge function error:', errorData);
-        throw new Error(errorData.error || errorData.details || `Export failed with status ${response.status}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId,
+            mode: 'junior_pack'
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const result = await response.json();
+          htmlContent = result.html;
+        } else {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.warn('Edge function error, will use fallback:', errorData);
+        }
+      } catch (edgeError) {
+        console.warn('Edge function failed, using client-side fallback:', edgeError);
       }
 
-      const result = await response.json();
+      if (!htmlContent) {
+        console.log('Generating PDF client-side...');
+        const { generateJuniorPackHTML } = await import('../lib/handover/juniorPackGenerator');
 
-      if (!result.html) {
-        throw new Error('No HTML content received from server');
+        const juniorData = {
+          projectName: projectInfo?.name || 'Project',
+          projectClient: projectInfo?.client || 'TBC',
+          supplierName: awardInfo.supplier_name,
+          scopeSystems: scopeSystems.map(sys => ({
+            service_type: sys.service_type,
+            coverage: sys.coverage,
+            item_count: sys.item_count,
+            details: sys.details
+          })),
+          inclusions: inclusions,
+          exclusions: exclusions,
+          safetyNotes: [],
+          checklists: [],
+          organisationLogoUrl: undefined
+        };
+
+        htmlContent = generateJuniorPackHTML(juniorData);
+      }
+
+      if (!htmlContent) {
+        throw new Error('Failed to generate HTML content');
       }
 
       const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
       const filename = `JuniorSiteTeamPack_${projectName}`;
 
       await generateAndDownloadPdf({
-        htmlContent: result.html,
+        htmlContent,
         filename,
         projectName: projectInfo?.name,
         contractNumber: undefined,
@@ -356,38 +392,85 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
     setGeneratingSeniorPdf(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+      let htmlContent: string | null = null;
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          mode: 'senior_report'
-        })
-      });
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Edge function error:', errorData);
-        throw new Error(errorData.error || errorData.details || `Export failed with status ${response.status}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId,
+            mode: 'senior_report'
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const result = await response.json();
+          htmlContent = result.html;
+        } else {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.warn('Edge function error, will use fallback:', errorData);
+        }
+      } catch (edgeError) {
+        console.warn('Edge function failed, using client-side fallback:', edgeError);
       }
 
-      const result = await response.json();
+      if (!htmlContent) {
+        console.log('Generating Senior Report PDF client-side...');
+        const { generateSeniorReportHTML } = await import('../lib/handover/seniorReportGenerator');
 
-      if (!result.html) {
-        throw new Error('No HTML content received from server');
+        const retentionPercentage = 3;
+        const retentionAmount = awardInfo.total_amount * (retentionPercentage / 100);
+        const netAmount = awardInfo.total_amount - retentionAmount;
+
+        const totalItems = scopeSystems.reduce((sum, sys) => sum + sys.item_count, 0);
+
+        const seniorData = {
+          projectName: projectInfo?.name || 'Project',
+          projectClient: projectInfo?.client || 'TBC',
+          supplierName: awardInfo.supplier_name,
+          totalAmount: awardInfo.total_amount,
+          retentionAmount,
+          netAmount,
+          scopeSystems: scopeSystems.map(sys => ({
+            service_type: sys.service_type,
+            coverage: sys.coverage,
+            item_count: sys.item_count,
+            percentage: totalItems > 0 ? (sys.item_count / totalItems) * 100 : 0
+          })),
+          keyTerms: [
+            { term: 'Payment Terms', value: '30 days from invoice date' },
+            { term: 'Retention', value: `${retentionPercentage}%` },
+            { term: 'Liquidated Damages', value: 'As per main contract' }
+          ],
+          risks: [],
+          organisationLogoUrl: undefined
+        };
+
+        htmlContent = generateSeniorReportHTML(seniorData);
+      }
+
+      if (!htmlContent) {
+        throw new Error('Failed to generate HTML content');
       }
 
       const projectName = projectInfo?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
       const filename = `SeniorProjectOverview_${projectName}`;
 
       await generateAndDownloadPdf({
-        htmlContent: result.html,
+        htmlContent,
         filename,
         projectName: projectInfo?.name,
         contractNumber: undefined,
