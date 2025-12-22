@@ -1,12 +1,14 @@
 # Contract Manager Site Handover PDF Generation Fix
 
-**Status**: ✅ FIXED
+**Status**: ✅ FIXED (Updated)
 **Date**: December 22, 2025
 
 ---
 
 ## Problem
-The "Download PDF" button in Contract Manager's Site Handover section shows "Generating..." indefinitely and then displays error: **"Failed to generate Site Team Pack: Failed to fetch"**
+The "Download PDF" button in Contract Manager's Site Handover section was showing multiple errors:
+1. Initially: **"Failed to generate Site Team Pack: Failed to fetch"**
+2. After first fix: **"Failed to generate Site Team Pack: inclusions is not defined"**
 
 ## Root Cause Analysis
 
@@ -261,6 +263,46 @@ If you want to enable the edge function for faster PDF generation:
 
 ---
 
+## Additional Fix: Data Fetching Issue
+
+### Problem Discovered
+After implementing the fallback, a new error appeared: **"inclusions is not defined"**
+
+### Root Cause
+The `inclusions` and `exclusions` variables were defined in a separate component (`InclusionsExclusionsTab`) and not accessible in the `handleGenerateJuniorPdf` function scope.
+
+### Solution Applied
+Added database queries to fetch inclusions/exclusions data directly in both PDF generation functions:
+
+```typescript
+// Fetch data from Supabase
+const { data: inclusionsData } = await supabase
+  .from('contract_inclusions')
+  .select('description')
+  .eq('project_id', projectId)
+  .order('sort_order');
+
+const { data: exclusionsData } = await supabase
+  .from('contract_exclusions')
+  .select('description')
+  .eq('project_id', projectId)
+  .order('sort_order');
+
+// Map to string arrays
+const inclusionsList = (inclusionsData || []).map(i => i.description).filter(Boolean);
+const exclusionsList = (exclusionsData || []).map(e => e.description).filter(Boolean);
+```
+
+This ensures the PDF generation has access to all required data regardless of component scope.
+
+---
+
 ## Conclusion
 
-The PDF generation now has built-in resilience with automatic fallback to client-side generation. Users will be able to download PDFs regardless of edge function availability, ensuring uninterrupted workflow.
+The PDF generation now has:
+1. ✅ Built-in resilience with automatic fallback to client-side generation
+2. ✅ Proper data fetching for inclusions and exclusions
+3. ✅ No scope-related variable access issues
+4. ✅ Complete functionality for both Site Team Pack and Senior Management Pack
+
+Users can now successfully download PDFs regardless of edge function availability, ensuring uninterrupted workflow.

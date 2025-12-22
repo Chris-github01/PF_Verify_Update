@@ -340,6 +340,22 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
       if (!htmlContent) {
         console.log('Generating PDF client-side...');
+
+        const { data: inclusionsData } = await supabase
+          .from('contract_inclusions')
+          .select('description')
+          .eq('project_id', projectId)
+          .order('sort_order');
+
+        const { data: exclusionsData } = await supabase
+          .from('contract_exclusions')
+          .select('description')
+          .eq('project_id', projectId)
+          .order('sort_order');
+
+        const inclusionsList = (inclusionsData || []).map(i => i.description).filter(Boolean);
+        const exclusionsList = (exclusionsData || []).map(e => e.description).filter(Boolean);
+
         const { generateJuniorPackHTML } = await import('../lib/handover/juniorPackGenerator');
 
         const juniorData = {
@@ -352,8 +368,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             item_count: sys.item_count,
             details: sys.details
           })),
-          inclusions: inclusions,
-          exclusions: exclusions,
+          inclusions: inclusionsList,
+          exclusions: exclusionsList,
           safetyNotes: [],
           checklists: [],
           organisationLogoUrl: undefined
@@ -429,6 +445,22 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
       if (!htmlContent) {
         console.log('Generating Senior Report PDF client-side...');
+
+        const { data: inclusionsData } = await supabase
+          .from('contract_inclusions')
+          .select('description')
+          .eq('project_id', projectId)
+          .order('sort_order');
+
+        const { data: exclusionsData } = await supabase
+          .from('contract_exclusions')
+          .select('description')
+          .eq('project_id', projectId)
+          .order('sort_order');
+
+        const inclusionsList = (inclusionsData || []).map(i => i.description).filter(Boolean);
+        const exclusionsList = (exclusionsData || []).map(e => e.description).filter(Boolean);
+
         const { generateSeniorReportHTML } = await import('../lib/handover/seniorReportGenerator');
 
         const retentionPercentage = 3;
