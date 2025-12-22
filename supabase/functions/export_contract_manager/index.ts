@@ -129,50 +129,81 @@ Deno.serve(async (req: Request) => {
 
     // PRELET APPENDIX MODE - Fast path with minimal data fetching
     if (mode === 'prelet_appendix') {
-      console.log('Fast path: fetching only prelet appendix data');
+      console.log('[PRELET] Fast path started');
+      console.log('[PRELET] Project ID:', projectId);
+      console.log('[PRELET] Organisation ID:', (project as any).organisation_id);
 
-      const { data: appendixData } = await supabase
-        .from('prelet_appendix')
-        .select('*')
-        .eq('project_id', projectId)
-        .maybeSingle();
+      try {
+        console.log('[PRELET] Querying prelet_appendix table...');
+        const queryStart = Date.now();
 
-      if (!appendixData) {
-        throw new Error('No pre-let appendix found for this project');
-      }
-
-      // Get basic supplier info
-      const approvedQuoteId = (project as any)?.approved_quote_id;
-      let supplierName = 'TBC';
-      let totalAmount = 0;
-
-      if (approvedQuoteId) {
-        const { data: quote } = await supabase
-          .from('quotes')
-          .select('supplier_name, total_amount')
-          .eq('id', approvedQuoteId)
+        const { data: appendixData, error: appendixError } = await supabase
+          .from('prelet_appendix')
+          .select('*')
+          .eq('project_id', projectId)
           .maybeSingle();
 
-        if (quote) {
-          supplierName = quote.supplier_name;
-          totalAmount = quote.total_amount || 0;
+        const queryDuration = Date.now() - queryStart;
+        console.log(`[PRELET] Query completed in ${queryDuration}ms`);
+
+        if (appendixError) {
+          console.error('[PRELET] Database error:', appendixError);
+          throw new Error(`Database error: ${appendixError.message}`);
         }
+
+        if (!appendixData) {
+          console.error('[PRELET] No appendix data found for project:', projectId);
+          throw new Error('No pre-let appendix found for this project. Please save the appendix first.');
+        }
+
+        console.log('[PRELET] Appendix data loaded. Keys:', Object.keys(appendixData));
+
+        // Get basic supplier info
+        const approvedQuoteId = (project as any)?.approved_quote_id;
+        let supplierName = 'TBC';
+        let totalAmount = 0;
+
+        if (approvedQuoteId) {
+          console.log('[PRELET] Fetching quote info for:', approvedQuoteId);
+          const { data: quote, error: quoteError } = await supabase
+            .from('quotes')
+            .select('supplier_name, total_amount')
+            .eq('id', approvedQuoteId)
+            .maybeSingle();
+
+          if (quoteError) {
+            console.warn('[PRELET] Error fetching quote:', quoteError.message);
+          } else if (quote) {
+            supplierName = quote.supplier_name;
+            totalAmount = quote.total_amount || 0;
+            console.log('[PRELET] Quote loaded. Supplier:', supplierName, 'Amount:', totalAmount);
+          }
+        } else {
+          console.log('[PRELET] No approved quote ID found');
+        }
+
+        console.log('[PRELET] Generating HTML...');
+        const genStart = Date.now();
+
+        const htmlContent = generatePreletAppendixHTML(
+          project.name,
+          supplierName,
+          totalAmount,
+          appendixData,
+          organisationLogoUrl
+        );
+
+        const genDuration = Date.now() - genStart;
+        console.log(`[PRELET] HTML generated in ${genDuration}ms, length: ${htmlContent.length}`);
+
+        return new Response(
+          JSON.stringify({ html: htmlContent }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (presetError) {
+        console.error('[PRELET] Error in prelet appendix generation:', presetError);
+        throw presetError;
       }
-
-      console.log('Generating prelet appendix HTML');
-      const htmlContent = generatePreletAppendixHTML(
-        project.name,
-        supplierName,
-        totalAmount,
-        appendixData,
-        organisationLogoUrl
-      );
-
-      console.log('Prelet appendix HTML generated, length:', htmlContent.length);
-      return new Response(
-        JSON.stringify({ html: htmlContent }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
     // For other modes, fetch detailed data
