@@ -1040,15 +1040,15 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
       <div class="stats-grid" style="margin-top: 40px;">
         <div class="stat-card">
-          <div class="stat-card-value">$${(data.totalAmount / 1000).toFixed(0)}k</div>
+          <div class="stat-card-value">$${data.totalAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="stat-card-label">Contract Value</div>
         </div>
         <div class="stat-card">
-          <div class="stat-card-value">$${(data.retentionAmount / 1000).toFixed(0)}k</div>
+          <div class="stat-card-value">$${data.retentionAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="stat-card-label">Retention</div>
         </div>
         <div class="stat-card">
-          <div class="stat-card-value">$${(data.netAmount / 1000).toFixed(0)}k</div>
+          <div class="stat-card-value">$${data.netAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <div class="stat-card-label">Net Payable</div>
         </div>
         <div class="stat-card">
