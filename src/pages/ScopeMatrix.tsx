@@ -760,15 +760,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       headerData.push([`Generated: ${new Date().toLocaleString()}`]);
       headerData.push([]);
 
-      const headerRow = ['System Description', 'Service Type', 'Type', 'Qty', 'UOM'];
+      const headerRow = ['System Description', 'Qty', 'UOM'];
       suppliers.forEach(supplier => {
-        headerRow.push(supplier, '', '', '', '');
+        headerRow.push(supplier, '', '', '', '', '', '');
       });
       headerData.push(headerRow);
 
-      const subHeaderRow = ['', '', '', '', ''];
+      const subHeaderRow = ['', '', ''];
       suppliers.forEach(() => {
-        subHeaderRow.push('Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
+        subHeaderRow.push('SERVICE TYPE', 'TYPE', 'Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total');
       });
       headerData.push(subHeaderRow);
 
@@ -778,11 +778,13 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       matrixRows.forEach((row) => {
         const dataRow = [
           row.systemLabel || row.systemId,
-          row.service || '',
-          row.scope_category || '',
           '',
           'Mixed'
         ];
+
+        // Extract service type and type from the row (same for all suppliers)
+        const serviceType = row.service || '';
+        const type = row.scope_category || '';
 
         suppliers.forEach((supplier, supplierIdx) => {
           const cell = row.cells[supplier];
@@ -794,6 +796,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             const qty = cell.totalQuantity || 0;
 
             dataRow.push(
+              serviceType || 'N/A',
+              type || 'N/A',
               qty,
               cell.unit || 'Mixed',
               cell.normalisedUnit || 'Mixed',
@@ -802,41 +806,39 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             );
             supplierTotals[supplierIdx] += total;
           } else {
-            dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
+            dataRow.push(serviceType || 'N/A', type || 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }
         });
 
         dataRows.push(dataRow);
       });
 
-      const subtotalsRow = ['Subtotals:', '', '', '', ''];
+      const subtotalsRow = ['Subtotals:', '', ''];
       suppliers.forEach((_, idx) => {
-        subtotalsRow.push('', '', '', '', supplierTotals[idx]);
+        subtotalsRow.push('', '', '', '', '', '', supplierTotals[idx]);
       });
       dataRows.push(subtotalsRow);
 
       const allData = [...headerData, ...dataRows];
       const ws = XLSX.utils.aoa_to_sheet(allData);
 
-      const colWidths = [{ wch: 50 }, { wch: 15 }, { wch: 15 }, { wch: 8 }, { wch: 10 }];
+      const colWidths = [{ wch: 50 }, { wch: 8 }, { wch: 10 }];
       suppliers.forEach(() => {
-        colWidths.push({ wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 15 });
+        colWidths.push({ wch: 15 }, { wch: 15 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 15 });
       });
       ws['!cols'] = colWidths;
 
       ws['!merges'] = [
         { s: { r: 4, c: 0 }, e: { r: 5, c: 0 } },
         { s: { r: 4, c: 1 }, e: { r: 5, c: 1 } },
-        { s: { r: 4, c: 2 }, e: { r: 5, c: 2 } },
-        { s: { r: 4, c: 3 }, e: { r: 5, c: 3 } },
-        { s: { r: 4, c: 4 }, e: { r: 5, c: 4 } }
+        { s: { r: 4, c: 2 }, e: { r: 5, c: 2 } }
       ];
 
       suppliers.forEach((_, idx) => {
-        const startSupplierCol = 5 + (idx * 5);
+        const startSupplierCol = 3 + (idx * 7);
         ws['!merges'].push({
           s: { r: 4, c: startSupplierCol },
-          e: { r: 4, c: startSupplierCol + 4 }
+          e: { r: 4, c: startSupplierCol + 6 }
         });
       });
 
@@ -867,8 +869,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               }
             };
 
-            if (C >= 5) {
-              const supplierIdx = Math.floor((C - 5) / 5);
+            if (C >= 3) {
+              const supplierIdx = Math.floor((C - 3) / 7);
               if (supplierIdx < supplierColors.length) {
                 ws[cellAddress].s.fill = { fgColor: { rgb: supplierColors[supplierIdx] } };
               }
@@ -876,8 +878,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           }
 
           if (R > 5) {
-            if (C >= 5) {
-              const supplierIdx = Math.floor((C - 5) / 5);
+            if (C >= 3) {
+              const supplierIdx = Math.floor((C - 3) / 7);
               if (supplierIdx < supplierColors.length) {
                 ws[cellAddress].s = {
                   fill: { fgColor: { rgb: supplierColors[supplierIdx] } },
