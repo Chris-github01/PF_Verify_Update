@@ -88,15 +88,23 @@ function categorizeLineItems(items: LineItem[]): Map<string, LineItem[]> {
 
     const service = item.service.toLowerCase();
     const desc = item.description.toLowerCase();
+    const material = item.material?.toLowerCase() || '';
 
-    if (service.includes('electrical') || desc.includes('electrical') || desc.includes('cable')) {
+    // Check for Flush Boxes FIRST (before Electrical)
+    // This includes: flush boxes, powerpad, intumescent pads
+    if (service.includes('flush box') ||
+        desc.includes('flush box') ||
+        desc.includes('powerpad') ||
+        material.includes('powerpad') ||
+        (desc.includes('intumescent') && desc.includes('pad')) ||
+        (desc.includes('intumescent') && desc.includes('flush'))) {
+      category = 'Flush Boxes';
+    } else if (service.includes('electrical') || desc.includes('electrical') || desc.includes('cable')) {
       category = 'Electrical';
     } else if (service.includes('plumbing') || desc.includes('plumbing') || desc.includes('pipe')) {
       category = 'Plumbing';
     } else if (service.includes('fire') || desc.includes('fire')) {
       category = 'Fire';
-    } else if (service.includes('flush box') || desc.includes('flush box')) {
-      category = 'Flush Boxes';
     } else if (service.includes('intumescent') || desc.includes('coating')) {
       category = 'Intumescent Coatings';
     }
