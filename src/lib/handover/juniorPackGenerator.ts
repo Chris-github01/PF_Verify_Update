@@ -1,3 +1,11 @@
+export interface LineItem {
+  description: string;
+  service: string;
+  material: string;
+  quantity: number | string;
+  unit: string;
+}
+
 export interface JuniorPackData {
   projectName: string;
   projectClient: string;
@@ -8,6 +16,7 @@ export interface JuniorPackData {
     item_count: number;
     details: string[];
   }>;
+  lineItems?: LineItem[];
   inclusions: string[];
   exclusions: string[];
   safetyNotes: string[];
@@ -16,6 +25,10 @@ export interface JuniorPackData {
     items: string[];
   }>;
   organisationLogoUrl?: string;
+  supplierContact?: string;
+  supplierEmail?: string;
+  supplierPhone?: string;
+  supplierAddress?: string;
 }
 
 const VERIFYTRADE_ORANGE = '#f97316';
@@ -50,6 +63,102 @@ function generateLogoSection(organisationLogoUrl?: string): string {
   }
 }
 
+function categorizeLineItems(items: LineItem[]): Map<string, LineItem[]> {
+  const categories = new Map<string, LineItem[]>();
+
+  const categoryMap: Record<string, string> = {
+    'Electrical': 'Electrical Cable Penetrations',
+    'Plumbing': 'Plumbing Pipe Penetrations',
+    'Fire Sprinkler': 'Fire Sprinkler Penetrations',
+    'Fire': 'Fire Protection Systems',
+    'Flush Box': 'Flush Boxes',
+    'Flush Boxes': 'Flush Boxes'
+  };
+
+  items.forEach(item => {
+    let category = 'Other Systems';
+
+    const service = item.service.toLowerCase();
+    const desc = item.description.toLowerCase();
+
+    if (service.includes('electrical') || desc.includes('electrical') || desc.includes('cable')) {
+      category = 'Electrical Cable Penetrations';
+    } else if (service.includes('plumbing') || desc.includes('plumbing') || desc.includes('pipe')) {
+      category = 'Plumbing Pipe Penetrations';
+    } else if (service.includes('fire sprinkler') || desc.includes('fire sprinkler') || desc.includes('sprinkler')) {
+      category = 'Fire Sprinkler Penetrations';
+    } else if (service.includes('flush box') || desc.includes('flush box')) {
+      category = 'Flush Boxes';
+    } else if (service.includes('fire') && !desc.includes('flush box')) {
+      category = 'Fire Protection Systems';
+    }
+
+    if (!categories.has(category)) {
+      categories.set(category, []);
+    }
+    categories.get(category)!.push(item);
+  });
+
+  return categories;
+}
+
+function generateLineItemsHTML(items: LineItem[]): string {
+  const categorized = categorizeLineItems(items);
+  const sortOrder = [
+    'Electrical Cable Penetrations',
+    'Plumbing Pipe Penetrations',
+    'Other Systems',
+    'Fire Sprinkler Penetrations',
+    'Flush Boxes',
+    'Fire Protection Systems'
+  ];
+
+  let html = '<div class="line-items-section">';
+
+  sortOrder.forEach(category => {
+    if (categorized.has(category)) {
+      const categoryItems = categorized.get(category)!;
+      html += `
+        <div class="category-section page-break-inside-avoid">
+          <h3 class="category-title">
+            <span class="checkmark">✓</span>
+            ${category}
+          </h3>
+          <p class="category-count">${categoryItems.length} items</p>
+
+          <div class="table-wrapper">
+            <table class="line-items-table">
+              <thead>
+                <tr>
+                  <th style="width: 40%">DESCRIPTION</th>
+                  <th style="width: 20%">SERVICE TYPE</th>
+                  <th style="width: 20%">MATERIAL</th>
+                  <th style="width: 10%">QTY</th>
+                  <th style="width: 10%">UNIT</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${categoryItems.map(item => `
+                  <tr>
+                    <td>${item.description}</td>
+                    <td>${item.service}</td>
+                    <td>${item.material}</td>
+                    <td class="text-center">${item.quantity}</td>
+                    <td class="text-center">${item.unit}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+  });
+
+  html += '</div>';
+  return html;
+}
+
 export function generateJuniorPackHTML(data: JuniorPackData): string {
   const safetyNotesHTML = data.safetyNotes.map(note =>
     `<li class="safety-item">${note}</li>`
@@ -73,6 +182,41 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       </ul>
     </div>
   `).join('');
+
+  const lineItemsHTML = data.lineItems && data.lineItems.length > 0
+    ? generateLineItemsHTML(data.lineItems)
+    : '';
+
+  const inclusionsHTML = data.inclusions.length > 0 ? `
+    <div class="inclusions-section">
+      <h3>Scope Inclusions</h3>
+      <ul class="inclusions-list">
+        ${data.inclusions.map(inc => `<li>${inc}</li>`).join('')}
+      </ul>
+    </div>
+  ` : '';
+
+  const exclusionsHTML = data.exclusions.length > 0 ? `
+    <div class="exclusions-section">
+      <h3>Scope Exclusions</h3>
+      <p class="exclusions-intro">Not Included in Scope</p>
+      <ul class="exclusions-list">
+        ${data.exclusions.map(exc => `<li>⚠ ${exc}</li>`).join('')}
+      </ul>
+    </div>
+  ` : '';
+
+  const contactHTML = (data.supplierContact || data.supplierEmail || data.supplierPhone || data.supplierAddress) ? `
+    <div class="contact-section">
+      <h3>Subcontractor Contact Details</h3>
+      <div class="contact-card">
+        ${data.supplierContact ? `<p><strong>Contact:</strong> ${data.supplierContact}</p>` : ''}
+        ${data.supplierEmail ? `<p><strong>Email:</strong> ${data.supplierEmail}</p>` : ''}
+        ${data.supplierPhone ? `<p><strong>Phone:</strong> ${data.supplierPhone}</p>` : ''}
+        ${data.supplierAddress ? `<p><strong>Address:</strong> ${data.supplierAddress}</p>` : ''}
+      </div>
+    </div>
+  ` : '';
 
   return `
 <!DOCTYPE html>
@@ -409,6 +553,206 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       cursor: pointer;
     }
 
+    /* === LINE ITEMS TABLE === */
+    .line-items-section {
+      margin: 32px 0;
+    }
+
+    .category-section {
+      margin-bottom: 40px;
+    }
+
+    .category-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 20px;
+      color: #111827;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .category-title .checkmark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: #10b981;
+      color: white;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .category-count {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 16px;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      margin-bottom: 24px;
+    }
+
+    .line-items-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .line-items-table thead {
+      background: ${VERIFYTRADE_ORANGE};
+      color: white;
+    }
+
+    .line-items-table th {
+      padding: 12px 10px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid ${VERIFYTRADE_ORANGE_DARK};
+    }
+
+    .line-items-table tbody tr {
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .line-items-table tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    .line-items-table tbody tr:hover {
+      background: #f9fafb;
+    }
+
+    .line-items-table td {
+      padding: 10px;
+      color: #374151;
+      line-height: 1.5;
+      vertical-align: top;
+    }
+
+    .line-items-table .text-center {
+      text-align: center;
+    }
+
+    /* === CONTACT SECTION === */
+    .contact-section {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+    }
+
+    .contact-section h3 {
+      color: #0c4a6e;
+      margin-bottom: 16px;
+    }
+
+    .contact-card p {
+      margin: 8px 0;
+      color: #0f172a;
+      font-size: 14px;
+    }
+
+    .contact-card strong {
+      color: #0369a1;
+      margin-right: 8px;
+    }
+
+    /* === INCLUSIONS SECTION === */
+    .inclusions-section {
+      background: #f0fdf4;
+      border-left: 4px solid #10b981;
+      border-radius: 0 12px 12px 0;
+      padding: 24px;
+      margin: 24px 0;
+    }
+
+    .inclusions-section h3 {
+      color: #065f46;
+      margin-bottom: 16px;
+    }
+
+    .inclusions-list {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .inclusions-list li {
+      padding: 10px 0;
+      padding-left: 28px;
+      position: relative;
+      color: #064e3b;
+      border-bottom: 1px solid #d1fae5;
+      line-height: 1.6;
+    }
+
+    .inclusions-list li:last-child {
+      border-bottom: none;
+    }
+
+    .inclusions-list li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #10b981;
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    /* === EXCLUSIONS SECTION === */
+    .exclusions-section {
+      background: #fef2f2;
+      border-left: 4px solid #ef4444;
+      border-radius: 0 12px 12px 0;
+      padding: 24px;
+      margin: 24px 0;
+    }
+
+    .exclusions-section h3 {
+      color: #991b1b;
+      margin-bottom: 12px;
+    }
+
+    .exclusions-intro {
+      font-weight: 600;
+      color: #7f1d1d;
+      margin-bottom: 16px;
+      font-size: 15px;
+    }
+
+    .exclusions-list {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .exclusions-list li {
+      padding: 10px 0;
+      color: #7f1d1d;
+      border-bottom: 1px solid #fecaca;
+      line-height: 1.6;
+    }
+
+    .exclusions-list li:last-child {
+      border-bottom: none;
+    }
+
+    /* === PAGE BREAK CONTROL === */
+    .page-break-inside-avoid {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
     /* === PRINT STYLES === */
     @media print {
       body {
@@ -419,6 +763,15 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       .page-break {
         page-break-after: always;
         break-after: page;
+      }
+
+      .page-break-inside-avoid {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+
+      .line-items-table {
+        page-break-inside: avoid;
       }
     }
   </style>
@@ -468,12 +821,7 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       ${scopeSystemsHTML}
     </div>
 
-    <div class="warning-box">
-      <h3>Safety & Installation Notes</h3>
-      <ul>
-        ${safetyNotesHTML}
-      </ul>
-    </div>
+    ${contactHTML}
 
     <footer>
       <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
@@ -481,7 +829,8 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
     </footer>
   </div>
 
-  <!-- CHECKLISTS PAGE -->
+  ${lineItemsHTML ? `
+  <!-- LINE ITEMS DETAILS PAGE(S) -->
   <div class="page page-break">
     <header>
       ${generateLogoSection(data.organisationLogoUrl)}
@@ -490,14 +839,60 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       </div>
     </header>
 
-    <h2>Site Handover Checklists</h2>
-    ${checklistsHTML}
+    <h2>Detailed Line Items</h2>
+    ${lineItemsHTML}
 
     <footer>
       <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
       <div>Page 3</div>
     </footer>
   </div>
+  ` : ''}
+
+  <!-- SAFETY & INSTALLATION PAGE -->
+  <div class="page page-break">
+    <header>
+      ${generateLogoSection(data.organisationLogoUrl)}
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    <div class="warning-box">
+      <h3>Safety & Installation Notes</h3>
+      <ul>
+        ${safetyNotesHTML}
+      </ul>
+    </div>
+
+    <h2>Site Handover Checklists</h2>
+    ${checklistsHTML}
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page ${lineItemsHTML ? '4' : '3'}</div>
+    </footer>
+  </div>
+
+  ${inclusionsHTML || exclusionsHTML ? `
+  <!-- INCLUSIONS & EXCLUSIONS PAGE -->
+  <div class="page page-break">
+    <header>
+      ${generateLogoSection(data.organisationLogoUrl)}
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    ${inclusionsHTML}
+    ${exclusionsHTML}
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page ${lineItemsHTML ? '5' : '4'}</div>
+    </footer>
+  </div>
+  ` : ''}
 
   <div style="margin-top: 40px; padding: 24px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; text-align: center;">
     <p style="font-size: 12px; color: #6b7280; line-height: 1.7;">
@@ -513,12 +908,8 @@ export function getDefaultJuniorPackData(): Partial<JuniorPackData> {
   return {
     safetyNotes: [
       'All personnel must complete site induction before commencing work',
-      'Ensure SWMS (Safe Work Method Statement) is reviewed and signed',
       'Use appropriate PPE: Hard hat, safety glasses, high-vis vest, safety boots',
-      'Work at heights requires appropriate access equipment and fall protection',
-      'Report any health and safety concerns immediately to site supervisor',
-      'Follow manufacturer\'s instructions for all fire protection materials',
-      'Ensure adequate ventilation when working with sealants and intumescent products'
+      'Follow manufacturer\'s instructions for all fire protection materials'
     ],
     checklists: [
       {
@@ -526,43 +917,23 @@ export function getDefaultJuniorPackData(): Partial<JuniorPackData> {
         items: [
           'Site induction completed',
           'SWMS reviewed and signed',
-          'All required materials and equipment on site',
-          'Access to work areas confirmed',
-          'Fire engineering drawings reviewed',
-          'Quality control procedures understood'
+          'All required materials and equipment on site'
         ]
       },
       {
         title: 'Installation Checklist',
         items: [
           'Verify penetration dimensions against drawings',
-          'Check FRR (Fire Resistance Rating) requirements',
-          'Ensure surfaces are clean and free from debris',
-          'Apply products as per manufacturer specifications',
-          'Install in accordance with tested systems',
-          'Label all penetrations with system reference'
+          'Check FRR requirements',
+          'Apply products as per manufacturer specifications'
         ]
       },
       {
-        title: 'Quality Control Checklist',
+        title: 'Quality Control',
         items: [
           'Photograph all completed penetrations',
-          'Record system references and FRR achieved',
-          'Verify compliance with fire engineering report',
           'Complete QA documentation for each penetration',
-          'Prepare for independent inspection if required',
           'Ensure PS3 documentation is prepared'
-        ]
-      },
-      {
-        title: 'Completion & Handover',
-        items: [
-          'All works completed as per scope',
-          'All penetrations labeled and photographed',
-          'QA documentation package complete',
-          'Site cleaned and made good',
-          'Defects list prepared if applicable',
-          'Handover documentation submitted to main contractor'
         ]
       }
     ]

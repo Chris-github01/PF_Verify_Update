@@ -369,7 +369,23 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           console.log('Inclusions:', inclusionsList.length, 'Exclusions:', exclusionsList.length);
 
           console.log('Loading junior pack generator...');
-          const { generateJuniorPackHTML } = await import('../lib/handover/juniorPackGenerator');
+          const { generateJuniorPackHTML, getDefaultJuniorPackData } = await import('../lib/handover/juniorPackGenerator');
+
+          console.log('Fetching quote items for line item details...');
+          const { data: quoteItemsData } = await supabase
+            .from('quote_items')
+            .select('description, service, material, quantity, unit, subclass')
+            .eq('quote_id', (project as any)?.approved_quote_id);
+
+          const lineItems = (quoteItemsData || []).map((item: any) => ({
+            description: item.description || 'N/A',
+            service: item.service || item.subclass || 'N/A',
+            material: item.material || 'N/A',
+            quantity: item.quantity ?? 'N/A',
+            unit: item.unit || 'N/A'
+          }));
+
+          const defaultData = getDefaultJuniorPackData();
 
           console.log('Building junior data object...');
           const juniorData = {
@@ -382,11 +398,16 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
               item_count: sys.item_count,
               details: sys.details
             })),
+            lineItems: lineItems,
             inclusions: inclusionsList,
             exclusions: exclusionsList,
-            safetyNotes: [],
-            checklists: [],
-            organisationLogoUrl: undefined
+            safetyNotes: defaultData.safetyNotes || [],
+            checklists: defaultData.checklists || [],
+            organisationLogoUrl: undefined,
+            supplierContact: awardInfo.supplier_contact,
+            supplierEmail: awardInfo.supplier_email,
+            supplierPhone: awardInfo.supplier_phone,
+            supplierAddress: awardInfo.supplier_address
           };
 
           console.log('Generating HTML from junior data...');

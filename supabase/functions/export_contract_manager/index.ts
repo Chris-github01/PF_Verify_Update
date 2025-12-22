@@ -256,13 +256,44 @@ Deno.serve(async (req: Request) => {
     if (mode === 'junior_pack') {
       console.log('Generating junior pack for:', project.name, 'with', scopeSystems.length, 'systems');
       try {
+        // Format line items for the junior pack
+        const lineItems = quoteItems.map(item => ({
+          description: item.description || 'N/A',
+          service: item.service || item.subclass || 'N/A',
+          material: item.material || 'N/A',
+          quantity: item.quantity ?? 'N/A',
+          unit: item.unit || 'N/A'
+        }));
+
+        // Get supplier contact details
+        let supplierContact = null;
+        if ((project as any).organisation_id && supplierName) {
+          const { data: supplier } = await supabase
+            .from('suppliers')
+            .select('contact_name, contact_email, contact_phone, address')
+            .eq('organisation_id', (project as any).organisation_id)
+            .ilike('name', supplierName)
+            .maybeSingle();
+
+          if (supplier) {
+            supplierContact = {
+              contactName: supplier.contact_name,
+              contactEmail: supplier.contact_email,
+              contactPhone: supplier.contact_phone,
+              address: supplier.address
+            };
+          }
+        }
+
         const htmlContent = generateJuniorPackHTML(
           project.name,
           supplierName,
           scopeSystems,
           inclusions,
           exclusions,
-          organisationLogoUrl
+          organisationLogoUrl,
+          lineItems,
+          supplierContact
         );
         console.log('Junior pack HTML generated successfully, length:', htmlContent.length);
         return new Response(

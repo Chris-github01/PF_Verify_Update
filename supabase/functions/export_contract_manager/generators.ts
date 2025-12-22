@@ -14,14 +14,20 @@ export function generateJuniorPackHTML(
   scopeSystems: any[],
   inclusions: string[],
   exclusions: string[],
-  organisationLogoUrl?: string
+  organisationLogoUrl?: string,
+  lineItems?: any[],
+  supplierContact?: any
 ): string {
   const rawData = {
     project: {
       name: projectName
     },
     supplier: {
-      name: supplierName
+      name: supplierName,
+      contactName: supplierContact?.contactName,
+      contactEmail: supplierContact?.contactEmail,
+      contactPhone: supplierContact?.contactPhone,
+      address: supplierContact?.address
     },
     financial: {
       totalAmount: 0
@@ -30,6 +36,7 @@ export function generateJuniorPackHTML(
     inclusions,
     exclusions,
     allowances: [],
+    lineItems: lineItems || [],
     organisationLogoUrl
   };
 
