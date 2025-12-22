@@ -127,7 +127,7 @@ function generateLineItemsHTML(items: LineItem[]): string {
     if (categorized.has(category)) {
       const categoryItems = categorized.get(category)!;
       html += `
-        <div class="category-section page-break-inside-avoid">
+        <div class="category-section">
           <h3 class="category-title">
             <span class="checkmark">✓</span>
             ${category}
@@ -314,12 +314,13 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
     }
 
     footer {
-      position: absolute;
-      bottom: 15px;
-      left: 30px;
-      right: 30px;
-      padding-top: 12px;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 10px 30px;
       border-top: 1px solid #e5e7eb;
+      background: white;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -590,6 +591,8 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
 
     .category-section {
       margin-bottom: 28px;
+      page-break-inside: auto;
+      break-inside: auto;
     }
 
     .category-title {
@@ -600,6 +603,8 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       color: #111827;
       margin-bottom: 8px;
       font-weight: 600;
+      page-break-after: avoid;
+      break-after: avoid;
     }
 
     .category-title .checkmark {
@@ -619,6 +624,8 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       font-size: 13px;
       color: #6b7280;
       margin-bottom: 16px;
+      page-break-after: avoid;
+      break-after: avoid;
     }
 
     .table-wrapper {
@@ -629,30 +636,39 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
     .line-items-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12px;
+      font-size: 11px;
       background: white;
       border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      overflow: hidden;
+      page-break-inside: auto;
+      break-inside: auto;
     }
 
     .line-items-table thead {
       background: ${VERIFYTRADE_ORANGE};
       color: white;
+      display: table-header-group;
     }
 
     .line-items-table th {
-      padding: 12px 10px;
+      padding: 10px 8px;
       text-align: left;
       font-weight: 600;
-      font-size: 11px;
+      font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       border-bottom: 2px solid ${VERIFYTRADE_ORANGE_DARK};
     }
 
+    .line-items-table tbody {
+      page-break-inside: auto;
+    }
+
     .line-items-table tbody tr {
       border-bottom: 1px solid #f3f4f6;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      page-break-after: auto;
+      break-after: auto;
     }
 
     .line-items-table tbody tr:last-child {
@@ -664,9 +680,9 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
     }
 
     .line-items-table td {
-      padding: 10px;
+      padding: 8px 6px;
       color: #374151;
-      line-height: 1.5;
+      line-height: 1.4;
       vertical-align: top;
     }
 
@@ -788,6 +804,20 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       body {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
+        margin: 0 !important;
+        padding: 0 !important;
+        padding-bottom: 20mm !important; /* Reserve space for fixed footer */
+      }
+
+      .page {
+        min-height: auto !important;
+        height: auto !important;
+        padding-bottom: 40px;
+      }
+
+      .page:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
       }
 
       .page-break {
@@ -795,13 +825,41 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
         break-after: page;
       }
 
-      .page-break-inside-avoid {
-        page-break-inside: avoid;
-        break-inside: avoid;
+      /* Allow tables to break across pages */
+      .line-items-table {
+        page-break-inside: auto !important;
+        break-inside: auto !important;
       }
 
-      .line-items-table {
-        page-break-inside: avoid;
+      /* Repeat table headers on each page */
+      .line-items-table thead {
+        display: table-header-group !important;
+      }
+
+      /* Prevent row breaks but allow table breaks */
+      .line-items-table tbody tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
+
+      /* Keep small sections together */
+      .checklist-section, .contact-section, .warning-box {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      /* Category headers stay with at least first row */
+      .category-title, .category-count {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+
+      /* Prevent orphaned headings */
+      h2, h3 {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
       }
     }
   </style>
@@ -861,7 +919,7 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
 
   ${lineItemsHTML ? `
   <!-- LINE ITEMS DETAILS PAGE(S) -->
-  <div class="page page-break">
+  <div class="page">
     <header>
       ${generateLogoSection(data.organisationLogoUrl)}
       <div class="generated-by">
@@ -871,11 +929,6 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
 
     <h2>Detailed Line Items</h2>
     ${lineItemsHTML}
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 3</div>
-    </footer>
   </div>
   ` : ''}
 
@@ -897,11 +950,6 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
 
     <h2>Site Handover Checklists</h2>
     ${checklistsHTML}
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page ${lineItemsHTML ? '4' : '3'}</div>
-    </footer>
   </div>
 
   ${inclusionsHTML || exclusionsHTML ? `
@@ -916,11 +964,6 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
 
     ${inclusionsHTML}
     ${exclusionsHTML}
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page ${lineItemsHTML ? '5' : '4'}</div>
-    </footer>
   </div>
   ` : ''}
 
