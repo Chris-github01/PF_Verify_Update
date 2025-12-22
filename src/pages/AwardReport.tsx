@@ -335,13 +335,18 @@ export default function AwardReport({
       comparisonData.forEach((row) => {
         const dataRow = [row.description || '', row.quantity || 0, row.unit || ''];
 
+        // Extract service type and type from the row (same for all suppliers)
+        const rowData = row as any;
+        const serviceType = rowData.service || rowData.systemLabel || '';
+        const type = rowData.category || rowData.subclass || '';
+
         suppliers.forEach((supplier, supplierIdx) => {
           const supplierData = row.suppliers?.[supplier.supplierName];
 
           if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
             dataRow.push(
-              (row as any).service || (row as any).systemLabel || 'N/A',
-              (row as any).category || (row as any).subclass || 'N/A',
+              serviceType || 'N/A',
+              type || 'N/A',
               supplierData.quantity ?? 'N/A',
               supplierData.unit || 'N/A',
               supplierData.normalisedUnit || 'N/A',
@@ -350,7 +355,7 @@ export default function AwardReport({
             );
             supplierTotals[supplierIdx] += supplierData.total || 0;
           } else {
-            dataRow.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A');
+            dataRow.push(serviceType || 'N/A', type || 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }
         });
 
