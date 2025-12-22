@@ -699,7 +699,14 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
   const handleNextTab = () => {
     const currentIndex = tabOrder.indexOf(activeTab);
-    if (currentIndex < tabOrder.length - 1) {
+    const isLastTab = currentIndex === tabOrder.length - 1;
+
+    if (isLastTab) {
+      // On last tab (Site Handover), navigate back to dashboard
+      if (onNavigateBack) {
+        onNavigateBack();
+      }
+    } else if (currentIndex < tabOrder.length - 1) {
       setActiveTab(tabOrder[currentIndex + 1]);
     }
   };
@@ -853,10 +860,9 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
               </button>
               <button
                 onClick={handleNextTab}
-                disabled={tabOrder.indexOf(activeTab) === tabOrder.length - 1}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:from-orange-600"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium transition-all"
               >
-                Next
+                {tabOrder.indexOf(activeTab) === tabOrder.length - 1 ? 'Finish' : 'Next'}
                 <ChevronRight size={18} />
               </button>
             </div>
