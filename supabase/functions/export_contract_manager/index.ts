@@ -254,6 +254,7 @@ Deno.serve(async (req: Request) => {
     const exclusions = (exclusionsData || []).map(e => e.description).filter(Boolean);
 
     if (mode === 'junior_pack') {
+      console.log('Generating junior pack for:', project.name, 'with', scopeSystems.length, 'systems');
       const htmlContent = generateJuniorPackHTML(
         project.name,
         supplierName,
@@ -262,6 +263,7 @@ Deno.serve(async (req: Request) => {
         exclusions,
         organisationLogoUrl
       );
+      console.log('Junior pack HTML generated successfully, length:', htmlContent.length);
       return new Response(
         JSON.stringify({ html: htmlContent }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -269,6 +271,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (mode === 'senior_report') {
+      console.log('Generating senior report for:', project.name, 'with', scopeSystems.length, 'systems');
       const htmlContent = generateSeniorReportHTML(
         project.name,
         supplierName,
@@ -335,9 +338,11 @@ Deno.serve(async (req: Request) => {
 
   } catch (error) {
     console.error('Export error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Export failed'
+        error: error instanceof Error ? error.message : 'Export failed',
+        details: error instanceof Error ? error.stack : String(error)
       }),
       {
         status: 500,

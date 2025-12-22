@@ -339,6 +339,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       alert('Site Team Pack PDF downloaded successfully!');
     } catch (error) {
       console.error('PDF generation error:', error);
+      alert(`Failed to generate Site Team Pack: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setGeneratingJuniorPdf(false);
     }
@@ -385,6 +386,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       alert('Senior Management Pack PDF downloaded successfully!');
     } catch (error) {
       console.error('PDF generation error:', error);
+      alert(`Failed to generate Senior Management Pack: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setGeneratingSeniorPdf(false);
     }

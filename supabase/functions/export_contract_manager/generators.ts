@@ -6,7 +6,7 @@
  * ROLLBACK: Run rollback-contract-manager.sh to restore original files
  */
 
-import { generateContractPDF } from '../../../src/lib/reports/contractPrintEngine.ts';
+import { generateContractPDF } from './contractPrintEngine.ts';
 
 export function generateJuniorPackHTML(
   projectName: string,
