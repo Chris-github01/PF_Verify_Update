@@ -1,3 +1,13 @@
+export interface LineItem {
+  description: string;
+  service: string;
+  material: string;
+  quantity: number | string;
+  unit: string;
+  unitPrice?: number;
+  totalPrice?: number;
+}
+
 export interface SeniorReportData {
   projectName: string;
   projectClient: string;
@@ -20,6 +30,20 @@ export interface SeniorReportData {
     description: string;
     mitigation: string;
     severity: 'high' | 'medium' | 'low';
+  }>;
+  lineItems?: LineItem[];
+  supplierContact?: string;
+  supplierEmail?: string;
+  supplierPhone?: string;
+  supplierAddress?: string;
+  benchmarkData?: {
+    industryAverage: number;
+    variance: number;
+    percentile: number;
+  };
+  cashflowProjection?: Array<{
+    month: string;
+    amount: number;
   }>;
   organisationLogoUrl?: string;
 }
@@ -56,6 +80,90 @@ function generateLogoSection(organisationLogoUrl?: string): string {
   }
 }
 
+function categorizeLineItems(items: LineItem[]): Map<string, LineItem[]> {
+  const categories = new Map<string, LineItem[]>();
+
+  items.forEach(item => {
+    let category = 'Other Systems';
+
+    const service = item.service.toLowerCase();
+    const desc = item.description.toLowerCase();
+
+    if (service.includes('electrical') || desc.includes('electrical') || desc.includes('cable')) {
+      category = 'Electrical';
+    } else if (service.includes('plumbing') || desc.includes('plumbing') || desc.includes('pipe')) {
+      category = 'Plumbing';
+    } else if (service.includes('fire') || desc.includes('fire')) {
+      category = 'Fire';
+    } else if (service.includes('flush box') || desc.includes('flush box')) {
+      category = 'Flush Boxes';
+    } else if (service.includes('intumescent') || desc.includes('coating')) {
+      category = 'Intumescent Coatings';
+    }
+
+    if (!categories.has(category)) {
+      categories.set(category, []);
+    }
+    categories.get(category)!.push(item);
+  });
+
+  return categories;
+}
+
+function generateLineItemsHTML(items: LineItem[]): string {
+  const categorized = categorizeLineItems(items);
+  const sortOrder = ['Electrical', 'Plumbing', 'Other Systems', 'Fire', 'Intumescent Coatings', 'Flush Boxes'];
+
+  let html = '<div class="line-items-section">';
+
+  sortOrder.forEach(category => {
+    if (categorized.has(category)) {
+      const categoryItems = categorized.get(category)!;
+      const categoryTotal = categoryItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+
+      html += `
+        <div class="category-section">
+          <h3 class="category-title">
+            <span class="checkmark">✓</span>
+            ${category}
+          </h3>
+          <p class="category-count">${categoryItems.length} items${categoryTotal > 0 ? ` • $${categoryTotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : ''}</p>
+
+          <div class="table-wrapper">
+            <table class="line-items-table">
+              <thead>
+                <tr>
+                  <th style="width: 35%">DESCRIPTION</th>
+                  <th style="width: 15%">SERVICE</th>
+                  <th style="width: 15%">MATERIAL</th>
+                  <th style="width: 10%">QTY</th>
+                  <th style="width: 10%">UNIT</th>
+                  ${categoryTotal > 0 ? '<th style="width: 15%; text-align: right;">TOTAL</th>' : ''}
+                </tr>
+              </thead>
+              <tbody>
+                ${categoryItems.map(item => `
+                  <tr>
+                    <td>${item.description}</td>
+                    <td>${item.service}</td>
+                    <td>${item.material}</td>
+                    <td class="text-center">${item.quantity}</td>
+                    <td class="text-center">${item.unit}</td>
+                    ${categoryTotal > 0 ? `<td class="text-right">$${(item.totalPrice || 0).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</td>` : ''}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+  });
+
+  html += '</div>';
+  return html;
+}
+
 export function generateSeniorReportHTML(data: SeniorReportData): string {
   const pieChartSVG = generatePieChartSVG(data.scopeSystems);
 
@@ -81,6 +189,77 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       </tr>
     `;
   }).join('');
+
+  const lineItemsHTML = data.lineItems && data.lineItems.length > 0
+    ? generateLineItemsHTML(data.lineItems)
+    : '';
+
+  const scopeSystemsHTML = data.scopeSystems.map(system => `
+    <div class="system-card-compact">
+      <h4>${system.service_type}</h4>
+      <p class="item-count-large">${system.item_count}</p>
+      <p class="item-label">Items</p>
+    </div>
+  `).join('');
+
+  const contactHTML = (data.supplierContact || data.supplierEmail || data.supplierPhone || data.supplierAddress) ? `
+    <div class="contact-section">
+      <h3>Subcontractor Contact Details</h3>
+      <div class="contact-grid">
+        ${data.supplierContact ? `<div><strong>Contact:</strong> ${data.supplierContact}</div>` : ''}
+        ${data.supplierEmail ? `<div><strong>Email:</strong> ${data.supplierEmail}</div>` : ''}
+        ${data.supplierPhone ? `<div><strong>Phone:</strong> ${data.supplierPhone}</div>` : ''}
+        ${data.supplierAddress ? `<div><strong>Address:</strong> ${data.supplierAddress}</div>` : ''}
+      </div>
+    </div>
+  ` : '';
+
+  const benchmarkHTML = data.benchmarkData ? `
+    <div class="card">
+      <h3>Commercial Benchmarking</h3>
+      <div class="benchmark-metrics">
+        <div class="benchmark-item">
+          <div class="benchmark-label">Industry Average ($/m²)</div>
+          <div class="benchmark-value">$${data.benchmarkData.industryAverage.toFixed(2)}</div>
+        </div>
+        <div class="benchmark-item">
+          <div class="benchmark-label">Variance from Average</div>
+          <div class="benchmark-value ${data.benchmarkData.variance < 0 ? 'positive' : 'negative'}">
+            ${data.benchmarkData.variance > 0 ? '+' : ''}${data.benchmarkData.variance.toFixed(1)}%
+          </div>
+        </div>
+        <div class="benchmark-item">
+          <div class="benchmark-label">Market Percentile</div>
+          <div class="benchmark-value">${data.benchmarkData.percentile}th</div>
+        </div>
+      </div>
+      <p class="benchmark-note">
+        ${data.benchmarkData.variance < 0
+          ? '✓ This quote is below market average, representing good value.'
+          : '⚠ This quote is above market average. Consider negotiation or alternative suppliers.'}
+      </p>
+    </div>
+  ` : '';
+
+  const cashflowHTML = data.cashflowProjection && data.cashflowProjection.length > 0 ? `
+    <div class="card full-width">
+      <h3>Cashflow Forecast</h3>
+      <div class="cashflow-chart">
+        ${data.cashflowProjection.map((month, idx) => {
+          const maxAmount = Math.max(...data.cashflowProjection!.map(m => m.amount));
+          const height = (month.amount / maxAmount) * 100;
+          return `
+            <div class="cashflow-bar-container">
+              <div class="cashflow-bar" style="height: ${height}%;">
+                <div class="cashflow-amount">$${(month.amount / 1000).toFixed(0)}k</div>
+              </div>
+              <div class="cashflow-label">${month.month}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  ` : '';
 
   return `
 <!DOCTYPE html>
@@ -111,14 +290,15 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     /* === PAGE LAYOUT === */
     @page {
       size: A4;
-      margin: 20mm 15mm;
+      margin: 15mm 12mm;
     }
 
     .page {
       page-break-after: always;
-      padding: 40px 40px 80px 40px; /* Extra bottom padding for footer */
+      padding: 20px 30px 60px 30px;
       position: relative;
       box-sizing: border-box;
+      min-height: 0;
     }
 
     .page:last-child {
@@ -130,9 +310,9 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 40px;
-      padding-bottom: 20px;
-      border-bottom: 3px solid ${VERIFYTRADE_ORANGE};
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid ${VERIFYTRADE_ORANGE};
     }
 
     .logo-section {
@@ -172,15 +352,15 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
     footer {
       position: absolute;
-      bottom: 20px;
-      left: 40px;
-      right: 40px;
-      padding-top: 20px;
+      bottom: 15px;
+      left: 30px;
+      right: 30px;
+      padding-top: 12px;
       border-top: 1px solid #e5e7eb;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 11px;
+      font-size: 10px;
       color: #9ca3af;
     }
 
@@ -212,20 +392,27 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
     /* === TYPOGRAPHY === */
     h2 {
-      font-size: 30px;
+      font-size: 28px;
       font-weight: 700;
       color: #111827;
       letter-spacing: -0.5px;
-      margin-bottom: 28px;
-      padding-bottom: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
       border-bottom: 2px solid #f3f4f6;
     }
 
     h3 {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 600;
       color: #374151;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
+    }
+
+    h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #4b5563;
+      margin-bottom: 10px;
     }
 
     /* === PROJECT DETAILS CARD === */
@@ -489,6 +676,255 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       font-weight: 700;
     }
 
+    /* === SCOPE SYSTEMS GRID === */
+    .systems-grid-compact {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .system-card-compact {
+      background: white;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 120px;
+    }
+
+    .system-card-compact h4 {
+      color: ${VERIFYTRADE_ORANGE};
+      font-size: 14px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .item-count-large {
+      font-size: 36px;
+      color: #111827;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .item-label {
+      font-size: 12px;
+      color: #6b7280;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* === LINE ITEMS === */
+    .line-items-section {
+      margin: 20px 0;
+    }
+
+    .category-section {
+      margin-bottom: 24px;
+    }
+
+    .category-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      color: #111827;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .category-title .checkmark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: #10b981;
+      color: white;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .category-count {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      margin-bottom: 20px;
+    }
+
+    .line-items-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .line-items-table thead {
+      background: ${VERIFYTRADE_ORANGE};
+      color: white;
+    }
+
+    .line-items-table th {
+      padding: 10px 8px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .line-items-table tbody tr {
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .line-items-table tbody tr:nth-child(even) {
+      background: #f9fafb;
+    }
+
+    .line-items-table td {
+      padding: 8px;
+      color: #374151;
+      line-height: 1.4;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .text-right {
+      text-align: right;
+    }
+
+    /* === CONTACT SECTION === */
+    .contact-section {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    .contact-section h3 {
+      color: #0c4a6e;
+      margin-bottom: 12px;
+    }
+
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      color: #0f172a;
+      font-size: 13px;
+    }
+
+    .contact-grid strong {
+      color: #0369a1;
+      margin-right: 6px;
+    }
+
+    /* === BENCHMARKING === */
+    .benchmark-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .benchmark-item {
+      text-align: center;
+      padding: 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+
+    .benchmark-label {
+      font-size: 11px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .benchmark-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .benchmark-value.positive {
+      color: #16a34a;
+    }
+
+    .benchmark-value.negative {
+      color: #dc2626;
+    }
+
+    .benchmark-note {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #374151;
+    }
+
+    /* === CASHFLOW CHART === */
+    .cashflow-chart {
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-end;
+      height: 180px;
+      padding: 20px 0;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .cashflow-bar-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+    }
+
+    .cashflow-bar {
+      width: 60%;
+      background: linear-gradient(to top, ${VERIFYTRADE_ORANGE}, ${VERIFYTRADE_ORANGE_LIGHT});
+      border-radius: 4px 4px 0 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 8px;
+      position: relative;
+      margin-bottom: 8px;
+    }
+
+    .cashflow-amount {
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .cashflow-label {
+      font-size: 11px;
+      color: #6b7280;
+      text-align: center;
+      margin-top: auto;
+    }
+
     /* === PRINT STYLES === */
     @media print {
       body {
@@ -502,6 +938,10 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       }
 
       table {
+        page-break-inside: avoid;
+      }
+
+      .category-section {
         page-break-inside: avoid;
       }
     }
@@ -557,7 +997,49 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     </footer>
   </div>
 
-  <!-- FINANCIAL & SCOPE BREAKDOWN PAGE -->
+  <!-- SCOPE OF WORKS OVERVIEW PAGE -->
+  <div class="page page-break">
+    <header>
+      ${generateLogoSection(data.organisationLogoUrl)}
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    <h2>Scope of Works Overview</h2>
+    <div class="systems-grid-compact">
+      ${scopeSystemsHTML}
+    </div>
+
+    ${contactHTML}
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page 2</div>
+    </footer>
+  </div>
+
+  ${lineItemsHTML ? `
+  <!-- LINE ITEMS DETAILS PAGE -->
+  <div class="page page-break">
+    <header>
+      ${generateLogoSection(data.organisationLogoUrl)}
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
+      </div>
+    </header>
+
+    <h2>Detailed Line Items</h2>
+    ${lineItemsHTML}
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page 3</div>
+    </footer>
+  </div>
+  ` : ''}
+
+  <!-- FINANCIAL & COMMERCIAL ANALYSIS PAGE -->
   <div class="page page-break">
     <header>
       ${generateLogoSection(data.organisationLogoUrl)}
@@ -600,22 +1082,39 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
           </div>
         </div>
       </div>
+
+      ${benchmarkHTML}
     </div>
 
-    <div style="margin-top: 32px;">
-      <h3>Key Commercial Terms</h3>
-      <div class="table-container">
-        <table>
-          <tbody>
-            ${keyTermsHTML}
-          </tbody>
-        </table>
+    ${cashflowHTML}
+
+    <footer>
+      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
+      <div>Page ${lineItemsHTML ? '4' : '3'}</div>
+    </footer>
+  </div>
+
+  <!-- COMMERCIAL TERMS PAGE -->
+  <div class="page page-break">
+    <header>
+      ${generateLogoSection(data.organisationLogoUrl)}
+      <div class="generated-by">
+        Generated by <strong>VerifyTrade</strong>
       </div>
+    </header>
+
+    <h2>Key Commercial Terms</h2>
+    <div class="table-container">
+      <table>
+        <tbody>
+          ${keyTermsHTML}
+        </tbody>
+      </table>
     </div>
 
     <footer>
       <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 2</div>
+      <div>Page ${lineItemsHTML ? '5' : '4'}</div>
     </footer>
   </div>
 
@@ -644,7 +1143,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       </table>
     </div>
 
-    <div style="margin-top: 40px; padding: 24px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; text-align: center;">
+    <div style="margin-top: 32px; padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; text-align: center;">
       <p style="font-size: 12px; color: #6b7280; line-height: 1.7;">
         <strong style="color: #111827;">Confidential:</strong> This document contains commercial and sensitive information. Distribution restricted to authorized project team members only.
       </p>
@@ -652,7 +1151,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
     <footer>
       <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 3</div>
+      <div>Page ${lineItemsHTML ? '6' : '5'}</div>
     </footer>
   </div>
 </body>
