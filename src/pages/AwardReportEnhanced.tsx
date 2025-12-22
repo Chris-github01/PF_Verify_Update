@@ -1033,6 +1033,7 @@ export default function AwardReportEnhanced({
           allSuppliers={enhancedSuppliers}
           onApprovalComplete={(approvalId) => {
             setShowApprovalModal(false);
+            loadProjectInfo(); // Refresh project data including approved_quote_id
             loadSavedReport(currentReportId);
           }}
           onToast={onToast}
