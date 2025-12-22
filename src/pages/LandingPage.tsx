@@ -20,7 +20,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
     'Verify+ Electrical • Q1 2026',
     'Verify+ Plumbing • Q1 2026',
     'Verify+ HVAC • Q1 2026',
-    'ActiveFire Verify+ • Q1 2026',
+    'Verify+ Active Fire • Q1 2026',
     'Trade Analysis Suite • Expanding'
   ];
 
@@ -94,7 +94,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </span>
                 <span className="inline-block px-2 text-slate-200">•</span>
                 <span className="inline-block px-6 text-sm font-semibold">
-                  🚨 Active Fire Verify+
+                  🚨 Verify+ Active Fire
                 </span>
                 <span className="inline-block px-2 text-slate-200">•</span>
               </div>
@@ -558,8 +558,8 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
                   <CheckCircle className="text-slate-500" size={24} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-2">ActiveFire Verify+</h3>
-                <p className="text-slate-400 text-sm">Quote audit intelligence for activefire trades</p>
+                <h3 className="text-xl font-bold text-slate-100 mb-2">Verify+ Active Fire</h3>
+                <p className="text-slate-400 text-sm">Quote audit intelligence for active fire trades</p>
               </div>
             </div>
           </div>
