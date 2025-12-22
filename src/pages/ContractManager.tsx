@@ -529,13 +529,55 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         const inclusionsList = (inclusionsData || []).map(i => i.description).filter(Boolean);
         const exclusionsList = (exclusionsData || []).map(e => e.description).filter(Boolean);
 
-        const { generateSeniorReportHTML } = await import('../lib/handover/seniorReportGenerator');
+        // Fetch detailed quote items for line item details
+        const approvedQuoteId = (projectInfo as any)?.approved_quote_id;
+        let lineItems: any[] = [];
+
+        if (approvedQuoteId) {
+          const { data: quoteItemsData } = await supabase
+            .from('quote_items')
+            .select('description, service, material, quantity, unit, unit_price, total_price, subclass')
+            .eq('quote_id', approvedQuoteId);
+
+          lineItems = (quoteItemsData || []).map((item: any) => ({
+            description: item.description || 'N/A',
+            service: item.service || item.subclass || 'N/A',
+            material: item.material || 'N/A',
+            quantity: item.quantity ?? 'N/A',
+            unit: item.unit || 'N/A',
+            unitPrice: item.unit_price || 0,
+            totalPrice: item.total_price || 0
+          }));
+        }
+
+        const { generateSeniorReportHTML, getDefaultSeniorReportData } = await import('../lib/handover/seniorReportGenerator');
 
         const retentionPercentage = 3;
         const retentionAmount = awardInfo.total_amount * (retentionPercentage / 100);
         const netAmount = awardInfo.total_amount - retentionAmount;
 
         const totalItems = scopeSystems.reduce((sum, sys) => sum + sys.item_count, 0);
+
+        // Calculate benchmark data
+        const projectArea = 5000; // Could be fetched from project data
+        const pricePerM2 = awardInfo.total_amount / projectArea;
+        const industryAverage = 95; // Industry average $/m² for fire protection
+        const variance = ((pricePerM2 - industryAverage) / industryAverage) * 100;
+        const percentile = variance < 0 ? 35 : 65; // Below average = lower percentile (better value)
+
+        // Generate cashflow projection (6-month typical project)
+        const months = ['Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6'];
+        const cashflowProjection = months.map((month, idx) => {
+          // Typical S-curve: slow start, ramp up, slow finish
+          const percentages = [5, 15, 25, 30, 20, 5];
+          return {
+            month,
+            amount: (awardInfo.total_amount * percentages[idx]) / 100
+          };
+        });
+
+        // Get default risks from generator
+        const defaults = getDefaultSeniorReportData();
 
         const seniorData = {
           projectName: projectInfo?.name || 'Project',
@@ -550,12 +592,23 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             item_count: sys.item_count,
             percentage: totalItems > 0 ? (sys.item_count / totalItems) * 100 : 0
           })),
-          keyTerms: [
+          keyTerms: defaults.keyTerms || [
             { term: 'Payment Terms', value: '30 days from invoice date' },
             { term: 'Retention', value: `${retentionPercentage}%` },
             { term: 'Liquidated Damages', value: 'As per main contract' }
           ],
-          risks: [],
+          risks: defaults.risks || [],
+          lineItems: lineItems,
+          supplierContact: awardInfo.supplier_contact,
+          supplierEmail: awardInfo.supplier_email,
+          supplierPhone: awardInfo.supplier_phone,
+          supplierAddress: awardInfo.supplier_address,
+          benchmarkData: {
+            industryAverage,
+            variance,
+            percentile
+          },
+          cashflowProjection,
           organisationLogoUrl: organisationLogoUrl
         };
 
