@@ -94,6 +94,9 @@ Deno.serve(async (req: Request) => {
       throw new Error('projectId is required');
     }
 
+    console.log('Export mode:', mode, 'for project:', projectId);
+
+    // Fetch only basic project info first
     const { data: project } = await supabase
       .from('projects')
       .select('name, client, updated_at, approved_quote_id, organisation_id, retention_percentage, main_contractor_name, payment_terms, liquidated_damages, project_manager_name, project_manager_email, project_manager_phone')
@@ -104,6 +107,7 @@ Deno.serve(async (req: Request) => {
       throw new Error('Project not found');
     }
 
+    // Fetch organisation logo (needed for all modes)
     let organisationLogoUrl: string | undefined;
     if ((project as any).organisation_id) {
       const { data: org } = await supabase
@@ -123,6 +127,55 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // PRELET APPENDIX MODE - Fast path with minimal data fetching
+    if (mode === 'prelet_appendix') {
+      console.log('Fast path: fetching only prelet appendix data');
+
+      const { data: appendixData } = await supabase
+        .from('prelet_appendix')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      if (!appendixData) {
+        throw new Error('No pre-let appendix found for this project');
+      }
+
+      // Get basic supplier info
+      const approvedQuoteId = (project as any)?.approved_quote_id;
+      let supplierName = 'TBC';
+      let totalAmount = 0;
+
+      if (approvedQuoteId) {
+        const { data: quote } = await supabase
+          .from('quotes')
+          .select('supplier_name, total_amount')
+          .eq('id', approvedQuoteId)
+          .maybeSingle();
+
+        if (quote) {
+          supplierName = quote.supplier_name;
+          totalAmount = quote.total_amount || 0;
+        }
+      }
+
+      console.log('Generating prelet appendix HTML');
+      const htmlContent = generatePreletAppendixHTML(
+        project.name,
+        supplierName,
+        totalAmount,
+        appendixData,
+        organisationLogoUrl
+      );
+
+      console.log('Prelet appendix HTML generated, length:', htmlContent.length);
+      return new Response(
+        JSON.stringify({ html: htmlContent }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // For other modes, fetch detailed data
     const approvedQuoteId = (project as any)?.approved_quote_id;
     let approvedQuote: any = null;
     let quoteItems: any[] = [];
@@ -152,17 +205,6 @@ Deno.serve(async (req: Request) => {
       .order('generated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-
-    const { data: systemsData } = await supabase
-      .from('scope_matrix_systems')
-      .select('*')
-      .eq('project_id', projectId);
-
-    const { data: allowancesData } = await supabase
-      .from('contract_allowances')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('sort_order');
 
     const { data: inclusionsData } = await supabase
       .from('contract_inclusions')
@@ -240,15 +282,6 @@ Deno.serve(async (req: Request) => {
     scopeSystems.forEach(system => {
       system.percentage = totalItems > 0 ? (system.item_count / totalItems) * 100 : 0;
     });
-
-    const realAllowances = (allowancesData || []).map(a => ({
-      description: a.description,
-      quantity: a.quantity,
-      unit: a.unit,
-      rate: a.rate,
-      total: a.total,
-      notes: a.notes
-    }));
 
     const inclusions = (inclusionsData || []).map(i => i.description).filter(Boolean);
     const exclusions = (exclusionsData || []).map(e => e.description).filter(Boolean);
@@ -347,30 +380,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (mode === 'prelet_appendix') {
-      const { data: appendixData } = await supabase
-        .from('prelet_appendix')
-        .select('*')
-        .eq('project_id', projectId)
-        .maybeSingle();
-
-      if (!appendixData) {
-        throw new Error('No pre-let appendix found for this project');
-      }
-
-      const htmlContent = generatePreletAppendixHTML(
-        project.name,
-        supplierName,
-        totalAmount,
-        appendixData,
-        organisationLogoUrl
-      );
-
-      return new Response(
-        JSON.stringify({ html: htmlContent }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // prelet_appendix mode is handled earlier in the fast path
 
     return new Response(
       JSON.stringify({ error: 'Invalid mode' }),
