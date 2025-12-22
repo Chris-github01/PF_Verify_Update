@@ -167,10 +167,8 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
   const scopeSystemsHTML = data.scopeSystems.map(system => `
     <div class="system-card">
       <h4>${system.service_type}</h4>
-      <p class="item-count">${system.item_count} items</p>
-      <ul class="detail-list">
-        ${system.details.slice(0, 3).map(detail => `<li>${detail}</li>`).join('')}
-      </ul>
+      <p class="item-count-large">${system.item_count}</p>
+      <p class="item-label">Items</p>
     </div>
   `).join('');
 
@@ -247,14 +245,15 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
     /* === PAGE LAYOUT === */
     @page {
       size: A4;
-      margin: 20mm 15mm;
+      margin: 15mm 12mm;
     }
 
     .page {
       page-break-after: always;
-      padding: 40px 40px 80px 40px; /* Extra bottom padding for footer */
+      padding: 20px 30px 60px 30px;
       position: relative;
       box-sizing: border-box;
+      min-height: 0;
     }
 
     .page:last-child {
@@ -266,9 +265,9 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 40px;
-      padding-bottom: 20px;
-      border-bottom: 3px solid ${VERIFYTRADE_ORANGE};
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid ${VERIFYTRADE_ORANGE};
     }
 
     .logo-section {
@@ -308,15 +307,15 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
 
     footer {
       position: absolute;
-      bottom: 20px;
-      left: 40px;
-      right: 40px;
-      padding-top: 20px;
+      bottom: 15px;
+      left: 30px;
+      right: 30px;
+      padding-top: 12px;
       border-top: 1px solid #e5e7eb;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 11px;
+      font-size: 10px;
       color: #9ca3af;
     }
 
@@ -348,27 +347,27 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
 
     /* === TYPOGRAPHY === */
     h2 {
-      font-size: 30px;
+      font-size: 28px;
       font-weight: 700;
       color: #111827;
       letter-spacing: -0.5px;
-      margin-bottom: 28px;
-      padding-bottom: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
       border-bottom: 2px solid #f3f4f6;
     }
 
     h3 {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 600;
       color: #374151;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
     }
 
     h4 {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
       color: #4b5563;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
     /* === PROJECT DETAILS CARD === */
@@ -413,16 +412,16 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       background: #fef3c7;
       border-left: 4px solid #f59e0b;
       border-radius: 0 8px 8px 0;
-      padding: 20px 24px;
-      margin: 24px 0;
-      line-height: 1.8;
+      padding: 16px 20px;
+      margin: 20px 0;
+      line-height: 1.6;
     }
 
     .warning-box h3 {
       font-weight: 700;
-      font-size: 15px;
+      font-size: 14px;
       color: #92400e;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .warning-box ul {
@@ -467,8 +466,14 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       background: white;
       border: 2px solid #e5e7eb;
       border-radius: 12px;
-      padding: 20px;
+      padding: 24px;
       transition: all 0.3s ease;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 140px;
     }
 
     .system-card:hover {
@@ -479,7 +484,8 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
     .system-card h4 {
       color: ${VERIFYTRADE_ORANGE};
       font-size: 16px;
-      margin-bottom: 8px;
+      margin-bottom: 16px;
+      font-weight: 600;
     }
 
     .item-count {
@@ -487,6 +493,22 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       color: #6b7280;
       margin-bottom: 12px;
       font-weight: 500;
+    }
+
+    .item-count-large {
+      font-size: 48px;
+      color: #111827;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .item-label {
+      font-size: 14px;
+      color: #6b7280;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .detail-list {
@@ -516,14 +538,14 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       background: #f9fafb;
       border: 1px solid #e5e7eb;
       border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 20px;
+      padding: 18px;
+      margin-bottom: 16px;
     }
 
     .checklist-section h3 {
-      font-size: 18px;
+      font-size: 16px;
       color: #111827;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       font-weight: 600;
     }
 
@@ -555,11 +577,11 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
 
     /* === LINE ITEMS TABLE === */
     .line-items-section {
-      margin: 32px 0;
+      margin: 20px 0;
     }
 
     .category-section {
-      margin-bottom: 40px;
+      margin-bottom: 28px;
     }
 
     .category-title {
@@ -649,24 +671,24 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       background: #f0f9ff;
       border: 1px solid #bae6fd;
       border-radius: 12px;
-      padding: 24px;
-      margin: 24px 0;
+      padding: 20px;
+      margin: 20px 0;
     }
 
     .contact-section h3 {
       color: #0c4a6e;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .contact-card p {
-      margin: 8px 0;
+      margin: 6px 0;
       color: #0f172a;
-      font-size: 14px;
+      font-size: 13px;
     }
 
     .contact-card strong {
       color: #0369a1;
-      margin-right: 8px;
+      margin-right: 6px;
     }
 
     /* === INCLUSIONS SECTION === */
@@ -674,13 +696,13 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       background: #f0fdf4;
       border-left: 4px solid #10b981;
       border-radius: 0 12px 12px 0;
-      padding: 24px;
-      margin: 24px 0;
+      padding: 20px;
+      margin: 20px 0;
     }
 
     .inclusions-section h3 {
       color: #065f46;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .inclusions-list {
@@ -715,20 +737,20 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       background: #fef2f2;
       border-left: 4px solid #ef4444;
       border-radius: 0 12px 12px 0;
-      padding: 24px;
-      margin: 24px 0;
+      padding: 20px;
+      margin: 20px 0;
     }
 
     .exclusions-section h3 {
       color: #991b1b;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .exclusions-intro {
       font-weight: 600;
       color: #7f1d1d;
-      margin-bottom: 16px;
-      font-size: 15px;
+      margin-bottom: 12px;
+      font-size: 14px;
     }
 
     .exclusions-list {

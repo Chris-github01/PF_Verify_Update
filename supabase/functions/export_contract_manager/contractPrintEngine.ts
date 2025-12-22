@@ -259,14 +259,14 @@ class ContractPDFLayout {
 
       @page {
         size: A4;
-        margin: 16mm 12mm 18mm 12mm;
+        margin: 15mm 12mm;
       }
 
       /* === PAGINATION RULES === */
       .page {
-        padding: 20px 32px 60px 32px;
+        padding: 20px 30px 60px 30px;
         position: relative;
-        min-height: 240mm;
+        min-height: 0;
         box-sizing: border-box;
       }
 
@@ -286,8 +286,8 @@ class ContractPDFLayout {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
+        margin-bottom: 24px;
+        padding-bottom: 12px;
         border-bottom: 2px solid ${VERIFYTRADE_ORANGE};
       }
 
@@ -297,13 +297,13 @@ class ContractPDFLayout {
         bottom: 0;
         left: 0;
         right: 0;
-        padding: 10px 32px;
+        padding: 12px 30px;
         border-top: 1px solid #e5e7eb;
         background: white;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-size: 9px;
+        font-size: 10px;
         color: #6b7280;
       }
 
@@ -800,20 +800,16 @@ class ContractPackBuilder {
           ${this.layout.generateLogoSection(logoUrl)}
         </header>
         ${systems.map(sys => `
-          <div class="system-card">
-            <h4>
+          <div class="system-card" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 140px;">
+            <h4 style="color: ${VERIFYTRADE_ORANGE}; font-size: 16px; margin-bottom: 16px; font-weight: 600;">
               ${sys.service_type}
-              <span class="section-badge">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-                Verified
-              </span>
             </h4>
-            <div class="section-subinfo">
-              ${sys.item_count} ${sys.item_count === 1 ? 'item' : 'items'}
-            </div>
-            ${this.buildScopeTable(sys, this.theme)}
+            <p style="font-size: 48px; color: #111827; font-weight: 700; line-height: 1; margin-bottom: 4px;">
+              ${sys.item_count}
+            </p>
+            <p style="font-size: 14px; color: #6b7280; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">
+              ${sys.item_count === 1 ? 'Item' : 'Items'}
+            </p>
           </div>
         `).join('')}
         <footer>
