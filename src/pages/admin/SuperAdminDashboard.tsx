@@ -104,9 +104,9 @@ export default function SuperAdminDashboard() {
   const getTradeLabel = (tradeType: string) => {
     const labels: Record<string, string> = {
       'passive_fire': 'VerifyTrade Passive Fire',
-      'electrical': 'Electrical Verify+',
-      'plumbing': 'Plumbing Verify+',
-      'mechanical': 'Mechanical Verify+',
+      'electrical': 'Verify+ Electrical',
+      'plumbing': 'Verify+ Plumbing',
+      'mechanical': 'Verify+ Mechanical',
       'other': 'Other'
     };
     return labels[tradeType] || tradeType;

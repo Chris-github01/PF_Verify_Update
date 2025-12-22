@@ -17,9 +17,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
 
   const comingSoonTrades = [
     'PassiveFire Verify+ • Now Available',
-    'Electrical Verify+ • Q1 2026',
-    'Plumbing Verify+ • Q1 2026',
-    'HVAC Verify+ • Q1 2026',
+    'Verify+ Electrical • Q1 2026',
+    'Verify+ Plumbing • Q1 2026',
+    'Verify+ HVAC • Q1 2026',
     'ActiveFire Verify+ • Q1 2026',
     'Trade Analysis Suite • Expanding'
   ];
@@ -82,15 +82,15 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </span>
                 <span className="inline-block px-2 text-slate-200">•</span>
                 <span className="inline-block px-6 text-sm font-semibold">
-                  🔌 Electrical Verify+
+                  🔌 Verify+ Electrical
                 </span>
                 <span className="inline-block px-2 text-slate-200">•</span>
                 <span className="inline-block px-6 text-sm font-semibold">
-                  ❄️ HVAC Verify+
+                  ❄️ Verify+ HVAC
                 </span>
                 <span className="inline-block px-2 text-slate-200">•</span>
                 <span className="inline-block px-6 text-sm font-semibold">
-                  🚿 Plumbing Verify+
+                  🚿 Verify+ Plumbing
                 </span>
                 <span className="inline-block px-2 text-slate-200">•</span>
                 <span className="inline-block px-6 text-sm font-semibold">
@@ -531,7 +531,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
                   <CheckCircle className="text-slate-500" size={24} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-2">Electrical Verify+</h3>
+                <h3 className="text-xl font-bold text-slate-100 mb-2">Verify+ Electrical</h3>
                 <p className="text-slate-400 text-sm">Quote audit intelligence for electrical trades</p>
               </div>
 
@@ -540,7 +540,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
                   <CheckCircle className="text-slate-500" size={24} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-2">Plumbing Verify+</h3>
+                <h3 className="text-xl font-bold text-slate-100 mb-2">Verify+ Plumbing</h3>
                 <p className="text-slate-400 text-sm">Quote audit intelligence for plumbing trades</p>
               </div>
 
@@ -549,7 +549,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
                   <CheckCircle className="text-slate-500" size={24} />
                 </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-2">HVAC Verify+</h3>
+                <h3 className="text-xl font-bold text-slate-100 mb-2">Verify+ HVAC</h3>
                 <p className="text-slate-400 text-sm">Quote audit intelligence for hvac trades</p>
               </div>
 

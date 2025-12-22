@@ -82,7 +82,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
         'Unlimited users',
         'Dedicated account manager',
         'White-label client portal',
-        'Early access to Electrical / HVAC / Plumbing Verify+',
+        'Early access to Verify+ Electrical / HVAC / Plumbing',
         'Custom ontology training',
         'SLA + 99.9% uptime',
         'On-premise / private cloud option'
