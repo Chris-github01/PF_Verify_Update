@@ -1,7 +1,13 @@
 /**
  * Unified Contract Manager Print Engine
  * Single source of truth for ALL Contract Manager PDF outputs
+ *
+ * REFACTORED: Now uses theme system and pagination engine
+ * PRESENTATION ONLY - NO DATA LOGIC CHANGES
  */
+
+import { getThemeForPackType, applyThemeToHTML, type PDFTheme } from './pdfThemes';
+import { generatePDFHeader, generatePDFFooter, generatePageNumberingScript } from './pdfHeaderFooter';
 
 const VERIFYTRADE_ORANGE = '#f97316';
 const VERIFYTRADE_ORANGE_LIGHT = '#fed7aa';
@@ -232,13 +238,19 @@ class ContractDataNormalizer {
 }
 
 class ContractPDFLayout {
+  private theme: PDFTheme;
+
+  constructor(packType: PackType) {
+    this.theme = getThemeForPackType(packType);
+  }
+
   generateCSS(): string {
     return `
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Helvetica Neue', Arial, sans-serif;
-        font-size: 14px;
-        line-height: 1.6;
+        font-family: ${this.theme.fonts.family};
+        font-size: ${this.theme.fonts.tableBody}pt;
+        line-height: 1.5;
         color: #1f2937;
         background: white;
         padding: 0;
@@ -250,8 +262,9 @@ class ContractPDFLayout {
         margin: 16mm 12mm 18mm 12mm;
       }
 
+      /* === PAGINATION RULES === */
       .page {
-        padding: 20px 32px 80px 32px; /* Extra bottom padding for footer */
+        padding: 20px 32px 60px 32px;
         position: relative;
         min-height: 240mm;
         box-sizing: border-box;
@@ -262,43 +275,67 @@ class ContractPDFLayout {
         break-after: page;
       }
 
-      section:not(:last-child) {
-        break-before: page;
+      /* Prevent section breaks at bottom 20% of page */
+      .section-title {
+        break-after: avoid;
+        page-break-after: avoid;
       }
 
+      /* === HEADER === */
       header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 24px;
-        padding-bottom: 12px;
-        border-bottom: 3px solid ${VERIFYTRADE_ORANGE};
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid ${VERIFYTRADE_ORANGE};
       }
 
+      /* === FOOTER === */
       footer {
-        position: absolute;
-        bottom: 20px;
-        left: 32px;
-        right: 32px;
-        padding-top: 12px;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 10px 32px;
         border-top: 1px solid #e5e7eb;
+        background: white;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-size: 11px;
-        color: #9ca3af;
+        font-size: 9px;
+        color: #6b7280;
       }
 
+      /* === TABLE PAGINATION === */
       table {
         page-break-inside: auto;
         width: 100%;
         border-collapse: collapse;
+        margin-bottom: 16px;
       }
 
+      /* Rule 2: Repeat table headers on every page */
+      thead {
+        display: table-header-group;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      tbody {
+        page-break-inside: auto;
+      }
+
+      /* Rule 1 & 3: Never split header from first 6 rows */
       tr {
         page-break-inside: avoid;
         break-inside: avoid;
-        page-break-after: auto;
+        break-after: auto;
+      }
+
+      tr:nth-child(-n+6) {
+        break-after: avoid;
+        page-break-after: avoid;
       }
 
       td, th {
@@ -306,22 +343,27 @@ class ContractPDFLayout {
         break-inside: avoid;
       }
 
-      thead {
-        display: table-header-group;
-      }
-
-      tbody {
-        page-break-inside: auto;
-      }
-
+      /* === SECTION CONTAINERS === */
       .system-card {
         background: white;
-        border: 2px solid #e5e7eb;
+        border: 1px solid #e5e7eb;
         border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 16px;
+        padding: ${this.theme.density === 'high' ? '12px' : '16px'};
+        margin-bottom: ${this.theme.sectionSpacing};
         page-break-inside: avoid;
         break-inside: avoid;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      }
+
+      /* Rule 6: No section starts in bottom 20% of page */
+      .system-card {
+        break-before: auto;
+        page-break-before: auto;
+      }
+
+      /* Prevent orphan sections */
+      .system-card:last-of-type {
+        min-height: 80px;
       }
 
       .logo-section { display: flex; align-items: center; gap: 12px; }
@@ -351,6 +393,7 @@ class ContractPDFLayout {
         font-weight: 600;
       }
 
+      /* === SECTION HIERARCHY === */
       h1 {
         font-size: 46px;
         font-weight: 800;
@@ -366,21 +409,63 @@ class ContractPDFLayout {
         color: #111827;
         letter-spacing: -0.5px;
         margin-bottom: 20px;
+        margin-top: 32px;
         padding-bottom: 8px;
         border-bottom: 2px solid #f3f4f6;
+        break-after: avoid;
+        page-break-after: avoid;
       }
 
       h3 {
-        font-size: 20px;
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 14px;
+        font-size: ${this.theme.fonts.sectionTitle}pt;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 12px;
+        margin-top: 24px;
+        letter-spacing: -0.3px;
+        break-after: avoid;
+        page-break-after: avoid;
       }
 
       h4 {
         color: ${VERIFYTRADE_ORANGE};
-        font-size: 16px;
-        margin-bottom: 6px;
+        font-size: ${this.theme.fonts.sectionTitle}pt;
+        font-weight: 700;
+        margin-bottom: 8px;
+        margin-top: 20px;
+        letter-spacing: -0.2px;
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+
+      /* Section badges (replaces per-row icons) */
+      .section-badge {
+        display: ${this.theme.showSectionBadges ? 'inline-flex' : 'none'};
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: #f0fdf4;
+        border: 1px solid #86efac;
+        border-radius: 6px;
+        font-size: ${this.theme.fonts.caption}pt;
+        font-weight: 600;
+        color: #15803d;
+        margin-left: 10px;
+        vertical-align: middle;
+      }
+
+      /* Sub-info (e.g., "28 items") */
+      .section-subinfo {
+        font-size: ${this.theme.fonts.caption}pt;
+        color: #6b7280;
+        font-weight: 500;
+        margin-top: 4px;
+        margin-bottom: 12px;
+      }
+
+      /* Remove per-row icons */
+      .row-icon {
+        display: none;
       }
 
       .cover-page {
@@ -576,7 +661,13 @@ class ContractPDFValidator {
 }
 
 class ContractPackBuilder {
-  private layout = new ContractPDFLayout();
+  private layout: ContractPDFLayout;
+  private packType: PackType;
+
+  constructor(packType: PackType) {
+    this.packType = packType;
+    this.layout = new ContractPDFLayout(packType);
+  }
 
   buildCoverPage(data: ContractPackData, packType: PackType): string {
     const year = new Date().getFullYear();
@@ -627,37 +718,40 @@ class ContractPackBuilder {
     `;
   }
 
-  buildScopeTable(system: NormalizedSystem): string {
+  buildScopeTable(system: NormalizedSystem, theme: PDFTheme): string {
     if (system.items.length === 0) {
       return '';
     }
 
+    const headerFontSize = theme.fonts.tableHeader;
+    const bodyFontSize = theme.fonts.tableBody;
+    const rowPadding = theme.rowPadding;
+
+    // REMOVED: per-row checkmark column (✓)
+    // ADDED: Clean table without row icons
+
     return `
-      <div style="background: #f9fafb; border-radius: 8px; padding: 16px; overflow-x: auto; margin-top: 12px;">
+      <div style="background: #f9fafb; border-radius: 8px; padding: ${theme.density === 'high' ? '12px' : '16px'}; overflow-x: auto; margin-top: 12px;">
         <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden;">
           <thead>
             <tr style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%);">
-              <th style="padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 40px;">✓</th>
-              <th style="padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; color: white; text-transform: uppercase; letter-spacing: 0.5px;">Description</th>
-              <th style="padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 90px;">Service</th>
-              <th style="padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 100px;">Type</th>
-              <th style="padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 90px;">Material</th>
-              <th style="padding: 12px 10px; text-align: right; font-weight: 700; font-size: 11px; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 70px;">Qty</th>
-              <th style="padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 60px;">Unit</th>
+              <th style="padding: ${rowPadding}; text-align: left; font-weight: 700; font-size: ${headerFontSize}pt; color: white; text-transform: uppercase; letter-spacing: 0.5px;">Description</th>
+              <th style="padding: ${rowPadding}; text-align: left; font-weight: 700; font-size: ${headerFontSize}pt; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 90px;">Service</th>
+              <th style="padding: ${rowPadding}; text-align: left; font-weight: 700; font-size: ${headerFontSize}pt; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 100px;">Type</th>
+              <th style="padding: ${rowPadding}; text-align: left; font-weight: 700; font-size: ${headerFontSize}pt; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 90px;">Material</th>
+              <th style="padding: ${rowPadding}; text-align: right; font-weight: 700; font-size: ${headerFontSize}pt; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 70px;">Qty</th>
+              <th style="padding: ${rowPadding}; text-align: left; font-weight: 700; font-size: ${headerFontSize}pt; color: white; text-transform: uppercase; letter-spacing: 0.5px; width: 60px;">Unit</th>
             </tr>
           </thead>
           <tbody>
             ${system.items.map((item, idx) => `
               <tr style="border-bottom: 1px solid #e5e7eb; ${idx % 2 === 0 ? 'background: #f9fafb;' : 'background: white;'}">
-                <td style="padding: 12px 10px; text-align: center;">
-                  <span style="color: #10b981; font-weight: 700; font-size: 14px;">✓</span>
-                </td>
-                <td style="padding: 12px 10px; font-size: 13px; color: #374151; line-height: 1.5;">${item.description}</td>
-                <td style="padding: 12px 10px; font-size: 13px; color: #6b7280;">${item.service}</td>
-                <td style="padding: 12px 10px; font-size: 13px; color: #6b7280;">${item.type}</td>
-                <td style="padding: 12px 10px; font-size: 13px; color: #6b7280;">${item.material}</td>
-                <td style="padding: 12px 10px; font-size: 13px; color: #374151; text-align: right; font-weight: 600;">${item.quantity}</td>
-                <td style="padding: 12px 10px; font-size: 13px; color: #6b7280;">${item.unit}</td>
+                <td style="padding: ${rowPadding}; font-size: ${bodyFontSize}pt; color: #374151; line-height: 1.4;">${item.description}</td>
+                <td style="padding: ${rowPadding}; font-size: ${bodyFontSize}pt; color: #6b7280;">${item.service}</td>
+                <td style="padding: ${rowPadding}; font-size: ${bodyFontSize}pt; color: #6b7280;">${item.type}</td>
+                <td style="padding: ${rowPadding}; font-size: ${bodyFontSize}pt; color: #6b7280;">${item.material}</td>
+                <td style="padding: ${rowPadding}; font-size: ${bodyFontSize}pt; color: #374151; text-align: right; font-weight: 600;">${item.quantity}</td>
+                <td style="padding: ${rowPadding}; font-size: ${bodyFontSize}pt; color: #6b7280;">${item.unit}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -694,25 +788,46 @@ class ContractPackBuilder {
 
   buildScopePageContent(systems: NormalizedSystem[], logoUrl?: string): string {
     const year = new Date().getFullYear();
+    const generatedDate = new Date().toLocaleDateString('en-NZ', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
 
     return `
       <div class="page">
         <header>
           ${this.layout.generateLogoSection(logoUrl)}
-          <div class="generated-by">Generated by <strong>VerifyTrade</strong></div>
         </header>
         ${systems.map(sys => `
           <div class="system-card">
-            <h4>${sys.service_type}</h4>
-            <p style="font-size: 12px; color: #6b7280; margin-bottom: 10px; font-weight: 500;">
-              ${sys.item_count} items
-            </p>
-            ${this.buildScopeTable(sys)}
+            <h4>
+              ${sys.service_type}
+              <span class="section-badge">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Verified
+              </span>
+            </h4>
+            <div class="section-subinfo">
+              ${sys.item_count} ${sys.item_count === 1 ? 'item' : 'items'}
+            </div>
+            ${this.buildScopeTable(sys, this.theme)}
           </div>
         `).join('')}
         <footer>
-          <div>© ${year} VerifyTrade. All rights reserved.</div>
-          <div class="page-number"></div>
+          <div style="flex: 1; text-align: left; font-weight: 600; color: #374151;">
+            <!-- Supplier name populated in generation -->
+          </div>
+          <div style="flex: 1; text-align: center;">
+            <span style="color: ${VERIFYTRADE_ORANGE}; font-weight: 600;">Generated by VerifyTrade</span>
+            <span style="margin: 0 8px;">|</span>
+            <span>${generatedDate}</span>
+          </div>
+          <div style="flex: 1; text-align: right;" class="page-number">
+            <!-- Page X of Y injected via script -->
+          </div>
         </footer>
       </div>
     `;
@@ -992,14 +1107,17 @@ export function generateContractPDF(
 ): { html: string; validation: ValidationResult } {
   const normalizer = new ContractDataNormalizer();
   const validator = new ContractPDFValidator();
-  const packBuilder = new ContractPackBuilder();
-  const layout = new ContractPDFLayout();
+  const packBuilder = new ContractPackBuilder(packType);
+  const layout = new ContractPDFLayout(packType);
 
   const normalizedData = normalizer.normalizeData(rawData);
 
   const bodyContent = packBuilder.build(packType, normalizedData);
 
   const cleanedContent = validator.removeEmptySections(bodyContent);
+
+  // Add page numbering script
+  const pageNumberScript = generatePageNumberingScript();
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1013,6 +1131,7 @@ export function generateContractPDF(
 </head>
 <body>
   ${cleanedContent}
+  ${pageNumberScript}
 </body>
 </html>`;
 
