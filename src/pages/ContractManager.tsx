@@ -341,41 +341,61 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       if (!htmlContent) {
         console.log('Generating PDF client-side...');
 
-        const { data: inclusionsData } = await supabase
-          .from('contract_inclusions')
-          .select('description')
-          .eq('project_id', projectId)
-          .order('sort_order');
+        try {
+          console.log('Fetching inclusions and exclusions...');
+          const { data: inclusionsData, error: incError } = await supabase
+            .from('contract_inclusions')
+            .select('description')
+            .eq('project_id', projectId)
+            .order('sort_order');
 
-        const { data: exclusionsData } = await supabase
-          .from('contract_exclusions')
-          .select('description')
-          .eq('project_id', projectId)
-          .order('sort_order');
+          if (incError) {
+            console.warn('Error fetching inclusions:', incError);
+          }
 
-        const inclusionsList = (inclusionsData || []).map(i => i.description).filter(Boolean);
-        const exclusionsList = (exclusionsData || []).map(e => e.description).filter(Boolean);
+          const { data: exclusionsData, error: excError } = await supabase
+            .from('contract_exclusions')
+            .select('description')
+            .eq('project_id', projectId)
+            .order('sort_order');
 
-        const { generateJuniorPackHTML } = await import('../lib/handover/juniorPackGenerator');
+          if (excError) {
+            console.warn('Error fetching exclusions:', excError);
+          }
 
-        const juniorData = {
-          projectName: projectInfo?.name || 'Project',
-          projectClient: projectInfo?.client || 'TBC',
-          supplierName: awardInfo.supplier_name,
-          scopeSystems: scopeSystems.map(sys => ({
-            service_type: sys.service_type,
-            coverage: sys.coverage,
-            item_count: sys.item_count,
-            details: sys.details
-          })),
-          inclusions: inclusionsList,
-          exclusions: exclusionsList,
-          safetyNotes: [],
-          checklists: [],
-          organisationLogoUrl: undefined
-        };
+          const inclusionsList = (inclusionsData || []).map((i: any) => i.description).filter(Boolean);
+          const exclusionsList = (exclusionsData || []).map((e: any) => e.description).filter(Boolean);
 
-        htmlContent = generateJuniorPackHTML(juniorData);
+          console.log('Inclusions:', inclusionsList.length, 'Exclusions:', exclusionsList.length);
+
+          console.log('Loading junior pack generator...');
+          const { generateJuniorPackHTML } = await import('../lib/handover/juniorPackGenerator');
+
+          console.log('Building junior data object...');
+          const juniorData = {
+            projectName: projectInfo?.name || 'Project',
+            projectClient: projectInfo?.client || 'TBC',
+            supplierName: awardInfo.supplier_name,
+            scopeSystems: scopeSystems.map(sys => ({
+              service_type: sys.service_type,
+              coverage: sys.coverage,
+              item_count: sys.item_count,
+              details: sys.details
+            })),
+            inclusions: inclusionsList,
+            exclusions: exclusionsList,
+            safetyNotes: [],
+            checklists: [],
+            organisationLogoUrl: undefined
+          };
+
+          console.log('Generating HTML from junior data...');
+          htmlContent = generateJuniorPackHTML(juniorData);
+          console.log('HTML generated successfully, length:', htmlContent?.length);
+        } catch (fallbackError) {
+          console.error('Error in client-side fallback:', fallbackError);
+          throw fallbackError;
+        }
       }
 
       if (!htmlContent) {
