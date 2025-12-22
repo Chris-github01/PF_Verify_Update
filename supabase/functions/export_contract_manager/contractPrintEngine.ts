@@ -395,16 +395,16 @@ class ContractPDFLayout {
 
       /* === SECTION HIERARCHY === */
       h1 {
-        font-size: 46px;
+        font-size: 32px;
         font-weight: 800;
         color: #111827;
-        letter-spacing: -1.2px;
+        letter-spacing: -0.8px;
         line-height: 1.1;
         margin-bottom: 12px;
       }
 
       h2 {
-        font-size: 28px;
+        font-size: 22px;
         font-weight: 700;
         color: #111827;
         letter-spacing: -0.5px;
@@ -804,7 +804,7 @@ class ContractPackBuilder {
             <h4 style="color: ${VERIFYTRADE_ORANGE}; font-size: 16px; margin-bottom: 16px; font-weight: 600;">
               ${sys.service_type}
             </h4>
-            <p style="font-size: 48px; color: #111827; font-weight: 700; line-height: 1; margin-bottom: 4px;">
+            <p style="font-size: 36px; color: #111827; font-weight: 700; line-height: 1; margin-bottom: 4px;">
               ${sys.item_count}
             </p>
             <p style="font-size: 14px; color: #6b7280; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">

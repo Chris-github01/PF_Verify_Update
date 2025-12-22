@@ -384,24 +384,24 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     h1 {
-      font-size: 46px;
+      font-size: 32px;
       font-weight: 800;
       color: #111827;
-      letter-spacing: -1.2px;
+      letter-spacing: -0.8px;
       line-height: 1.1;
       margin-bottom: 12px;
     }
 
     .subtitle {
-      font-size: 22px;
+      font-size: 16px;
       color: #6b7280;
       font-weight: 400;
-      margin-bottom: 48px;
+      margin-bottom: 32px;
     }
 
     /* === TYPOGRAPHY === */
     h2 {
-      font-size: 28px;
+      font-size: 22px;
       font-weight: 700;
       color: #111827;
       letter-spacing: -0.5px;
@@ -411,7 +411,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     h3 {
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 600;
       color: #374151;
       margin-bottom: 14px;
@@ -465,7 +465,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
+      gap: 16px;
       margin: 32px 0;
     }
 
@@ -478,14 +478,18 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     .stat-card-value {
-      font-size: 32px;
+      font-size: 20px;
       font-weight: 800;
       color: ${VERIFYTRADE_ORANGE};
       margin-bottom: 8px;
+      line-height: 1.3;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      hyphens: none;
     }
 
     .stat-card-label {
-      font-size: 13px;
+      font-size: 11px;
       color: #6b7280;
       font-weight: 500;
       text-transform: uppercase;
