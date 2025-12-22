@@ -579,8 +579,9 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     const rowMap = new Map<string, MatrixRow>();
 
     filteredData.forEach(row => {
-      // Use only systemId as key to avoid duplicate rows for same system with different labels
-      const key = row.systemId;
+      // Include service and scope_category in key to preserve this critical data
+      // This ensures each unique combination gets its own row in the export
+      const key = `${row.systemId}|${row.service || 'N/A'}|${row.scope_category || 'N/A'}`;
 
       if (!rowMap.has(key)) {
         rowMap.set(key, {
@@ -746,6 +747,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         return;
       }
 
+      // Log sample data to verify service and scope_category are present
+      if (matrixRows.length > 0) {
+        console.log('Sample matrix row for export:', {
+          systemLabel: matrixRows[0].systemLabel,
+          service: matrixRows[0].service,
+          scope_category: matrixRows[0].scope_category,
+        });
+      }
+
       const wb = XLSX.utils.book_new();
 
       const supplierColors = [
@@ -776,15 +786,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       const supplierTotals: number[] = new Array(suppliers.length).fill(0);
 
       matrixRows.forEach((row) => {
+        // Extract service type and scope category from the row
+        const serviceType = row.service && row.service.trim() !== '' ? row.service : 'N/A';
+        const scopeCategory = row.scope_category && row.scope_category.trim() !== '' ? row.scope_category : 'N/A';
+
         const dataRow = [
           row.systemLabel || row.systemId,
           '',
           'Mixed'
         ];
-
-        // Extract service type and type from the row (same for all suppliers)
-        const serviceType = row.service || '';
-        const type = row.scope_category || '';
 
         suppliers.forEach((supplier, supplierIdx) => {
           const cell = row.cells[supplier];
@@ -796,8 +806,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             const qty = cell.totalQuantity || 0;
 
             dataRow.push(
-              serviceType || 'N/A',
-              type || 'N/A',
+              serviceType,
+              scopeCategory,
               qty,
               cell.unit || 'Mixed',
               cell.normalisedUnit || 'Mixed',
@@ -806,7 +816,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
             );
             supplierTotals[supplierIdx] += total;
           } else {
-            dataRow.push(serviceType || 'N/A', type || 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A');
+            dataRow.push(serviceType, scopeCategory, 'N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }
         });
 
