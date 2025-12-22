@@ -359,12 +359,13 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     footer {
-      position: absolute;
-      bottom: 15px;
-      left: 30px;
-      right: 30px;
-      padding-top: 12px;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 10px 30px;
       border-top: 1px solid #e5e7eb;
+      background: white;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -735,6 +736,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
     .category-section {
       margin-bottom: 24px;
+      page-break-inside: auto;
+      break-inside: auto;
     }
 
     .category-title {
@@ -745,6 +748,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       color: #111827;
       margin-bottom: 6px;
       font-weight: 600;
+      page-break-after: avoid;
+      break-after: avoid;
     }
 
     .category-title .checkmark {
@@ -764,6 +769,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       font-size: 12px;
       color: #6b7280;
       margin-bottom: 12px;
+      page-break-after: avoid;
+      break-after: avoid;
     }
 
     .table-wrapper {
@@ -777,13 +784,14 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       font-size: 11px;
       background: white;
       border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      overflow: hidden;
+      page-break-inside: auto;
+      break-inside: auto;
     }
 
     .line-items-table thead {
       background: ${VERIFYTRADE_ORANGE};
       color: white;
+      display: table-header-group;
     }
 
     .line-items-table th {
@@ -795,8 +803,16 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       letter-spacing: 0.5px;
     }
 
+    .line-items-table tbody {
+      page-break-inside: auto;
+    }
+
     .line-items-table tbody tr {
       border-bottom: 1px solid #f3f4f6;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      page-break-after: auto;
+      break-after: auto;
     }
 
     .line-items-table tbody tr:nth-child(even) {
@@ -804,7 +820,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     .line-items-table td {
-      padding: 8px;
+      padding: 8px 6px;
       color: #374151;
       line-height: 1.4;
     }
@@ -938,6 +954,20 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       body {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
+        margin: 0 !important;
+        padding: 0 !important;
+        padding-bottom: 20mm !important; /* Reserve space for fixed footer */
+      }
+
+      .page {
+        min-height: auto !important;
+        height: auto !important;
+        padding-bottom: 40px;
+      }
+
+      .page:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
       }
 
       .page-break {
@@ -945,12 +975,47 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         break-after: page;
       }
 
-      table {
-        page-break-inside: avoid;
+      /* Allow line items tables to break across pages */
+      .line-items-table {
+        page-break-inside: auto !important;
+        break-inside: auto !important;
       }
 
-      .category-section {
-        page-break-inside: avoid;
+      /* Repeat table headers on each page */
+      .line-items-table thead {
+        display: table-header-group !important;
+      }
+
+      /* Prevent row breaks but allow table breaks */
+      .line-items-table tbody tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
+
+      /* Keep other tables together */
+      .table-container table {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      /* Keep cards together */
+      .card, .stat-card, .contact-section {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      /* Category headers stay with content */
+      .category-title, .category-count {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+
+      /* Prevent orphaned headings */
+      h2, h3 {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
       }
     }
   </style>
@@ -1023,13 +1088,12 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
     <footer>
       <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 2</div>
     </footer>
   </div>
 
   ${lineItemsHTML ? `
   <!-- LINE ITEMS DETAILS PAGE -->
-  <div class="page page-break">
+  <div class="page">
     <header>
       ${generateLogoSection(data.organisationLogoUrl)}
       <div class="generated-by">
@@ -1039,11 +1103,6 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
     <h2>Detailed Line Items</h2>
     ${lineItemsHTML}
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page 3</div>
-    </footer>
   </div>
   ` : ''}
 
@@ -1095,11 +1154,6 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     </div>
 
     ${cashflowHTML}
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page ${lineItemsHTML ? '4' : '3'}</div>
-    </footer>
   </div>
 
   <!-- COMMERCIAL TERMS PAGE -->
@@ -1119,11 +1173,6 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         </tbody>
       </table>
     </div>
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page ${lineItemsHTML ? '5' : '4'}</div>
-    </footer>
   </div>
 
   <!-- RISK REGISTER PAGE -->
@@ -1156,11 +1205,6 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         <strong style="color: #111827;">Confidential:</strong> This document contains commercial and sensitive information. Distribution restricted to authorized project team members only.
       </p>
     </div>
-
-    <footer>
-      <div>© ${new Date().getFullYear()} VerifyTrade. All rights reserved.</div>
-      <div>Page ${lineItemsHTML ? '6' : '5'}</div>
-    </footer>
   </div>
 </body>
 </html>
