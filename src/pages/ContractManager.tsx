@@ -171,7 +171,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
         const { data: quoteItems } = await supabase
           .from('quote_items')
-          .select('scope_category, service, description, quantity, unit_price, total_price')
+          .select('scope_category, service, subclass, material, description, quantity, unit, unit_price, total_price')
           .eq('quote_id', approvedQuoteId);
 
         if (quoteItems && quoteItems.length > 0) {
@@ -191,7 +191,15 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             const system = systemsMap.get(category)!;
             system.item_count += 1;
             if (system.details.length < 5 && item.description) {
-              system.details.push(item.description);
+              // Format: Description | Service | Type | Material | Qty | Unit
+              const serviceStr = item.service || 'N/A';
+              const typeStr = item.subclass || 'N/A';
+              const materialStr = item.material || 'N/A';
+              const qtyStr = item.quantity != null ? String(item.quantity) : 'N/A';
+              const unitStr = item.unit || 'N/A';
+
+              const formattedDetail = `${item.description} | ${serviceStr} | ${typeStr} | ${materialStr} | ${qtyStr} | ${unitStr}`;
+              system.details.push(formattedDetail);
             }
           });
 

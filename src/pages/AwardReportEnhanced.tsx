@@ -503,30 +503,33 @@ export default function AwardReportEnhanced({
       worksheet.addRow([`Generated: ${new Date().toLocaleString()}`]);
       worksheet.addRow([]);
 
-      // Header row 5 - supplier names
-      const supplierNameRow = worksheet.addRow(['Item Description', ...suppliers.flatMap(s => [s.supplierName, '', '', '', ''])]);
+      // Header row 5 - supplier names (8 columns per supplier now)
+      const supplierNameRow = worksheet.addRow(['Item Description', ...suppliers.flatMap(s => [s.supplierName, '', '', '', '', '', '', ''])]);
 
-      // Header row 6 - column labels
-      const columnHeaderRow = worksheet.addRow(['', ...suppliers.flatMap(() => ['Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total'])]);
+      // Header row 6 - column labels (with new SERVICE TYPE, TYPE, MATERIAL columns)
+      const columnHeaderRow = worksheet.addRow(['', ...suppliers.flatMap(() => ['SERVICE TYPE', 'TYPE', 'MATERIAL', 'Qty', 'UOM', 'Norm UOM', 'Unit Rate', 'Total'])]);
 
       // Set column widths
       worksheet.getColumn(1).width = 50; // Item Description
-      for (let i = 2; i <= 1 + (suppliers.length * 5); i++) {
-        const colIdx = (i - 2) % 5;
-        if (colIdx === 0) worksheet.getColumn(i).width = 10;  // Qty
-        else if (colIdx === 1) worksheet.getColumn(i).width = 12; // UOM
-        else if (colIdx === 2) worksheet.getColumn(i).width = 12; // Norm UOM
-        else if (colIdx === 3) worksheet.getColumn(i).width = 12; // Unit Rate
+      for (let i = 2; i <= 1 + (suppliers.length * 8); i++) {
+        const colIdx = (i - 2) % 8;
+        if (colIdx === 0) worksheet.getColumn(i).width = 15;  // SERVICE TYPE
+        else if (colIdx === 1) worksheet.getColumn(i).width = 12; // TYPE
+        else if (colIdx === 2) worksheet.getColumn(i).width = 15; // MATERIAL
+        else if (colIdx === 3) worksheet.getColumn(i).width = 10; // Qty
+        else if (colIdx === 4) worksheet.getColumn(i).width = 12; // UOM
+        else if (colIdx === 5) worksheet.getColumn(i).width = 12; // Norm UOM
+        else if (colIdx === 6) worksheet.getColumn(i).width = 12; // Unit Rate
         else worksheet.getColumn(i).width = 15; // Total
       }
 
       // Merge cells for Item Description header
       worksheet.mergeCells('A5:A6');
 
-      // Merge supplier name cells
+      // Merge supplier name cells (8 columns per supplier)
       suppliers.forEach((_, idx) => {
-        const startCol = 2 + (idx * 5);
-        const endCol = startCol + 4;
+        const startCol = 2 + (idx * 8);
+        const endCol = startCol + 7;
         worksheet.mergeCells(5, startCol, 5, endCol);
       });
 
@@ -540,6 +543,11 @@ export default function AwardReportEnhanced({
           const supplierData = row.suppliers?.[supplier.supplierName];
 
           if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
+            // Get service type, type, material from row (item-level data)
+            const serviceType = (row as any).service || (row as any).service_type || 'N/A';
+            const type = (row as any).subclass || (row as any).type || 'N/A';
+            const material = (row as any).material || 'N/A';
+
             const qty = supplierData.quantity !== null && supplierData.quantity !== undefined
               ? supplierData.quantity
               : 'N/A';
@@ -550,18 +558,18 @@ export default function AwardReportEnhanced({
               ? supplierData.normalisedUnit
               : 'N/A';
 
-            rowData.push(qty, unit, normUnit, supplierData.unitPrice, supplierData.total);
+            rowData.push(serviceType, type, material, qty, unit, normUnit, supplierData.unitPrice, supplierData.total);
             supplierTotals[supplierIdx] += supplierData.total || 0;
           } else {
-            rowData.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
+            rowData.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }
         });
 
         worksheet.addRow(rowData);
       });
 
-      // Add subtotals row
-      const subtotalsRow = ['Subtotals:', ...suppliers.flatMap((_, idx) => ['', '', '', '', supplierTotals[idx]])];
+      // Add subtotals row (8 columns per supplier)
+      const subtotalsRow = ['Subtotals:', ...suppliers.flatMap((_, idx) => ['', '', '', '', '', '', '', supplierTotals[idx]])];
       worksheet.addRow(subtotalsRow);
 
       // Style header rows (rows 1-3)
@@ -586,7 +594,7 @@ export default function AwardReportEnhanced({
 
           // Apply colors to supplier columns (skip column A)
           if (colNum > 1) {
-            const supplierIdx = Math.floor((colNum - 2) / 5);
+            const supplierIdx = Math.floor((colNum - 2) / 8);
             if (supplierIdx < supplierColors.length) {
               cell.fill = {
                 type: 'pattern',
@@ -599,7 +607,7 @@ export default function AwardReportEnhanced({
       });
 
       // Style data rows (starting from row 7)
-      const totalCols = 1 + (suppliers.length * 5);
+      const totalCols = 1 + (suppliers.length * 8);
       for (let rowNum = 7; rowNum <= worksheet.rowCount; rowNum++) {
         const row = worksheet.getRow(rowNum);
         const isSubtotalRow = rowNum === worksheet.rowCount;
@@ -618,9 +626,9 @@ export default function AwardReportEnhanced({
             };
             if (isSubtotalRow) cell.font = { bold: true };
           } else {
-            // Supplier columns
-            const supplierIdx = Math.floor((colNum - 2) / 5);
-            const columnInSupplier = (colNum - 2) % 5; // 0=Qty, 1=UOM, 2=NormUOM, 3=UnitRate, 4=Total
+            // Supplier columns (8 per supplier: SERVICE TYPE, TYPE, MATERIAL, Qty, UOM, Norm UOM, Unit Rate, Total)
+            const supplierIdx = Math.floor((colNum - 2) / 8);
+            const columnInSupplier = (colNum - 2) % 8; // 0=SERVICE, 1=TYPE, 2=MATERIAL, 3=Qty, 4=UOM, 5=NormUOM, 6=UnitRate, 7=Total
 
             if (supplierIdx < supplierColors.length) {
               cell.fill = {
@@ -637,7 +645,7 @@ export default function AwardReportEnhanced({
               };
 
               // Apply currency format only to Unit Rate and Total columns
-              if (typeof cell.value === 'number' && (columnInSupplier === 3 || columnInSupplier === 4)) {
+              if (typeof cell.value === 'number' && (columnInSupplier === 6 || columnInSupplier === 7)) {
                 cell.numFmt = '"$"#,##0.00';
               }
 

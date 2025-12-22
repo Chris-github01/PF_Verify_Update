@@ -116,7 +116,9 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
     .page {
       page-break-after: always;
-      padding: 40px;
+      padding: 40px 40px 80px 40px; /* Extra bottom padding for footer */
+      position: relative;
+      box-sizing: border-box;
     }
 
     .page:last-child {
@@ -169,7 +171,10 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     footer {
-      margin-top: 60px;
+      position: absolute;
+      bottom: 20px;
+      left: 40px;
+      right: 40px;
       padding-top: 20px;
       border-top: 1px solid #e5e7eb;
       display: flex;

@@ -79,6 +79,22 @@ export interface ValidationResult {
 
 class ContractDataNormalizer {
   parseDetailString(detailStr: string): NormalizedLineItem {
+    // NEW FORMAT: Description | Service | Type | Material | Qty | Unit
+    const pipeParts = detailStr.split('|').map(p => p.trim());
+
+    if (pipeParts.length === 6) {
+      // New pipe-delimited format
+      return {
+        description: pipeParts[0],
+        service: pipeParts[1] || '—',
+        type: pipeParts[2] || '—',
+        material: pipeParts[3] || '—',
+        quantity: pipeParts[4] || '—',
+        unit: pipeParts[5] || '—'
+      };
+    }
+
+    // OLD FORMAT (backwards compatibility): Description [service: X | type: Y | material: Z | qty: 4 ea]
     const bracketMatch = detailStr.match(/^(.+?)\s*\[(.+)\]$/);
 
     if (!bracketMatch) {
@@ -207,9 +223,10 @@ class ContractPDFLayout {
       }
 
       .page {
-        padding: 20px 32px 32px 32px;
+        padding: 20px 32px 80px 32px; /* Extra bottom padding for footer */
         position: relative;
         min-height: 240mm;
+        box-sizing: border-box;
       }
 
       .page:not(:last-child) {
@@ -231,7 +248,10 @@ class ContractPDFLayout {
       }
 
       footer {
-        margin-top: 32px;
+        position: absolute;
+        bottom: 20px;
+        left: 32px;
+        right: 32px;
         padding-top: 12px;
         border-top: 1px solid #e5e7eb;
         display: flex;
