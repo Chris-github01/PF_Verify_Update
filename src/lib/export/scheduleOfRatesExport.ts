@@ -113,14 +113,17 @@ async function createSupplierSheet(
     .order('description');
 
   if (error) {
-    console.error('Error fetching quote items:', error);
+    console.error('[Schedule of Rates] Error fetching quote items:', error);
     throw error;
   }
 
   if (!items || items.length === 0) {
-    console.log(`No items found for quote ${quote.id}`);
+    console.log(`[Schedule of Rates] No items found for quote ${quote.id}`);
     return;
   }
+
+  console.log(`[Schedule of Rates] Fetched ${items.length} items for ${quote.supplier_name}`);
+  console.log('[Schedule of Rates] Sample item data:', items[0]);
 
   // Create sheet
   const sheetName = quote.supplier_name.substring(0, 31).replace(/[\\\/\?\*\[\]]/g, '_');
@@ -282,21 +285,36 @@ async function createSupplierSheet(
       // Size/Diameter - Use size column first, then extract from description, then show FRR if available
       const sizeCell = row.getCell(5);
       let sizeValue = 'N/A';
+      let source = 'none';
 
       // Priority 1: Use the size column if populated
       if (item.size && item.size.trim() !== '') {
         sizeValue = item.size;
+        source = 'size_column';
       }
       // Priority 2: Extract from description
       else {
         const sizeMatch = item.description?.match(/\d+\s*mm|\d+\s*"|\d+x\d+/i);
         if (sizeMatch) {
           sizeValue = sizeMatch[0];
+          source = 'regex_extraction';
         }
         // Priority 3: Show FRR if available and no size found
         else if (item.frr && item.frr.trim() !== '') {
           sizeValue = item.frr;
+          source = 'frr_column';
         }
+      }
+
+      // Debug log for first few items
+      if (idx < 3) {
+        console.log(`[Schedule of Rates] Item ${idx + 1} size extraction:`, {
+          description: item.description?.substring(0, 50),
+          size_column: item.size,
+          frr_column: item.frr,
+          extracted_value: sizeValue,
+          source: source
+        });
       }
 
       sizeCell.value = sizeValue;
