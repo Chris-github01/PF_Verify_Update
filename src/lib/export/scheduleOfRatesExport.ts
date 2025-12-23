@@ -45,6 +45,8 @@ function categorizeServiceType(serviceType: string, category: string): string {
 
 export async function exportScheduleOfRates(projectId: string, projectName: string): Promise<void> {
   try {
+    console.log('[Schedule of Rates] Starting export for project:', projectId);
+
     // Fetch all quotes for the project
     const { data: quotes, error: quotesError } = await supabase
       .from('quotes')
@@ -52,10 +54,17 @@ export async function exportScheduleOfRates(projectId: string, projectName: stri
       .eq('project_id', projectId)
       .order('supplier_name');
 
-    if (quotesError) throw quotesError;
+    if (quotesError) {
+      console.error('[Schedule of Rates] Error fetching quotes:', quotesError);
+      throw quotesError;
+    }
+
     if (!quotes || quotes.length === 0) {
+      console.error('[Schedule of Rates] No quotes found');
       throw new Error('No quotes found for this project');
     }
+
+    console.log(`[Schedule of Rates] Found ${quotes.length} quotes`);
 
     // Create workbook
     const workbook = new ExcelJS.Workbook();
@@ -64,8 +73,11 @@ export async function exportScheduleOfRates(projectId: string, projectName: stri
 
     // Create a sheet for each supplier
     for (const quote of quotes) {
+      console.log(`[Schedule of Rates] Creating sheet for supplier: ${quote.supplier_name}`);
       await createSupplierSheet(workbook, quote, projectName);
     }
+
+    console.log('[Schedule of Rates] Generating Excel file...');
 
     // Generate file
     const buffer = await workbook.xlsx.writeBuffer();
@@ -75,12 +87,15 @@ export async function exportScheduleOfRates(projectId: string, projectName: stri
     const link = document.createElement('a');
     link.href = url;
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    link.download = `Schedule_of_Rates_${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.xlsx`;
+    const filename = `Schedule_of_Rates_${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.xlsx`;
+    link.download = filename;
     link.click();
 
     window.URL.revokeObjectURL(url);
+
+    console.log('[Schedule of Rates] Export completed:', filename);
   } catch (error) {
-    console.error('Error exporting Schedule of Rates:', error);
+    console.error('[Schedule of Rates] Export error:', error);
     throw error;
   }
 }
@@ -90,15 +105,22 @@ async function createSupplierSheet(
   quote: Quote,
   projectName: string
 ): Promise<void> {
-  // Fetch quote items
+  // Fetch quote items - use basic columns that definitely exist
   const { data: items, error } = await supabase
     .from('quote_items')
-    .select('id, description, service, mapped_service_type, material, unit, size, diameter, unit_price, scope_category')
+    .select('id, description, service, material, unit, unit_price')
     .eq('quote_id', quote.id)
-    .order('scope_category, description');
+    .order('description');
 
-  if (error) throw error;
-  if (!items || items.length === 0) return;
+  if (error) {
+    console.error('Error fetching quote items:', error);
+    throw error;
+  }
+
+  if (!items || items.length === 0) {
+    console.log(`No items found for quote ${quote.id}`);
+    return;
+  }
 
   // Create sheet
   const sheetName = quote.supplier_name.substring(0, 31).replace(/[\\\/\?\*\[\]]/g, '_');
@@ -153,7 +175,7 @@ async function createSupplierSheet(
   const groupedItems: Record<string, QuoteItem[]> = {};
 
   items.forEach((item: any) => {
-    const category = categorizeServiceType(item.mapped_service_type || item.service, item.scope_category);
+    const category = categorizeServiceType(item.service || '', '');
     if (!groupedItems[category]) {
       groupedItems[category] = [];
     }
@@ -237,7 +259,7 @@ async function createSupplierSheet(
 
       // Service Type
       const srvCell = row.getCell(3);
-      srvCell.value = item.mapped_service_type || item.service || 'N/A';
+      srvCell.value = item.service || 'General';
       srvCell.font = { name: 'Calibri', size: 10 };
       srvCell.alignment = { horizontal: 'left', vertical: 'middle' };
       srvCell.fill = {
@@ -257,9 +279,10 @@ async function createSupplierSheet(
         fgColor: { argb: isEven ? 'FFFFFFFF' : colors.bg }
       };
 
-      // Size/Diameter
+      // Size/Diameter - Try to extract from description or leave as N/A
       const sizeCell = row.getCell(5);
-      sizeCell.value = item.size || item.diameter || 'N/A';
+      const sizeMatch = item.description?.match(/\d+\s*mm|\d+\s*"|\d+x\d+/i);
+      sizeCell.value = sizeMatch ? sizeMatch[0] : 'N/A';
       sizeCell.font = { name: 'Calibri', size: 10 };
       sizeCell.alignment = { horizontal: 'center', vertical: 'middle' };
       sizeCell.fill = {
