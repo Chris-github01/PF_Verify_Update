@@ -105,10 +105,10 @@ async function createSupplierSheet(
   quote: Quote,
   projectName: string
 ): Promise<void> {
-  // Fetch quote items - use basic columns that definitely exist
+  // Fetch quote items - include size and frr columns
   const { data: items, error } = await supabase
     .from('quote_items')
-    .select('id, description, service, material, unit, unit_price')
+    .select('id, description, service, material, unit, unit_price, size, frr')
     .eq('quote_id', quote.id)
     .order('description');
 
@@ -279,10 +279,27 @@ async function createSupplierSheet(
         fgColor: { argb: isEven ? 'FFFFFFFF' : colors.bg }
       };
 
-      // Size/Diameter - Try to extract from description or leave as N/A
+      // Size/Diameter - Use size column first, then extract from description, then show FRR if available
       const sizeCell = row.getCell(5);
-      const sizeMatch = item.description?.match(/\d+\s*mm|\d+\s*"|\d+x\d+/i);
-      sizeCell.value = sizeMatch ? sizeMatch[0] : 'N/A';
+      let sizeValue = 'N/A';
+
+      // Priority 1: Use the size column if populated
+      if (item.size && item.size.trim() !== '') {
+        sizeValue = item.size;
+      }
+      // Priority 2: Extract from description
+      else {
+        const sizeMatch = item.description?.match(/\d+\s*mm|\d+\s*"|\d+x\d+/i);
+        if (sizeMatch) {
+          sizeValue = sizeMatch[0];
+        }
+        // Priority 3: Show FRR if available and no size found
+        else if (item.frr && item.frr.trim() !== '') {
+          sizeValue = item.frr;
+        }
+      }
+
+      sizeCell.value = sizeValue;
       sizeCell.font = { name: 'Calibri', size: 10 };
       sizeCell.alignment = { horizontal: 'center', vertical: 'middle' };
       sizeCell.fill = {
