@@ -9,6 +9,7 @@ import ApprovalModal from '../components/ApprovalModal';
 import RevisionRequestModal from '../components/RevisionRequestModal';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
+import { exportScheduleOfRates } from '../lib/export/scheduleOfRatesExport';
 import EnhancedSupplierTable from '../components/award/EnhancedSupplierTable';
 import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdown';
 import CoverageBreakdownChart from '../components/award/CoverageBreakdownChart';
@@ -902,6 +903,23 @@ export default function AwardReportEnhanced({
                       >
                         <FileSpreadsheet size={16} />
                         Export Excel Supplier Comparison
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setShowExportDropdown(false);
+                          if (!currentProject) return;
+                          try {
+                            await exportScheduleOfRates(projectId, currentProject.name);
+                            onToast?.('Schedule of Rates exported successfully', 'success');
+                          } catch (error) {
+                            console.error('Export error:', error);
+                            onToast?.('Failed to export Schedule of Rates', 'error');
+                          }
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <FileSpreadsheet size={16} />
+                        Export Schedule of Rates
                       </button>
                     </div>
                   </div>
