@@ -68,6 +68,32 @@ Deno.serve(async (req: Request) => {
       throw new Error('Invalid email format');
     }
 
+    // Determine the final role - if make_owner is true OR role is 'owner', set as owner
+    const finalRole = make_owner || role === 'owner' ? 'owner' : role;
+
+    // If making this user the owner, demote existing owner first
+    if (make_owner || role === 'owner') {
+      const { error: demoteError } = await supabase
+        .from('organisation_members')
+        .update({ role: 'admin' })
+        .eq('organisation_id', organisation_id)
+        .eq('role', 'owner');
+
+      if (demoteError) {
+        console.warn('Error demoting existing owner:', demoteError);
+      }
+
+      // Update organisation owner_email
+      const { error: orgUpdateError } = await supabase
+        .from('organisations')
+        .update({ owner_email: email })
+        .eq('id', organisation_id);
+
+      if (orgUpdateError) {
+        console.warn('Error updating organisation owner_email:', orgUpdateError);
+      }
+    }
+
     // Check if user already exists
     const { data: existingUser } = await supabase.auth.admin.listUsers();
     const userExists = existingUser?.users.find(u => u.email === email);
@@ -91,11 +117,11 @@ Deno.serve(async (req: Request) => {
       }
 
       if (existingMember && existingMember.archived_at) {
-        // Reactivate archived member
+        // Reactivate archived member with the final role
         const { error: updateError } = await supabase
           .from('organisation_members')
           .update({
-            role,
+            role: finalRole,
             status: 'active',
             archived_at: null,
             activated_at: new Date().toISOString()
@@ -104,13 +130,13 @@ Deno.serve(async (req: Request) => {
 
         if (updateError) throw updateError;
       } else {
-        // Add as new member
+        // Add as new member with the final role
         const { error: insertError } = await supabase
           .from('organisation_members')
           .insert({
             organisation_id,
             user_id: userId,
-            role,
+            role: finalRole,
             status: 'active',
             activated_at: new Date().toISOString()
           });
@@ -135,51 +161,18 @@ Deno.serve(async (req: Request) => {
 
       userId = newUser.user.id;
 
-      // Add user to organisation
+      // Add user to organisation with the final role
       const { error: memberError } = await supabase
         .from('organisation_members')
         .insert({
           organisation_id,
           user_id: userId,
-          role,
+          role: finalRole,
           status: 'active',
           activated_at: new Date().toISOString()
         });
 
       if (memberError) throw memberError;
-    }
-
-    // If make_owner is true, update the organisation owner
-    if (make_owner) {
-      // First, demote existing owner to admin
-      const { error: demoteError } = await supabase
-        .from('organisation_members')
-        .update({ role: 'admin' })
-        .eq('organisation_id', organisation_id)
-        .eq('role', 'owner');
-
-      if (demoteError) {
-        console.warn('Error demoting existing owner:', demoteError);
-      }
-
-      // Promote this user to owner
-      const { error: promoteError } = await supabase
-        .from('organisation_members')
-        .update({ role: 'owner' })
-        .eq('organisation_id', organisation_id)
-        .eq('user_id', userId);
-
-      if (promoteError) throw promoteError;
-
-      // Update organisation owner_email
-      const { error: orgUpdateError } = await supabase
-        .from('organisations')
-        .update({ owner_email: email })
-        .eq('id', organisation_id);
-
-      if (orgUpdateError) {
-        console.warn('Error updating organisation owner_email:', orgUpdateError);
-      }
     }
 
     // Log the admin action
@@ -191,7 +184,8 @@ Deno.serve(async (req: Request) => {
       p_details: {
         email,
         organisation_id,
-        role,
+        role: finalRole,
+        make_owner: make_owner || false,
         full_name
       }
     });
@@ -203,15 +197,22 @@ Deno.serve(async (req: Request) => {
       .eq('id', organisation_id)
       .single();
 
+    // Build success message
+    let message = '';
+    if (userExists) {
+      message = `User ${email} added to organisation${make_owner ? ' as owner' : ''}`;
+    } else {
+      message = `User ${email} created and added to organisation${make_owner ? ' as owner' : ''}. ${password ? 'Use the provided password to login.' : 'They will need to reset their password on first login.'}`;
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         user_id: userId,
         email,
         organisation_name: org?.name,
-        message: userExists
-          ? `User ${email} added to organisation`
-          : `User ${email} created and added to organisation. They will need to reset their password on first login.`
+        role: finalRole,
+        message
       }),
       {
         status: 200,
