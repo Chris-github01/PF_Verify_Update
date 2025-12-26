@@ -72,7 +72,7 @@ export default function ContractWorkflowStepper({
       </div>
 
       <div className="relative">
-        <div className="flex items-center justify-between">
+        <div className="grid grid-cols-6 gap-2">
           {steps.map((step, index) => {
             const status = getStepStatus(step.id);
             const styles = getStepStyles(status);
@@ -80,37 +80,51 @@ export default function ContractWorkflowStepper({
             const isLast = index === steps.length - 1;
 
             return (
-              <div key={step.id} className="flex items-center flex-1 group">
+              <div key={step.id} className="relative flex flex-col items-center group">
                 <button
                   onClick={() => isClickable && onStepClick(step.id)}
                   disabled={status === 'locked'}
                   className={`
-                    relative flex flex-col items-center min-w-0 flex-1
+                    relative flex flex-col items-center w-full
                     ${isClickable ? 'cursor-pointer' : 'cursor-default'}
                     transition-all duration-200
                   `}
                 >
-                  <div
-                    className={`
-                      relative z-10 flex items-center justify-center w-10 h-10 rounded-full
-                      border-2 transition-all duration-200
-                      ${styles.number}
-                      ${isClickable ? 'group-hover:scale-110 group-hover:shadow-lg' : ''}
-                    `}
-                  >
-                    {status === 'completed' ? (
-                      <CheckCircle2 className="w-5 h-5" />
-                    ) : status === 'locked' ? (
-                      <Lock className="w-4 h-4" />
-                    ) : (
-                      <span className="text-sm font-bold">{step.stepNumber}</span>
+                  <div className="relative w-full mb-3">
+                    <div
+                      className={`
+                        relative z-10 flex items-center justify-center w-10 h-10 rounded-full mx-auto
+                        border-2 transition-all duration-200
+                        ${styles.number}
+                        ${isClickable ? 'group-hover:scale-110 group-hover:shadow-lg' : ''}
+                      `}
+                    >
+                      {status === 'completed' ? (
+                        <CheckCircle2 className="w-5 h-5" />
+                      ) : status === 'locked' ? (
+                        <Lock className="w-4 h-4" />
+                      ) : (
+                        <span className="text-sm font-bold">{step.stepNumber}</span>
+                      )}
+                    </div>
+
+                    {!isLast && (
+                      <div className="absolute left-[calc(50%+20px)] right-[-50%] top-5 h-0.5 z-0">
+                        <div className="absolute inset-0 bg-slate-800 rounded-full"></div>
+                        <div
+                          className={`
+                            absolute inset-0 rounded-full transition-all duration-500
+                            ${completedSteps.includes(step.id) ? 'bg-green-500 w-full' : 'bg-slate-700 w-0'}
+                          `}
+                        ></div>
+                      </div>
                     )}
                   </div>
 
                   <div
                     className={`
-                      mt-3 px-3 py-2 rounded-lg border text-center
-                      transition-all duration-200 w-full
+                      px-3 py-2 rounded-lg border text-center w-full
+                      transition-all duration-200
                       ${styles.container}
                       ${isClickable ? 'group-hover:border-orange-500/70' : ''}
                     `}
@@ -126,21 +140,9 @@ export default function ContractWorkflowStepper({
                   </div>
 
                   {status === 'current' && (
-                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
                   )}
                 </button>
-
-                {!isLast && (
-                  <div className="flex-shrink-0 w-12 h-0.5 mx-2 relative" style={{ top: '-30px' }}>
-                    <div className="absolute inset-0 bg-slate-800 rounded-full"></div>
-                    <div
-                      className={`
-                        absolute inset-0 rounded-full transition-all duration-500
-                        ${completedSteps.includes(step.id) ? 'bg-green-500 w-full' : 'bg-slate-700 w-0'}
-                      `}
-                    ></div>
-                  </div>
-                )}
               </div>
             );
           })}
