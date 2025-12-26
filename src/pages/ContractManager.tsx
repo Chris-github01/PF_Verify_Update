@@ -891,42 +891,22 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
                 Previous
               </button>
 
-              <div className="flex items-center gap-3">
-                {!workflowProgress.find(p => p.step_id === activeTab)?.completed && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        await updateWorkflowStep(projectId, activeTab, true, 100, { manuallyCompleted: true });
-                        const updatedProgress = await getWorkflowProgress(projectId);
-                        setWorkflowProgress(updatedProgress);
-                      } catch (error) {
-                        console.error('Error marking step as complete:', error);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all"
-                  >
+              <button
+                onClick={handleNextTab}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium transition-all"
+              >
+                {tabOrder.indexOf(activeTab) === tabOrder.length - 1 ? (
+                  <>
                     <CheckCircle size={18} />
-                    Mark Complete
-                  </button>
+                    Complete & Finish
+                  </>
+                ) : (
+                  <>
+                    Next
+                    <ChevronRight size={18} />
+                  </>
                 )}
-
-                <button
-                  onClick={handleNextTab}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium transition-all"
-                >
-                  {tabOrder.indexOf(activeTab) === tabOrder.length - 1 ? (
-                    <>
-                      <CheckCircle size={18} />
-                      Complete & Finish
-                    </>
-                  ) : (
-                    <>
-                      Next
-                      <ChevronRight size={18} />
-                    </>
-                  )}
-                </button>
-              </div>
+              </button>
             </div>
           </>
         )}
