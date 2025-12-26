@@ -1372,8 +1372,61 @@ class ContractPackBuilder {
             <p style="color: #374151; line-height: 1.8; white-space: pre-wrap;">${appendixData.scope_summary}</p>
           </div>
         ` : ''}
-        ${this.buildInclusionsExclusionsSection(data)}
-        ${this.buildAppendixExtrasSection(appendixData)}
+
+        ${data.inclusions.length > 0 ? `
+          <h2>Scope Inclusions</h2>
+          <ul class="checklist">
+            ${data.inclusions.map((inc: any) => `
+              <li><input type="checkbox" disabled> ${typeof inc === 'string' ? inc : inc.text || inc}</li>
+            `).join('')}
+          </ul>
+        ` : ''}
+
+        ${data.exclusions.length > 0 ? `
+          <h2 style="margin-top: 32px;">Scope Exclusions</h2>
+          <div class="warning-box">
+            <h3>Not Included in Scope</h3>
+            <ul style="list-style: none; padding: 0;">
+              ${data.exclusions.map((exc: any) => `
+                <li class="safety-item">${typeof exc === 'string' ? exc : exc.text || exc}</li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
+        ${appendixData.commercial_assumptions && appendixData.commercial_assumptions.length > 0 ? `
+          <h2 style="margin-top: 32px;">Commercial Assumptions</h2>
+          <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 18px; margin-bottom: 24px;">
+            <ul style="margin: 0; padding-left: 20px;">
+              ${appendixData.commercial_assumptions.map((assumption: any) => `
+                <li style="color: #1e40af; margin-bottom: 8px; line-height: 1.6;">${typeof assumption === 'string' ? assumption : assumption.text || assumption}</li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
+        ${appendixData.clarifications && appendixData.clarifications.length > 0 ? `
+          <h2 style="margin-top: 32px;">Subcontractor Clarifications</h2>
+          <div style="background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 18px; margin-bottom: 24px;">
+            <ul style="margin: 0; padding-left: 20px;">
+              ${appendixData.clarifications.map((clarification: any) => `
+                <li style="color: #92400e; margin-bottom: 8px; line-height: 1.6;">${typeof clarification === 'string' ? clarification : clarification.text || clarification}</li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
+        ${appendixData.known_risks && appendixData.known_risks.length > 0 ? `
+          <h2 style="margin-top: 32px;">Known Risks & Hold Points</h2>
+          <div style="background: #fee2e2; border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin-bottom: 24px;">
+            <ul style="margin: 0; padding-left: 20px;">
+              ${appendixData.known_risks.map((risk: any) => `
+                <li style="color: #991b1b; margin-bottom: 8px; line-height: 1.6;">${typeof risk === 'string' ? risk : risk.text || risk}</li>
+              `).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
         <footer>
           <div>© ${year} VerifyTrade. All rights reserved.</div>
           <div class="page-number"></div>
