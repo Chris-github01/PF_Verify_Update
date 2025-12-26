@@ -3347,7 +3347,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
           const totalExGst = quote.total_amount || 0;
           const totalIncGst = totalExGst * 1.15; // Assuming 15% GST
 
-          setAwardOverview({
+          const overview = {
             awarded_subcontractor: quote.suppliers?.name || awardInfo?.supplier_name || 'Unknown',
             awarded_total_ex_gst: totalExGst,
             awarded_total_inc_gst: totalIncGst,
@@ -3368,7 +3368,17 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
               { name: 'Awarded Quote', type: 'quote_pdf', url: quote.file_url },
               { name: 'Award Report', type: 'award_report', id: awardReport?.id }
             ].filter(a => a.url || a.id)
-          });
+          };
+
+          setAwardOverview(overview);
+
+          // Auto-populate scope_summary if empty (only for new appendix)
+          if (!existingAppendix && !formData.scope_summary) {
+            setFormData(prev => ({
+              ...prev,
+              scope_summary: overview.scope_summary_snapshot || ''
+            }));
+          }
         }
       } catch (error) {
         console.error('Error fetching award overview:', error);
@@ -3419,14 +3429,9 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
   };
 
   const handleFinalise = async () => {
-    // Validate required fields before finalizing
+    // Validate ONLY required field: pricing_basis
     if (!formData.pricing_basis) {
-      alert('Please select a Pricing Basis before finalising the appendix');
-      return;
-    }
-
-    if (!formData.scope_summary || formData.scope_summary.trim().length === 0) {
-      alert('Please enter a Scope Summary before finalising the appendix');
+      alert('Please select a Pricing Basis & Commercial Structure before finalising the appendix');
       return;
     }
 
@@ -3751,12 +3756,15 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
 
       <div className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Priced Scope Summary (Plain English)</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Priced Scope Summary (Plain English)
+            <span className="text-xs text-slate-500 ml-2 font-normal">(Optional - auto-populated from Award)</span>
+          </label>
           <textarea
             value={formData.scope_summary}
             onChange={(e) => setFormData({ ...formData, scope_summary: e.target.value })}
             rows={4}
-            placeholder="Describe the priced scope in plain English..."
+            placeholder="Auto-populated from Award Report. You can edit or add additional details..."
             disabled={isFinalised}
             className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white disabled:opacity-50"
           />
@@ -3765,9 +3773,10 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
             Pricing Basis & Commercial Structure
+            <span className="text-xs text-orange-400 ml-2 font-semibold">*REQUIRED</span>
           </label>
           <p className="text-xs text-slate-400 mb-2">
-            Select the pricing basis for this contract. This will be included in the Pre-let Appendix document.
+            Select the pricing basis for this contract. This will be included in the Pre-let Appendix document and PDF.
           </p>
           <select
             value={formData.pricing_basis}
@@ -3809,7 +3818,10 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Explicit Inclusions</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Explicit Inclusions
+            <span className="text-xs text-slate-500 ml-2 font-normal">(Optional)</span>
+          </label>
           <p className="text-xs text-slate-400 mb-2">What is explicitly included in the subcontractor's scope</p>
           {!isFinalised && (
             <div className="space-y-2 mb-3">
@@ -3866,7 +3878,10 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Explicit Exclusions</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Explicit Exclusions
+            <span className="text-xs text-slate-500 ml-2 font-normal">(Optional)</span>
+          </label>
           <p className="text-xs text-slate-400 mb-2">What is explicitly excluded from the subcontractor's scope</p>
           {!isFinalised && (
             <div className="flex gap-2 mb-3">
@@ -3904,7 +3919,10 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Commercial Assumptions</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Commercial Assumptions
+            <span className="text-xs text-slate-500 ml-2 font-normal">(Optional)</span>
+          </label>
           <p className="text-xs text-slate-400 mb-2">Assumptions impacting cost, access, staging, or hours</p>
           {!isFinalised && (
             <div className="flex gap-2 mb-3">
@@ -3942,7 +3960,10 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Subcontractor Clarifications</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Subcontractor Clarifications
+            <span className="text-xs text-slate-500 ml-2 font-normal">(Optional)</span>
+          </label>
           <p className="text-xs text-slate-400 mb-2">Clarifications intended to remain part of the contract</p>
           {!isFinalised && (
             <div className="flex gap-2 mb-3">
@@ -3980,7 +4001,10 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Known Risks & Hold Points</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Known Risks & Hold Points
+            <span className="text-xs text-slate-500 ml-2 font-normal">(Optional)</span>
+          </label>
           <p className="text-xs text-slate-400 mb-2">Known risks, exclusions, or hold points affecting scope or price</p>
           {!isFinalised && (
             <div className="flex gap-2 mb-3">
