@@ -3419,6 +3419,17 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
   };
 
   const handleFinalise = async () => {
+    // Validate required fields before finalizing
+    if (!formData.pricing_basis) {
+      alert('Please select a Pricing Basis before finalising the appendix');
+      return;
+    }
+
+    if (!formData.scope_summary || formData.scope_summary.trim().length === 0) {
+      alert('Please enter a Scope Summary before finalising the appendix');
+      return;
+    }
+
     if (!confirm('Once finalised, this appendix cannot be edited. The award overview will be locked as an immutable snapshot. Continue?')) return;
 
     setSaving(true);
@@ -3459,6 +3470,34 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
     } catch (error) {
       console.error('Finalise error:', error);
       alert('Failed to finalise appendix');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnfinalise = async () => {
+    if (!existingAppendix) return;
+
+    if (!confirm('Are you sure you want to unfinalise this appendix? You will be able to edit it again.')) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('prelet_appendix')
+        .update({
+          is_finalised: false,
+          finalised_at: null,
+          finalised_by: null
+        })
+        .eq('id', existingAppendix.id);
+
+      if (error) throw error;
+
+      onAppendixUpdated();
+      alert('Appendix unfinalised successfully. You can now edit it.');
+    } catch (error) {
+      console.error('Unfinalise error:', error);
+      alert('Failed to unfinalise appendix');
     } finally {
       setSaving(false);
     }
@@ -3994,23 +4033,32 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
             </>
           )}
           {isFinalised && (
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-all disabled:opacity-50"
-            >
-              {generating ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Generating PDF... This may take up to 3 minutes
-                </>
-              ) : (
-                <>
-                  <Download size={16} />
-                  Download Appendix PDF
-                </>
-              )}
-            </button>
+            <>
+              <button
+                onClick={handleUnfinalise}
+                disabled={saving || generating}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded transition-all disabled:opacity-50"
+              >
+                Unfinalise & Edit
+              </button>
+              <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-all disabled:opacity-50"
+              >
+                {generating ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Generating PDF... This may take up to 3 minutes
+                  </>
+                ) : (
+                  <>
+                    <Download size={16} />
+                    Download Appendix PDF
+                  </>
+                )}
+              </button>
+            </>
           )}
         </div>
 
