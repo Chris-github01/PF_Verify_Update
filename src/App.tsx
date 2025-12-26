@@ -699,7 +699,11 @@ function AppContent() {
         return <ContractManager
           projectId={projectId}
           dashboardMode={dashboardMode}
-          onNavigateBack={() => setActiveTab('dashboard')}
+          onNavigateBack={() => {
+            setProjectId(null);
+            setProjectInfo(null);
+            setActiveTab('dashboard');
+          }}
         />;
 
       case 'reports':
