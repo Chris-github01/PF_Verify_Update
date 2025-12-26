@@ -3553,12 +3553,15 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         if (response.ok) {
           const result = await response.json();
           htmlContent = result.html;
+          console.log('Pre-let Appendix HTML generated successfully, length:', htmlContent?.length);
         } else {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          console.warn('Edge function error:', errorData);
+          console.error('Edge function returned error:', errorData);
+          throw new Error(errorData.error || `Server error: ${response.status}`);
         }
       } catch (edgeError) {
-        console.warn('Edge function failed:', edgeError);
+        console.error('Edge function failed:', edgeError);
+        throw edgeError;
       }
 
       if (!htmlContent) {
