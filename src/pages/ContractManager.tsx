@@ -433,6 +433,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             .select(`
               subcontractor_name,
               quantity_surveyor_name, quantity_surveyor_phone, quantity_surveyor_email,
+              subcontractor_project_manager_name, subcontractor_project_manager_phone, subcontractor_project_manager_email,
               site_manager_name, site_manager_phone, site_manager_email,
               health_safety_officer_name, health_safety_officer_phone, health_safety_officer_email,
               accounts_name, accounts_phone, accounts_email,
@@ -449,21 +450,26 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
               email: projectData?.quantity_surveyor_email || ''
             },
             projectManager: {
+              name: projectData?.subcontractor_project_manager_name || '',
+              phone: projectData?.subcontractor_project_manager_phone || '',
+              email: projectData?.subcontractor_project_manager_email || ''
+            },
+            siteManager: {
               name: projectData?.site_manager_name || '',
               phone: projectData?.site_manager_phone || '',
               email: projectData?.site_manager_email || ''
             },
-            siteManager: {
+            healthSafety: {
               name: projectData?.health_safety_officer_name || '',
               phone: projectData?.health_safety_officer_phone || '',
               email: projectData?.health_safety_officer_email || ''
             },
-            healthSafety: {
+            accounts: {
               name: projectData?.accounts_name || '',
               phone: projectData?.accounts_phone || '',
               email: projectData?.accounts_email || ''
             },
-            accounts: {
+            documentController: {
               name: projectData?.document_controller_name || '',
               phone: projectData?.document_controller_phone || '',
               email: projectData?.document_controller_email || ''
@@ -662,21 +668,26 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             email: projectData?.quantity_surveyor_email || ''
           },
           projectManager: {
+            name: projectData?.subcontractor_project_manager_name || '',
+            phone: projectData?.subcontractor_project_manager_phone || '',
+            email: projectData?.subcontractor_project_manager_email || ''
+          },
+          siteManager: {
             name: projectData?.site_manager_name || '',
             phone: projectData?.site_manager_phone || '',
             email: projectData?.site_manager_email || ''
           },
-          siteManager: {
+          healthSafety: {
             name: projectData?.health_safety_officer_name || '',
             phone: projectData?.health_safety_officer_phone || '',
             email: projectData?.health_safety_officer_email || ''
           },
-          healthSafety: {
+          accounts: {
             name: projectData?.accounts_name || '',
             phone: projectData?.accounts_phone || '',
             email: projectData?.accounts_email || ''
           },
-          accounts: {
+          documentController: {
             name: projectData?.document_controller_name || '',
             phone: projectData?.document_controller_phone || '',
             email: projectData?.document_controller_email || ''
@@ -1185,6 +1196,7 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
   const [motorVehicleInsurance, setMotorVehicleInsurance] = useState<number>(5000000);
   const [subcontractorName, setSubcontractorName] = useState<string>('');
   const [quantitySurveyor, setQuantitySurveyor] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
+  const [subcontractorProjectManager, setSubcontractorProjectManager] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
   const [siteManager, setSiteManager] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
   const [healthSafetyOfficer, setHealthSafetyOfficer] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
   const [accounts, setAccounts] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
@@ -1255,6 +1267,7 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
           project_duration_months, public_liability_insurance, motor_vehicle_insurance, organisation_id,
           subcontractor_name,
           quantity_surveyor_name, quantity_surveyor_phone, quantity_surveyor_email,
+          subcontractor_project_manager_name, subcontractor_project_manager_phone, subcontractor_project_manager_email,
           site_manager_name, site_manager_phone, site_manager_email,
           health_safety_officer_name, health_safety_officer_phone, health_safety_officer_email,
           accounts_name, accounts_phone, accounts_email,
@@ -1275,6 +1288,11 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
           name: projectData.quantity_surveyor_name ?? '',
           phone: projectData.quantity_surveyor_phone ?? '',
           email: projectData.quantity_surveyor_email ?? ''
+        });
+        setSubcontractorProjectManager({
+          name: projectData.subcontractor_project_manager_name ?? '',
+          phone: projectData.subcontractor_project_manager_phone ?? '',
+          email: projectData.subcontractor_project_manager_email ?? ''
         });
         setSiteManager({
           name: projectData.site_manager_name ?? '',
@@ -1859,13 +1877,45 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
             onCancel={() => { setIsEditing(null); loadContractSettings(); }}
           />
 
-          {/* Project Manager - Duplicate listing for subcontractor's project manager (different from main PM) */}
+          {/* Project Manager */}
           <SubcontractorContactCard
             title="Project Manager"
-            contact={siteManager}
+            contact={subcontractorProjectManager}
             isEditing={isEditing === 'subcontractor_pm'}
             isSaving={isSaving}
             onEdit={() => setIsEditing('subcontractor_pm')}
+            onChange={setSubcontractorProjectManager}
+            onSave={async () => {
+              if (!projectInfo?.id) return;
+              setIsSaving(true);
+              try {
+                const { error } = await supabase
+                  .from('projects')
+                  .update({
+                    subcontractor_project_manager_name: subcontractorProjectManager.name,
+                    subcontractor_project_manager_phone: subcontractorProjectManager.phone,
+                    subcontractor_project_manager_email: subcontractorProjectManager.email
+                  })
+                  .eq('id', projectInfo.id);
+                if (error) throw error;
+                setIsEditing(null);
+              } catch (error) {
+                console.error('Error saving project manager:', error);
+                alert('Failed to save project manager details');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            onCancel={() => { setIsEditing(null); loadContractSettings(); }}
+          />
+
+          {/* Site Manager */}
+          <SubcontractorContactCard
+            title="Site Manager"
+            contact={siteManager}
+            isEditing={isEditing === 'site_manager_contact'}
+            isSaving={isSaving}
+            onEdit={() => setIsEditing('site_manager_contact')}
             onChange={setSiteManager}
             onSave={async () => {
               if (!projectInfo?.id) return;
@@ -1883,38 +1933,6 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
                 setIsEditing(null);
               } catch (error) {
                 console.error('Error saving site manager:', error);
-                alert('Failed to save project manager details');
-              } finally {
-                setIsSaving(false);
-              }
-            }}
-            onCancel={() => { setIsEditing(null); loadContractSettings(); }}
-          />
-
-          {/* Site Manager - using healthSafetyOfficer state temporarily, will create separate field */}
-          <SubcontractorContactCard
-            title="Site Manager"
-            contact={healthSafetyOfficer}
-            isEditing={isEditing === 'site_manager_contact'}
-            isSaving={isSaving}
-            onEdit={() => setIsEditing('site_manager_contact')}
-            onChange={setHealthSafetyOfficer}
-            onSave={async () => {
-              if (!projectInfo?.id) return;
-              setIsSaving(true);
-              try {
-                const { error } = await supabase
-                  .from('projects')
-                  .update({
-                    health_safety_officer_name: healthSafetyOfficer.name,
-                    health_safety_officer_phone: healthSafetyOfficer.phone,
-                    health_safety_officer_email: healthSafetyOfficer.email
-                  })
-                  .eq('id', projectInfo.id);
-                if (error) throw error;
-                setIsEditing(null);
-              } catch (error) {
-                console.error('Error saving site manager:', error);
                 alert('Failed to save site manager details');
               } finally {
                 setIsSaving(false);
@@ -1926,11 +1944,11 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
           {/* Health & Safety Officer */}
           <SubcontractorContactCard
             title="Health & Safety Officer"
-            contact={accounts}
+            contact={healthSafetyOfficer}
             isEditing={isEditing === 'health_safety'}
             isSaving={isSaving}
             onEdit={() => setIsEditing('health_safety')}
-            onChange={setAccounts}
+            onChange={setHealthSafetyOfficer}
             onSave={async () => {
               if (!projectInfo?.id) return;
               setIsSaving(true);
@@ -1938,9 +1956,9 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
                 const { error } = await supabase
                   .from('projects')
                   .update({
-                    accounts_name: accounts.name,
-                    accounts_phone: accounts.phone,
-                    accounts_email: accounts.email
+                    health_safety_officer_name: healthSafetyOfficer.name,
+                    health_safety_officer_phone: healthSafetyOfficer.phone,
+                    health_safety_officer_email: healthSafetyOfficer.email
                   })
                   .eq('id', projectInfo.id);
                 if (error) throw error;
@@ -1958,10 +1976,42 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
           {/* Accounts */}
           <SubcontractorContactCard
             title="Accounts"
-            contact={documentController}
+            contact={accounts}
             isEditing={isEditing === 'accounts_contact'}
             isSaving={isSaving}
             onEdit={() => setIsEditing('accounts_contact')}
+            onChange={setAccounts}
+            onSave={async () => {
+              if (!projectInfo?.id) return;
+              setIsSaving(true);
+              try {
+                const { error } = await supabase
+                  .from('projects')
+                  .update({
+                    accounts_name: accounts.name,
+                    accounts_phone: accounts.phone,
+                    accounts_email: accounts.email
+                  })
+                  .eq('id', projectInfo.id);
+                if (error) throw error;
+                setIsEditing(null);
+              } catch (error) {
+                console.error('Error saving accounts:', error);
+                alert('Failed to save accounts details');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            onCancel={() => { setIsEditing(null); loadContractSettings(); }}
+          />
+
+          {/* Document Controller */}
+          <SubcontractorContactCard
+            title="Document Controller"
+            contact={documentController}
+            isEditing={isEditing === 'document_controller'}
+            isSaving={isSaving}
+            onEdit={() => setIsEditing('document_controller')}
             onChange={setDocumentController}
             onSave={async () => {
               if (!projectInfo?.id) return;
@@ -1978,20 +2028,14 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
                 if (error) throw error;
                 setIsEditing(null);
               } catch (error) {
-                console.error('Error saving accounts:', error);
-                alert('Failed to save accounts details');
+                console.error('Error saving document controller:', error);
+                alert('Failed to save document controller details');
               } finally {
                 setIsSaving(false);
               }
             }}
             onCancel={() => { setIsEditing(null); loadContractSettings(); }}
           />
-
-          {/* Document Controller - needs new state variable */}
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Document Controller</label>
-            <div className="text-sm text-slate-500">Coming soon</div>
-          </div>
         </div>
       </div>
 

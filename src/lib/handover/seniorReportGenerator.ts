@@ -41,6 +41,7 @@ export interface SeniorReportData {
     siteManager?: { name: string; phone: string; email: string };
     healthSafety?: { name: string; phone: string; email: string };
     accounts?: { name: string; phone: string; email: string };
+    documentController?: { name: string; phone: string; email: string };
   };
   scopeSystems: Array<{
     service_type: string;
@@ -352,7 +353,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       data.subcontractorContacts.projectManager?.name ||
       data.subcontractorContacts.siteManager?.name ||
       data.subcontractorContacts.healthSafety?.name ||
-      data.subcontractorContacts.accounts?.name
+      data.subcontractorContacts.accounts?.name ||
+      data.subcontractorContacts.documentController?.name
     ));
 
   const contactHTML = hasAnyContacts ? `
@@ -412,6 +414,15 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
               <div style="font-size: 14px; color: #1e293b; margin-bottom: 4px;">${data.subcontractorContacts.accounts.name}</div>
               ${data.subcontractorContacts.accounts.email ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.accounts.email}</div>` : ''}
               ${data.subcontractorContacts.accounts.phone ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.accounts.phone}</div>` : ''}
+            </div>
+          ` : ''}
+
+          ${data.subcontractorContacts.documentController?.name ? `
+            <div style="padding: 12px; background: #f8fafc; border-left: 3px solid #14b8a6; border-radius: 4px;">
+              <div style="font-weight: 700; color: #0f766e; margin-bottom: 8px; font-size: 13px;">Document Controller</div>
+              <div style="font-size: 14px; color: #1e293b; margin-bottom: 4px;">${data.subcontractorContacts.documentController.name}</div>
+              ${data.subcontractorContacts.documentController.email ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.documentController.email}</div>` : ''}
+              ${data.subcontractorContacts.documentController.phone ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.documentController.phone}</div>` : ''}
             </div>
           ` : ''}
         </div>

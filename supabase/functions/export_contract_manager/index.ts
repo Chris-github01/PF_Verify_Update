@@ -40,6 +40,7 @@ Deno.serve(async (req: Request) => {
         public_liability_insurance, motor_vehicle_insurance,
         subcontractor_name,
         quantity_surveyor_name, quantity_surveyor_phone, quantity_surveyor_email,
+        subcontractor_project_manager_name, subcontractor_project_manager_phone, subcontractor_project_manager_email,
         site_manager_name, site_manager_phone, site_manager_email,
         health_safety_officer_name, health_safety_officer_phone, health_safety_officer_email,
         accounts_name, accounts_phone, accounts_email,
