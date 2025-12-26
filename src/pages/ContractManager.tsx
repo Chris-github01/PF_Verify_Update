@@ -303,7 +303,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
   useEffect(() => {
     if (projectId && !loading) {
-      refreshWorkflowProgress();
+      loadWorkflowProgress();
     }
   }, [activeTab]);
 

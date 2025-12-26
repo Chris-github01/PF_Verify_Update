@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw } from 'lucide-react';
+import { Trash2, Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { normaliseUnit, normaliseNumber, deriveRate, deriveTotal } from '../lib/normaliser/unitNormaliser';
 import { extractAttributes } from '../lib/normaliser/attributeExtractor';
@@ -189,6 +189,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [showIssues, setShowIssues] = useState<string | null>(null);
   const [showMatchDetails, setShowMatchDetails] = useState<string | null>(null);
+  const [isTableExpanded, setIsTableExpanded] = useState(false);
   const availableSystems = SYSTEM_TEMPLATES;
 
   const updateProjectTimestamp = async () => {
@@ -1112,7 +1113,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {items.map((item) => {
+                  {(isTableExpanded ? items : items.slice(0, 5)).map((item) => {
                     const issues = parseIssues(item.issues);
                     return (
                       <tr key={item.id} className={item.is_excluded ? 'bg-slate-800/30 opacity-60' : ''}>
@@ -1355,6 +1356,27 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                 </tbody>
               </table>
             </div>
+
+            {items.length > 5 && (
+              <div className="flex justify-center items-center py-4 border-t border-slate-700">
+                <button
+                  onClick={() => setIsTableExpanded(!isTableExpanded)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-all"
+                >
+                  {isTableExpanded ? (
+                    <>
+                      <ChevronUp size={18} />
+                      Show Less (First 5 rows)
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={18} />
+                      Show All ({items.length} rows)
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
