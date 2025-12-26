@@ -7,7 +7,7 @@ import { useOrganisation } from '../lib/organisationContext';
 import { exportTagsClarificationsToExcel } from '../lib/export/tagsExcelExport';
 import EnhancedAllowancesTab from '../components/EnhancedAllowancesTab';
 import ContractWorkflowStepper from '../components/ContractWorkflowStepper';
-import { getWorkflowProgress, autoUpdateWorkflowProgress, getCompletedSteps, WORKFLOW_STEPS, type WorkflowStepProgress } from '../lib/workflow/contractWorkflow';
+import { getWorkflowProgress, autoUpdateWorkflowProgress, getCompletedSteps, updateWorkflowStep, WORKFLOW_STEPS, type WorkflowStepProgress } from '../lib/workflow/contractWorkflow';
 import type { DashboardMode } from '../App';
 
 interface ContractManagerProps {
@@ -730,9 +730,20 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
   const tabOrder: TabId[] = tabs.map(t => t.id);
 
-  const handleNextTab = () => {
+  const handleNextTab = async () => {
     const currentIndex = tabOrder.indexOf(activeTab);
     const isLastTab = currentIndex === tabOrder.length - 1;
+
+    // Mark current step as manually completed
+    try {
+      await updateWorkflowStep(projectId, activeTab, true, 100, { manuallyCompleted: true });
+
+      // Reload workflow progress to update UI
+      const updatedProgress = await getWorkflowProgress(projectId);
+      setWorkflowProgress(updatedProgress);
+    } catch (error) {
+      console.error('Error marking step as complete:', error);
+    }
 
     if (isLastTab) {
       // On last tab (Site Handover), navigate back to dashboard
@@ -879,13 +890,43 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
                 <ChevronLeft size={18} />
                 Previous
               </button>
-              <button
-                onClick={handleNextTab}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium transition-all"
-              >
-                {tabOrder.indexOf(activeTab) === tabOrder.length - 1 ? 'Finish' : 'Next'}
-                <ChevronRight size={18} />
-              </button>
+
+              <div className="flex items-center gap-3">
+                {!workflowProgress.find(p => p.step_id === activeTab)?.completed && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await updateWorkflowStep(projectId, activeTab, true, 100, { manuallyCompleted: true });
+                        const updatedProgress = await getWorkflowProgress(projectId);
+                        setWorkflowProgress(updatedProgress);
+                      } catch (error) {
+                        console.error('Error marking step as complete:', error);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all"
+                  >
+                    <CheckCircle size={18} />
+                    Mark Complete
+                  </button>
+                )}
+
+                <button
+                  onClick={handleNextTab}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium transition-all"
+                >
+                  {tabOrder.indexOf(activeTab) === tabOrder.length - 1 ? (
+                    <>
+                      <CheckCircle size={18} />
+                      Complete & Finish
+                    </>
+                  ) : (
+                    <>
+                      Next
+                      <ChevronRight size={18} />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </>
         )}
