@@ -252,19 +252,27 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
   const cashflowHTML = data.cashflowProjection && data.cashflowProjection.length > 0 ? `
     <div class="card full-width">
       <h3>Cashflow Forecast</h3>
-      <div class="cashflow-chart">
-        ${data.cashflowProjection.map((month, idx) => {
-          const maxAmount = Math.max(...data.cashflowProjection!.map(m => m.amount));
-          const height = (month.amount / maxAmount) * 100;
-          return `
-            <div class="cashflow-bar-container">
-              <div class="cashflow-bar" style="height: ${height}%;">
-                <div class="cashflow-amount">$${(month.amount / 1000).toFixed(0)}k</div>
-              </div>
-              <div class="cashflow-label">${month.month}</div>
-            </div>
-          `;
-        }).join('')}
+      <div class="cashflow-table-wrapper">
+        <table class="cashflow-table">
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Forecast Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.cashflowProjection.map(month => `
+              <tr>
+                <td class="cashflow-month">${month.month}</td>
+                <td class="cashflow-value">$${month.amount.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            `).join('')}
+            <tr class="cashflow-total">
+              <td class="cashflow-month"><strong>Total Forecast</strong></td>
+              <td class="cashflow-value"><strong>$${data.cashflowProjection.reduce((sum, m) => sum + m.amount, 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   ` : '';
@@ -478,11 +486,11 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     .stat-card-value {
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 800;
       color: ${VERIFYTRADE_ORANGE};
       margin-bottom: 8px;
-      line-height: 1.3;
+      line-height: 1.2;
       word-break: break-word;
       overflow-wrap: break-word;
       hyphens: none;
@@ -910,47 +918,69 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       color: #374151;
     }
 
-    /* === CASHFLOW CHART === */
-    .cashflow-chart {
-      display: flex;
-      justify-content: space-around;
-      align-items: flex-end;
-      height: 180px;
-      padding: 20px 0;
-      border-bottom: 2px solid #e5e7eb;
+    /* === CASHFLOW TABLE === */
+    .cashflow-table-wrapper {
+      overflow-x: auto;
+      margin-top: 16px;
     }
 
-    .cashflow-bar-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      height: 100%;
+    .cashflow-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
     }
 
-    .cashflow-bar {
-      width: 60%;
-      background: linear-gradient(to top, ${VERIFYTRADE_ORANGE}, ${VERIFYTRADE_ORANGE_LIGHT});
-      border-radius: 4px 4px 0 0;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding-top: 8px;
-      position: relative;
-      margin-bottom: 8px;
+    .cashflow-table thead {
+      background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
     }
 
-    .cashflow-amount {
-      font-size: 11px;
+    .cashflow-table thead th {
+      padding: 14px 16px;
+      text-align: left;
       font-weight: 700;
-      color: #fff;
+      font-size: 12px;
+      color: white;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
-    .cashflow-label {
-      font-size: 11px;
-      color: #6b7280;
-      text-align: center;
-      margin-top: auto;
+    .cashflow-table thead th:last-child {
+      text-align: right;
+    }
+
+    .cashflow-table tbody tr {
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .cashflow-table tbody tr:nth-child(even) {
+      background: #f9fafb;
+    }
+
+    .cashflow-table tbody tr:hover {
+      background: #f3f4f6;
+    }
+
+    .cashflow-table .cashflow-month {
+      padding: 12px 16px;
+      color: #374151;
+      font-weight: 500;
+    }
+
+    .cashflow-table .cashflow-value {
+      padding: 12px 16px;
+      color: #111827;
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .cashflow-table .cashflow-total {
+      background: ${VERIFYTRADE_ORANGE_LIGHT};
+      border-top: 2px solid ${VERIFYTRADE_ORANGE};
+    }
+
+    .cashflow-table .cashflow-total .cashflow-value {
+      color: ${VERIFYTRADE_ORANGE_DARK};
+      font-size: 15px;
     }
 
     /* === PRINT STYLES === */
