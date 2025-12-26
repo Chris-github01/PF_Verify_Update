@@ -83,6 +83,7 @@ Deno.serve(async (req: Request) => {
       const approvedQuoteId = (project as any)?.approved_quote_id;
       let supplierName = 'TBC';
       let totalAmount = 0;
+      let supplierContact = null;
 
       if (approvedQuoteId) {
         const { data: quote } = await supabase
@@ -95,7 +96,47 @@ Deno.serve(async (req: Request) => {
           supplierName = quote.supplier_name;
           totalAmount = quote.total_amount || 0;
         }
+
+        const { data: supplierData } = await supabase
+          .from('suppliers')
+          .select('contact_name, contact_email, contact_phone, address')
+          .eq('name', supplierName)
+          .maybeSingle();
+
+        if (supplierData) {
+          supplierContact = supplierData;
+        }
       }
+
+      const { data: scopeSystemsData } = await supabase
+        .from('quote_items')
+        .select('service_type, description, quantity, unit, rate, total')
+        .eq('project_id', projectId)
+        .not('service_type', 'is', null)
+        .order('service_type, description');
+
+      const groupedSystems: any = {};
+      scopeSystemsData?.forEach((item: any) => {
+        if (!groupedSystems[item.service_type]) {
+          groupedSystems[item.service_type] = {
+            service_type: item.service_type,
+            items: [],
+            total: 0,
+            item_count: 0
+          };
+        }
+        groupedSystems[item.service_type].items.push(item);
+        groupedSystems[item.service_type].total += item.total || 0;
+        groupedSystems[item.service_type].item_count += 1;
+      });
+
+      const scopeSystems = Object.values(groupedSystems);
+
+      const { data: allowancesData } = await supabase
+        .from('contract_allowances')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('sort_order');
 
       console.log('[PRELET] Generating HTML...');
       const genStart = Date.now();
@@ -104,7 +145,13 @@ Deno.serve(async (req: Request) => {
         project.name,
         supplierName,
         totalAmount,
-        appendixData,
+        {
+          ...appendixData,
+          project: project,
+          supplierContact: supplierContact,
+          scopeSystems: scopeSystems,
+          allowances: allowancesData || []
+        },
         organisationLogoUrl
       );
 

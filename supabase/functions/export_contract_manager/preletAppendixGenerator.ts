@@ -22,6 +22,10 @@ interface PreletAppendixData {
   scope_summary_snapshot?: string;
   systems_snapshot?: any[];
   attachments_snapshot?: any[];
+  project?: any;
+  supplierContact?: any;
+  scopeSystems?: any[];
+  allowances?: any[];
 }
 
 function formatCurrency(amount: number | null | undefined): string {
@@ -52,13 +56,235 @@ function renderList(items: any[] | undefined | null, title: string): string {
   }).join('');
 
   return `
-    <div style="margin-bottom: 32px;">
-      <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 12px; border-bottom: 2px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+    <div style="margin-bottom: 24px;">
+      <h4 style="font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px;">
         ${title}
-      </h3>
+      </h4>
       <ul style="list-style-type: disc; padding-left: 24px; color: #374151;">
         ${listItems}
       </ul>
+    </div>
+  `;
+}
+
+function renderContractSummary(data: PreletAppendixData): string {
+  if (!data.project) return '';
+
+  const project = data.project;
+  const supplier = data.supplierContact || {};
+
+  return `
+    <div style="margin-bottom: 32px; page-break-inside: avoid;">
+      <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+        1. Contract Summary
+      </h3>
+
+      <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+        <h4 style="font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 12px;">Project Details</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Project Name</div>
+            <div style="font-size: 14px; color: #111827; font-weight: 600;">${project.name || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Client</div>
+            <div style="font-size: 14px; color: #111827;">${project.client || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Main Contractor</div>
+            <div style="font-size: 14px; color: #111827;">${project.main_contractor_name || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Pricing Basis</div>
+            <div style="font-size: 14px; color: #111827; font-weight: 600;">${formatPricingBasis(data.awarded_pricing_basis)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+        <h4 style="font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 12px;">Subcontractor Details</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Company Name</div>
+            <div style="font-size: 14px; color: #111827; font-weight: 600;">${data.awarded_subcontractor || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Contact Name</div>
+            <div style="font-size: 14px; color: #111827;">${supplier.contact_name || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Email</div>
+            <div style="font-size: 14px; color: #111827;">${supplier.contact_email || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Phone</div>
+            <div style="font-size: 14px; color: #111827;">${supplier.contact_phone || 'N/A'}</div>
+          </div>
+          ${supplier.address ? `
+          <div style="grid-column: 1 / -1;">
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Address</div>
+            <div style="font-size: 14px; color: #111827;">${supplier.address}</div>
+          </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+        <h4 style="font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 12px;">Project Management</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Project Manager</div>
+            <div style="font-size: 14px; color: #111827;">${project.project_manager_name || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Manager Email</div>
+            <div style="font-size: 14px; color: #111827;">${project.project_manager_email || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Manager Phone</div>
+            <div style="font-size: 14px; color: #111827;">${project.project_manager_phone || 'N/A'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px;">
+        <h4 style="font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 12px;">Commercial Terms</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Payment Terms</div>
+            <div style="font-size: 14px; color: #111827;">${project.payment_terms || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Retention</div>
+            <div style="font-size: 14px; color: #111827;">${project.retention_percentage ? project.retention_percentage + '%' : 'N/A'}</div>
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Liquidated Damages</div>
+            <div style="font-size: 14px; color: #111827;">${project.liquidated_damages || 'N/A'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderScopeSystems(data: PreletAppendixData): string {
+  if (!data.scopeSystems || data.scopeSystems.length === 0) return '';
+
+  const systemsHtml = data.scopeSystems.map((system: any) => `
+    <div style="margin-bottom: 20px; page-break-inside: avoid;">
+      <div style="background: #f3f4f6; border-left: 4px solid ${VERIFYTRADE_ORANGE}; padding: 12px 16px; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h5 style="font-size: 14px; font-weight: 700; color: #111827; margin: 0;">${system.service_type}</h5>
+          <div style="display: flex; gap: 16px; align-items: center;">
+            <div style="font-size: 12px; color: #6b7280;">${system.item_count} items</div>
+            <div style="font-size: 14px; font-weight: 700; color: #111827;">${formatCurrency(system.total)}</div>
+          </div>
+        </div>
+      </div>
+      ${system.items && system.items.length > 0 ? `
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb;">
+              <th style="text-align: left; padding: 8px; font-weight: 600; color: #6b7280;">Description</th>
+              <th style="text-align: right; padding: 8px; font-weight: 600; color: #6b7280; width: 80px;">Qty</th>
+              <th style="text-align: left; padding: 8px; font-weight: 600; color: #6b7280; width: 60px;">Unit</th>
+              <th style="text-align: right; padding: 8px; font-weight: 600; color: #6b7280; width: 100px;">Rate</th>
+              <th style="text-align: right; padding: 8px; font-weight: 600; color: #6b7280; width: 120px;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${system.items.map((item: any, idx: number) => `
+              <tr style="border-bottom: 1px solid #e5e7eb; ${idx % 2 === 0 ? 'background: #ffffff;' : 'background: #f9fafb;'}">
+                <td style="padding: 8px; color: #374151;">${item.description || 'N/A'}</td>
+                <td style="padding: 8px; text-align: right; color: #374151;">${item.quantity || ''}</td>
+                <td style="padding: 8px; color: #374151;">${item.unit || ''}</td>
+                <td style="padding: 8px; text-align: right; color: #374151;">${item.rate ? formatCurrency(item.rate) : ''}</td>
+                <td style="padding: 8px; text-align: right; font-weight: 600; color: #111827;">${formatCurrency(item.total)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : ''}
+    </div>
+  `).join('');
+
+  const totalValue = data.scopeSystems.reduce((sum, sys) => sum + (sys.total || 0), 0);
+
+  return `
+    <div style="margin-bottom: 32px; page-break-inside: avoid;">
+      <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+        2. Scope & Systems Breakdown
+      </h3>
+      <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.6;">
+        Detailed breakdown of all systems and work packages included in this contract.
+      </p>
+      ${systemsHtml}
+      <div style="background: #111827; color: white; padding: 16px; border-radius: 8px; margin-top: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 14px; font-weight: 600;">Total Scope Value</div>
+          <div style="font-size: 18px; font-weight: 700;">${formatCurrency(totalValue)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderAllowances(data: PreletAppendixData): string {
+  if (!data.allowances || data.allowances.length === 0) return '';
+
+  const allowancesHtml = data.allowances.map((allowance: any, idx: number) => `
+    <tr style="border-bottom: 1px solid #e5e7eb; ${idx % 2 === 0 ? 'background: #ffffff;' : 'background: #f9fafb;'}">
+      <td style="padding: 10px; color: #374151; font-weight: 500;">
+        ${allowance.description || 'N/A'}
+        ${allowance.is_provisional ? '<span style="background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 6px; font-weight: 600;">PROVISIONAL</span>' : ''}
+      </td>
+      <td style="padding: 10px; text-align: center; color: #374151;">${allowance.quantity || ''}</td>
+      <td style="padding: 10px; text-align: center; color: #374151;">${allowance.unit || ''}</td>
+      <td style="padding: 10px; text-align: right; color: #374151;">${allowance.rate ? formatCurrency(allowance.rate) : 'N/A'}</td>
+      <td style="padding: 10px; text-align: right; font-weight: 600; color: #111827;">${formatCurrency(allowance.total)}</td>
+    </tr>
+    ${allowance.notes ? `
+    <tr style="border-bottom: 1px solid #e5e7eb; ${idx % 2 === 0 ? 'background: #ffffff;' : 'background: #f9fafb;'}">
+      <td colspan="5" style="padding: 6px 10px 10px 10px;">
+        <div style="font-size: 11px; color: #6b7280; font-style: italic;">Note: ${allowance.notes}</div>
+      </td>
+    </tr>
+    ` : ''}
+  `).join('');
+
+  const totalAllowances = data.allowances.reduce((sum, a) => sum + (a.total || 0), 0);
+  const provisionalCount = data.allowances.filter(a => a.is_provisional).length;
+
+  return `
+    <div style="margin-bottom: 32px; page-break-inside: avoid;">
+      <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+        4. Allowances, Provisional Sums & Prime Costs
+      </h3>
+      <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.6;">
+        Detailed breakdown of all allowances, provisional sums, and prime costs included in the contract value.
+        ${provisionalCount > 0 ? `<strong>${provisionalCount} provisional sum(s)</strong> requiring approval before expenditure.` : ''}
+      </p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 2px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background: #111827; color: white;">
+            <th style="text-align: left; padding: 12px; font-weight: 600;">Description</th>
+            <th style="text-align: center; padding: 12px; font-weight: 600; width: 80px;">Qty</th>
+            <th style="text-align: center; padding: 12px; font-weight: 600; width: 80px;">Unit</th>
+            <th style="text-align: right; padding: 12px; font-weight: 600; width: 120px;">Rate</th>
+            <th style="text-align: right; padding: 12px; font-weight: 600; width: 140px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${allowancesHtml}
+        </tbody>
+        <tfoot>
+          <tr style="background: #f9fafb; border-top: 2px solid #e5e7eb;">
+            <td colspan="4" style="padding: 12px; font-weight: 700; color: #111827; text-align: right;">Total Allowances</td>
+            <td style="padding: 12px; font-weight: 700; color: #111827; text-align: right; font-size: 15px;">${formatCurrency(totalAllowances)}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   `;
 }
@@ -82,7 +308,7 @@ function renderAwardOverview(data: PreletAppendixData): string {
     : '';
 
   return `
-    <div style="background: #fef3c7; border: 2px solid ${VERIFYTRADE_ORANGE}; border-radius: 8px; padding: 24px; margin-bottom: 32px;">
+    <div style="background: #fef3c7; border: 2px solid ${VERIFYTRADE_ORANGE}; border-radius: 8px; padding: 24px; margin-bottom: 32px; page-break-inside: avoid;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
         <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin: 0;">
           Awarded Quote Overview
@@ -295,35 +521,22 @@ export function generateFastPreletAppendix(
 
     ${renderAwardOverview(appendixData)}
 
-    <div class="info-box">
-      <div class="info-row">
-        <div class="info-label">Project:</div>
-        <div class="info-value">${projectName}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Subcontractor:</div>
-        <div class="info-value">${supplierName}</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Pricing Basis:</div>
-        <div class="info-value">${formatPricingBasis(appendixData.pricing_basis)}</div>
-      </div>
+    ${renderContractSummary(appendixData)}
+
+    ${renderScopeSystems(appendixData)}
+
+    <div style="margin-bottom: 32px; page-break-inside: avoid;">
+      <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+        3. Inclusions & Exclusions
+      </h3>
+      ${renderList(appendixData.inclusions, 'Explicit Inclusions')}
+      ${renderList(appendixData.exclusions, 'Explicit Exclusions')}
+      ${renderList(appendixData.commercial_assumptions, 'Commercial Assumptions')}
+      ${renderList(appendixData.clarifications, 'Subcontractor Clarifications')}
+      ${renderList(appendixData.known_risks, 'Known Risks & Hold Points')}
     </div>
 
-    ${appendixData.scope_summary ? `
-      <div class="section">
-        <h3 class="section-title">Priced Scope Summary</h3>
-        <div style="line-height: 1.8; color: #374151;">
-          ${appendixData.scope_summary}
-        </div>
-      </div>
-    ` : ''}
-
-    ${renderList(appendixData.inclusions, 'Explicit Inclusions')}
-    ${renderList(appendixData.exclusions, 'Explicit Exclusions')}
-    ${renderList(appendixData.commercial_assumptions, 'Commercial Assumptions')}
-    ${renderList(appendixData.clarifications, 'Subcontractor Clarifications')}
-    ${renderList(appendixData.known_risks, 'Known Risks & Hold Points')}
+    ${renderAllowances(appendixData)}
 
     <div class="footer">
       <div class="footer-notice">
