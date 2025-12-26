@@ -962,51 +962,51 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                       <td className="px-2 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           {member.role !== 'owner' && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setEditingMember(member.id);
-                                  setEditRole(member.role);
-                                }}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-sky-300 bg-sky-500/10 border border-sky-500/30 hover:bg-sky-500/20 hover:border-sky-500/50 rounded-lg transition"
-                                title="Edit role"
-                              >
-                                <Edit2 size={12} />
-                                Edit Role
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setResetPasswordMemberId(member.id);
-                                  setResetPasswordEmail(member.email);
-                                  setShowResetPasswordModal(true);
-                                  const generated = generateSecurePassword();
-                                  setNewPassword(generated);
-                                }}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 rounded-lg transition"
-                                title="Reset password"
-                              >
-                                <Key size={12} />
-                                Reset Password
-                              </button>
-                              {member.status === 'invited' && (
-                                <button
-                                  onClick={() => handleResendInvite(member.email)}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-300 bg-slate-500/10 border border-slate-500/30 hover:bg-slate-500/20 hover:border-slate-500/50 rounded-lg transition"
-                                  title="Resend invite"
-                                >
-                                  <Mail size={12} />
-                                  Resend
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleRemoveMember(member.id, member.email)}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-rose-300 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 hover:border-rose-500/50 rounded-lg transition"
-                                title="Remove member"
-                              >
-                                <Trash2 size={12} />
-                                Remove
-                              </button>
-                            </>
+                            <button
+                              onClick={() => {
+                                setEditingMember(member.id);
+                                setEditRole(member.role);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-sky-300 bg-sky-500/10 border border-sky-500/30 hover:bg-sky-500/20 hover:border-sky-500/50 rounded-lg transition"
+                              title="Edit role"
+                            >
+                              <Edit2 size={12} />
+                              Edit Role
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setResetPasswordMemberId(member.id);
+                              setResetPasswordEmail(member.email);
+                              setShowResetPasswordModal(true);
+                              const generated = generateSecurePassword();
+                              setNewPassword(generated);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 rounded-lg transition"
+                            title="Reset password"
+                          >
+                            <Key size={12} />
+                            Reset Password
+                          </button>
+                          {member.status === 'invited' && (
+                            <button
+                              onClick={() => handleResendInvite(member.email)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-300 bg-slate-500/10 border border-slate-500/30 hover:bg-slate-500/20 hover:border-slate-500/50 rounded-lg transition"
+                              title="Resend invite"
+                            >
+                              <Mail size={12} />
+                              Resend
+                            </button>
+                          )}
+                          {member.role !== 'owner' && (
+                            <button
+                              onClick={() => handleRemoveMember(member.id, member.email)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-rose-300 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 hover:border-rose-500/50 rounded-lg transition"
+                              title="Remove member"
+                            >
+                              <Trash2 size={12} />
+                              Remove
+                            </button>
                           )}
                         </div>
                       </td>
