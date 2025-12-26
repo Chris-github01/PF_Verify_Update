@@ -802,6 +802,10 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       border-radius: 0 12px 12px 0;
       padding: 20px;
       margin: 20px 0;
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+      page-break-inside: auto;
+      break-inside: auto;
     }
 
     .inclusions-section h3 {
@@ -843,6 +847,10 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       border-radius: 0 12px 12px 0;
       padding: 20px;
       margin: 20px 0;
+      page-break-before: avoid !important;
+      break-before: avoid !important;
+      page-break-inside: auto;
+      break-inside: auto;
     }
 
     .exclusions-section h3 {
@@ -940,6 +948,17 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
       h2, h3 {
         page-break-after: avoid !important;
         break-after: avoid !important;
+      }
+
+      /* Keep inclusions and exclusions together on same page */
+      .inclusions-section {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+
+      .exclusions-section {
+        page-break-before: avoid !important;
+        break-before: avoid !important;
       }
     }
   </style>
