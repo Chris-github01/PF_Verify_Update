@@ -432,14 +432,14 @@ export default function CreateOrganisation() {
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Typical Project Size Range <span className="text-rose-600">*</span>
+                <label className="block text-sm font-medium text-gray-400 mb-1">
+                  Typical Project Size Range <span className="text-rose-400">*</span>
                   <Tooltip text="Helps calibrate risk thresholds and analysis depth" />
                 </label>
                 <select
                   value={projectSizeRange}
                   onChange={(e) => setProjectSizeRange(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                  className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 >
                   <option value="<$5m">Less than $5 million</option>
                   <option value="$5-20m">$5 - $20 million</option>
@@ -450,14 +450,14 @@ export default function CreateOrganisation() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Jurisdiction / Code Set <span className="text-rose-600">*</span>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Jurisdiction / Code Set <span className="text-rose-400">*</span>
                     <Tooltip text="Building codes and standards this organisation operates under" />
                   </label>
                   <select
                     value={jurisdictionCodeSet}
                     onChange={(e) => setJurisdictionCodeSet(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                    className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   >
                     <option value="NZBC">NZBC (New Zealand Building Code)</option>
                     <option value="NCC">NCC (National Construction Code - Australia)</option>
@@ -467,14 +467,14 @@ export default function CreateOrganisation() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Compliance Role <span className="text-rose-600">*</span>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Compliance Role <span className="text-rose-400">*</span>
                     <Tooltip text="Primary role in compliance verification process" />
                   </label>
                   <select
                     value={complianceRole}
                     onChange={(e) => setComplianceRole(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                    className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   >
                     <option value="Awarding party">Awarding Party</option>
                     <option value="Reviewing party">Reviewing Party</option>
@@ -493,8 +493,8 @@ export default function CreateOrganisation() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Owner Full Name <span className="text-rose-600">*</span>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Owner Full Name <span className="text-rose-400">*</span>
                     <Tooltip text="Full name of the person who will own this organisation" />
                   </label>
                   <input
@@ -502,13 +502,13 @@ export default function CreateOrganisation() {
                     placeholder="John Smith"
                     value={ownerFullName}
                     onChange={(e) => setOwnerFullName(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                    className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Owner Role / Title <span className="text-rose-600">*</span>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Owner Role / Title <span className="text-rose-400">*</span>
                     <Tooltip text="Owner's position within the organisation" />
                   </label>
                   <input
@@ -516,15 +516,15 @@ export default function CreateOrganisation() {
                     placeholder="Managing Director"
                     value={ownerRoleTitle}
                     onChange={(e) => setOwnerRoleTitle(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                    className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Owner Email <span className="text-rose-600">*</span>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Owner Email <span className="text-rose-400">*</span>
                     <Tooltip text="Email address for account access and verification" />
                   </label>
                   <input
@@ -532,12 +532,12 @@ export default function CreateOrganisation() {
                     placeholder="john@company.com"
                     value={ownerEmail}
                     onChange={(e) => setOwnerEmail(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                    className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
                     Owner Phone
                     <Tooltip text="Contact phone number (optional but recommended)" />
                   </label>
@@ -546,7 +546,7 @@ export default function CreateOrganisation() {
                     placeholder="+64 21 123 4567"
                     value={ownerPhone}
                     onChange={(e) => setOwnerPhone(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                    className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
                 </div>
               </div>
@@ -558,7 +558,7 @@ export default function CreateOrganisation() {
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center justify-between w-full text-lg font-semibold text-slate-900 mb-4 pb-2 border-b border-slate-200 hover:text-[#0A66C2] transition"
+              className="flex items-center justify-between w-full text-lg font-semibold text-white mb-4 pb-2 border-b border-slate-700 hover:text-orange-400 transition"
             >
               <span>4. Billing & Trial Controls</span>
               {showAdvanced ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
@@ -568,8 +568,8 @@ export default function CreateOrganisation() {
               <div className="space-y-6">
                 {/* Account Type Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-3">
-                    Account Type <span className="text-rose-600">*</span>
+                  <label className="block text-sm font-medium text-gray-400 mb-3">
+                    Account Type <span className="text-rose-400">*</span>
                     <Tooltip text="Choose between trial account or paid subscription" />
                   </label>
                   <div className="grid grid-cols-2 gap-4">
@@ -578,36 +578,36 @@ export default function CreateOrganisation() {
                       onClick={() => handleAccountTypeChange('trial')}
                       className={`p-4 rounded-lg border-2 text-left transition ${
                         accountType === 'trial'
-                          ? 'border-[#0A66C2] bg-blue-50'
-                          : 'border-slate-300 bg-white hover:border-slate-400'
+                          ? 'border-orange-500 bg-orange-500/20'
+                          : 'border-slate-600 bg-slate-800/50 hover:border-slate-500'
                       }`}
                     >
-                      <div className="font-semibold text-slate-900 mb-1">Trial Account</div>
-                      <div className="text-xs text-slate-600">14-day free trial with limited features</div>
+                      <div className="font-semibold text-white mb-1">Trial Account</div>
+                      <div className="text-xs text-gray-400">14-day free trial with limited features</div>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleAccountTypeChange('subscription')}
                       className={`p-4 rounded-lg border-2 text-left transition ${
                         accountType === 'subscription'
-                          ? 'border-[#0A66C2] bg-blue-50'
-                          : 'border-slate-300 bg-white hover:border-slate-400'
+                          ? 'border-orange-500 bg-orange-500/20'
+                          : 'border-slate-600 bg-slate-800/50 hover:border-slate-500'
                       }`}
                     >
-                      <div className="font-semibold text-slate-900 mb-1">Paid Subscription</div>
-                      <div className="text-xs text-slate-600">Full access with paid plan</div>
+                      <div className="font-semibold text-white mb-1">Paid Subscription</div>
+                      <div className="text-xs text-gray-400">Full access with paid plan</div>
                     </button>
                   </div>
                 </div>
 
                 {/* Trial Account Settings */}
                 {accountType === 'trial' && (
-                  <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <h3 className="text-sm font-semibold text-slate-900">Trial Settings</h3>
+                  <div className="space-y-4 p-4 bg-slate-800/50 rounded-lg border border-slate-600">
+                    <h3 className="text-sm font-semibold text-white">Trial Settings</h3>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          Trial Duration (Days) <span className="text-rose-600">*</span>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                          Trial Duration (Days) <span className="text-rose-400">*</span>
                           <Tooltip text="Number of days for the trial period" />
                         </label>
                         <input
@@ -616,20 +616,20 @@ export default function CreateOrganisation() {
                           max="90"
                           value={trialDuration}
                           onChange={(e) => setTrialDuration(parseInt(e.target.value) || 14)}
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                          className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
                           User Seat Limit
                         </label>
                         <input
                           type="number"
                           value={seatLimit}
                           readOnly
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-slate-100 text-gray-600"
+                          className="w-full rounded-lg border border-slate-600 px-3 py-2 text-sm bg-slate-900/50 text-gray-400"
                         />
-                        <p className="text-xs text-slate-500 mt-1">Trial accounts limited to 5 users</p>
+                        <p className="text-xs text-gray-500 mt-1">Trial accounts limited to 5 users</p>
                       </div>
                     </div>
                   </div>
@@ -637,18 +637,18 @@ export default function CreateOrganisation() {
 
                 {/* Subscription Settings */}
                 {accountType === 'subscription' && (
-                  <div className="space-y-4 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-                    <h3 className="text-sm font-semibold text-slate-900">Subscription Settings</h3>
+                  <div className="space-y-4 p-4 bg-slate-800/50 rounded-lg border border-slate-600">
+                    <h3 className="text-sm font-semibold text-white">Subscription Settings</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          Subscription Plan <span className="text-rose-600">*</span>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                          Subscription Plan <span className="text-rose-400">*</span>
                           <Tooltip text="Select the pricing tier for this organisation" />
                         </label>
                         <select
                           value={subscriptionPlan}
                           onChange={(e) => handlePlanChange(e.target.value)}
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2]"
+                          className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                         >
                           <option value="starter">Starter - Up to 5 users ($11,988 NZD/year)</option>
                           <option value="professional">Professional - Up to 15 users ($23,988 NZD/year)</option>
@@ -658,8 +658,8 @@ export default function CreateOrganisation() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">
-                            User Seat Limit <span className="text-rose-600">*</span>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">
+                            User Seat Limit <span className="text-rose-400">*</span>
                           </label>
                           <input
                             type="number"
@@ -667,9 +667,9 @@ export default function CreateOrganisation() {
                             onChange={(e) => setSeatLimit(parseInt(e.target.value) || 0)}
                             min="1"
                             max="1000"
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                            className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                           />
-                          <p className="text-xs text-slate-500 mt-1">
+                          <p className="text-xs text-gray-500 mt-1">
                             {subscriptionPlan === 'starter' && 'Starter: up to 5 users'}
                             {subscriptionPlan === 'professional' && 'Professional: up to 15 users'}
                             {subscriptionPlan === 'enterprise' && 'Enterprise: unlimited users'}
@@ -677,7 +677,7 @@ export default function CreateOrganisation() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-400 mb-1">
                             Billing Contact Email
                           </label>
                           <input
@@ -685,25 +685,25 @@ export default function CreateOrganisation() {
                             placeholder="billing@company.com"
                             value={billingContactEmail}
                             onChange={(e) => setBillingContactEmail(e.target.value)}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:border-[#0A66C2] bg-white text-gray-900"
+                            className="w-full rounded-lg bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                           />
                         </div>
                       </div>
 
                       {/* Payment Confirmation */}
-                      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                         <label className="flex items-start gap-3 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={paymentConfirmed}
                             onChange={(e) => setPaymentConfirmed(e.target.checked)}
-                            className="mt-1 w-4 h-4 text-[#0A66C2] border-slate-300 rounded focus:ring-[#0A66C2]"
+                            className="mt-1 w-4 h-4 text-orange-500 border-slate-600 rounded focus:ring-orange-500"
                           />
                           <div>
-                            <div className="text-sm font-medium text-slate-900">
-                              Payment Received <span className="text-rose-600">*</span>
+                            <div className="text-sm font-medium text-white">
+                              Payment Received <span className="text-rose-400">*</span>
                             </div>
-                            <div className="text-xs text-slate-600 mt-1">
+                            <div className="text-xs text-gray-400 mt-1">
                               Confirm that payment has been received before activating this paid subscription.
                               The account will be immediately active with full access.
                             </div>
