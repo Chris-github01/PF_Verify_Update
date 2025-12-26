@@ -590,7 +590,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         // Get project duration and retention settings from database
         const { data: projectData } = await supabase
           .from('projects')
-          .select('project_duration_months, retention_percentage, retention_method, retention_tiers')
+          .select('project_duration_months, retention_percentage, retention_method, retention_tiers, public_liability_insurance, motor_vehicle_insurance')
           .eq('id', projectId)
           .maybeSingle();
 
@@ -598,6 +598,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         const retentionPercentage = projectData?.retention_percentage || 5;
         const retentionMethod = projectData?.retention_method || 'flat';
         const retentionTiers = projectData?.retention_tiers || [];
+        const publicLiabilityInsurance = projectData?.public_liability_insurance || 10000000;
+        const motorVehicleInsurance = projectData?.motor_vehicle_insurance || 5000000;
 
         const retentionCalc = calculateRetention(
           awardInfo.total_amount,
@@ -674,6 +676,15 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           ? `${retentionPercentage}% standard retention held until practical completion`
           : `Sliding scale retention (effective ${retentionCalc.effectiveRate.toFixed(2)}%) - see retention schedule`;
 
+        const formatInsuranceAmount = (amount: number) => {
+          if (amount >= 1000000) {
+            return `$${(amount / 1000000).toFixed(1)}M`;
+          }
+          return `$${(amount / 1000).toFixed(0)}K`;
+        };
+
+        const insuranceDescription = `Public liability ${formatInsuranceAmount(publicLiabilityInsurance)}, Motor vehicle ${formatInsuranceAmount(motorVehicleInsurance)}`;
+
         const seniorData = {
           projectName: projectInfo?.name || 'Project',
           projectClient: projectInfo?.client || 'TBC',
@@ -684,6 +695,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           netAmount,
           retentionMethod,
           retentionCalculation: retentionCalc,
+          publicLiabilityInsurance,
+          motorVehicleInsurance,
           scopeSystems: scopeSystems.map(sys => ({
             service_type: sys.service_type,
             coverage: sys.coverage,
@@ -695,7 +708,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             { term: 'Retention', value: retentionDescription },
             { term: 'Liquidated Damages', value: 'None specified - back-to-back with head contract' },
             { term: 'Variations', value: 'Rate-based as per schedule of rates' },
-            { term: 'Insurance', value: 'Public liability $10M, Professional indemnity as required' }
+            { term: 'Insurance', value: insuranceDescription }
           ],
           risks: defaults.risks || [],
           lineItems: lineItems,
@@ -987,6 +1000,8 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
   const [paymentTerms, setPaymentTerms] = useState<string>('20th following month, 22 working days');
   const [liquidatedDamages, setLiquidatedDamages] = useState<string>('None specified');
   const [projectDurationMonths, setProjectDurationMonths] = useState<number>(6);
+  const [publicLiabilityInsurance, setPublicLiabilityInsurance] = useState<number>(10000000);
+  const [motorVehicleInsurance, setMotorVehicleInsurance] = useState<number>(5000000);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [organisationName, setOrganisationName] = useState<string>('');
@@ -1048,7 +1063,7 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
       // Get both project settings and organisation name in one go
       const { data: projectData } = await supabase
         .from('projects')
-        .select('retention_percentage, retention_method, retention_tiers, main_contractor_name, payment_terms, liquidated_damages, project_duration_months, organisation_id')
+        .select('retention_percentage, retention_method, retention_tiers, main_contractor_name, payment_terms, liquidated_damages, project_duration_months, public_liability_insurance, motor_vehicle_insurance, organisation_id')
         .eq('id', projectInfo.id)
         .maybeSingle();
 
@@ -1057,6 +1072,8 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
         setRetentionMethod(projectData.retention_method ?? 'flat');
         setRetentionTiers(projectData.retention_tiers ?? []);
         setProjectDurationMonths(projectData.project_duration_months ?? 6);
+        setPublicLiabilityInsurance(projectData.public_liability_insurance ?? 10000000);
+        setMotorVehicleInsurance(projectData.motor_vehicle_insurance ?? 5000000);
 
         // If main_contractor_name is not set, load organisation name and use it
         if (!projectData.main_contractor_name && projectData.organisation_id) {
@@ -1355,6 +1372,108 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
               </div>
             )}
             <p className="text-xs text-slate-500 mt-2">Used for cashflow projections in Senior Management Pack</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Insurance Requirements</label>
+            {isEditing === 'insurance' ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-2">Public Liability Insurance</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000000"
+                      value={publicLiabilityInsurance}
+                      onChange={(e) => setPublicLiabilityInsurance(parseInt(e.target.value) || 0)}
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-2">Motor Vehicle Insurance</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000000"
+                      value={motorVehicleInsurance}
+                      onChange={(e) => setMotorVehicleInsurance(parseInt(e.target.value) || 0)}
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={async () => {
+                      if (!projectInfo?.id) return;
+                      setIsSaving(true);
+                      try {
+                        const { error } = await supabase
+                          .from('projects')
+                          .update({
+                            public_liability_insurance: publicLiabilityInsurance,
+                            motor_vehicle_insurance: motorVehicleInsurance
+                          })
+                          .eq('id', projectInfo.id);
+                        if (error) throw error;
+                        setIsEditing(null);
+                      } catch (error) {
+                        console.error('Error saving insurance:', error);
+                        alert('Failed to save insurance requirements');
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                    disabled={isSaving}
+                    className="flex-1 p-2 bg-green-600 hover:bg-green-500 text-white rounded transition-colors disabled:opacity-50"
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <Save size={18} />
+                      <span>Save</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(null)}
+                    className="flex-1 p-2 bg-slate-700 hover:bg-slate-600 text-white rounded transition-colors"
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <X size={18} />
+                      <span>Cancel</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="space-y-2 mb-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Public Liability:</span>
+                    <span className="text-sm text-slate-300 font-semibold">
+                      ${(publicLiabilityInsurance / 1000000).toFixed(1)}M
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Motor Vehicle:</span>
+                    <span className="text-sm text-slate-300 font-semibold">
+                      ${(motorVehicleInsurance / 1000000).toFixed(1)}M
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsEditing('insurance')}
+                  className="w-full opacity-0 group-hover:opacity-100 p-2 text-blue-400 hover:text-blue-300 transition-opacity text-xs flex items-center justify-center gap-1"
+                >
+                  <Edit2 size={14} />
+                  <span>Edit Insurance</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Project Information */}

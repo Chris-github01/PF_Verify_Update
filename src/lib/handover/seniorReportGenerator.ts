@@ -32,6 +32,8 @@ export interface SeniorReportData {
   netAmount: number;
   retentionMethod?: 'flat' | 'sliding_scale';
   retentionCalculation?: RetentionCalculation;
+  publicLiabilityInsurance?: number;
+  motorVehicleInsurance?: number;
   scopeSystems: Array<{
     service_type: string;
     coverage: string;

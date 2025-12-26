@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: project } = await supabase
       .from('projects')
-      .select('name, client, updated_at, approved_quote_id, organisation_id, retention_percentage, main_contractor_name, payment_terms, liquidated_damages, project_manager_name, project_manager_email, project_manager_phone')
+      .select('name, client, updated_at, approved_quote_id, organisation_id, retention_percentage, retention_method, retention_tiers, main_contractor_name, payment_terms, liquidated_damages, project_manager_name, project_manager_email, project_manager_phone, public_liability_insurance, motor_vehicle_insurance')
       .eq('id', projectId)
       .maybeSingle();
 
