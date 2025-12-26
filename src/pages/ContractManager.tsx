@@ -674,10 +674,12 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             item_count: sys.item_count,
             percentage: totalItems > 0 ? (sys.item_count / totalItems) * 100 : 0
           })),
-          keyTerms: defaults.keyTerms || [
-            { term: 'Payment Terms', value: '30 days from invoice date' },
-            { term: 'Retention', value: `${retentionPercentage}%` },
-            { term: 'Liquidated Damages', value: 'As per main contract' }
+          keyTerms: [
+            { term: 'Payment Terms', value: '20th following month, 22 working days' },
+            { term: 'Retention', value: `${retentionPercentage}% standard retention held until practical completion` },
+            { term: 'Liquidated Damages', value: 'None specified - back-to-back with head contract' },
+            { term: 'Variations', value: 'Rate-based as per schedule of rates' },
+            { term: 'Insurance', value: 'Public liability $10M, Professional indemnity as required' }
           ],
           risks: defaults.risks || [],
           lineItems: lineItems,
