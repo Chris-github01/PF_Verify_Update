@@ -11,6 +11,7 @@ interface CreateUserRequest {
   full_name: string;
   organisation_id: string;
   role: 'owner' | 'admin' | 'member';
+  make_owner?: boolean;
 }
 
 Deno.serve(async (req: Request) => {
@@ -54,7 +55,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const body: CreateUserRequest = await req.json();
-    const { email, full_name, organisation_id, role } = body;
+    const { email, full_name, organisation_id, role, make_owner } = body;
 
     if (!email || !organisation_id || !role) {
       throw new Error('Missing required fields: email, organisation_id, role');
@@ -145,6 +146,39 @@ Deno.serve(async (req: Request) => {
         });
 
       if (memberError) throw memberError;
+    }
+
+    // If make_owner is true, update the organisation owner
+    if (make_owner) {
+      // First, demote existing owner to admin
+      const { error: demoteError } = await supabase
+        .from('organisation_members')
+        .update({ role: 'admin' })
+        .eq('organisation_id', organisation_id)
+        .eq('role', 'owner');
+
+      if (demoteError) {
+        console.warn('Error demoting existing owner:', demoteError);
+      }
+
+      // Promote this user to owner
+      const { error: promoteError } = await supabase
+        .from('organisation_members')
+        .update({ role: 'owner' })
+        .eq('organisation_id', organisation_id)
+        .eq('user_id', userId);
+
+      if (promoteError) throw promoteError;
+
+      // Update organisation owner_email
+      const { error: orgUpdateError } = await supabase
+        .from('organisations')
+        .update({ owner_email: email })
+        .eq('id', organisation_id);
+
+      if (orgUpdateError) {
+        console.warn('Error updating organisation owner_email:', orgUpdateError);
+      }
     }
 
     // Log the admin action

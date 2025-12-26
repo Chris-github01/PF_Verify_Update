@@ -57,6 +57,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'viewer'>('member');
   const [inviting, setInviting] = useState(false);
+  const [makeOwner, setMakeOwner] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<string>('');
 
@@ -419,25 +420,77 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
     setInviting(true);
     try {
-      // Use the new RPC function to add member
-      const { data, error } = await supabase.rpc('add_member_to_organisation_by_email', {
-        p_organisation_id: organisationId,
-        p_email: inviteEmail.toLowerCase().trim(),
-        p_role: inviteRole
-      });
+      // Check if user is platform admin (god mode)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
-      if (error) throw error;
+      const { data: adminCheck } = await supabase
+        .from('platform_admins')
+        .select('is_active')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
 
-      if (data && !data.success) {
-        setToast({ type: 'error', message: data.error || 'Failed to add member' });
-        setInviting(false);
-        return;
+      const isPlatformAdmin = !!adminCheck;
+
+      if (isPlatformAdmin) {
+        // Platform admin: use edge function to create user if not exists
+        const { data: session } = await supabase.auth.getSession();
+        if (!session.session) throw new Error('No active session');
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create_user_for_organisation`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: inviteEmail.toLowerCase().trim(),
+              full_name: inviteEmail.split('@')[0],
+              organisation_id: organisationId,
+              role: makeOwner ? 'owner' : inviteRole,
+              make_owner: makeOwner,
+            }),
+          }
+        );
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to add member');
+        }
+
+        setToast({
+          type: 'success',
+          message: makeOwner
+            ? `User created and set as organisation owner`
+            : result.message || 'User added successfully'
+        });
+      } else {
+        // Regular admin: use existing function (requires user to exist)
+        const { data, error } = await supabase.rpc('add_member_to_organisation_by_email', {
+          p_organisation_id: organisationId,
+          p_email: inviteEmail.toLowerCase().trim(),
+          p_role: inviteRole
+        });
+
+        if (error) throw error;
+
+        if (data && !data.success) {
+          setToast({ type: 'error', message: data.error || 'Failed to add member' });
+          setInviting(false);
+          return;
+        }
+
+        setToast({ type: 'success', message: 'User added successfully' });
       }
 
-      setToast({ type: 'success', message: 'User added successfully' });
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteRole('member');
+      setMakeOwner(false);
       await loadOrganisation();
     } catch (error: any) {
       console.error('Error adding user:', error);
@@ -897,6 +950,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                   setShowInviteModal(false);
                   setInviteEmail('');
                   setInviteRole('member');
+                  setMakeOwner(false);
                 }}
                 className="text-slate-400 hover:text-slate-200 transition"
               >
@@ -905,7 +959,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
             </div>
 
             <p className="text-sm text-slate-400 mb-4">
-              Add an existing user or invite a new one to join this organisation.
+              Add an existing user or create a new account for this organisation. Platform admins can create users automatically.
             </p>
 
             <div className="space-y-4">
@@ -921,7 +975,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                   className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 placeholder:text-slate-500"
                 />
                 <p className="mt-1 text-xs text-slate-400">
-                  If the user exists, they'll be added immediately. Otherwise, we'll create an account and send an invite.
+                  Platform admins: User will be created automatically if they don't exist. Regular admins: User must already exist.
                 </p>
               </div>
 
@@ -931,8 +985,14 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                 </label>
                 <select
                   value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member' | 'viewer')}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                  onChange={(e) => {
+                    setInviteRole(e.target.value as 'admin' | 'member' | 'viewer');
+                    if (e.target.value !== 'admin' && e.target.value !== 'member') {
+                      setMakeOwner(false);
+                    }
+                  }}
+                  disabled={makeOwner}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="admin">Admin (can manage settings and members)</option>
                   <option value="member">Member (standard access)</option>
@@ -940,10 +1000,34 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                 </select>
               </div>
 
+              <div>
+                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-700 bg-slate-900/60 cursor-pointer hover:bg-slate-800/60 transition">
+                  <input
+                    type="checkbox"
+                    checked={makeOwner}
+                    onChange={(e) => {
+                      setMakeOwner(e.target.checked);
+                      if (e.target.checked) {
+                        setInviteRole('owner' as any);
+                      } else {
+                        setInviteRole('member');
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-2 focus:ring-sky-500 focus:ring-offset-0"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-slate-200">Make this user the organisation owner</div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      Current owner will be demoted to admin. Only platform admins can do this.
+                    </div>
+                  </div>
+                </label>
+              </div>
+
               <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl p-3">
                 <p className="text-xs text-sky-300">
                   <strong>Note:</strong> Admin and Member roles consume a seat. Current usage: {seatsUsed}/{seatLimit} seats.
-                  {seatsUsed >= seatLimit && inviteRole !== 'viewer' && (
+                  {seatsUsed >= seatLimit && inviteRole !== 'viewer' && !makeOwner && (
                     <span className="block mt-1 text-rose-400 font-semibold">
                       Warning: This organisation is at its seat limit!
                     </span>
@@ -958,6 +1042,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                   setShowInviteModal(false);
                   setInviteEmail('');
                   setInviteRole('member');
+                  setMakeOwner(false);
                 }}
                 className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 transition"
                 disabled={inviting}
