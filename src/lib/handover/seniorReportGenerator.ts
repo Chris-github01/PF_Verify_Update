@@ -14,6 +14,7 @@ export interface SeniorReportData {
   supplierName: string;
   totalAmount: number;
   retentionAmount: number;
+  retentionPercentage: number;
   netAmount: number;
   scopeSystems: Array<{
     service_type: string;
@@ -1174,7 +1175,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
             <span class="cost-value">$${data.totalAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span>
           </div>
           <div class="cost-row">
-            <span class="cost-label">Less: Retention (3%)</span>
+            <span class="cost-label">Less: Retention (${data.retentionPercentage}%)</span>
             <span class="cost-value" style="color: #f59e0b;">-$${data.retentionAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</span>
           </div>
           <div class="cost-row">
