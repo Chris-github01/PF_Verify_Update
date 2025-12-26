@@ -144,7 +144,6 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   const [isApproved, setIsApproved] = useState(false);
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | undefined>(undefined);
   const [workflowProgress, setWorkflowProgress] = useState<WorkflowStepProgress[]>([]);
-  const [showWorkflowGuide, setShowWorkflowGuide] = useState(true);
   const { currentOrganisation } = useOrganisation();
 
   useEffect(() => {
@@ -829,60 +828,15 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           </div>
         ) : (
           <>
-            {showWorkflowGuide && (
-              <ContractWorkflowStepper
-                steps={WORKFLOW_STEPS.filter(step =>
-                  isApproved || !['onboarding', 'handover'].includes(step.id)
-                )}
-                currentStep={activeTab}
-                completedSteps={getCompletedSteps(workflowProgress)}
-                onStepClick={handleStepClick}
-                lockedSteps={!isApproved ? ['onboarding', 'handover'] : []}
-              />
-            )}
-
-            <div className="flex items-center justify-between mb-4">
-              <div className="border-b border-slate-700/50 flex-1">
-                <div className="flex flex-wrap gap-0.5">
-                  {tabs.map((tab) => {
-                    const Icon = tab.icon;
-                    const isCompleted = workflowProgress.find(p => p.step_id === tab.id)?.completed;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-1.5 px-3 py-3 font-medium transition-all rounded-t-lg text-xs sm:text-sm whitespace-nowrap relative ${
-                          activeTab === tab.id
-                            ? 'text-orange-400 bg-slate-800/60 border-b-2 border-orange-500'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
-                        }`}
-                      >
-                        <span className={`flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${
-                          isCompleted
-                            ? 'bg-green-500 text-white'
-                            : activeTab === tab.id
-                            ? 'bg-orange-500 text-white'
-                            : 'bg-slate-700 text-slate-400'
-                        }`}>
-                          {tab.stepNumber}
-                        </span>
-                        <Icon size={16} />
-                        {tab.label}
-                        {isCompleted && (
-                          <CheckCircle size={14} className="text-green-400" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <button
-                onClick={() => setShowWorkflowGuide(!showWorkflowGuide)}
-                className="ml-4 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 rounded-lg transition-all"
-              >
-                {showWorkflowGuide ? 'Hide Guide' : 'Show Guide'}
-              </button>
-            </div>
+            <ContractWorkflowStepper
+              steps={WORKFLOW_STEPS.filter(step =>
+                isApproved || !['onboarding', 'handover'].includes(step.id)
+              )}
+              currentStep={activeTab}
+              completedSteps={getCompletedSteps(workflowProgress)}
+              onStepClick={handleStepClick}
+              lockedSteps={!isApproved ? ['onboarding', 'handover'] : []}
+            />
 
             <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-8 shadow-xl">
               {activeTab === 'summary' && <ContractSummaryTab awardInfo={awardInfo} projectInfo={projectInfo} organisationId={projectInfo?.organisation_id} />}
