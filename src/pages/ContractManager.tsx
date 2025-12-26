@@ -6,6 +6,8 @@ import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { useOrganisation } from '../lib/organisationContext';
 import { exportTagsClarificationsToExcel } from '../lib/export/tagsExcelExport';
 import EnhancedAllowancesTab from '../components/EnhancedAllowancesTab';
+import ContractWorkflowStepper from '../components/ContractWorkflowStepper';
+import { getWorkflowProgress, autoUpdateWorkflowProgress, getCompletedSteps, WORKFLOW_STEPS, type WorkflowStepProgress } from '../lib/workflow/contractWorkflow';
 import type { DashboardMode } from '../App';
 
 interface ContractManagerProps {
@@ -141,6 +143,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   const [generatingSeniorPdf, setGeneratingSeniorPdf] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | undefined>(undefined);
+  const [workflowProgress, setWorkflowProgress] = useState<WorkflowStepProgress[]>([]);
+  const [showWorkflowGuide, setShowWorkflowGuide] = useState(true);
   const { currentOrganisation } = useOrganisation();
 
   useEffect(() => {
@@ -271,11 +275,41 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           setScopeSystems(Array.from(systemsMap.values()));
         }
       }
+
+      await loadWorkflowProgress();
     } catch (error) {
       console.error('Error loading contract manager data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadWorkflowProgress = async () => {
+    try {
+      const progress = await getWorkflowProgress(projectId);
+      setWorkflowProgress(progress);
+    } catch (error) {
+      console.error('Error loading workflow progress:', error);
+    }
+  };
+
+  const refreshWorkflowProgress = async () => {
+    try {
+      await autoUpdateWorkflowProgress(projectId);
+      await loadWorkflowProgress();
+    } catch (error) {
+      console.error('Error refreshing workflow progress:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (projectId && !loading) {
+      refreshWorkflowProgress();
+    }
+  }, [activeTab]);
+
+  const handleStepClick = (stepId: string) => {
+    setActiveTab(stepId as TabId);
   };
 
   const handleGenerateJuniorPack = async () => {
@@ -682,16 +716,16 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   };
 
   const baseTabs = [
-    { id: 'summary' as TabId, label: 'Contract Summary', icon: FileText },
-    { id: 'scope' as TabId, label: 'Scope & Systems', icon: CheckCircle },
-    { id: 'inclusions' as TabId, label: 'Inclusions & Exclusions', icon: FileCheck },
-    { id: 'allowances' as TabId, label: 'Allowances', icon: FileText },
+    { id: 'summary' as TabId, label: 'Contract Summary', icon: FileText, stepNumber: 1 },
+    { id: 'scope' as TabId, label: 'Scope & Systems', icon: CheckCircle, stepNumber: 2 },
+    { id: 'inclusions' as TabId, label: 'Inclusions & Exclusions', icon: FileCheck, stepNumber: 3 },
+    { id: 'allowances' as TabId, label: 'Allowances', icon: FileText, stepNumber: 4 },
   ];
 
   const tabs = isApproved
     ? [...baseTabs,
-       { id: 'onboarding' as TabId, label: 'Subcontractor Onboarding', icon: UserCheck },
-       { id: 'handover' as TabId, label: 'Site Handover', icon: PackageOpen }
+       { id: 'onboarding' as TabId, label: 'Subcontractor Onboarding', icon: UserCheck, stepNumber: 5 },
+       { id: 'handover' as TabId, label: 'Site Handover', icon: PackageOpen, stepNumber: 6 }
       ]
     : baseTabs;
 
@@ -795,26 +829,59 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           </div>
         ) : (
           <>
-            <div className="border-b border-slate-700/50 mb-8">
-              <div className="flex flex-wrap gap-0.5">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-1.5 px-3 py-3 font-medium transition-all rounded-t-lg text-xs sm:text-sm whitespace-nowrap ${
-                        activeTab === tab.id
-                          ? 'text-orange-400 bg-slate-800/60 border-b-2 border-orange-500'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
-                      }`}
-                    >
-                      <Icon size={16} />
-                      {tab.label}
-                    </button>
-                  );
-                })}
+            {showWorkflowGuide && (
+              <ContractWorkflowStepper
+                steps={WORKFLOW_STEPS.filter(step =>
+                  isApproved || !['onboarding', 'handover'].includes(step.id)
+                )}
+                currentStep={activeTab}
+                completedSteps={getCompletedSteps(workflowProgress)}
+                onStepClick={handleStepClick}
+                lockedSteps={!isApproved ? ['onboarding', 'handover'] : []}
+              />
+            )}
+
+            <div className="flex items-center justify-between mb-4">
+              <div className="border-b border-slate-700/50 flex-1">
+                <div className="flex flex-wrap gap-0.5">
+                  {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isCompleted = workflowProgress.find(p => p.step_id === tab.id)?.completed;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-1.5 px-3 py-3 font-medium transition-all rounded-t-lg text-xs sm:text-sm whitespace-nowrap relative ${
+                          activeTab === tab.id
+                            ? 'text-orange-400 bg-slate-800/60 border-b-2 border-orange-500'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                        }`}
+                      >
+                        <span className={`flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${
+                          isCompleted
+                            ? 'bg-green-500 text-white'
+                            : activeTab === tab.id
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {tab.stepNumber}
+                        </span>
+                        <Icon size={16} />
+                        {tab.label}
+                        {isCompleted && (
+                          <CheckCircle size={14} className="text-green-400" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+              <button
+                onClick={() => setShowWorkflowGuide(!showWorkflowGuide)}
+                className="ml-4 px-3 py-2 text-xs text-slate-400 hover:text-slate-200 bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 rounded-lg transition-all"
+              >
+                {showWorkflowGuide ? 'Hide Guide' : 'Show Guide'}
+              </button>
             </div>
 
             <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-8 shadow-xl">
