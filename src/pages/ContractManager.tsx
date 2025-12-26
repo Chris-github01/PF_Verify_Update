@@ -796,20 +796,20 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         ) : (
           <>
             <div className="border-b border-slate-700/50 mb-8">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-0.5">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-2 px-5 py-3 font-medium transition-all rounded-t-lg ${
+                      className={`flex items-center gap-1.5 px-3 py-3 font-medium transition-all rounded-t-lg text-xs sm:text-sm whitespace-nowrap ${
                         activeTab === tab.id
                           ? 'text-orange-400 bg-slate-800/60 border-b-2 border-orange-500'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                       }`}
                     >
-                      <Icon size={18} />
+                      <Icon size={16} />
                       {tab.label}
                     </button>
                   );
