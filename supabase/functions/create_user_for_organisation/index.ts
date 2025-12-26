@@ -12,6 +12,7 @@ interface CreateUserRequest {
   organisation_id: string;
   role: 'owner' | 'admin' | 'member';
   make_owner?: boolean;
+  password?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -55,7 +56,7 @@ Deno.serve(async (req: Request) => {
 
     // Parse request body
     const body: CreateUserRequest = await req.json();
-    const { email, full_name, organisation_id, role, make_owner } = body;
+    const { email, full_name, organisation_id, role, make_owner, password } = body;
 
     if (!email || !organisation_id || !role) {
       throw new Error('Missing required fields: email, organisation_id, role');
@@ -117,12 +118,12 @@ Deno.serve(async (req: Request) => {
         if (insertError) throw insertError;
       }
     } else {
-      // Create new user with a random password (they'll need to reset it)
-      const randomPassword = crypto.randomUUID();
+      // Create new user with provided password or generate a random one
+      const userPassword = password || crypto.randomUUID();
 
       const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
         email,
-        password: randomPassword,
+        password: userPassword,
         email_confirm: true, // Auto-confirm email
         user_metadata: {
           full_name: full_name || email.split('@')[0]

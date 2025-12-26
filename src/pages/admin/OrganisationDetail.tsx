@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, AlertCircle, X, UserPlus, Edit2, Trash2, Mail, Upload, Settings } from 'lucide-react';
+import { ArrowLeft, AlertCircle, X, UserPlus, Edit2, Trash2, Mail, Upload, Settings, Copy, RefreshCw, Eye, EyeOff, Key } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Organisation {
@@ -58,8 +58,16 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
   const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'viewer'>('member');
   const [inviting, setInviting] = useState(false);
   const [makeOwner, setMakeOwner] = useState(false);
+  const [customPassword, setCustomPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [editingMember, setEditingMember] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<string>('');
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [resetPasswordMemberId, setResetPasswordMemberId] = useState<string | null>(null);
+  const [resetPasswordEmail, setResetPasswordEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   // Edit organisation modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -77,7 +85,111 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
 
   useEffect(() => {
     loadOrganisation();
+    checkPlatformAdminStatus();
   }, [organisationId]);
+
+  const checkPlatformAdminStatus = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: adminCheck } = await supabase
+        .from('platform_admins')
+        .select('is_active')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      setIsPlatformAdmin(!!adminCheck);
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+    }
+  };
+
+  const generateSecurePassword = () => {
+    const length = 16;
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+    let password = '';
+
+    // Ensure at least one of each type
+    password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)]; // uppercase
+    password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]; // lowercase
+    password += '0123456789'[Math.floor(Math.random() * 10)]; // number
+    password += '!@#$%^&*()_+-='[Math.floor(Math.random() * 14)]; // special
+
+    // Fill the rest randomly
+    for (let i = password.length; i < length; i++) {
+      password += charset[Math.floor(Math.random() * charset.length)];
+    }
+
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setToast({ type: 'success', message: 'Password copied to clipboard' });
+    } catch (error) {
+      setToast({ type: 'error', message: 'Failed to copy password' });
+    }
+  };
+
+  const handleGeneratePassword = () => {
+    const newPassword = generateSecurePassword();
+    setCustomPassword(newPassword);
+  };
+
+  const handleGenerateNewPassword = () => {
+    const generated = generateSecurePassword();
+    setNewPassword(generated);
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      setToast({ type: 'error', message: 'Password must be at least 6 characters' });
+      return;
+    }
+
+    setResettingPassword(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error('No active session');
+
+      // Call edge function to reset password
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset_user_password`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: resetPasswordEmail,
+            new_password: newPassword,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to reset password');
+      }
+
+      setToast({ type: 'success', message: 'Password reset successfully' });
+      setShowResetPasswordModal(false);
+      setResetPasswordMemberId(null);
+      setResetPasswordEmail('');
+      setNewPassword('');
+    } catch (error: any) {
+      console.error('Error resetting password:', error);
+      setToast({ type: 'error', message: error.message || 'Failed to reset password' });
+    } finally {
+      setResettingPassword(false);
+    }
+  };
 
   const loadOrganisation = async () => {
     try {
@@ -452,6 +564,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
               organisation_id: organisationId,
               role: makeOwner ? 'owner' : inviteRole,
               make_owner: makeOwner,
+              password: customPassword || undefined,
             }),
           }
         );
@@ -491,6 +604,8 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
       setInviteEmail('');
       setInviteRole('member');
       setMakeOwner(false);
+      setCustomPassword('');
+      setShowPassword(false);
       await loadOrganisation();
     } catch (error: any) {
       console.error('Error adding user:', error);
@@ -751,7 +866,14 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-slate-100">Members</h2>
               <button
-                onClick={() => setShowInviteModal(true)}
+                onClick={() => {
+                  setShowInviteModal(true);
+                  if (isPlatformAdmin) {
+                    // Auto-generate password for platform admins
+                    const generatedPassword = generateSecurePassword();
+                    setCustomPassword(generatedPassword);
+                  }
+                }}
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl transition shadow-lg"
               >
                 <UserPlus size={14} />
@@ -851,6 +973,21 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                               >
                                 <Edit2 size={14} />
                               </button>
+                              {isPlatformAdmin && (
+                                <button
+                                  onClick={() => {
+                                    setResetPasswordMemberId(member.id);
+                                    setResetPasswordEmail(member.email);
+                                    setShowResetPasswordModal(true);
+                                    const generated = generateSecurePassword();
+                                    setNewPassword(generated);
+                                  }}
+                                  className="text-slate-400 hover:text-amber-400 transition"
+                                  title="Reset password"
+                                >
+                                  <Key size={14} />
+                                </button>
+                              )}
                               {member.status === 'invited' && (
                                 <button
                                   onClick={() => handleResendInvite(member.email)}
@@ -951,6 +1088,8 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                   setInviteEmail('');
                   setInviteRole('member');
                   setMakeOwner(false);
+                  setCustomPassword('');
+                  setShowPassword(false);
                 }}
                 className="text-slate-400 hover:text-slate-200 transition"
               >
@@ -1024,6 +1163,55 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                 </label>
               </div>
 
+              {isPlatformAdmin && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Password <span className="text-slate-500">(for new users)</span>
+                  </label>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={customPassword}
+                        onChange={(e) => setCustomPassword(e.target.value)}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 pr-24 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono"
+                        placeholder="Auto-generated password"
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition"
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(customPassword)}
+                          disabled={!customPassword}
+                          className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Copy password"
+                        >
+                          <Copy size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleGeneratePassword}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-slate-100 bg-slate-800 hover:bg-slate-700 rounded-lg transition"
+                    >
+                      <RefreshCw size={14} />
+                      Generate new password
+                    </button>
+                    <p className="text-xs text-slate-400">
+                      Password will be used when creating a new user. Existing users will keep their current password.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl p-3">
                 <p className="text-xs text-sky-300">
                   <strong>Note:</strong> Admin and Member roles consume a seat. Current usage: {seatsUsed}/{seatLimit} seats.
@@ -1043,6 +1231,8 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                   setInviteEmail('');
                   setInviteRole('member');
                   setMakeOwner(false);
+                  setCustomPassword('');
+                  setShowPassword(false);
                 }}
                 className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 transition"
                 disabled={inviting}
@@ -1274,6 +1464,106 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                 className="px-6 py-2 rounded-xl bg-sky-500 text-sm font-semibold text-white hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg"
               >
                 {updatingOrg ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {showResetPasswordModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-100">Reset User Password</h3>
+              <button
+                onClick={() => {
+                  setShowResetPasswordModal(false);
+                  setResetPasswordMemberId(null);
+                  setResetPasswordEmail('');
+                  setNewPassword('');
+                }}
+                className="text-slate-400 hover:text-slate-200 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-400 mb-4">
+              Set a new password for <span className="text-slate-200 font-medium">{resetPasswordEmail}</span>
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  New Password <span className="text-rose-400">*</span>
+                </label>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 px-3 py-2 pr-24 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono"
+                      placeholder="Enter new password"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition"
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(newPassword)}
+                        disabled={!newPassword}
+                        className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Copy password"
+                      >
+                        <Copy size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGenerateNewPassword}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-slate-100 bg-slate-800 hover:bg-slate-700 rounded-lg transition"
+                  >
+                    <RefreshCw size={14} />
+                    Generate new password
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+                <p className="text-xs text-amber-300">
+                  <strong>Warning:</strong> The user will need to use this new password to login. Make sure to share it with them securely.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowResetPasswordModal(false);
+                  setResetPasswordMemberId(null);
+                  setResetPasswordEmail('');
+                  setNewPassword('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-slate-100 transition"
+                disabled={resettingPassword}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={resettingPassword || !newPassword || newPassword.length < 6}
+                className="px-4 py-2 rounded-xl bg-amber-500 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg"
+              >
+                {resettingPassword ? 'Resetting...' : 'Reset Password'}
               </button>
             </div>
           </div>
