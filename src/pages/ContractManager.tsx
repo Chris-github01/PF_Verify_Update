@@ -585,6 +585,16 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
         const { generateSeniorReportHTML, getDefaultSeniorReportData } = await import('../lib/handover/seniorReportGenerator');
 
+        // Get project duration and retention percentage from database
+        const { data: projectData } = await supabase
+          .from('projects')
+          .select('project_duration_months, retention_percentage')
+          .eq('id', projectId)
+          .maybeSingle();
+
+        const projectDurationMonths = projectData?.project_duration_months || 6;
+        const retentionPercentage = projectData?.retention_percentage || 5;
+
         const retentionAmount = awardInfo.total_amount * (retentionPercentage / 100);
         const netAmount = awardInfo.total_amount - retentionAmount;
 
@@ -596,16 +606,6 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         const industryAverage = 95; // Industry average $/m² for fire protection
         const variance = ((pricePerM2 - industryAverage) / industryAverage) * 100;
         const percentile = variance < 0 ? 35 : 65; // Below average = lower percentile (better value)
-
-        // Get project duration and retention percentage from database
-        const { data: projectData } = await supabase
-          .from('projects')
-          .select('project_duration_months, retention_percentage')
-          .eq('id', projectId)
-          .maybeSingle();
-
-        const projectDurationMonths = projectData?.project_duration_months || 6;
-        const retentionPercentage = projectData?.retention_percentage || 5;
 
         // Generate cashflow projection with S-curve distribution
         const generateSCurvePercentages = (months: number): number[] => {
