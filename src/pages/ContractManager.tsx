@@ -3440,6 +3440,31 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
 
     setSaving(true);
     try {
+      let appendixId = existingAppendix?.id;
+
+      // If appendix doesn't exist yet, create it first
+      if (!existingAppendix) {
+        const dataToSave = {
+          project_id: projectId,
+          scope_summary: formData.scope_summary,
+          pricing_basis: formData.pricing_basis,
+          inclusions: formData.inclusions,
+          exclusions: formData.exclusions,
+          commercial_assumptions: formData.commercial_assumptions,
+          clarifications: formData.clarifications,
+          known_risks: formData.known_risks
+        };
+
+        const { data: newAppendix, error: insertError } = await supabase
+          .from('prelet_appendix')
+          .insert(dataToSave)
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        appendixId = newAppendix.id;
+      }
+
       // Prepare finalization data with award snapshot
       const finalizationData: any = {
         is_finalised: true,
@@ -3452,7 +3477,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         finalizationData.awarded_subcontractor = awardOverview.awarded_subcontractor;
         finalizationData.awarded_total_ex_gst = awardOverview.awarded_total_ex_gst;
         finalizationData.awarded_total_inc_gst = awardOverview.awarded_total_inc_gst;
-        finalizationData.awarded_pricing_basis = awardOverview.awarded_pricing_basis;
+        finalizationData.awarded_pricing_basis = formData.pricing_basis; // Use selected pricing_basis
         finalizationData.award_date = awardOverview.award_date;
         finalizationData.award_status = awardOverview.award_status;
         finalizationData.quote_reference = awardOverview.quote_reference;
@@ -3467,7 +3492,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
       const { error } = await supabase
         .from('prelet_appendix')
         .update(finalizationData)
-        .eq('id', existingAppendix.id);
+        .eq('id', appendixId);
 
       if (error) throw error;
 
