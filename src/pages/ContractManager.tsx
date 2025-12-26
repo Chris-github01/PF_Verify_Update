@@ -776,7 +776,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
     }
 
     if (isLastTab) {
-      // On last tab (Site Handover), navigate back to dashboard
+      // On last tab (Site Handover), navigate back to All Projects Dashboard
       if (onNavigateBack) {
         onNavigateBack();
       }
