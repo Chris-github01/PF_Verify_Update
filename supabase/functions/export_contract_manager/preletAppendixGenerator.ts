@@ -700,12 +700,19 @@ export function generateFastPreletAppendix(
 
     ${renderScopeSystems(appendixData)}
 
-    <div style="margin-bottom: 32px; page-break-inside: avoid;">
+    <div style="margin-bottom: 32px;">
       <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
         3. Inclusions & Exclusions
       </h3>
-      ${renderList(appendixData.inclusions, 'Explicit Inclusions')}
-      ${renderList(appendixData.exclusions, 'Explicit Exclusions')}
+
+      <div style="page-break-before: always; page-break-after: always; page-break-inside: avoid;">
+        ${renderList(appendixData.inclusions, 'Scope Inclusions')}
+      </div>
+
+      <div style="page-break-before: always; page-break-after: always; page-break-inside: avoid;">
+        ${renderList(appendixData.exclusions, 'Scope Exclusions')}
+      </div>
+
       ${renderList(appendixData.commercial_assumptions, 'Commercial Assumptions')}
       ${renderList(appendixData.clarifications, 'Subcontractor Clarifications')}
       ${renderList(appendixData.known_risks, 'Known Risks & Hold Points')}
