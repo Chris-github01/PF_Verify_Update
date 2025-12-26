@@ -146,7 +146,7 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    console.log('🔄 [App] useEffect [authLoading, session, currentOrganisation] triggered:', {
+    console.log('🔄 [App] useEffect [authLoading, session, currentOrganisation?.id] triggered:', {
       authLoading,
       hasSession: !!session,
       currentOrganisation: currentOrganisation?.name,
@@ -169,13 +169,13 @@ function AppContent() {
         needsOrg: !currentOrganisation
       });
     }
-  }, [authLoading, session, currentOrganisation]);
+  }, [authLoading, session, currentOrganisation?.id]);
 
   useEffect(() => {
     if (currentOrganisation) {
       loadOrgLicensing();
     }
-  }, [currentOrganisation]);
+  }, [currentOrganisation?.id]);
 
   const loadOrgLicensing = async () => {
     if (!currentOrganisation) return;
@@ -234,7 +234,7 @@ function AppContent() {
     if (currentOrganisation && !orgLoading && !adminLoading) {
       checkTrialStatus();
     }
-  }, [currentOrganisation, isGodMode, isMasterAdmin, orgLoading, adminLoading]);
+  }, [currentOrganisation?.id, isGodMode, isMasterAdmin, orgLoading, adminLoading]);
 
   useEffect(() => {
     if (projectId) {
