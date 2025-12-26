@@ -3273,7 +3273,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
   const [loadingAward, setLoadingAward] = useState(true);
   const [formData, setFormData] = useState({
     scope_summary: existingAppendix?.scope_summary || '',
-    pricing_basis: existingAppendix?.pricing_basis || 'lump_sum',
+    pricing_basis: existingAppendix?.pricing_basis || '',
     inclusions: existingAppendix?.inclusions || [],
     exclusions: existingAppendix?.exclusions || [],
     commercial_assumptions: existingAppendix?.commercial_assumptions || [],
@@ -3351,7 +3351,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
             awarded_subcontractor: quote.suppliers?.name || awardInfo?.supplier_name || 'Unknown',
             awarded_total_ex_gst: totalExGst,
             awarded_total_inc_gst: totalIncGst,
-            awarded_pricing_basis: 'lump_sum', // Default, can be enhanced
+            awarded_pricing_basis: 'fixed_price_lump_sum', // Default to most common option
             award_date: quote.created_at,
             award_status: 'Approved',
             quote_reference: `Q-${quote.id.slice(0, 8).toUpperCase()}`,
