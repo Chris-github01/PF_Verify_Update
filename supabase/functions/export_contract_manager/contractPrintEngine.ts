@@ -1264,10 +1264,94 @@ class ContractPackBuilder {
       'cost_plus': 'Cost Plus',
       'unit_rates': 'Unit Rates',
       're_measurable': 'Re-measurable',
-      'schedule_based': 'Schedule-based'
+      'schedule_based': 'Schedule-based',
+      'fixed_price_lump_sum': 'Fixed Price – Lump Sum',
+      'fixed_price_lump_sum_quoted_quantities': 'Fixed Price – Lump Sum (Based on Quoted Quantities & Rates)',
+      'fixed_price_lump_sum_remeasurable': 'Fixed Price – Lump Sum (Re-measurable Against Issued Drawings)',
+      'hybrid_lump_sum_with_sor': 'Hybrid – Lump Sum with Schedule of Rates Variations',
+      'provisional_quantities_fixed_rates': 'Provisional Quantities – Rates Fixed',
+      'cost_reimbursable': 'Cost Reimbursable (Time & Materials)'
     };
 
     const pricingBasisLabel = pricingBasisLabels[appendixData.pricing_basis] || 'Lump Sum';
+
+    // Pricing Basis Clause Generator (Non-Disruptive Additive Feature)
+    const getPricingBasisClause = (pricingBasis: string): string => {
+      const clauses: Record<string, string> = {
+        'fixed_price_lump_sum': `
+          <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+            <h3 style="color: #1e40af; margin-top: 0;">Pricing Basis: Fixed Price – Lump Sum</h3>
+            <p style="color: #1e3a8a; line-height: 1.8;">
+              The subcontractor's price is a fixed lump sum for the complete scope of works as described.
+              The price is not subject to variation for changes in quantities, rates, or scope, except where
+              explicitly agreed as a variation order.
+            </p>
+          </div>
+        `,
+        'fixed_price_lump_sum_quoted_quantities': `
+          <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+            <h3 style="color: #1e40af; margin-top: 0;">Pricing Basis: Fixed Price – Lump Sum (Based on Quoted Quantities & Rates)</h3>
+            <p style="color: #1e3a8a; line-height: 1.8;">
+              The subcontractor's price is a lump sum based on the quantities and rates provided in their quote.
+              The total price is fixed unless actual quantities vary by more than 10% from quoted quantities,
+              in which case rates will be applied to the variation in quantities.
+            </p>
+          </div>
+        `,
+        'fixed_price_lump_sum_remeasurable': `
+          <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+            <h3 style="color: #1e40af; margin-top: 0;">Pricing Basis: Fixed Price – Lump Sum (Re-measurable Against Issued Drawings)</h3>
+            <p style="color: #1e3a8a; line-height: 1.8;">
+              The subcontractor's price is a lump sum based on the issued construction drawings.
+              The work will be re-measured upon completion against the as-built drawings.
+              Variations in quantities from the issued drawings will be assessed using the quoted rates.
+            </p>
+          </div>
+        `,
+        'schedule_of_rates': `
+          <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+            <h3 style="color: #1e40af; margin-top: 0;">Pricing Basis: Schedule of Rates (SOR)</h3>
+            <p style="color: #1e3a8a; line-height: 1.8;">
+              The subcontractor will be paid based on the actual quantities of work completed,
+              measured against the schedule of rates provided in their quote. All work will be measured
+              and valued in accordance with the agreed measurement methodology.
+            </p>
+          </div>
+        `,
+        'hybrid_lump_sum_with_sor': `
+          <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+            <h3 style="color: #1e40af; margin-top: 0;">Pricing Basis: Hybrid – Lump Sum with Schedule of Rates Variations</h3>
+            <p style="color: #1e3a8a; line-height: 1.8;">
+              The base scope of works is priced as a fixed lump sum. Variations, additional works,
+              and provisional sum items will be measured and paid using the schedule of rates provided
+              in the subcontractor's quote.
+            </p>
+          </div>
+        `,
+        'provisional_quantities_fixed_rates': `
+          <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+            <h3 style="color: #1e40af; margin-top: 0;">Pricing Basis: Provisional Quantities – Rates Fixed</h3>
+            <p style="color: #1e3a8a; line-height: 1.8;">
+              The rates in the subcontractor's quote are fixed. Quantities are provisional and will
+              be measured upon completion. Final payment will be calculated based on actual measured
+              quantities multiplied by the fixed rates.
+            </p>
+          </div>
+        `,
+        'cost_reimbursable': `
+          <div style="background: #eff6ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
+            <h3 style="color: #1e40af; margin-top: 0;">Pricing Basis: Cost Reimbursable (Time & Materials)</h3>
+            <p style="color: #1e3a8a; line-height: 1.8;">
+              The subcontractor will be reimbursed for all reasonable costs incurred in executing
+              the works, including labor, materials, plant, and equipment, plus an agreed percentage
+              for overheads and profit. All costs must be substantiated with evidence of expenditure.
+            </p>
+          </div>
+        `
+      };
+
+      return clauses[pricingBasis] || '';
+    };
 
     // Build Awarded Quote Overview section
     const awardOverviewHtml = appendixData.awarded_subcontractor ? `
@@ -1372,6 +1456,8 @@ class ContractPackBuilder {
             <p style="color: #374151; line-height: 1.8; white-space: pre-wrap;">${appendixData.scope_summary}</p>
           </div>
         ` : ''}
+
+        ${getPricingBasisClause(appendixData.pricing_basis || '')}
 
         ${data.inclusions.length > 0 ? `
           <h2>Scope Inclusions</h2>

@@ -3524,70 +3524,70 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
 
     setGenerating(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
+      let htmlContent: string | null = null;
 
-      console.log('Generating Pre-let Appendix for project:', projectId);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes timeout
+        console.log('Generating Pre-let Appendix for project:', projectId);
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          mode: 'prelet_appendix'
-        }),
-        signal: controller.signal
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes timeout
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId,
+            mode: 'prelet_appendix'
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const result = await response.json();
+          htmlContent = result.html;
+        } else {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.warn('Edge function error:', errorData);
+        }
+      } catch (edgeError) {
+        console.warn('Edge function failed:', edgeError);
+      }
+
+      if (!htmlContent) {
+        throw new Error('Failed to generate Pre-let Appendix HTML content');
+      }
+
+      const projectName = awardInfo?.project_name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
+      const filename = `PreletAppendix_${projectName}`;
+
+      await generateAndDownloadPdf({
+        htmlContent,
+        filename,
+        projectName: awardInfo?.project_name,
+        contractNumber: undefined,
+        reportType: 'Pre-let Appendix'
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Server error:', errorData);
-        throw new Error(errorData.error || `Server error: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (!result.html) {
-        throw new Error('No HTML content received from server');
-      }
-
-      const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '_');
-      const projectName = awardInfo?.project_name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
-      const filename = `PreletAppendix_${projectName}_${timestamp}`;
-
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('Please allow popups for this site to generate the PDF');
-        return;
-      }
-
-      printWindow.document.write(result.html);
-      printWindow.document.close();
-
-      setTimeout(() => {
-        printWindow.print();
-      }, 500);
-
-      alert('Pre-let Appendix document generated successfully! Use the print dialog to save as PDF.');
+      alert('Pre-let Appendix PDF downloaded successfully!');
     } catch (error) {
-      console.error('Generation error:', error);
+      console.error('PDF generation error:', error);
 
-      let errorMessage = 'Failed to generate appendix document';
+      let errorMessage = 'Failed to generate Pre-let Appendix';
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           errorMessage = 'Request timed out. Please try again.';
         } else if (error.message.includes('Failed to fetch')) {
           errorMessage = 'Network error. Please check your connection and try again.';
         } else {
-          errorMessage = `Failed to generate appendix document: ${error.message}`;
+          errorMessage = `Failed to generate Pre-let Appendix: ${error.message}`;
         }
       }
 
@@ -3721,17 +3721,43 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Pricing Basis</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Pricing Basis & Commercial Structure
+          </label>
+          <p className="text-xs text-slate-400 mb-2">
+            Select the pricing basis for this contract. This will be included in the Pre-let Appendix document.
+          </p>
           <select
             value={formData.pricing_basis}
             onChange={(e) => setFormData({ ...formData, pricing_basis: e.target.value })}
             disabled={isFinalised}
             className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white disabled:opacity-50"
           >
-            <option value="lump_sum">Lump Sum</option>
-            <option value="re_measurable">Re-measurable</option>
-            <option value="schedule_based">Schedule-based</option>
+            <option value="">Select Pricing Basis...</option>
+            <option value="fixed_price_lump_sum">Fixed Price – Lump Sum</option>
+            <option value="fixed_price_lump_sum_quoted_quantities">Fixed Price – Lump Sum (Based on Quoted Quantities & Rates)</option>
+            <option value="fixed_price_lump_sum_remeasurable">Fixed Price – Lump Sum (Re-measurable Against Issued Drawings)</option>
+            <option value="schedule_of_rates">Schedule of Rates (SOR)</option>
+            <option value="hybrid_lump_sum_with_sor">Hybrid – Lump Sum with Schedule of Rates Variations</option>
+            <option value="provisional_quantities_fixed_rates">Provisional Quantities – Rates Fixed</option>
+            <option value="cost_reimbursable">Cost Reimbursable (Time & Materials)</option>
           </select>
+
+          {formData.pricing_basis === 'fixed_price_lump_sum' && allowances.some((a: any) => a.category === 'PS' || a.category === 'PC') && (
+            <div className="mt-3 bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 text-sm text-amber-300">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-medium mb-1">Advisory: PS/PC Items Detected</div>
+                  <div className="text-xs text-amber-400/80">
+                    You have Provisional Sums (PS) or Prime Cost (PC) items under a Fixed Price – Lump Sum contract.
+                    This may introduce commercial variability. Consider using "Hybrid – Lump Sum with SOR Variations"
+                    or "Provisional Quantities – Rates Fixed" instead.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
@@ -3973,12 +3999,12 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
               {generating ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Generating document... This may take up to 2 minutes
+                  Generating PDF... This may take up to 3 minutes
                 </>
               ) : (
                 <>
                   <Download size={16} />
-                  Generate Appendix Document
+                  Download Appendix PDF
                 </>
               )}
             </button>
