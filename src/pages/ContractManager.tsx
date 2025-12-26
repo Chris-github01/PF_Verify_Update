@@ -3631,18 +3631,81 @@ function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, exis
     custom_terms: ''
   });
 
-  // Update form data when awardInfo changes
-  useEffect(() => {
-    if (awardInfo && !existingLoi) {
-      setFormData(prev => ({
-        ...prev,
-        supplier_contact: awardInfo.supplier_contact || prev.supplier_contact,
-        supplier_email: awardInfo.supplier_email || prev.supplier_email,
-        supplier_phone: awardInfo.supplier_phone || prev.supplier_phone,
-        supplier_address: awardInfo.supplier_address || prev.supplier_address
-      }));
+  // Load contract summary data and populate form
+  const loadContractSummaryData = async () => {
+    if (!projectId) return;
+
+    try {
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select(`
+          main_contractor_name, payment_terms, liquidated_damages,
+          project_duration_months, public_liability_insurance, motor_vehicle_insurance,
+          subcontractor_name,
+          quantity_surveyor_name, quantity_surveyor_phone, quantity_surveyor_email,
+          subcontractor_project_manager_name, subcontractor_project_manager_phone, subcontractor_project_manager_email,
+          retention_percentage, retention_method
+        `)
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (projectData) {
+        const mainContractor = projectData.main_contractor_name || '';
+        const paymentTerms = projectData.payment_terms || '';
+        const liquidatedDamages = projectData.liquidated_damages || '';
+        const duration = projectData.project_duration_months || 6;
+        const plInsurance = projectData.public_liability_insurance || 10000000;
+        const mvInsurance = projectData.motor_vehicle_insurance || 5000000;
+        const retentionPct = projectData.retention_percentage || 3.0;
+        const retentionMethod = projectData.retention_method || 'flat';
+
+        // Build enhanced scope summary
+        const serviceSummary = scopeSystems.map(s => s.service_type).join(', ') || 'Fire protection and passive fire stopping works';
+        const scopeSummary = `${serviceSummary} for ${awardInfo?.supplier_name || 'project'}`;
+
+        // Build custom terms from contract summary data
+        const customTermsArray = [];
+        if (mainContractor) customTermsArray.push(`Main Contractor: ${mainContractor}`);
+        if (paymentTerms) customTermsArray.push(`Payment Terms: ${paymentTerms}`);
+        if (liquidatedDamages && liquidatedDamages !== 'None specified') customTermsArray.push(`Liquidated Damages: ${liquidatedDamages}`);
+        if (duration) customTermsArray.push(`Programme Duration: ${duration} months`);
+        if (retentionMethod === 'flat') {
+          customTermsArray.push(`Retention: ${retentionPct}% flat rate`);
+        } else {
+          customTermsArray.push(`Retention: Sliding scale as per contract schedule`);
+        }
+        customTermsArray.push(`Insurance Requirements: Public Liability $${(plInsurance / 1000000).toFixed(1)}M, Motor Vehicle $${(mvInsurance / 1000000).toFixed(1)}M`);
+
+        // Calculate target dates based on duration
+        const today = new Date();
+        const targetStart = new Date(today);
+        targetStart.setDate(today.getDate() + 14); // 2 weeks from now
+        const targetCompletion = new Date(targetStart);
+        targetCompletion.setMonth(targetStart.getMonth() + duration);
+
+        setFormData(prev => ({
+          ...prev,
+          supplier_contact: awardInfo?.supplier_contact || projectData.quantity_surveyor_name || prev.supplier_contact,
+          supplier_email: awardInfo?.supplier_email || projectData.quantity_surveyor_email || prev.supplier_email,
+          supplier_phone: awardInfo?.supplier_phone || projectData.quantity_surveyor_phone || prev.supplier_phone,
+          supplier_address: awardInfo?.supplier_address || prev.supplier_address,
+          scope_summary: scopeSummary,
+          target_start_date: targetStart.toISOString().split('T')[0],
+          target_completion_date: targetCompletion.toISOString().split('T')[0],
+          custom_terms: customTermsArray.join('\n')
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading contract summary data:', error);
     }
-  }, [awardInfo, existingLoi]);
+  };
+
+  // Load contract summary data when showing form or when regenerating
+  useEffect(() => {
+    if (showForm && awardInfo) {
+      loadContractSummaryData();
+    }
+  }, [showForm, awardInfo, projectId]);
 
   const handleGenerate = async () => {
     if (!confirmedNonBinding) {
@@ -3836,12 +3899,15 @@ function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, exis
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Additional Terms (Optional)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Key Contract Terms
+              <span className="text-slate-500 font-normal ml-2">(Auto-populated from Contract Summary)</span>
+            </label>
             <textarea
               value={formData.custom_terms}
               onChange={(e) => setFormData({ ...formData, custom_terms: e.target.value })}
-              rows={3}
-              placeholder="Any additional terms or conditions..."
+              rows={6}
+              placeholder="Key contract terms will be automatically populated from your Contract Summary..."
               className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white"
             />
           </div>
