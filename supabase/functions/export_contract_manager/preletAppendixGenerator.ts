@@ -1,12 +1,3 @@
-/**
- * Lightweight Pre-let Appendix Generator
- *
- * OPTIMIZED for speed - generates simple HTML without heavy dependencies
- * Replaces the massive contractPrintEngine.ts for prelet appendix generation
- *
- * Performance: < 100ms execution time vs 3+ minutes with full engine
- */
-
 const VERIFYTRADE_ORANGE = '#f97316';
 
 interface PreletAppendixData {
@@ -20,7 +11,6 @@ interface PreletAppendixData {
   known_risks?: any[];
   is_finalised?: boolean;
   finalised_at?: string;
-  // Award overview snapshot (immutable after finalization)
   awarded_subcontractor?: string;
   awarded_total_ex_gst?: number;
   awarded_total_inc_gst?: number;
