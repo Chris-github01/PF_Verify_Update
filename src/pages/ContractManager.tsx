@@ -992,6 +992,104 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   );
 }
 
+function SubcontractorContactCard({
+  title,
+  contact,
+  isEditing,
+  isSaving,
+  onEdit,
+  onChange,
+  onSave,
+  onCancel
+}: {
+  title: string;
+  contact: { name: string; email: string; phone: string };
+  isEditing: boolean;
+  isSaving: boolean;
+  onEdit: () => void;
+  onChange: (contact: { name: string; email: string; phone: string }) => void;
+  onSave: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
+      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">{title}</label>
+      {isEditing ? (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Name and Surname</label>
+            <input
+              type="text"
+              value={contact.name}
+              onChange={(e) => onChange({ ...contact, name: e.target.value })}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+              placeholder="Enter full name"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Email</label>
+            <input
+              type="email"
+              value={contact.email}
+              onChange={(e) => onChange({ ...contact, email: e.target.value })}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+              placeholder="Enter email address"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Telephone</label>
+            <input
+              type="tel"
+              value={contact.phone}
+              onChange={(e) => onChange({ ...contact, phone: e.target.value })}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+              placeholder="Enter phone number"
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              onClick={onSave}
+              disabled={isSaving}
+              className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium disabled:opacity-50"
+            >
+              <Save size={14} />
+              Save
+            </button>
+            <button
+              onClick={onCancel}
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm"
+            >
+              <X size={14} />
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <div>
+            {contact.name ? (
+              <>
+                <div className="text-base text-white font-semibold">{contact.name}</div>
+                {contact.email && <div className="text-sm text-slate-400 mt-1">{contact.email}</div>}
+                {contact.phone && <div className="text-sm text-slate-400 mt-0.5">{contact.phone}</div>}
+              </>
+            ) : (
+              <div className="text-sm text-slate-500">Not set</div>
+            )}
+          </div>
+          <button
+            onClick={onEdit}
+            className="opacity-0 group-hover:opacity-100 p-1 text-blue-400 hover:text-blue-300 transition-opacity"
+          >
+            <Edit2 size={16} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardInfo: AwardInfo | null; projectInfo: ProjectInfo | null; organisationId?: string }) {
   const [retentionPercentage, setRetentionPercentage] = useState<number>(3.0);
   const [retentionMethod, setRetentionMethod] = useState<'flat' | 'sliding_scale'>('flat');
@@ -1002,6 +1100,12 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
   const [projectDurationMonths, setProjectDurationMonths] = useState<number>(6);
   const [publicLiabilityInsurance, setPublicLiabilityInsurance] = useState<number>(10000000);
   const [motorVehicleInsurance, setMotorVehicleInsurance] = useState<number>(5000000);
+  const [subcontractorName, setSubcontractorName] = useState<string>('');
+  const [quantitySurveyor, setQuantitySurveyor] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
+  const [siteManager, setSiteManager] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
+  const [healthSafetyOfficer, setHealthSafetyOfficer] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
+  const [accounts, setAccounts] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
+  const [documentController, setDocumentController] = useState<{ name: string; email: string; phone: string }>({ name: '', email: '', phone: '' });
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [organisationName, setOrganisationName] = useState<string>('');
@@ -1063,7 +1167,16 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
       // Get both project settings and organisation name in one go
       const { data: projectData } = await supabase
         .from('projects')
-        .select('retention_percentage, retention_method, retention_tiers, main_contractor_name, payment_terms, liquidated_damages, project_duration_months, public_liability_insurance, motor_vehicle_insurance, organisation_id')
+        .select(`
+          retention_percentage, retention_method, retention_tiers, main_contractor_name, payment_terms, liquidated_damages,
+          project_duration_months, public_liability_insurance, motor_vehicle_insurance, organisation_id,
+          subcontractor_name,
+          quantity_surveyor_name, quantity_surveyor_phone, quantity_surveyor_email,
+          site_manager_name, site_manager_phone, site_manager_email,
+          health_safety_officer_name, health_safety_officer_phone, health_safety_officer_email,
+          accounts_name, accounts_phone, accounts_email,
+          document_controller_name, document_controller_phone, document_controller_email
+        `)
         .eq('id', projectInfo.id)
         .maybeSingle();
 
@@ -1074,6 +1187,32 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
         setProjectDurationMonths(projectData.project_duration_months ?? 6);
         setPublicLiabilityInsurance(projectData.public_liability_insurance ?? 10000000);
         setMotorVehicleInsurance(projectData.motor_vehicle_insurance ?? 5000000);
+        setSubcontractorName(projectData.subcontractor_name ?? '');
+        setQuantitySurveyor({
+          name: projectData.quantity_surveyor_name ?? '',
+          phone: projectData.quantity_surveyor_phone ?? '',
+          email: projectData.quantity_surveyor_email ?? ''
+        });
+        setSiteManager({
+          name: projectData.site_manager_name ?? '',
+          phone: projectData.site_manager_phone ?? '',
+          email: projectData.site_manager_email ?? ''
+        });
+        setHealthSafetyOfficer({
+          name: projectData.health_safety_officer_name ?? '',
+          phone: projectData.health_safety_officer_phone ?? '',
+          email: projectData.health_safety_officer_email ?? ''
+        });
+        setAccounts({
+          name: projectData.accounts_name ?? '',
+          phone: projectData.accounts_phone ?? '',
+          email: projectData.accounts_email ?? ''
+        });
+        setDocumentController({
+          name: projectData.document_controller_name ?? '',
+          phone: projectData.document_controller_phone ?? '',
+          email: projectData.document_controller_email ?? ''
+        });
 
         // If main_contractor_name is not set, load organisation name and use it
         if (!projectData.main_contractor_name && projectData.organisation_id) {
@@ -1194,9 +1333,44 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
         </h3>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Subcontractor</label>
-            <div className="text-xl text-white font-semibold">{awardInfo?.supplier_name || 'TBC'}</div>
+            {isEditing === 'subcontractor' ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={subcontractorName}
+                  onChange={(e) => setSubcontractorName(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white"
+                  placeholder={awardInfo?.supplier_name || 'Enter subcontractor name'}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveField('subcontractor_name', subcontractorName);
+                    if (e.key === 'Escape') setIsEditing(null);
+                  }}
+                />
+                <button
+                  onClick={() => saveField('subcontractor_name', subcontractorName)}
+                  disabled={isSaving}
+                  className="p-2 text-green-400 hover:text-green-300"
+                >
+                  <Save size={18} />
+                </button>
+                <button onClick={() => setIsEditing(null)} className="p-2 text-slate-400 hover:text-slate-300">
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="text-xl text-white font-semibold">{subcontractorName || awardInfo?.supplier_name || 'TBC'}</div>
+                <button
+                  onClick={() => setIsEditing('subcontractor')}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-blue-400 hover:text-blue-300 transition-opacity"
+                >
+                  <Edit2 size={16} />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="bg-gradient-to-br from-orange-900/30 to-orange-800/10 rounded-xl border border-orange-700/30 p-5 hover:border-orange-600/50 transition-all">
@@ -1561,9 +1735,184 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
             )}
           </div>
         </div>
+
+        {/* Subcontractor Team Contacts Section */}
+        <h3 className="text-lg font-bold text-white mb-4 mt-8 flex items-center gap-3">
+          <div className="w-1 h-8 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
+          Subcontractor Team Contacts
+          <span className="text-xs font-normal text-slate-500">(Optional)</span>
+        </h3>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Quantity Surveyor */}
+          <SubcontractorContactCard
+            title="Quantity Surveyor (Commercial Contact)"
+            contact={quantitySurveyor}
+            isEditing={isEditing === 'quantity_surveyor'}
+            isSaving={isSaving}
+            onEdit={() => setIsEditing('quantity_surveyor')}
+            onChange={setQuantitySurveyor}
+            onSave={async () => {
+              if (!projectInfo?.id) return;
+              setIsSaving(true);
+              try {
+                const { error } = await supabase
+                  .from('projects')
+                  .update({
+                    quantity_surveyor_name: quantitySurveyor.name,
+                    quantity_surveyor_phone: quantitySurveyor.phone,
+                    quantity_surveyor_email: quantitySurveyor.email
+                  })
+                  .eq('id', projectInfo.id);
+                if (error) throw error;
+                setIsEditing(null);
+              } catch (error) {
+                console.error('Error saving quantity surveyor:', error);
+                alert('Failed to save quantity surveyor details');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            onCancel={() => { setIsEditing(null); loadContractSettings(); }}
+          />
+
+          {/* Project Manager - Duplicate listing for subcontractor's project manager (different from main PM) */}
+          <SubcontractorContactCard
+            title="Project Manager"
+            contact={siteManager}
+            isEditing={isEditing === 'subcontractor_pm'}
+            isSaving={isSaving}
+            onEdit={() => setIsEditing('subcontractor_pm')}
+            onChange={setSiteManager}
+            onSave={async () => {
+              if (!projectInfo?.id) return;
+              setIsSaving(true);
+              try {
+                const { error } = await supabase
+                  .from('projects')
+                  .update({
+                    site_manager_name: siteManager.name,
+                    site_manager_phone: siteManager.phone,
+                    site_manager_email: siteManager.email
+                  })
+                  .eq('id', projectInfo.id);
+                if (error) throw error;
+                setIsEditing(null);
+              } catch (error) {
+                console.error('Error saving site manager:', error);
+                alert('Failed to save project manager details');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            onCancel={() => { setIsEditing(null); loadContractSettings(); }}
+          />
+
+          {/* Site Manager - using healthSafetyOfficer state temporarily, will create separate field */}
+          <SubcontractorContactCard
+            title="Site Manager"
+            contact={healthSafetyOfficer}
+            isEditing={isEditing === 'site_manager_contact'}
+            isSaving={isSaving}
+            onEdit={() => setIsEditing('site_manager_contact')}
+            onChange={setHealthSafetyOfficer}
+            onSave={async () => {
+              if (!projectInfo?.id) return;
+              setIsSaving(true);
+              try {
+                const { error } = await supabase
+                  .from('projects')
+                  .update({
+                    health_safety_officer_name: healthSafetyOfficer.name,
+                    health_safety_officer_phone: healthSafetyOfficer.phone,
+                    health_safety_officer_email: healthSafetyOfficer.email
+                  })
+                  .eq('id', projectInfo.id);
+                if (error) throw error;
+                setIsEditing(null);
+              } catch (error) {
+                console.error('Error saving site manager:', error);
+                alert('Failed to save site manager details');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            onCancel={() => { setIsEditing(null); loadContractSettings(); }}
+          />
+
+          {/* Health & Safety Officer */}
+          <SubcontractorContactCard
+            title="Health & Safety Officer"
+            contact={accounts}
+            isEditing={isEditing === 'health_safety'}
+            isSaving={isSaving}
+            onEdit={() => setIsEditing('health_safety')}
+            onChange={setAccounts}
+            onSave={async () => {
+              if (!projectInfo?.id) return;
+              setIsSaving(true);
+              try {
+                const { error } = await supabase
+                  .from('projects')
+                  .update({
+                    accounts_name: accounts.name,
+                    accounts_phone: accounts.phone,
+                    accounts_email: accounts.email
+                  })
+                  .eq('id', projectInfo.id);
+                if (error) throw error;
+                setIsEditing(null);
+              } catch (error) {
+                console.error('Error saving health & safety officer:', error);
+                alert('Failed to save health & safety officer details');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            onCancel={() => { setIsEditing(null); loadContractSettings(); }}
+          />
+
+          {/* Accounts */}
+          <SubcontractorContactCard
+            title="Accounts"
+            contact={documentController}
+            isEditing={isEditing === 'accounts_contact'}
+            isSaving={isSaving}
+            onEdit={() => setIsEditing('accounts_contact')}
+            onChange={setDocumentController}
+            onSave={async () => {
+              if (!projectInfo?.id) return;
+              setIsSaving(true);
+              try {
+                const { error } = await supabase
+                  .from('projects')
+                  .update({
+                    document_controller_name: documentController.name,
+                    document_controller_phone: documentController.phone,
+                    document_controller_email: documentController.email
+                  })
+                  .eq('id', projectInfo.id);
+                if (error) throw error;
+                setIsEditing(null);
+              } catch (error) {
+                console.error('Error saving accounts:', error);
+                alert('Failed to save accounts details');
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            onCancel={() => { setIsEditing(null); loadContractSettings(); }}
+          />
+
+          {/* Document Controller - needs new state variable */}
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Document Controller</label>
+            <div className="text-sm text-slate-500">Coming soon</div>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 rounded-xl border border-slate-700/50 p-6 shadow-lg">
+      <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 rounded-xl border border-slate-700/50 p-6 shadow-lg mt-8">
         <div className="flex items-center justify-between mb-6">
           <h4 className="text-lg font-bold text-white flex items-center gap-2">
             <BarChart3 size={20} className="text-orange-500" />

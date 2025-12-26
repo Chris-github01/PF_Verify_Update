@@ -279,6 +279,23 @@ function generateRetentionSummary(data: SeniorReportData): string {
           <span style="font-size: 15px; color: #16a34a; font-weight: 700;">${formatNZD(retentionCalc.netPayable)}</span>
         </div>
       </div>
+      ${data.publicLiabilityInsurance || data.motorVehicleInsurance ? `
+      <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #bae6fd;">
+        <p style="margin: 0 0 12px 0; font-size: 13px; color: #6b7280;"><strong>Insurance Requirements:</strong></p>
+        ${data.publicLiabilityInsurance ? `
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="font-size: 14px; color: #374151;">Public Liability Insurance:</span>
+          <span style="font-size: 14px; color: #374151; font-weight: 600;">${formatNZD(data.publicLiabilityInsurance)}</span>
+        </div>
+        ` : ''}
+        ${data.motorVehicleInsurance ? `
+        <div style="display: flex; justify-content: space-between;">
+          <span style="font-size: 14px; color: #374151;">Motor Vehicle Insurance:</span>
+          <span style="font-size: 14px; color: #374151; font-weight: 600;">${formatNZD(data.motorVehicleInsurance)}</span>
+        </div>
+        ` : ''}
+      </div>
+      ` : ''}
     </div>
   `;
 }
