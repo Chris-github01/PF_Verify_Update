@@ -331,7 +331,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
 
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -483,7 +483,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes timeout
 
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -3530,7 +3530,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
       console.log('Generating Pre-let Appendix for project:', projectId);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes timeout
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -3973,7 +3973,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
               {generating ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Processing...
+                  Generating document... This may take up to 2 minutes
                 </>
               ) : (
                 <>
