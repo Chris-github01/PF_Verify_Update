@@ -598,16 +598,46 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         const variance = ((pricePerM2 - industryAverage) / industryAverage) * 100;
         const percentile = variance < 0 ? 35 : 65; // Below average = lower percentile (better value)
 
-        // Generate cashflow projection (6-month typical project)
-        const months = ['Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6'];
-        const cashflowProjection = months.map((month, idx) => {
-          // Typical S-curve: slow start, ramp up, slow finish
-          const percentages = [5, 15, 25, 30, 20, 5];
-          return {
-            month,
-            amount: (awardInfo.total_amount * percentages[idx]) / 100
-          };
-        });
+        // Get project duration from database
+        const { data: projectData } = await supabase
+          .from('projects')
+          .select('project_duration_months')
+          .eq('id', projectId)
+          .maybeSingle();
+
+        const projectDurationMonths = projectData?.project_duration_months || 6;
+
+        // Generate cashflow projection with S-curve distribution
+        const generateSCurvePercentages = (months: number): number[] => {
+          if (months === 1) return [100];
+          if (months === 2) return [40, 60];
+          if (months === 3) return [20, 50, 30];
+          if (months === 4) return [15, 30, 35, 20];
+          if (months === 5) return [10, 20, 35, 25, 10];
+          if (months === 6) return [5, 15, 25, 30, 20, 5];
+
+          // For longer projects, use a smooth S-curve
+          const percentages: number[] = [];
+          let total = 0;
+
+          for (let i = 0; i < months; i++) {
+            // S-curve formula: slow start, fast middle, slow end
+            const x = i / (months - 1);
+            const sCurve = 1 / (1 + Math.exp(-10 * (x - 0.5)));
+            percentages.push(sCurve);
+            total += sCurve;
+          }
+
+          // Normalize to 100%
+          return percentages.map(p => (p / total) * 100);
+        };
+
+        const percentages = generateSCurvePercentages(projectDurationMonths);
+        const months = Array.from({ length: projectDurationMonths }, (_, i) => `Month ${i + 1}`);
+        const cashflowProjection = months.map((month, idx) => ({
+          month,
+          amount: (awardInfo.total_amount * percentages[idx]) / 100
+        }));
 
         // Get default risks from generator
         const defaults = getDefaultSeniorReportData();
@@ -920,6 +950,7 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
   const [mainContractor, setMainContractor] = useState<string>('');
   const [paymentTerms, setPaymentTerms] = useState<string>('20th following month, 22 working days');
   const [liquidatedDamages, setLiquidatedDamages] = useState<string>('None specified');
+  const [projectDurationMonths, setProjectDurationMonths] = useState<number>(6);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [organisationName, setOrganisationName] = useState<string>('');
@@ -981,12 +1012,13 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
       // Get both project settings and organisation name in one go
       const { data: projectData } = await supabase
         .from('projects')
-        .select('retention_percentage, main_contractor_name, payment_terms, liquidated_damages, organisation_id')
+        .select('retention_percentage, main_contractor_name, payment_terms, liquidated_damages, project_duration_months, organisation_id')
         .eq('id', projectInfo.id)
         .maybeSingle();
 
       if (projectData) {
         setRetentionPercentage(projectData.retention_percentage ?? 3.0);
+        setProjectDurationMonths(projectData.project_duration_months ?? 6);
 
         // If main_contractor_name is not set, load organisation name and use it
         if (!projectData.main_contractor_name && projectData.organisation_id) {
@@ -1212,6 +1244,49 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
                 </button>
               </div>
             )}
+          </div>
+
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all group">
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Project Duration (Months)</label>
+            {isEditing === 'project_duration' ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={projectDurationMonths}
+                  onChange={(e) => setProjectDurationMonths(parseInt(e.target.value) || 6)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm"
+                  placeholder="Enter duration in months"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveField('project_duration_months', projectDurationMonths);
+                    if (e.key === 'Escape') setIsEditing(null);
+                  }}
+                />
+                <button
+                  onClick={() => saveField('project_duration_months', projectDurationMonths)}
+                  disabled={isSaving}
+                  className="p-2 text-green-400 hover:text-green-300"
+                >
+                  <Save size={18} />
+                </button>
+                <button onClick={() => setIsEditing(null)} className="p-2 text-slate-400 hover:text-slate-300">
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="text-base text-slate-300">{projectDurationMonths} {projectDurationMonths === 1 ? 'month' : 'months'}</div>
+                <button
+                  onClick={() => setIsEditing('project_duration')}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-blue-400 hover:text-blue-300 transition-opacity"
+                >
+                  <Edit2 size={16} />
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-slate-500 mt-2">Used for cashflow projections in Senior Management Pack</p>
           </div>
 
           {/* Project Information */}
