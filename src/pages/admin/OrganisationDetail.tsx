@@ -960,7 +960,7 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                         {member.activated_at ? formatDate(member.activated_at) : 'Never'}
                       </td>
                       <td className="px-2 py-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {member.role !== 'owner' && (
                             <>
                               <button
@@ -982,10 +982,10 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                                     const generated = generateSecurePassword();
                                     setNewPassword(generated);
                                   }}
-                                  className="text-slate-400 hover:text-amber-400 transition"
-                                  title="Reset password"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 rounded-lg transition"
                                 >
-                                  <Key size={14} />
+                                  <Key size={12} />
+                                  Reset Password
                                 </button>
                               )}
                               {member.status === 'invited' && (
