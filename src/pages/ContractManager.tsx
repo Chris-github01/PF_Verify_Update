@@ -3771,9 +3771,15 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
           </p>
           <select
             value={formData.pricing_basis}
-            onChange={(e) => setFormData({ ...formData, pricing_basis: e.target.value })}
+            onChange={(e) => {
+              console.log('Dropdown changed to:', e.target.value);
+              setFormData({ ...formData, pricing_basis: e.target.value });
+            }}
+            onClick={() => console.log('Dropdown clicked, isFinalised:', isFinalised, 'current value:', formData.pricing_basis)}
+            onFocus={() => console.log('Dropdown focused')}
             disabled={isFinalised}
-            className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white disabled:opacity-50"
+            className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer relative z-10"
+            style={{ appearance: 'auto', WebkitAppearance: 'menulist', MozAppearance: 'menulist' }}
           >
             <option value="">Select Pricing Basis...</option>
             <option value="fixed_price_lump_sum">Fixed Price – Lump Sum</option>
