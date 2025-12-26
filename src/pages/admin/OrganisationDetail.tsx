@@ -968,41 +968,43 @@ export default function OrganisationDetail({ organisationId }: { organisationId:
                                   setEditingMember(member.id);
                                   setEditRole(member.role);
                                 }}
-                                className="text-slate-400 hover:text-sky-400 transition"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-sky-300 bg-sky-500/10 border border-sky-500/30 hover:bg-sky-500/20 hover:border-sky-500/50 rounded-lg transition"
                                 title="Edit role"
                               >
-                                <Edit2 size={14} />
+                                <Edit2 size={12} />
+                                Edit Role
                               </button>
-                              {isPlatformAdmin && (
-                                <button
-                                  onClick={() => {
-                                    setResetPasswordMemberId(member.id);
-                                    setResetPasswordEmail(member.email);
-                                    setShowResetPasswordModal(true);
-                                    const generated = generateSecurePassword();
-                                    setNewPassword(generated);
-                                  }}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 rounded-lg transition"
-                                >
-                                  <Key size={12} />
-                                  Reset Password
-                                </button>
-                              )}
+                              <button
+                                onClick={() => {
+                                  setResetPasswordMemberId(member.id);
+                                  setResetPasswordEmail(member.email);
+                                  setShowResetPasswordModal(true);
+                                  const generated = generateSecurePassword();
+                                  setNewPassword(generated);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 rounded-lg transition"
+                                title="Reset password"
+                              >
+                                <Key size={12} />
+                                Reset Password
+                              </button>
                               {member.status === 'invited' && (
                                 <button
                                   onClick={() => handleResendInvite(member.email)}
-                                  className="text-slate-400 hover:text-sky-400 transition"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-300 bg-slate-500/10 border border-slate-500/30 hover:bg-slate-500/20 hover:border-slate-500/50 rounded-lg transition"
                                   title="Resend invite"
                                 >
-                                  <Mail size={14} />
+                                  <Mail size={12} />
+                                  Resend
                                 </button>
                               )}
                               <button
                                 onClick={() => handleRemoveMember(member.id, member.email)}
-                                className="text-slate-400 hover:text-red-400 transition"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-rose-300 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 hover:border-rose-500/50 rounded-lg transition"
                                 title="Remove member"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={12} />
+                                Remove
                               </button>
                             </>
                           )}
