@@ -1,5 +1,24 @@
 const VERIFYTRADE_ORANGE = '#f97316';
 
+interface RetentionTier {
+  threshold_nzd: number | null;
+  rate_percent: number;
+}
+
+interface RetentionCalculation {
+  method: 'flat' | 'sliding_scale';
+  totalAmount: number;
+  retentionHeld: number;
+  netPayable: number;
+  effectiveRate: number;
+  breakdown?: Array<{
+    bandLabel: string;
+    amountInBand: number;
+    rate: number;
+    retentionForBand: number;
+  }>;
+}
+
 interface PreletAppendixData {
   project_id: string;
   scope_summary?: string;
@@ -26,6 +45,82 @@ interface PreletAppendixData {
   supplierContact?: any;
   scopeSystems?: any[];
   allowances?: any[];
+}
+
+function calculateRetention(
+  totalAmount: number,
+  retentionPercentage: number,
+  retentionMethod: 'flat' | 'sliding_scale' = 'flat',
+  retentionTiers: RetentionTier[] | null = null
+): RetentionCalculation {
+  if (retentionMethod === 'flat' || !retentionTiers || retentionTiers.length === 0) {
+    const retentionHeld = totalAmount * (retentionPercentage / 100);
+    return {
+      method: 'flat',
+      totalAmount,
+      retentionHeld,
+      netPayable: totalAmount - retentionHeld,
+      effectiveRate: retentionPercentage
+    };
+  }
+
+  const sortedTiers = [...retentionTiers].sort((a, b) => {
+    if (a.threshold_nzd === null) return 1;
+    if (b.threshold_nzd === null) return -1;
+    return a.threshold_nzd - b.threshold_nzd;
+  });
+
+  let totalRetention = 0;
+  let remainingAmount = totalAmount;
+  let previousThreshold = 0;
+  const breakdown: RetentionCalculation['breakdown'] = [];
+
+  for (let i = 0; i < sortedTiers.length; i++) {
+    const tier = sortedTiers[i];
+    const currentThreshold = tier.threshold_nzd ?? Infinity;
+
+    if (remainingAmount <= 0) break;
+
+    const amountInBand = Math.min(
+      remainingAmount,
+      currentThreshold - previousThreshold
+    );
+
+    if (amountInBand > 0) {
+      const retentionForBand = amountInBand * (tier.rate_percent / 100);
+      totalRetention += retentionForBand;
+
+      const bandLabel = tier.threshold_nzd === null
+        ? `Above ${formatCurrency(previousThreshold)}`
+        : i === 0
+        ? `Up to ${formatCurrency(currentThreshold)}`
+        : `${formatCurrency(previousThreshold)} – ${formatCurrency(currentThreshold)}`;
+
+      breakdown.push({
+        bandLabel,
+        amountInBand,
+        rate: tier.rate_percent,
+        retentionForBand
+      });
+
+      remainingAmount -= amountInBand;
+    }
+
+    if (tier.threshold_nzd !== null) {
+      previousThreshold = tier.threshold_nzd;
+    }
+  }
+
+  const effectiveRate = totalAmount > 0 ? (totalRetention / totalAmount) * 100 : 0;
+
+  return {
+    method: 'sliding_scale',
+    totalAmount,
+    retentionHeld: totalRetention,
+    netPayable: totalAmount - totalRetention,
+    effectiveRate,
+    breakdown
+  };
 }
 
 function formatCurrency(amount: number | null | undefined): string {
@@ -162,6 +257,86 @@ function renderContractSummary(data: PreletAppendixData): string {
             <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; font-weight: 600;">Liquidated Damages</div>
             <div style="font-size: 14px; color: #111827;">${project.liquidated_damages || 'N/A'}</div>
           </div>
+        </div>
+      </div>
+
+      ${renderRetentionSummary(project, data.awarded_total_ex_gst)}
+    </div>
+  `;
+}
+
+function renderRetentionSummary(project: any, awardedTotal: number | undefined): string {
+  if (!awardedTotal) return '';
+
+  const retentionMethod = project.retention_method || 'flat';
+  const retentionPercentage = project.retention_percentage || 5;
+  const retentionTiers = project.retention_tiers || [];
+
+  const retentionCalc = calculateRetention(
+    awardedTotal,
+    retentionPercentage,
+    retentionMethod,
+    retentionTiers.length > 0 ? retentionTiers : null
+  );
+
+  let detailsHTML = '';
+
+  if (retentionMethod === 'flat') {
+    detailsHTML = `
+      <p style="margin: 12px 0; font-size: 13px; color: #374151; line-height: 1.6;">
+        A retention of <strong>${retentionCalc.effectiveRate.toFixed(1)}%</strong> shall be deducted from each payment claim and held in accordance with the subcontract.
+      </p>
+    `;
+  } else {
+    const breakdownRows = retentionCalc.breakdown?.map(band => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 12px;">${band.bandLabel}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right; font-size: 12px;">${formatCurrency(band.amountInBand)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center; font-size: 12px;">${band.rate.toFixed(1)}%</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600; font-size: 12px;">${formatCurrency(band.retentionForBand)}</td>
+      </tr>
+    `).join('') || '';
+
+    detailsHTML = `
+      <p style="margin: 12px 0; font-size: 13px; color: #374151; line-height: 1.6;">
+        Retention shall be applied on a <strong>sliding scale basis</strong> as follows:
+      </p>
+      <table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; margin: 12px 0;">
+        <thead>
+          <tr style="background: #f9fafb;">
+            <th style="padding: 8px; text-align: left; font-weight: 600; font-size: 11px; color: #6b7280; border-bottom: 2px solid #e5e7eb; text-transform: uppercase;">Contract Value Band</th>
+            <th style="padding: 8px; text-align: right; font-weight: 600; font-size: 11px; color: #6b7280; border-bottom: 2px solid #e5e7eb; text-transform: uppercase;">Amount in Band</th>
+            <th style="padding: 8px; text-align: center; font-weight: 600; font-size: 11px; color: #6b7280; border-bottom: 2px solid #e5e7eb; text-transform: uppercase;">Retention %</th>
+            <th style="padding: 8px; text-align: right; font-weight: 600; font-size: 11px; color: #6b7280; border-bottom: 2px solid #e5e7eb; text-transform: uppercase;">Retention Held</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${breakdownRows}
+        </tbody>
+      </table>
+    `;
+  }
+
+  return `
+    <div style="margin-top: 24px; padding: 20px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; page-break-inside: avoid;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+        <h4 style="font-size: 15px; font-weight: 700; color: #0c4a6e; margin: 0;">Retention (Commercial Terms)</h4>
+        <div style="display: inline-block; padding: 4px 10px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; font-size: 11px; font-weight: 600; color: #1e40af; text-transform: uppercase;">
+          ${retentionMethod === 'flat' ? 'Flat Retention' : 'Sliding Scale'}
+        </div>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <p style="margin: 0; font-size: 12px; color: #6b7280; font-weight: 600;">Retention Details:</p>
+        ${detailsHTML}
+      </div>
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #bae6fd;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="font-size: 13px; color: #374151; font-weight: 600;">Effective Retention Held:</span>
+          <span style="font-size: 13px; color: #ea580c; font-weight: 700;">${formatCurrency(retentionCalc.retentionHeld)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="font-size: 13px; color: #374151; font-weight: 600;">Net Payable After Retention:</span>
+          <span style="font-size: 13px; color: #16a34a; font-weight: 700;">${formatCurrency(retentionCalc.netPayable)}</span>
         </div>
       </div>
     </div>

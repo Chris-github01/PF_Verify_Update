@@ -8,6 +8,20 @@ export interface LineItem {
   totalPrice?: number;
 }
 
+export interface RetentionCalculation {
+  method: 'flat' | 'sliding_scale';
+  totalAmount: number;
+  retentionHeld: number;
+  netPayable: number;
+  effectiveRate: number;
+  breakdown?: Array<{
+    bandLabel: string;
+    amountInBand: number;
+    rate: number;
+    retentionForBand: number;
+  }>;
+}
+
 export interface SeniorReportData {
   projectName: string;
   projectClient: string;
@@ -16,6 +30,8 @@ export interface SeniorReportData {
   retentionAmount: number;
   retentionPercentage: number;
   netAmount: number;
+  retentionMethod?: 'flat' | 'sliding_scale';
+  retentionCalculation?: RetentionCalculation;
   scopeSystems: Array<{
     service_type: string;
     coverage: string;
@@ -178,6 +194,91 @@ function generateLineItemsHTML(items: LineItem[]): string {
 
   html += '</div>';
   return html;
+}
+
+function generateRetentionSummary(data: SeniorReportData): string {
+  const retentionMethod = data.retentionMethod || 'flat';
+  const retentionCalc = data.retentionCalculation;
+
+  if (!retentionCalc) {
+    return '';
+  }
+
+  const formatNZD = (value: number) => {
+    return new Intl.NumberFormat('en-NZ', {
+      style: 'currency',
+      currency: 'NZD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+
+  let detailsHTML = '';
+
+  if (retentionMethod === 'flat') {
+    detailsHTML = `
+      <p style="margin: 16px 0; font-size: 14px; color: #374151; line-height: 1.6;">
+        A retention of <strong>${retentionCalc.effectiveRate.toFixed(1)}%</strong> shall be deducted from each payment claim and held in accordance with the subcontract.
+      </p>
+    `;
+  } else {
+    const breakdownRows = retentionCalc.breakdown?.map(band => `
+      <tr>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${band.bandLabel}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatNZD(band.amountInBand)}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${band.rate.toFixed(1)}%</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600;">${formatNZD(band.retentionForBand)}</td>
+      </tr>
+    `).join('') || '';
+
+    detailsHTML = `
+      <p style="margin: 16px 0; font-size: 14px; color: #374151; line-height: 1.6;">
+        Retention shall be applied on a <strong>sliding scale basis</strong> as follows:
+      </p>
+      <div style="margin: 20px 0; overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <thead>
+            <tr style="background: #f9fafb;">
+              <th style="padding: 12px; text-align: left; font-weight: 600; color: #111827; border-bottom: 2px solid #e5e7eb;">Contract Value Band</th>
+              <th style="padding: 12px; text-align: right; font-weight: 600; color: #111827; border-bottom: 2px solid #e5e7eb;">Amount in Band</th>
+              <th style="padding: 12px; text-align: center; font-weight: 600; color: #111827; border-bottom: 2px solid #e5e7eb;">Retention %</th>
+              <th style="padding: 12px; text-align: right; font-weight: 600; color: #111827; border-bottom: 2px solid #e5e7eb;">Retention Held</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${breakdownRows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="margin-top: 32px; padding: 24px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px;">
+      <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: #0c4a6e;">
+        Retention (Commercial Terms)
+      </h3>
+      <div style="margin-bottom: 16px;">
+        <div style="display: inline-block; padding: 6px 12px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 6px; font-size: 12px; font-weight: 600; color: #1e40af;">
+          Method: ${retentionMethod === 'flat' ? 'Flat Retention' : 'Sliding Scale Retention'}
+        </div>
+      </div>
+      <div style="margin-top: 16px;">
+        <p style="margin: 0; font-size: 13px; color: #6b7280;"><strong>Retention Details:</strong></p>
+        ${detailsHTML}
+      </div>
+      <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #bae6fd;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+          <span style="font-size: 15px; color: #374151; font-weight: 600;">Effective Retention Held:</span>
+          <span style="font-size: 15px; color: #ea580c; font-weight: 700;">${formatNZD(retentionCalc.retentionHeld)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="font-size: 15px; color: #374151; font-weight: 600;">Net Payable After Retention:</span>
+          <span style="font-size: 15px; color: #16a34a; font-weight: 700;">${formatNZD(retentionCalc.netPayable)}</span>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 export function generateSeniorReportHTML(data: SeniorReportData): string {
@@ -1309,6 +1410,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         </tbody>
       </table>
     </div>
+
+    ${generateRetentionSummary(data)}
   </div>
 
   <!-- RISK REGISTER PAGE -->

@@ -9,6 +9,8 @@ import EnhancedAllowancesTab from '../components/EnhancedAllowancesTab';
 import ContractWorkflowStepper from '../components/ContractWorkflowStepper';
 import { getWorkflowProgress, autoUpdateWorkflowProgress, getCompletedSteps, updateWorkflowStep, WORKFLOW_STEPS, type WorkflowStepProgress } from '../lib/workflow/contractWorkflow';
 import type { DashboardMode } from '../App';
+import { RetentionThresholdEditor, type RetentionTier } from '../components/RetentionThresholdEditor';
+import { calculateRetention } from '../lib/retention/retentionCalculator';
 
 interface ContractManagerProps {
   projectId: string;
@@ -585,18 +587,26 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
         const { generateSeniorReportHTML, getDefaultSeniorReportData } = await import('../lib/handover/seniorReportGenerator');
 
-        // Get project duration and retention percentage from database
+        // Get project duration and retention settings from database
         const { data: projectData } = await supabase
           .from('projects')
-          .select('project_duration_months, retention_percentage')
+          .select('project_duration_months, retention_percentage, retention_method, retention_tiers')
           .eq('id', projectId)
           .maybeSingle();
 
         const projectDurationMonths = projectData?.project_duration_months || 6;
         const retentionPercentage = projectData?.retention_percentage || 5;
+        const retentionMethod = projectData?.retention_method || 'flat';
+        const retentionTiers = projectData?.retention_tiers || [];
 
-        const retentionAmount = awardInfo.total_amount * (retentionPercentage / 100);
-        const netAmount = awardInfo.total_amount - retentionAmount;
+        const retentionCalc = calculateRetention(
+          awardInfo.total_amount,
+          retentionPercentage,
+          retentionMethod,
+          retentionTiers.length > 0 ? retentionTiers : null
+        );
+        const retentionAmount = retentionCalc.retentionHeld;
+        const netAmount = retentionCalc.netPayable;
 
         const totalItems = scopeSystems.reduce((sum, sys) => sum + sys.item_count, 0);
 
@@ -660,6 +670,10 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         // Get default risks from generator
         const defaults = getDefaultSeniorReportData();
 
+        const retentionDescription = retentionMethod === 'flat'
+          ? `${retentionPercentage}% standard retention held until practical completion`
+          : `Sliding scale retention (effective ${retentionCalc.effectiveRate.toFixed(2)}%) - see retention schedule`;
+
         const seniorData = {
           projectName: projectInfo?.name || 'Project',
           projectClient: projectInfo?.client || 'TBC',
@@ -668,6 +682,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           retentionAmount,
           retentionPercentage,
           netAmount,
+          retentionMethod,
+          retentionCalculation: retentionCalc,
           scopeSystems: scopeSystems.map(sys => ({
             service_type: sys.service_type,
             coverage: sys.coverage,
@@ -676,7 +692,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           })),
           keyTerms: [
             { term: 'Payment Terms', value: '20th following month, 22 working days' },
-            { term: 'Retention', value: `${retentionPercentage}% standard retention held until practical completion` },
+            { term: 'Retention', value: retentionDescription },
             { term: 'Liquidated Damages', value: 'None specified - back-to-back with head contract' },
             { term: 'Variations', value: 'Rate-based as per schedule of rates' },
             { term: 'Insurance', value: 'Public liability $10M, Professional indemnity as required' }
@@ -965,6 +981,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
 function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardInfo: AwardInfo | null; projectInfo: ProjectInfo | null; organisationId?: string }) {
   const [retentionPercentage, setRetentionPercentage] = useState<number>(3.0);
+  const [retentionMethod, setRetentionMethod] = useState<'flat' | 'sliding_scale'>('flat');
+  const [retentionTiers, setRetentionTiers] = useState<RetentionTier[]>([]);
   const [mainContractor, setMainContractor] = useState<string>('');
   const [paymentTerms, setPaymentTerms] = useState<string>('20th following month, 22 working days');
   const [liquidatedDamages, setLiquidatedDamages] = useState<string>('None specified');
@@ -1030,12 +1048,14 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
       // Get both project settings and organisation name in one go
       const { data: projectData } = await supabase
         .from('projects')
-        .select('retention_percentage, main_contractor_name, payment_terms, liquidated_damages, project_duration_months, organisation_id')
+        .select('retention_percentage, retention_method, retention_tiers, main_contractor_name, payment_terms, liquidated_damages, project_duration_months, organisation_id')
         .eq('id', projectInfo.id)
         .maybeSingle();
 
       if (projectData) {
         setRetentionPercentage(projectData.retention_percentage ?? 3.0);
+        setRetentionMethod(projectData.retention_method ?? 'flat');
+        setRetentionTiers(projectData.retention_tiers ?? []);
         setProjectDurationMonths(projectData.project_duration_months ?? 6);
 
         // If main_contractor_name is not set, load organisation name and use it
@@ -1112,11 +1132,41 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
     }
   };
 
+  const saveRetentionSettings = async () => {
+    if (!projectInfo?.id) return;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          retention_method: retentionMethod,
+          retention_tiers: retentionTiers.length > 0 ? retentionTiers : null,
+          retention_percentage: retentionPercentage
+        })
+        .eq('id', projectInfo.id);
+
+      if (error) throw error;
+      setIsEditing(null);
+    } catch (error) {
+      console.error('Error saving retention settings:', error);
+      alert('Failed to save retention settings');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const totalAmount = awardInfo?.total_amount || 0;
-  const retentionRate = retentionPercentage / 100;
-  const retentionAmount = totalAmount * retentionRate;
-  const netAmount = totalAmount - retentionAmount;
-  const netPercentage = 100 - retentionPercentage;
+  const retentionCalculation = calculateRetention(
+    totalAmount,
+    retentionPercentage,
+    retentionMethod,
+    retentionTiers.length > 0 ? retentionTiers : null
+  );
+  const retentionAmount = retentionCalculation.retentionHeld;
+  const netAmount = retentionCalculation.netPayable;
+  const effectiveRetentionRate = retentionCalculation.effectiveRate;
+  const netPercentage = 100 - effectiveRetentionRate;
 
   return (
     <div className="space-y-8">
@@ -1414,13 +1464,13 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
                   max="100"
                   autoFocus
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') saveField('retention_percentage', retentionPercentage);
+                    if (e.key === 'Enter') saveRetentionSettings();
                     if (e.key === 'Escape') setIsEditing(null);
                   }}
                 />
                 <span className="text-white font-medium">%</span>
                 <button
-                  onClick={() => saveField('retention_percentage', retentionPercentage)}
+                  onClick={saveRetentionSettings}
                   disabled={isSaving}
                   className="p-1 text-green-400 hover:text-green-300"
                 >
@@ -1432,11 +1482,18 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-white font-bold">{retentionPercentage}%</span>
+                <span className="text-white font-bold">
+                  {retentionMethod === 'sliding_scale' ? `${effectiveRetentionRate.toFixed(2)}% (effective)` : `${retentionPercentage}%`}
+                </span>
+                {retentionMethod === 'sliding_scale' && (
+                  <span className="px-2 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-xs text-blue-300">
+                    Sliding Scale
+                  </span>
+                )}
                 <button
                   onClick={() => setIsEditing('retention')}
                   className="p-1 text-blue-400 hover:text-blue-300"
-                  title="Edit retention percentage"
+                  title="Edit retention settings"
                 >
                   <Edit2 size={14} />
                 </button>
@@ -1444,6 +1501,50 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
             )}
           </div>
         </div>
+
+        {isEditing === 'retention' && (
+          <div className="mb-6 space-y-4">
+            <div className="bg-slate-900/50 rounded-lg border border-slate-700/50 p-4">
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Retention Method
+              </label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setRetentionMethod('flat')}
+                  className={`flex-1 px-4 py-3 rounded-lg border transition-all ${
+                    retentionMethod === 'flat'
+                      ? 'bg-blue-600 border-blue-500 text-white shadow-lg'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  <div className="font-semibold">Flat (single rate)</div>
+                  <div className="text-xs mt-1 opacity-80">Standard retention percentage</div>
+                </button>
+                <button
+                  onClick={() => setRetentionMethod('sliding_scale')}
+                  className={`flex-1 px-4 py-3 rounded-lg border transition-all ${
+                    retentionMethod === 'sliding_scale'
+                      ? 'bg-blue-600 border-blue-500 text-white shadow-lg'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  <div className="font-semibold">Sliding scale (value thresholds)</div>
+                  <div className="text-xs mt-1 opacity-80">Progressive retention bands</div>
+                </button>
+              </div>
+            </div>
+
+            {retentionMethod === 'sliding_scale' && (
+              <RetentionThresholdEditor
+                tiers={retentionTiers}
+                onChange={setRetentionTiers}
+                onSave={saveRetentionSettings}
+                onCancel={() => setIsEditing(null)}
+                isSaving={isSaving}
+              />
+            )}
+          </div>
+        )}
 
         <div className="space-y-5">
           <div>
@@ -1460,13 +1561,15 @@ function ContractSummaryTab({ awardInfo, projectInfo, organisationId }: { awardI
 
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-300 font-medium">Retention Held ({retentionPercentage}%)</span>
+              <span className="text-slate-300 font-medium">
+                Retention Held {retentionMethod === 'sliding_scale' ? '(effective)' : `(${retentionPercentage}%)`}
+              </span>
               <span className="text-orange-400 font-semibold">
                 ${retentionAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div className="w-full bg-slate-900/80 rounded-full h-4 overflow-hidden border border-slate-700/50">
-              <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-full rounded-full shadow-lg" style={{ width: `${retentionPercentage}%` }} />
+              <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-full rounded-full shadow-lg" style={{ width: `${effectiveRetentionRate}%` }} />
             </div>
           </div>
 
