@@ -7,72 +7,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
-interface HandoverPackData {
-  mode: 'site' | 'commercial';
-  project: {
-    name: string;
-    address?: string;
-    client?: string;
-    mainContractor?: string;
-  };
-  subcontractor: {
-    name: string;
-    contact?: string;
-    email?: string;
-    phone?: string;
-  };
-  award?: {
-    totalAmount: number;
-    awardedDate?: string;
-  };
-  commercial?: {
-    paymentTerms: string;
-    retentions: string;
-    liquidatedDamages: string;
-  };
-  awardSummary?: any;
-  quoteItems?: any[];
-  systems: Array<{
-    system: string;
-    rating: string;
-    substrate?: string;
-    locations?: string;
-    included: string;
-  }>;
-  inclusions: string[];
-  exclusions: string[];
-  assumptions: string[];
-  allowances: Array<{
-    description: string;
-    quantity: string;
-    unit: string;
-    rate?: number;
-    total?: number;
-    notes?: string;
-    is_provisional?: boolean;
-    ps_type?: string;
-    ps_reason?: string;
-    ps_trigger?: string;
-    ps_approval_role?: string;
-    ps_evidence_required?: string;
-    ps_spend_method?: string;
-    ps_cap?: number;
-    ps_rate_basis?: string;
-    ps_spend_to_date?: number;
-    ps_conversion_rule?: string;
-    ps_status?: string;
-    ps_notes_internal?: string;
-  }>;
-  variations: Array<{
-    number: string;
-    description: string;
-    status: string;
-    amount?: number;
-  }>;
-  generatedAt: string;
-  generatedBy?: string;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -96,7 +30,6 @@ Deno.serve(async (req: Request) => {
 
     console.log('Export mode:', mode, 'for project:', projectId);
 
-    // Fetch only basic project info first
     const { data: project } = await supabase
       .from('projects')
       .select('name, client, updated_at, approved_quote_id, organisation_id, retention_percentage, main_contractor_name, payment_terms, liquidated_damages, project_manager_name, project_manager_email, project_manager_phone')
@@ -107,7 +40,6 @@ Deno.serve(async (req: Request) => {
       throw new Error('Project not found');
     }
 
-    // Fetch organisation logo (needed for all modes)
     let organisationLogoUrl: string | undefined;
     if ((project as any).organisation_id) {
       const { data: org } = await supabase
@@ -127,86 +59,64 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // PRELET APPENDIX MODE - Fast path with minimal data fetching
     if (mode === 'prelet_appendix') {
       console.log('[PRELET] Fast path started');
-      console.log('[PRELET] Project ID:', projectId);
-      console.log('[PRELET] Organisation ID:', (project as any).organisation_id);
+      const queryStart = Date.now();
 
-      try {
-        console.log('[PRELET] Querying prelet_appendix table...');
-        const queryStart = Date.now();
+      const { data: appendixData, error: appendixError } = await supabase
+        .from('prelet_appendix')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle();
 
-        const { data: appendixData, error: appendixError } = await supabase
-          .from('prelet_appendix')
-          .select('*')
-          .eq('project_id', projectId)
+      const queryDuration = Date.now() - queryStart;
+      console.log(`[PRELET] Query completed in ${queryDuration}ms`);
+
+      if (appendixError) {
+        throw new Error(`Database error: ${appendixError.message}`);
+      }
+
+      if (!appendixData) {
+        throw new Error('No pre-let appendix found. Please save the appendix first.');
+      }
+
+      const approvedQuoteId = (project as any)?.approved_quote_id;
+      let supplierName = 'TBC';
+      let totalAmount = 0;
+
+      if (approvedQuoteId) {
+        const { data: quote } = await supabase
+          .from('quotes')
+          .select('supplier_name, total_amount')
+          .eq('id', approvedQuoteId)
           .maybeSingle();
 
-        const queryDuration = Date.now() - queryStart;
-        console.log(`[PRELET] Query completed in ${queryDuration}ms`);
-
-        if (appendixError) {
-          console.error('[PRELET] Database error:', appendixError);
-          throw new Error(`Database error: ${appendixError.message}`);
+        if (quote) {
+          supplierName = quote.supplier_name;
+          totalAmount = quote.total_amount || 0;
         }
-
-        if (!appendixData) {
-          console.error('[PRELET] No appendix data found for project:', projectId);
-          throw new Error('No pre-let appendix found for this project. Please save the appendix first.');
-        }
-
-        console.log('[PRELET] Appendix data loaded. Keys:', Object.keys(appendixData));
-
-        // Get basic supplier info
-        const approvedQuoteId = (project as any)?.approved_quote_id;
-        let supplierName = 'TBC';
-        let totalAmount = 0;
-
-        if (approvedQuoteId) {
-          console.log('[PRELET] Fetching quote info for:', approvedQuoteId);
-          const { data: quote, error: quoteError } = await supabase
-            .from('quotes')
-            .select('supplier_name, total_amount')
-            .eq('id', approvedQuoteId)
-            .maybeSingle();
-
-          if (quoteError) {
-            console.warn('[PRELET] Error fetching quote:', quoteError.message);
-          } else if (quote) {
-            supplierName = quote.supplier_name;
-            totalAmount = quote.total_amount || 0;
-            console.log('[PRELET] Quote loaded. Supplier:', supplierName, 'Amount:', totalAmount);
-          }
-        } else {
-          console.log('[PRELET] No approved quote ID found');
-        }
-
-        console.log('[PRELET] Generating HTML...');
-        const genStart = Date.now();
-
-        const htmlContent = generatePreletAppendixHTML(
-          project.name,
-          supplierName,
-          totalAmount,
-          appendixData,
-          organisationLogoUrl
-        );
-
-        const genDuration = Date.now() - genStart;
-        console.log(`[PRELET] HTML generated in ${genDuration}ms, length: ${htmlContent.length}`);
-
-        return new Response(
-          JSON.stringify({ html: htmlContent }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } catch (presetError) {
-        console.error('[PRELET] Error in prelet appendix generation:', presetError);
-        throw presetError;
       }
+
+      console.log('[PRELET] Generating HTML...');
+      const genStart = Date.now();
+
+      const htmlContent = generatePreletAppendixHTML(
+        project.name,
+        supplierName,
+        totalAmount,
+        appendixData,
+        organisationLogoUrl
+      );
+
+      const genDuration = Date.now() - genStart;
+      console.log(`[PRELET] HTML generated in ${genDuration}ms`);
+
+      return new Response(
+        JSON.stringify({ html: htmlContent }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // For other modes, fetch detailed data
     const approvedQuoteId = (project as any)?.approved_quote_id;
     let approvedQuote: any = null;
     let quoteItems: any[] = [];
@@ -318,100 +228,83 @@ Deno.serve(async (req: Request) => {
     const exclusions = (exclusionsData || []).map(e => e.description).filter(Boolean);
 
     if (mode === 'junior_pack') {
-      console.log('Generating junior pack for:', project.name, 'with', scopeSystems.length, 'systems');
-      try {
-        // Format line items for the junior pack
-        const lineItems = quoteItems.map(item => ({
-          description: item.description || 'N/A',
-          service: item.service || item.subclass || 'N/A',
-          material: item.material || 'N/A',
-          quantity: item.quantity ?? 'N/A',
-          unit: item.unit || 'N/A'
-        }));
+      const lineItems = quoteItems.map(item => ({
+        description: item.description || 'N/A',
+        service: item.service || item.subclass || 'N/A',
+        material: item.material || 'N/A',
+        quantity: item.quantity ?? 'N/A',
+        unit: item.unit || 'N/A'
+      }));
 
-        // Get supplier contact details
-        let supplierContact = null;
-        if ((project as any).organisation_id && supplierName) {
-          const { data: supplier } = await supabase
-            .from('suppliers')
-            .select('contact_name, contact_email, contact_phone, address')
-            .eq('organisation_id', (project as any).organisation_id)
-            .ilike('name', supplierName)
-            .maybeSingle();
+      let supplierContact = null;
+      if ((project as any).organisation_id && supplierName) {
+        const { data: supplier } = await supabase
+          .from('suppliers')
+          .select('contact_name, contact_email, contact_phone, address')
+          .eq('organisation_id', (project as any).organisation_id)
+          .ilike('name', supplierName)
+          .maybeSingle();
 
-          if (supplier) {
-            supplierContact = {
-              contactName: supplier.contact_name,
-              contactEmail: supplier.contact_email,
-              contactPhone: supplier.contact_phone,
-              address: supplier.address
-            };
-          }
+        if (supplier) {
+          supplierContact = {
+            contactName: supplier.contact_name,
+            contactEmail: supplier.contact_email,
+            contactPhone: supplier.contact_phone,
+            address: supplier.address
+          };
         }
-
-        const htmlContent = generateJuniorPackHTML(
-          project.name,
-          supplierName,
-          scopeSystems,
-          inclusions,
-          exclusions,
-          organisationLogoUrl,
-          lineItems,
-          supplierContact
-        );
-        console.log('Junior pack HTML generated successfully, length:', htmlContent.length);
-        return new Response(
-          JSON.stringify({ html: htmlContent }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } catch (genError) {
-        console.error('Error in generateJuniorPackHTML:', genError);
-        throw new Error(`Failed to generate junior pack HTML: ${genError instanceof Error ? genError.message : String(genError)}`);
       }
-    }
 
-    if (mode === 'senior_report') {
-      console.log('Generating senior report for:', project.name, 'with', scopeSystems.length, 'systems');
-      try {
-        const htmlContent = generateSeniorReportHTML(
-          project.name,
-          supplierName,
-          totalAmount,
-          scopeSystems,
-          inclusions,
-          exclusions,
-          organisationLogoUrl,
-          {
-          client: (project as any).client,
-          mainContractor: (project as any).main_contractor_name,
-          retentionPercentage: (project as any).retention_percentage || 3,
-          paymentTerms: (project as any).payment_terms,
-          liquidatedDamages: (project as any).liquidated_damages,
-          projectManager: {
-            name: (project as any).project_manager_name,
-            email: (project as any).project_manager_email,
-            phone: (project as any).project_manager_phone
-          },
-          supplier: {
-            contactName: supplierData?.contact_name,
-            contactEmail: supplierData?.contact_email,
-            contactPhone: supplierData?.contact_phone,
-            address: supplierData?.address
-          },
-          awardReport: awardResult
-        }
+      const htmlContent = generateJuniorPackHTML(
+        project.name,
+        supplierName,
+        scopeSystems,
+        inclusions,
+        exclusions,
+        organisationLogoUrl,
+        lineItems,
+        supplierContact
       );
       return new Response(
         JSON.stringify({ html: htmlContent }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-      } catch (genError) {
-        console.error('Error in generateSeniorReportHTML:', genError);
-        throw new Error(`Failed to generate senior report HTML: ${genError instanceof Error ? genError.message : String(genError)}`);
-      }
     }
 
-    // prelet_appendix mode is handled earlier in the fast path
+    if (mode === 'senior_report') {
+      const htmlContent = generateSeniorReportHTML(
+        project.name,
+        supplierName,
+        totalAmount,
+        scopeSystems,
+        inclusions,
+        exclusions,
+        organisationLogoUrl,
+        {
+        client: (project as any).client,
+        mainContractor: (project as any).main_contractor_name,
+        retentionPercentage: (project as any).retention_percentage || 3,
+        paymentTerms: (project as any).payment_terms,
+        liquidatedDamages: (project as any).liquidated_damages,
+        projectManager: {
+          name: (project as any).project_manager_name,
+          email: (project as any).project_manager_email,
+          phone: (project as any).project_manager_phone
+        },
+        supplier: {
+          contactName: supplierData?.contact_name,
+          contactEmail: supplierData?.contact_email,
+          contactPhone: supplierData?.contact_phone,
+          address: supplierData?.address
+        },
+        awardReport: awardResult
+      }
+    );
+    return new Response(
+      JSON.stringify({ html: htmlContent }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+    }
 
     return new Response(
       JSON.stringify({ error: 'Invalid mode' }),
@@ -420,7 +313,6 @@ Deno.serve(async (req: Request) => {
 
   } catch (error) {
     console.error('Export error:', error);
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Export failed',

@@ -1,12 +1,15 @@
 /**
- * Contract Manager PDF Generators - MIGRATED TO UNIFIED PRINT ENGINE
- * This file now uses the unified contractPrintEngine for all PDF generation
+ * Contract Manager PDF Generators - OPTIMIZED FOR PERFORMANCE
+ *
+ * Pre-let Appendix: Uses lightweight fast generator (< 100ms)
+ * Junior Pack & Senior Report: Use unified print engine (complex layouts)
  *
  * BACKUP: generators.ts.backup contains the original implementation
  * ROLLBACK: Run rollback-contract-manager.sh to restore original files
  */
 
 import { generateContractPDF } from './contractPrintEngine.ts';
+import { generateFastPreletAppendix } from './preletAppendixGenerator.ts';
 
 export function generateJuniorPackHTML(
   projectName: string,
@@ -105,30 +108,13 @@ export function generatePreletAppendixHTML(
   appendixData: any,
   organisationLogoUrl?: string
 ): string {
-  const rawData = {
-    project: {
-      name: projectName
-    },
-    supplier: {
-      name: supplierName
-    },
-    financial: {
-      totalAmount
-    },
-    systems: [],
-    inclusions: appendixData?.inclusions || [],
-    exclusions: appendixData?.exclusions || [],
-    allowances: [],
-    organisationLogoUrl,
-    appendixData
-  };
+  console.log('[PRELET] Using FAST generator (optimized for speed)');
 
-  const { html, validation } = generateContractPDF('prelet_appendix', rawData);
-
-  if (!validation.valid) {
-    console.warn('PDF validation warnings:', validation.warnings);
-    console.error('PDF validation errors:', validation.errors);
-  }
-
-  return html;
+  // Use lightweight fast generator instead of heavy engine
+  return generateFastPreletAppendix(
+    projectName,
+    supplierName,
+    appendixData,
+    organisationLogoUrl
+  );
 }
