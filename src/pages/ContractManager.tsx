@@ -427,6 +427,49 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           console.log('Loading junior pack generator...');
           const { generateJuniorPackHTML, getDefaultJuniorPackData } = await import('../lib/handover/juniorPackGenerator');
 
+          console.log('Fetching project data with subcontractor contacts...');
+          const { data: projectData } = await supabase
+            .from('projects')
+            .select(`
+              subcontractor_name,
+              quantity_surveyor_name, quantity_surveyor_phone, quantity_surveyor_email,
+              site_manager_name, site_manager_phone, site_manager_email,
+              health_safety_officer_name, health_safety_officer_phone, health_safety_officer_email,
+              accounts_name, accounts_phone, accounts_email,
+              document_controller_name, document_controller_phone, document_controller_email
+            `)
+            .eq('id', projectId)
+            .maybeSingle();
+
+          const subcontractorContacts = {
+            subcontractorName: projectData?.subcontractor_name || awardInfo.supplier_name,
+            quantitySurveyor: {
+              name: projectData?.quantity_surveyor_name || '',
+              phone: projectData?.quantity_surveyor_phone || '',
+              email: projectData?.quantity_surveyor_email || ''
+            },
+            projectManager: {
+              name: projectData?.site_manager_name || '',
+              phone: projectData?.site_manager_phone || '',
+              email: projectData?.site_manager_email || ''
+            },
+            siteManager: {
+              name: projectData?.health_safety_officer_name || '',
+              phone: projectData?.health_safety_officer_phone || '',
+              email: projectData?.health_safety_officer_email || ''
+            },
+            healthSafety: {
+              name: projectData?.accounts_name || '',
+              phone: projectData?.accounts_phone || '',
+              email: projectData?.accounts_email || ''
+            },
+            accounts: {
+              name: projectData?.document_controller_name || '',
+              phone: projectData?.document_controller_phone || '',
+              email: projectData?.document_controller_email || ''
+            }
+          };
+
           console.log('Fetching quote items for line item details...');
           const approvedQuoteId = (projectInfo as any)?.approved_quote_id;
 
@@ -453,7 +496,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           const juniorData = {
             projectName: projectInfo?.name || 'Project',
             projectClient: projectInfo?.client || 'TBC',
-            supplierName: awardInfo.supplier_name,
+            supplierName: subcontractorContacts.subcontractorName,
+            subcontractorContacts,
             scopeSystems: scopeSystems.map(sys => ({
               service_type: sys.service_type,
               coverage: sys.coverage,
@@ -590,7 +634,16 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         // Get project duration and retention settings from database
         const { data: projectData } = await supabase
           .from('projects')
-          .select('project_duration_months, retention_percentage, retention_method, retention_tiers, public_liability_insurance, motor_vehicle_insurance')
+          .select(`
+            project_duration_months, retention_percentage, retention_method, retention_tiers,
+            public_liability_insurance, motor_vehicle_insurance,
+            subcontractor_name,
+            quantity_surveyor_name, quantity_surveyor_phone, quantity_surveyor_email,
+            site_manager_name, site_manager_phone, site_manager_email,
+            health_safety_officer_name, health_safety_officer_phone, health_safety_officer_email,
+            accounts_name, accounts_phone, accounts_email,
+            document_controller_name, document_controller_phone, document_controller_email
+          `)
           .eq('id', projectId)
           .maybeSingle();
 
@@ -600,6 +653,35 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         const retentionTiers = projectData?.retention_tiers || [];
         const publicLiabilityInsurance = projectData?.public_liability_insurance || 10000000;
         const motorVehicleInsurance = projectData?.motor_vehicle_insurance || 5000000;
+
+        const subcontractorContacts = {
+          subcontractorName: projectData?.subcontractor_name || awardInfo.supplier_name,
+          quantitySurveyor: {
+            name: projectData?.quantity_surveyor_name || '',
+            phone: projectData?.quantity_surveyor_phone || '',
+            email: projectData?.quantity_surveyor_email || ''
+          },
+          projectManager: {
+            name: projectData?.site_manager_name || '',
+            phone: projectData?.site_manager_phone || '',
+            email: projectData?.site_manager_email || ''
+          },
+          siteManager: {
+            name: projectData?.health_safety_officer_name || '',
+            phone: projectData?.health_safety_officer_phone || '',
+            email: projectData?.health_safety_officer_email || ''
+          },
+          healthSafety: {
+            name: projectData?.accounts_name || '',
+            phone: projectData?.accounts_phone || '',
+            email: projectData?.accounts_email || ''
+          },
+          accounts: {
+            name: projectData?.document_controller_name || '',
+            phone: projectData?.document_controller_phone || '',
+            email: projectData?.document_controller_email || ''
+          }
+        };
 
         const retentionCalc = calculateRetention(
           awardInfo.total_amount,
@@ -688,7 +770,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         const seniorData = {
           projectName: projectInfo?.name || 'Project',
           projectClient: projectInfo?.client || 'TBC',
-          supplierName: awardInfo.supplier_name,
+          supplierName: subcontractorContacts.subcontractorName,
           totalAmount: awardInfo.total_amount,
           retentionAmount,
           retentionPercentage,
@@ -697,6 +779,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           retentionCalculation: retentionCalc,
           publicLiabilityInsurance,
           motorVehicleInsurance,
+          subcontractorContacts,
           scopeSystems: scopeSystems.map(sys => ({
             service_type: sys.service_type,
             coverage: sys.coverage,

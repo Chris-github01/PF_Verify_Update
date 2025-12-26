@@ -34,6 +34,14 @@ export interface SeniorReportData {
   retentionCalculation?: RetentionCalculation;
   publicLiabilityInsurance?: number;
   motorVehicleInsurance?: number;
+  subcontractorContacts?: {
+    subcontractorName?: string;
+    quantitySurveyor?: { name: string; phone: string; email: string };
+    projectManager?: { name: string; phone: string; email: string };
+    siteManager?: { name: string; phone: string; email: string };
+    healthSafety?: { name: string; phone: string; email: string };
+    accounts?: { name: string; phone: string; email: string };
+  };
   scopeSystems: Array<{
     service_type: string;
     coverage: string;
@@ -338,15 +346,76 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     </div>
   `).join('');
 
-  const contactHTML = (data.supplierContact || data.supplierEmail || data.supplierPhone || data.supplierAddress) ? `
+  const hasAnyContacts = data.supplierContact || data.supplierEmail || data.supplierPhone || data.supplierAddress ||
+    (data.subcontractorContacts && (
+      data.subcontractorContacts.quantitySurveyor?.name ||
+      data.subcontractorContacts.projectManager?.name ||
+      data.subcontractorContacts.siteManager?.name ||
+      data.subcontractorContacts.healthSafety?.name ||
+      data.subcontractorContacts.accounts?.name
+    ));
+
+  const contactHTML = hasAnyContacts ? `
     <div class="contact-section">
       <h3>Subcontractor Contact Details</h3>
-      <div class="contact-grid">
-        ${data.supplierContact ? `<div><strong>Contact:</strong> ${data.supplierContact}</div>` : ''}
-        ${data.supplierEmail ? `<div><strong>Email:</strong> ${data.supplierEmail}</div>` : ''}
-        ${data.supplierPhone ? `<div><strong>Phone:</strong> ${data.supplierPhone}</div>` : ''}
-        ${data.supplierAddress ? `<div><strong>Address:</strong> ${data.supplierAddress}</div>` : ''}
-      </div>
+
+      ${(data.supplierContact || data.supplierEmail || data.supplierPhone || data.supplierAddress) ? `
+        <div class="contact-grid" style="margin-bottom: 24px;">
+          ${data.supplierContact ? `<div><strong>Main Contact:</strong> ${data.supplierContact}</div>` : ''}
+          ${data.supplierEmail ? `<div><strong>Email:</strong> ${data.supplierEmail}</div>` : ''}
+          ${data.supplierPhone ? `<div><strong>Phone:</strong> ${data.supplierPhone}</div>` : ''}
+          ${data.supplierAddress ? `<div><strong>Address:</strong> ${data.supplierAddress}</div>` : ''}
+        </div>
+      ` : ''}
+
+      ${data.subcontractorContacts ? `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px;">
+          ${data.subcontractorContacts.quantitySurveyor?.name ? `
+            <div style="padding: 12px; background: #f8fafc; border-left: 3px solid #3b82f6; border-radius: 4px;">
+              <div style="font-weight: 700; color: #1e40af; margin-bottom: 8px; font-size: 13px;">Quantity Surveyor (Commercial)</div>
+              <div style="font-size: 14px; color: #1e293b; margin-bottom: 4px;">${data.subcontractorContacts.quantitySurveyor.name}</div>
+              ${data.subcontractorContacts.quantitySurveyor.email ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.quantitySurveyor.email}</div>` : ''}
+              ${data.subcontractorContacts.quantitySurveyor.phone ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.quantitySurveyor.phone}</div>` : ''}
+            </div>
+          ` : ''}
+
+          ${data.subcontractorContacts.projectManager?.name ? `
+            <div style="padding: 12px; background: #f8fafc; border-left: 3px solid #10b981; border-radius: 4px;">
+              <div style="font-weight: 700; color: #047857; margin-bottom: 8px; font-size: 13px;">Project Manager</div>
+              <div style="font-size: 14px; color: #1e293b; margin-bottom: 4px;">${data.subcontractorContacts.projectManager.name}</div>
+              ${data.subcontractorContacts.projectManager.email ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.projectManager.email}</div>` : ''}
+              ${data.subcontractorContacts.projectManager.phone ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.projectManager.phone}</div>` : ''}
+            </div>
+          ` : ''}
+
+          ${data.subcontractorContacts.siteManager?.name ? `
+            <div style="padding: 12px; background: #f8fafc; border-left: 3px solid #f59e0b; border-radius: 4px;">
+              <div style="font-weight: 700; color: #b45309; margin-bottom: 8px; font-size: 13px;">Site Manager</div>
+              <div style="font-size: 14px; color: #1e293b; margin-bottom: 4px;">${data.subcontractorContacts.siteManager.name}</div>
+              ${data.subcontractorContacts.siteManager.email ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.siteManager.email}</div>` : ''}
+              ${data.subcontractorContacts.siteManager.phone ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.siteManager.phone}</div>` : ''}
+            </div>
+          ` : ''}
+
+          ${data.subcontractorContacts.healthSafety?.name ? `
+            <div style="padding: 12px; background: #f8fafc; border-left: 3px solid #ef4444; border-radius: 4px;">
+              <div style="font-weight: 700; color: #b91c1c; margin-bottom: 8px; font-size: 13px;">Health & Safety Officer</div>
+              <div style="font-size: 14px; color: #1e293b; margin-bottom: 4px;">${data.subcontractorContacts.healthSafety.name}</div>
+              ${data.subcontractorContacts.healthSafety.email ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.healthSafety.email}</div>` : ''}
+              ${data.subcontractorContacts.healthSafety.phone ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.healthSafety.phone}</div>` : ''}
+            </div>
+          ` : ''}
+
+          ${data.subcontractorContacts.accounts?.name ? `
+            <div style="padding: 12px; background: #f8fafc; border-left: 3px solid #8b5cf6; border-radius: 4px;">
+              <div style="font-weight: 700; color: #6d28d9; margin-bottom: 8px; font-size: 13px;">Accounts</div>
+              <div style="font-size: 14px; color: #1e293b; margin-bottom: 4px;">${data.subcontractorContacts.accounts.name}</div>
+              ${data.subcontractorContacts.accounts.email ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.accounts.email}</div>` : ''}
+              ${data.subcontractorContacts.accounts.phone ? `<div style="font-size: 12px; color: #64748b;">${data.subcontractorContacts.accounts.phone}</div>` : ''}
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
     </div>
   ` : '';
 

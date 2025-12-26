@@ -32,7 +32,19 @@ Deno.serve(async (req: Request) => {
 
     const { data: project } = await supabase
       .from('projects')
-      .select('name, client, updated_at, approved_quote_id, organisation_id, retention_percentage, retention_method, retention_tiers, main_contractor_name, payment_terms, liquidated_damages, project_manager_name, project_manager_email, project_manager_phone, public_liability_insurance, motor_vehicle_insurance')
+      .select(`
+        name, client, updated_at, approved_quote_id, organisation_id,
+        retention_percentage, retention_method, retention_tiers,
+        main_contractor_name, payment_terms, liquidated_damages,
+        project_manager_name, project_manager_email, project_manager_phone,
+        public_liability_insurance, motor_vehicle_insurance,
+        subcontractor_name,
+        quantity_surveyor_name, quantity_surveyor_phone, quantity_surveyor_email,
+        site_manager_name, site_manager_phone, site_manager_email,
+        health_safety_officer_name, health_safety_officer_phone, health_safety_officer_email,
+        accounts_name, accounts_phone, accounts_email,
+        document_controller_name, document_controller_phone, document_controller_email
+      `)
       .eq('id', projectId)
       .maybeSingle();
 
