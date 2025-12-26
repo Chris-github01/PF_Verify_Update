@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen, FileSpreadsheet, MoreVertical, Tag, Loader2 } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen, FileSpreadsheet, MoreVertical, Tag, Loader2, Edit } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
@@ -3271,6 +3271,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
   const [generating, setGenerating] = useState(false);
   const [awardOverview, setAwardOverview] = useState<any>(null);
   const [loadingAward, setLoadingAward] = useState(true);
+  const [editingPricingBasis, setEditingPricingBasis] = useState(false);
   const [formData, setFormData] = useState({
     scope_summary: existingAppendix?.scope_summary || '',
     pricing_basis: existingAppendix?.pricing_basis || '',
@@ -3503,6 +3504,39 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
     } catch (error) {
       console.error('Unfinalise error:', error);
       alert('Failed to unfinalise appendix');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdatePricingBasis = async () => {
+    if (!existingAppendix) return;
+
+    if (!formData.pricing_basis) {
+      alert('Please select a Pricing Basis before saving');
+      return;
+    }
+
+    if (!confirm('Update the Pricing Basis for this finalized appendix?')) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('prelet_appendix')
+        .update({
+          pricing_basis: formData.pricing_basis,
+          awarded_pricing_basis: formData.pricing_basis // Also update snapshot
+        })
+        .eq('id', existingAppendix.id);
+
+      if (error) throw error;
+
+      setEditingPricingBasis(false);
+      onAppendixUpdated();
+      alert('Pricing Basis updated successfully!');
+    } catch (error) {
+      console.error('Update pricing basis error:', error);
+      alert('Failed to update Pricing Basis');
     } finally {
       setSaving(false);
     }
@@ -3778,27 +3812,73 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
           <p className="text-xs text-slate-400 mb-2">
             Select the pricing basis for this contract. This will be included in the Pre-let Appendix document and PDF.
           </p>
-          <select
-            value={formData.pricing_basis}
-            onChange={(e) => {
-              console.log('Dropdown changed to:', e.target.value);
-              setFormData({ ...formData, pricing_basis: e.target.value });
-            }}
-            onClick={() => console.log('Dropdown clicked, isFinalised:', isFinalised, 'current value:', formData.pricing_basis)}
-            onFocus={() => console.log('Dropdown focused')}
-            disabled={isFinalised}
-            className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer relative z-10"
-            style={{ appearance: 'auto', WebkitAppearance: 'menulist', MozAppearance: 'menulist' }}
-          >
-            <option value="">Select Pricing Basis...</option>
-            <option value="fixed_price_lump_sum">Fixed Price – Lump Sum</option>
-            <option value="fixed_price_lump_sum_quoted_quantities">Fixed Price – Lump Sum (Based on Quoted Quantities & Rates)</option>
-            <option value="fixed_price_lump_sum_remeasurable">Fixed Price – Lump Sum (Re-measurable Against Issued Drawings)</option>
-            <option value="schedule_of_rates">Schedule of Rates (SOR)</option>
-            <option value="hybrid_lump_sum_with_sor">Hybrid – Lump Sum with Schedule of Rates Variations</option>
-            <option value="provisional_quantities_fixed_rates">Provisional Quantities – Rates Fixed</option>
-            <option value="cost_reimbursable">Cost Reimbursable (Time & Materials)</option>
-          </select>
+
+          <div className="flex gap-2 items-start">
+            <select
+              value={formData.pricing_basis}
+              onChange={(e) => {
+                console.log('Dropdown changed to:', e.target.value);
+                setFormData({ ...formData, pricing_basis: e.target.value });
+              }}
+              onClick={() => console.log('Dropdown clicked, isFinalised:', isFinalised, 'editingPricingBasis:', editingPricingBasis)}
+              onFocus={() => console.log('Dropdown focused')}
+              disabled={isFinalised && !editingPricingBasis}
+              className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer relative z-10"
+              style={{ appearance: 'auto', WebkitAppearance: 'menulist', MozAppearance: 'menulist' }}
+            >
+              <option value="">Select Pricing Basis...</option>
+              <option value="fixed_price_lump_sum">Fixed Price – Lump Sum</option>
+              <option value="fixed_price_lump_sum_quoted_quantities">Fixed Price – Lump Sum (Based on Quoted Quantities & Rates)</option>
+              <option value="fixed_price_lump_sum_remeasurable">Fixed Price – Lump Sum (Re-measurable Against Issued Drawings)</option>
+              <option value="schedule_of_rates">Schedule of Rates (SOR)</option>
+              <option value="hybrid_lump_sum_with_sor">Hybrid – Lump Sum with Schedule of Rates Variations</option>
+              <option value="provisional_quantities_fixed_rates">Provisional Quantities – Rates Fixed</option>
+              <option value="cost_reimbursable">Cost Reimbursable (Time & Materials)</option>
+            </select>
+
+            {isFinalised && !editingPricingBasis && (
+              <button
+                onClick={() => setEditingPricingBasis(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-all flex items-center gap-2 whitespace-nowrap"
+              >
+                <Edit size={16} />
+                Change
+              </button>
+            )}
+
+            {editingPricingBasis && (
+              <>
+                <button
+                  onClick={handleUpdatePricingBasis}
+                  disabled={saving}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-all disabled:opacity-50 whitespace-nowrap"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingPricingBasis(false);
+                    setFormData({ ...formData, pricing_basis: existingAppendix?.pricing_basis || '' });
+                  }}
+                  disabled={saving}
+                  className="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+
+          {editingPricingBasis && (
+            <div className="mt-2 bg-blue-900/20 border border-blue-700/50 rounded-lg p-3 text-sm text-blue-300">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                <div className="text-xs">
+                  Changing the Pricing Basis on a finalized appendix. This will update the pricing structure in the PDF.
+                </div>
+              </div>
+            </div>
+          )}
 
           {formData.pricing_basis === 'fixed_price_lump_sum' && allowances.some((a: any) => a.category === 'PS' || a.category === 'PC') && (
             <div className="mt-3 bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 text-sm text-amber-300">
