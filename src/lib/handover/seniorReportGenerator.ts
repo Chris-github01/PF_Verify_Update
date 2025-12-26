@@ -37,11 +37,18 @@ export interface SeniorReportData {
   supplierEmail?: string;
   supplierPhone?: string;
   supplierAddress?: string;
-  benchmarkData?: {
-    industryAverage: number;
-    variance: number;
-    percentile: number;
-  };
+  quoteComparison?: Array<{
+    supplierName: string;
+    amount: number;
+    isAwarded: boolean;
+    difference: number;
+  }>;
+  costBreakdown?: Array<{
+    serviceType: string;
+    coverage: string;
+    itemCount: number;
+    estimatedCost: number;
+  }>;
   cashflowProjection?: Array<{
     month: string;
     amount: number;
@@ -223,30 +230,71 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     </div>
   ` : '';
 
-  const benchmarkHTML = data.benchmarkData ? `
+  const quoteComparisonHTML = data.quoteComparison && data.quoteComparison.length > 1 ? `
     <div class="card">
-      <h3>Commercial Benchmarking</h3>
-      <div class="benchmark-metrics">
-        <div class="benchmark-item">
-          <div class="benchmark-label">Industry Average ($/m²)</div>
-          <div class="benchmark-value">$${data.benchmarkData.industryAverage.toFixed(2)}</div>
-        </div>
-        <div class="benchmark-item">
-          <div class="benchmark-label">Variance from Average</div>
-          <div class="benchmark-value ${data.benchmarkData.variance < 0 ? 'positive' : 'negative'}">
-            ${data.benchmarkData.variance > 0 ? '+' : ''}${data.benchmarkData.variance.toFixed(1)}%
-          </div>
-        </div>
-        <div class="benchmark-item">
-          <div class="benchmark-label">Market Percentile</div>
-          <div class="benchmark-value">${data.benchmarkData.percentile}th</div>
-        </div>
+      <h3>Quote Comparison</h3>
+      <div class="quote-comparison-table-wrapper">
+        <table class="quote-comparison-table">
+          <thead>
+            <tr>
+              <th>Supplier</th>
+              <th>Quote Amount</th>
+              <th>Variance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.quoteComparison.map(quote => `
+              <tr class="${quote.isAwarded ? 'awarded-row' : ''}">
+                <td><strong>${quote.supplierName}</strong></td>
+                <td>$${quote.amount.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="${quote.difference > 0 ? 'negative' : quote.difference < 0 ? 'positive' : ''}">
+                  ${quote.difference > 0 ? '+' : ''}${quote.difference.toFixed(1)}%
+                </td>
+                <td>${quote.isAwarded ? '<span class="status-badge awarded">✓ Awarded</span>' : ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
       <p class="benchmark-note">
-        ${data.benchmarkData.variance < 0
-          ? '✓ This quote is below market average, representing good value.'
-          : '⚠ This quote is above market average. Consider negotiation or alternative suppliers.'}
+        ${data.quoteComparison.filter(q => !q.isAwarded && q.difference < 0).length > 0
+          ? '⚠ Lower quotes were received. Ensure the awarded supplier offers the best value based on quality, coverage, and terms.'
+          : '✓ The awarded supplier provided the most competitive quote.'}
       </p>
+    </div>
+  ` : '';
+
+  const costBreakdownHTML = data.costBreakdown && data.costBreakdown.length > 0 ? `
+    <div class="card">
+      <h3>Cost Breakdown by Service Type</h3>
+      <div class="cost-breakdown-table-wrapper">
+        <table class="cost-breakdown-table">
+          <thead>
+            <tr>
+              <th>Service Type</th>
+              <th>Coverage</th>
+              <th>Items</th>
+              <th>Estimated Cost</th>
+              <th>% of Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.costBreakdown.map(item => {
+              const percentage = data.totalAmount > 0 ? (item.estimatedCost / data.totalAmount) * 100 : 0;
+              return `
+                <tr>
+                  <td><strong>${item.serviceType}</strong></td>
+                  <td>${item.coverage}</td>
+                  <td>${item.itemCount}</td>
+                  <td>$${item.estimatedCost.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td>${percentage.toFixed(1)}%</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
     </div>
   ` : '';
 
@@ -873,41 +921,93 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       margin-right: 6px;
     }
 
-    /* === BENCHMARKING === */
-    .benchmark-metrics {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin: 16px 0;
+    /* === QUOTE COMPARISON TABLE === */
+    .quote-comparison-table-wrapper {
+      overflow-x: auto;
+      margin-top: 16px;
     }
 
-    .benchmark-item {
-      text-align: center;
-      padding: 16px;
-      background: #f9fafb;
-      border-radius: 8px;
+    .quote-comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
     }
 
-    .benchmark-label {
+    .quote-comparison-table thead {
+      background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+      color: white;
+    }
+
+    .quote-comparison-table th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
       font-size: 11px;
-      color: #6b7280;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 8px;
     }
 
-    .benchmark-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: #111827;
+    .quote-comparison-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
     }
 
-    .benchmark-value.positive {
+    .quote-comparison-table tr.awarded-row {
+      background: #f0fdf4;
+    }
+
+    .quote-comparison-table td.positive {
       color: #16a34a;
+      font-weight: 600;
     }
 
-    .benchmark-value.negative {
+    .quote-comparison-table td.negative {
       color: #dc2626;
+      font-weight: 600;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .status-badge.awarded {
+      background: #16a34a;
+      color: white;
+    }
+
+    /* === COST BREAKDOWN TABLE === */
+    .cost-breakdown-table-wrapper {
+      overflow-x: auto;
+      margin-top: 16px;
+    }
+
+    .cost-breakdown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .cost-breakdown-table thead {
+      background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+      color: white;
+    }
+
+    .cost-breakdown-table th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .cost-breakdown-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
     }
 
     .benchmark-note {
@@ -1185,7 +1285,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         </div>
       </div>
 
-      ${benchmarkHTML}
+      ${quoteComparisonHTML}
+      ${costBreakdownHTML}
     </div>
 
     ${cashflowHTML}

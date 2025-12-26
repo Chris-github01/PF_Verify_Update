@@ -600,12 +600,30 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
         const totalItems = scopeSystems.reduce((sum, sys) => sum + sys.item_count, 0);
 
-        // Calculate benchmark data
-        const projectArea = 5000; // Could be fetched from project data
-        const pricePerM2 = awardInfo.total_amount / projectArea;
-        const industryAverage = 95; // Industry average $/m² for fire protection
-        const variance = ((pricePerM2 - industryAverage) / industryAverage) * 100;
-        const percentile = variance < 0 ? 35 : 65; // Below average = lower percentile (better value)
+        // Fetch all quotes for comparison
+        const { data: allQuotes } = await supabase
+          .from('quotes')
+          .select('supplier_name, total_amount, is_awarded')
+          .eq('project_id', projectId)
+          .eq('latest', true)
+          .order('total_amount', { ascending: true });
+
+        // Calculate quote comparison data
+        const quoteComparison = allQuotes?.map(q => ({
+          supplierName: q.supplier_name,
+          amount: q.total_amount || 0,
+          isAwarded: q.is_awarded,
+          difference: q.total_amount ? ((q.total_amount - awardInfo.total_amount) / awardInfo.total_amount) * 100 : 0
+        })) || [];
+
+        // Calculate cost breakdown by service type
+        const costBreakdown = scopeSystems.map(sys => ({
+          serviceType: sys.service_type,
+          coverage: sys.coverage,
+          itemCount: sys.item_count,
+          // Estimate cost proportion based on item count (in real implementation, sum actual quote_items amounts)
+          estimatedCost: totalItems > 0 ? (sys.item_count / totalItems) * awardInfo.total_amount : 0
+        }));
 
         // Generate cashflow projection with S-curve distribution
         const generateSCurvePercentages = (months: number): number[] => {
@@ -667,11 +685,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           supplierEmail: awardInfo.supplier_email,
           supplierPhone: awardInfo.supplier_phone,
           supplierAddress: awardInfo.supplier_address,
-          benchmarkData: {
-            industryAverage,
-            variance,
-            percentile
-          },
+          quoteComparison,
+          costBreakdown,
           cashflowProjection,
           organisationLogoUrl: organisationLogoUrl
         };
