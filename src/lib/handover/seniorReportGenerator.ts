@@ -26,6 +26,7 @@ export interface SeniorReportData {
   projectName: string;
   projectClient: string;
   supplierName: string;
+  awardDate?: string;
   totalAmount: number;
   retentionAmount: number;
   retentionPercentage: number;
@@ -636,36 +637,36 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
     /* === TYPOGRAPHY === */
     h2 {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
       color: #111827;
       letter-spacing: -0.5px;
-      margin-bottom: 20px;
-      padding-bottom: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
       border-bottom: 2px solid #f3f4f6;
     }
 
     h3 {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       color: #374151;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
 
     h4 {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
       color: #4b5563;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     /* === PROJECT DETAILS CARD === */
     .project-details-card {
       background: #f9fafb;
       border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 32px;
-      margin: 40px 0;
+      border-radius: 10px;
+      padding: 24px;
+      margin: 24px 0;
       text-align: left;
       width: 100%;
       max-width: 600px;
@@ -674,7 +675,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     .project-details-card .detail-row {
       display: flex;
       justify-content: space-between;
-      padding: 12px 0;
+      padding: 10px 0;
       border-bottom: 1px solid #e5e7eb;
     }
 
@@ -685,7 +686,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     .project-details-card .detail-label {
       font-weight: 600;
       color: #6b7280;
-      font-size: 13px;
+      font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -693,30 +694,30 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     .project-details-card .detail-value {
       font-weight: 600;
       color: #111827;
-      font-size: 15px;
+      font-size: 14px;
     }
 
     /* === METRICS CARDS === */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin: 32px 0;
+      gap: 12px;
+      margin: 20px 0;
     }
 
     .stat-card {
       background: white;
       border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 24px;
+      border-radius: 10px;
+      padding: 16px;
       text-align: center;
     }
 
     .stat-card-value {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 800;
       color: ${VERIFYTRADE_ORANGE};
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       line-height: 1.2;
       word-break: break-word;
       overflow-wrap: break-word;
@@ -724,7 +725,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     .stat-card-label {
-      font-size: 11px;
+      font-size: 10px;
       color: #6b7280;
       font-weight: 500;
       text-transform: uppercase;
@@ -735,20 +736,20 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     .content-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      margin-bottom: 32px;
+      gap: 16px;
+      margin-bottom: 20px;
     }
 
     .card {
       background: white;
       border: 2px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 28px;
+      border-radius: 10px;
+      padding: 20px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
 
     .card h3 {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     .full-width {
@@ -1353,9 +1354,19 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
           <span class="detail-value">${data.projectName}</span>
         </div>
         <div class="detail-row">
+          <span class="detail-label">Client</span>
+          <span class="detail-value">${data.projectClient}</span>
+        </div>
+        <div class="detail-row">
           <span class="detail-label">Subcontractor</span>
           <span class="detail-value">${data.supplierName}</span>
         </div>
+        ${data.awardDate ? `
+        <div class="detail-row">
+          <span class="detail-label">Award Date</span>
+          <span class="detail-value">${data.awardDate}</span>
+        </div>
+        ` : ''}
       </div>
 
       <div class="stats-grid" style="margin-top: 32px;">
@@ -1379,8 +1390,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     </div>
   </div>
 
-  <!-- SCOPE OF WORKS OVERVIEW PAGE -->
-  <div class="page page-break">
+  <!-- SCOPE OF WORKS OVERVIEW -->
+  <div class="page" style="margin-top: 20px;">
     <h2>Scope of Works Overview</h2>
     <div class="systems-grid-compact">
       ${scopeSystemsHTML}
@@ -1390,15 +1401,16 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
   </div>
 
   ${lineItemsHTML ? `
-  <!-- LINE ITEMS DETAILS PAGE -->
-  <div class="page">
+  <!-- LINE ITEMS DETAILS -->
+  <div class="page" style="margin-top: 20px;">
     <h2>Detailed Line Items</h2>
     ${lineItemsHTML}
   </div>
   ` : ''}
 
-  <!-- FINANCIAL & COMMERCIAL ANALYSIS PAGE -->
-  <div class="page page-break">
+  <!-- FINANCIAL & COMMERCIAL ANALYSIS -->
+  <div class="page" style="margin-top: 20px;">
+    <h2>Financial Overview</h2>
     <div class="content-grid">
       <div class="card">
         <h3>Scope Distribution by Service Type</h3>
@@ -1441,8 +1453,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     ${cashflowHTML}
   </div>
 
-  <!-- COMMERCIAL TERMS PAGE -->
-  <div class="page page-break">
+  <!-- COMMERCIAL TERMS -->
+  <div class="page" style="margin-top: 20px;">
     <h2>Key Commercial Terms</h2>
     <div class="table-container">
       <table>
@@ -1455,8 +1467,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     ${generateRetentionSummary(data)}
   </div>
 
-  <!-- RISK REGISTER PAGE -->
-  <div class="page page-break">
+  <!-- RISK REGISTER -->
+  <div class="page" style="margin-top: 20px;">
     <h2>Risk Register & Mitigations</h2>
     <div class="table-container">
       <table>
@@ -1472,12 +1484,13 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         </tbody>
       </table>
     </div>
+  </div>
 
-    <div style="margin-top: 32px; padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; text-align: center;">
-      <p style="font-size: 12px; color: #6b7280; line-height: 1.7;">
-        <strong style="color: #111827;">Confidential:</strong> This document contains commercial and sensitive information. Distribution restricted to authorized project team members only.
-      </p>
-    </div>
+  <!-- FOOTER NOTE -->
+  <div style="margin-top: 24px; padding: 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; text-align: center;">
+    <p style="font-size: 11px; color: #6b7280; line-height: 1.6; margin: 0;">
+      <strong style="color: #111827;">Confidential:</strong> This document contains commercial and sensitive information. Distribution restricted to authorized project team members only.
+    </p>
   </div>
 </body>
 </html>
