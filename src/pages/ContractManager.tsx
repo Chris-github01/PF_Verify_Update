@@ -948,22 +948,6 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
   return (
     <div className="min-h-screen bg-slate-900">
-      {/* Header Navigation */}
-      <div className="bg-slate-800/60 border-b border-slate-700">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={onNavigateBack}
-                className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-100 transition-colors"
-              >
-                <ArrowLeft size={16} />
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Page Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
