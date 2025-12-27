@@ -40,6 +40,7 @@ interface StepStatus {
 
 interface ProjectStats {
   quoteCount: number;
+  selectedQuoteCount: number;
   supplierCount: number;
   systemsDetected: number;
   systemsCovered: number;
@@ -47,6 +48,7 @@ interface ProjectStats {
   completedSteps: number;
   totalSteps: number;
   hasQuotes: boolean;
+  hasSelectedQuotes: boolean;
   hasReviewedItems: boolean;
   hasScopeMatrix: boolean;
   hasReports: boolean;
@@ -74,6 +76,7 @@ export default function NewProjectDashboard({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [stats, setStats] = useState<ProjectStats>({
     quoteCount: 0,
+    selectedQuoteCount: 0,
     supplierCount: 0,
     systemsDetected: 0,
     systemsCovered: 0,
@@ -81,6 +84,7 @@ export default function NewProjectDashboard({
     completedSteps: 0,
     totalSteps: TOTAL_WORKFLOW_STEPS,
     hasQuotes: false,
+    hasSelectedQuotes: false,
     hasReviewedItems: false,
     hasScopeMatrix: false,
     hasReports: false,
@@ -95,6 +99,33 @@ export default function NewProjectDashboard({
       setLoading(false);
     }
   }, [projectId, dashboardMode]);
+
+  // Reload project data when page becomes visible (user returns from another page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && projectId) {
+        console.log('[NewProjectDashboard] Page visible, reloading project data...');
+        loadProjectData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [projectId]);
+
+  // Also expose a method to force reload - will be called by parent when navigating back
+  useEffect(() => {
+    // Create a custom event listener for manual refresh
+    const handleRefresh = () => {
+      console.log('[NewProjectDashboard] Manual refresh triggered');
+      if (projectId) {
+        loadProjectData();
+      }
+    };
+
+    window.addEventListener('refresh-dashboard', handleRefresh);
+    return () => window.removeEventListener('refresh-dashboard', handleRefresh);
+  }, [projectId]);
 
   const loadUserData = async () => {
     try {
@@ -120,7 +151,7 @@ export default function NewProjectDashboard({
       // Filter quotes based on dashboard mode
       let quotesQuery = supabase
         .from('quotes')
-        .select('id, supplier_name, revision_number')
+        .select('id, supplier_name, revision_number, is_selected')
         .eq('project_id', projectId);
 
       const { data: allQuotes, error: quotesError } = await quotesQuery;
@@ -142,6 +173,7 @@ export default function NewProjectDashboard({
       console.log(`Dashboard mode: ${dashboardMode}, Total quotes: ${allQuotes?.length || 0}, Filtered quotes: ${quotes.length}`);
 
       const quoteCount = quotes?.length || 0;
+      const selectedQuoteCount = quotes?.filter(q => q.is_selected).length || 0;
       const supplierCount = new Set(quotes?.map(q => q.supplier_name)).size;
 
       const { data: lineItems } = await supabase
@@ -179,6 +211,7 @@ export default function NewProjectDashboard({
 
       const newStats: ProjectStats = {
         quoteCount,
+        selectedQuoteCount,
         supplierCount,
         systemsDetected,
         systemsCovered,
@@ -186,6 +219,7 @@ export default function NewProjectDashboard({
         completedSteps: 0,
         totalSteps: TOTAL_WORKFLOW_STEPS,
         hasQuotes: quoteCount > 0,
+        hasSelectedQuotes: selectedQuoteCount > 0,
         // Review & Clean is complete if there are line items with data
         hasReviewedItems: hasLineItems || settings?.settings?.review_clean_completed || false,
         // Scope Matrix is complete if items have been mapped to systems or coverage is 100%
@@ -211,9 +245,13 @@ export default function NewProjectDashboard({
           // Completed if quotes have been imported
           status = projectStats.hasQuotes ? 'completed' : 'not_started';
           break;
+        case 'select':
+          // Completed if quotes have been selected
+          status = projectStats.hasSelectedQuotes ? 'completed' : projectStats.hasQuotes ? 'in_progress' : 'not_started';
+          break;
         case 'review':
           // Completed if items have been reviewed/exist
-          status = projectStats.hasReviewedItems ? 'completed' : projectStats.hasQuotes ? 'in_progress' : 'not_started';
+          status = projectStats.hasReviewedItems ? 'completed' : projectStats.hasSelectedQuotes ? 'in_progress' : 'not_started';
           break;
         case 'matrix':
           // Completed if systems have been mapped

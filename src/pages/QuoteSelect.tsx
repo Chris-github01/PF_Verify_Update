@@ -348,7 +348,11 @@ export default function QuoteSelect({
           {canProceed && onNavigateNext && (
             <div className="mt-8 pt-6 border-t border-slate-700/50 flex justify-end">
               <button
-                onClick={onNavigateNext}
+                onClick={() => {
+                  // Trigger dashboard refresh when navigating
+                  window.dispatchEvent(new Event('refresh-dashboard'));
+                  onNavigateNext();
+                }}
                 className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-orange-500/30 transition-all"
               >
                 Continue to Review & Clean

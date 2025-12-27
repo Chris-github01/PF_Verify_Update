@@ -40,6 +40,30 @@ export default function ProjectDashboard({
     loadProjectStats();
   }, [projectId]);
 
+  // Reload stats when page becomes visible (user returns from another page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('[ProjectDashboard] Page visible, reloading stats...');
+        loadProjectStats();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [projectId]);
+
+  // Listen for manual refresh events
+  useEffect(() => {
+    const handleRefresh = () => {
+      console.log('[ProjectDashboard] Manual refresh triggered');
+      loadProjectStats();
+    };
+
+    window.addEventListener('refresh-dashboard', handleRefresh);
+    return () => window.removeEventListener('refresh-dashboard', handleRefresh);
+  }, [projectId]);
+
   const loadProjectStats = async () => {
     setLoading(true);
     try {
@@ -52,6 +76,8 @@ export default function ProjectDashboard({
       const selectedQuoteCount = quotes?.filter(q => q.is_selected).length || 0;
       const totalValue = quotes?.reduce((sum, q) => sum + (q.total_amount || 0), 0) || 0;
       const supplierCount = new Set(quotes?.map(q => q.supplier_name)).size;
+
+      console.log(`[ProjectDashboard] Loaded stats - Total: ${quoteCount}, Selected: ${selectedQuoteCount}`);
 
       // Check if any quote has cleaned/processed items
       const { data: processedItems } = await supabase
