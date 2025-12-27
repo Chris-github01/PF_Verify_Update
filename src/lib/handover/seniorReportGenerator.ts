@@ -555,19 +555,19 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     /* === PAGE LAYOUT === */
     @page {
       size: A4;
-      margin: 15mm 12mm;
+      margin: 18mm 14mm 18mm 14mm;
     }
 
     .page {
-      page-break-after: always;
+      /* REMOVED page-break-after to prevent blank pages */
       padding: 20px 30px 60px 30px;
       position: relative;
       box-sizing: border-box;
-      min-height: 0;
+      margin-bottom: 40px;
     }
 
     .page:last-child {
-      page-break-after: auto;
+      margin-bottom: 0;
     }
 
     /* === HEADER & FOOTER === */

@@ -566,7 +566,7 @@ export function generateFastPreletAppendix(
   <style>
     @page {
       size: A4;
-      margin: 20mm;
+      margin: 18mm 14mm 18mm 14mm;
     }
     * {
       margin: 0;
