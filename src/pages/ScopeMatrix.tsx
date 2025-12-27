@@ -133,6 +133,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         .from('quotes')
         .select('id, supplier_name, quote_reference, total_amount, items_count, revision_number')
         .eq('project_id', projectId)
+        .eq('is_selected', true)
         .or('revision_number.is.null,revision_number.eq.1')
         .order('supplier_name');
 
@@ -174,11 +175,12 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
   const loadAvailableQuotes = async () => {
     setQuotesLoading(true);
     try {
-      // Filter quotes based on dashboard mode
+      // Filter quotes based on dashboard mode and selected status
       const { data: allQuotes } = await supabase
         .from('quotes')
         .select('id, supplier_name, quote_reference, total_amount, items_count, revision_number')
         .eq('project_id', projectId)
+        .eq('is_selected', true)
         .order('supplier_name');
 
       // Filter quotes by revision number, treating NULL as revision 1

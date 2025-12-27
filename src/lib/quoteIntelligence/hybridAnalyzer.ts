@@ -53,6 +53,7 @@ export async function analyzeQuoteIntelligenceHybrid(
         .from('quotes')
         .select('*')
         .eq('project_id', projectId)
+        .eq('is_selected', true)
         .gt('revision_number', 1),
       supabase
         .from('quotes')
@@ -75,12 +76,13 @@ export async function analyzeQuoteIntelligenceHybrid(
     console.log('📊 [QuoteIntelligence] Fetched revision quotes:', revisionsResult.data?.length);
     console.log('📊 [QuoteIntelligence] Fetched original quotes:', originalsResult.data?.length);
   } else {
-    // Standard mode: just filter by dashboard mode
+    // Standard mode: just filter by dashboard mode and selected quotes
     let query = supabase
       .from('quotes')
       .select('*')
       .eq('project_id', projectId)
-      .eq('is_latest', true);
+      .eq('is_latest', true)
+      .eq('is_selected', true);
 
     if (dashboardMode === 'original') {
       query = query.eq('revision_number', 1);
@@ -91,6 +93,7 @@ export async function analyzeQuoteIntelligenceHybrid(
     console.log('🔍 [QuoteIntelligence] Query params:', {
       projectId,
       is_latest: true,
+      is_selected: true,
       revision_number: dashboardMode === 'original' ? '= 1' : '> 1'
     });
 
