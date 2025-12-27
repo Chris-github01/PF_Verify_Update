@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckSquare, Square, Info, ArrowRight, AlertCircle } from 'lucide-react';
+import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import WorkflowNav from '../components/WorkflowNav';
 import type { DashboardMode } from '../App';
@@ -192,175 +192,189 @@ export default function QuoteSelect({
   }
 
   return (
-    <div className="h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-y-auto">
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
+    <div className="p-6 max-w-full">
+      <div className="mb-6">
         <WorkflowNav
           currentStep="select"
           onNavigateBack={onNavigateBack}
           onNavigateNext={canProceed ? onNavigateNext : undefined}
         />
+      </div>
 
-        <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 shadow-2xl">
-          <div className="flex items-start justify-between mb-8">
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-slate-50 mb-2">Select Quotes</h1>
-              <p className="text-slate-400 text-lg">
-                Choose which quotes you want to clean, map, and include in your analysis
-              </p>
+      <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 mb-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+            <CheckSquare className="text-orange-400" size={20} />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-slate-100">Select Quotes</h2>
+            <p className="text-sm text-slate-400">
+              Choose which quotes you want to clean, map, and include in your analysis
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 mb-6">
+          <button
+            onClick={selectAll}
+            disabled={saving || totalCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors text-sm"
+          >
+            <CheckSquare size={16} />
+            Select All
+          </button>
+          <button
+            onClick={deselectAll}
+            disabled={saving || totalCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700 disabled:text-slate-500 text-slate-300 rounded-lg font-medium transition-colors text-sm"
+          >
+            <Square size={16} />
+            Deselect All
+          </button>
+        </div>
+
+        {message && (
+          <div className={`p-4 rounded-xl mb-6 ${
+            message.type === 'success' ? 'bg-green-900/20 border border-green-500/30' :
+            message.type === 'error' ? 'bg-red-900/20 border border-red-500/30' :
+            'bg-blue-900/20 border border-blue-500/30'
+          }`}>
+            <div className="flex items-start gap-2">
+              {message.type === 'success' ? (
+                <CheckCircle size={18} className="mt-0.5 flex-shrink-0 text-green-400" />
+              ) : message.type === 'error' ? (
+                <AlertCircle size={18} className="mt-0.5 flex-shrink-0 text-red-400" />
+              ) : (
+                <Info size={18} className="mt-0.5 flex-shrink-0 text-blue-400" />
+              )}
+              <span className={
+                message.type === 'success' ? 'text-green-300' :
+                message.type === 'error' ? 'text-red-300' :
+                'text-blue-300'
+              }>{message.text}</span>
             </div>
+          </div>
+        )}
+
+        <div className="mb-6 p-4 bg-slate-900/50 border border-slate-700/50 rounded-lg">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button
-                onClick={selectAll}
-                disabled={saving || totalCount === 0}
-                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-emerald-500/20"
-              >
-                <CheckSquare size={18} />
-                Select All
-              </button>
-              <button
-                onClick={deselectAll}
-                disabled={saving || totalCount === 0}
-                className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700 disabled:text-slate-500 text-slate-300 rounded-xl font-medium transition-all"
-              >
-                <Square size={18} />
-                Deselect All
-              </button>
+              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                <CheckSquare className="text-orange-400" size={20} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-slate-100">
+                  {selectedCount} of {totalCount}
+                </p>
+                <p className="text-sm text-slate-400">quotes selected</p>
+              </div>
             </div>
+            {!canProceed && (
+              <div className="flex items-center gap-2 text-amber-400">
+                <AlertCircle size={16} />
+                <span className="text-sm">Select at least one quote to continue</span>
+              </div>
+            )}
           </div>
+        </div>
 
-          {message && (
-            <div className={`mb-6 p-4 rounded-xl border ${
-              message.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' :
-              message.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-300' :
-              'bg-blue-500/10 border-blue-500/30 text-blue-300'
-            }`}>
-              <div className="flex items-center gap-2">
-                <Info size={18} />
-                <span className="font-medium">{message.text}</span>
-              </div>
+        {quotes.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-900/50 mb-4">
+              <Info className="text-slate-400" size={24} />
             </div>
-          )}
-
-          <div className="mb-6 p-5 bg-slate-900/50 border border-slate-700/50 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
-                  <CheckSquare className="text-white" size={24} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-slate-50">
-                    {selectedCount} of {totalCount}
-                  </p>
-                  <p className="text-slate-400">quotes selected</p>
-                </div>
-              </div>
-              {!canProceed && (
-                <div className="flex items-center gap-2 text-amber-400">
-                  <AlertCircle size={18} />
-                  <span className="text-sm font-medium">Select at least one quote to continue</span>
-                </div>
-              )}
-            </div>
+            <h3 className="text-lg font-semibold text-slate-300 mb-2">No Quotes Found</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              Import quotes first before selecting them for processing
+            </p>
+            {onNavigateBack && (
+              <button
+                onClick={onNavigateBack}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors text-sm"
+              >
+                Go to Import Quotes
+              </button>
+            )}
           </div>
-
-          {quotes.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800 mb-4">
-                <Info className="text-slate-400" size={32} />
-              </div>
-              <h3 className="text-xl font-semibold text-slate-300 mb-2">No Quotes Found</h3>
-              <p className="text-slate-500 mb-6">
-                Import quotes first before selecting them for processing
-              </p>
-              {onNavigateBack && (
-                <button
-                  onClick={onNavigateBack}
-                  className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-colors"
-                >
-                  Go to Import Quotes
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {quotes.map((quote) => (
-                <button
-                  key={quote.id}
-                  onClick={() => toggleQuoteSelection(quote.id)}
-                  className={`group relative p-6 rounded-xl border-2 transition-all text-left ${
+        ) : (
+          <div className="space-y-3">
+            {quotes.map((quote) => (
+              <button
+                key={quote.id}
+                onClick={() => toggleQuoteSelection(quote.id)}
+                className={`group relative w-full p-4 rounded-lg border transition-all text-left ${
+                  quote.is_selected
+                    ? 'bg-slate-900/50 border-orange-500/50'
+                    : 'bg-slate-900/30 border-slate-700/50 hover:border-slate-600/50 hover:bg-slate-900/40'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center transition-all ${
                     quote.is_selected
-                      ? 'bg-slate-800/80 border-orange-500/50 shadow-lg shadow-orange-500/10'
-                      : 'bg-slate-800/30 border-slate-700/30 hover:border-slate-600/50 hover:bg-slate-800/50'
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className={`flex-shrink-0 mt-1 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                      quote.is_selected
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-slate-700/50 text-slate-400 group-hover:bg-slate-600'
-                    }`}>
-                      {quote.is_selected ? <CheckSquare size={20} /> : <Square size={20} />}
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-slate-700/50 text-slate-400 group-hover:bg-slate-600'
+                  }`}>
+                    {quote.is_selected ? <CheckSquare size={14} /> : <Square size={14} />}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-4 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-bold text-slate-100 mb-0.5 truncate">
+                          {quote.supplier_name}
+                        </h3>
+                        {quote.quote_reference && (
+                          <p className="text-xs text-slate-400">
+                            Reference: {quote.quote_reference}
+                          </p>
+                        )}
+                        {quote.file_name && (
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">
+                            {quote.file_name}
+                          </p>
+                        )}
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${getStatusColor(quote.status)}`}>
+                        {getStatusLabel(quote.status)}
+                      </span>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-xl font-bold text-slate-50 mb-1 truncate">
-                            {quote.supplier_name}
-                          </h3>
-                          {quote.quote_reference && (
-                            <p className="text-sm text-slate-400">
-                              Reference: {quote.quote_reference}
-                            </p>
-                          )}
-                          {quote.file_name && (
-                            <p className="text-xs text-slate-500 mt-1 truncate">
-                              {quote.file_name}
-                            </p>
-                          )}
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${getStatusColor(quote.status)}`}>
-                          {getStatusLabel(quote.status)}
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-slate-400">Total:</span>
+                        <span className="font-semibold text-slate-100">
+                          ${(quote.total_amount || 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
-
-                      <div className="flex items-center gap-6 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-400">Total:</span>
-                          <span className="font-bold text-slate-50">
-                            ${(quote.total_amount || 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-400">Items:</span>
-                          <span className="font-semibold text-slate-300">
-                            {quote.items_count.toLocaleString()}
-                          </span>
-                        </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-slate-400">Items:</span>
+                        <span className="font-medium text-slate-300">
+                          {quote.items_count.toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {canProceed && onNavigateNext && (
-            <div className="mt-8 pt-6 border-t border-slate-700/50 flex justify-end">
-              <button
-                onClick={() => {
-                  // Trigger dashboard refresh when navigating
-                  window.dispatchEvent(new Event('refresh-dashboard'));
-                  onNavigateNext();
-                }}
-                className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-orange-500/30 transition-all"
-              >
-                Continue to Review & Clean
-                <ArrowRight size={20} />
+                </div>
               </button>
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
+
+        {canProceed && onNavigateNext && (
+          <div className="mt-6 pt-6 border-t border-slate-700/50 flex justify-end">
+            <button
+              onClick={() => {
+                // Trigger dashboard refresh when navigating
+                window.dispatchEvent(new Event('refresh-dashboard'));
+                onNavigateNext();
+              }}
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white rounded-lg font-medium text-sm transition-all"
+            >
+              Continue to Review & Clean
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
