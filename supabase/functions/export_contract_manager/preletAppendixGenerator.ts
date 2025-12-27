@@ -335,7 +335,7 @@ function renderRetentionSummary(project: any, awardedTotal: number | undefined):
           <span style="font-size: 13px; color: #ea580c; font-weight: 700;">${formatCurrency(retentionCalc.retentionHeld)}</span>
         </div>
         <div style="display: flex; justify-content: space-between;">
-          <span style="font-size: 13px; color: #374151; font-weight: 600;">Net Payable After Retention:</span>
+          <span style="font-size: 13px; color: #374151; font-weight: 600;">Net Payable Before Retention:</span>
           <span style="font-size: 13px; color: #16a34a; font-weight: 700;">${formatCurrency(retentionCalc.netPayable)}</span>
         </div>
       </div>

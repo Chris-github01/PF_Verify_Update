@@ -284,7 +284,7 @@ function generateRetentionSummary(data: SeniorReportData): string {
           <span style="font-size: 15px; color: #ea580c; font-weight: 700;">${formatNZD(retentionCalc.retentionHeld)}</span>
         </div>
         <div style="display: flex; justify-content: space-between;">
-          <span style="font-size: 15px; color: #374151; font-weight: 600;">Net Payable After Retention:</span>
+          <span style="font-size: 15px; color: #374151; font-weight: 600;">Net Payable Before Retention:</span>
           <span style="font-size: 15px; color: #16a34a; font-weight: 700;">${formatNZD(retentionCalc.netPayable)}</span>
         </div>
       </div>
