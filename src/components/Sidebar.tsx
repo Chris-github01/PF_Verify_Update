@@ -116,28 +116,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
                 <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.8)]" />
               )}
             </button>
-            <button
-              onClick={() => {
-                onDashboardModeChange('revisions');
-                onTabChange('dashboard');
-              }}
-              className={`
-                group flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all
-                ${
-                  dashboardMode === 'revisions'
-                    ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
-                    : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
-                }
-              `}
-            >
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
-                <RefreshCw size={13} />
-              </span>
-              <span className="flex-1 text-left">Revised Quotes</span>
-              {dashboardMode === 'revisions' && (
-                <span className="h-1.5 w-1.5 rounded-full bg-purple-400 shadow-[0_0_12px_rgba(192,132,252,0.8)]" />
-              )}
-            </button>
+            {/* Revised Quotes button hidden as per user request */}
           </div>
         </div>
       )}
