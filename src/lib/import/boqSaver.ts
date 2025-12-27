@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import type { NormalisedBOQRow } from '../../types/import.types';
 import { detectServiceTypesInBatch } from '../quoteIntelligence/aiServiceDetector';
 import { reconcileQuoteTotal } from '../validation/quoteValidator';
+import { logActivity } from '../activityLogger';
 
 function extractServiceFromDescription(description: string): string {
   const upperDesc = description.toUpperCase();
@@ -119,6 +120,26 @@ export async function saveBOQToDatabase(
       }
 
       console.log('[BOQ Saver] Quote created', { quoteId: quote.id });
+
+      try {
+        const { data: projectInfo } = await supabase
+          .from('projects')
+          .select('organisation_id, user_id')
+          .eq('id', projectId)
+          .single();
+
+        if (projectInfo) {
+          await logActivity({
+            organisationId: projectInfo.organisation_id,
+            userId: projectInfo.user_id,
+            activityType: 'quote_imported',
+            projectId: projectId,
+            metadata: { supplierName, quoteId: quote.id }
+          });
+        }
+      } catch (logError) {
+        console.error('[BOQ Saver] Failed to log activity', logError);
+      }
 
       console.log('[BOQ Saver] Running AI service detection...');
       const itemsForDetection = rows.map((row, idx) => ({

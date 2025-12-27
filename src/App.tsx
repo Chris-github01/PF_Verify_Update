@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Sparkles, AlertTriangle, X } from 'lucide-react';
 import { isImpersonating, stopImpersonation } from './lib/admin/adminApi';
+import { logActivity } from './lib/activityLogger';
 import Sidebar, { SidebarTab } from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
 import AppBar from './components/AppBar';
@@ -359,6 +360,14 @@ function AppContent() {
       if (error) throw error;
 
       await loadAllProjects();
+
+      await logActivity({
+        organisationId: currentOrganisation.id,
+        userId: session.user.id,
+        activityType: 'project_created',
+        projectId: project.id,
+        metadata: { name, client, reference }
+      });
 
       setToast({ message: `Project "${name}" created successfully`, type: 'success' });
 

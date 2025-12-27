@@ -404,6 +404,28 @@ Deno.serve(async (req: Request) => {
 
     if (reportError) throw reportError;
 
+    try {
+      const { data: projectInfo } = await supabase
+        .from("projects")
+        .select("organisation_id, user_id")
+        .eq("id", projectId)
+        .single();
+
+      if (projectInfo) {
+        await supabase
+          .from("user_activity_log")
+          .insert({
+            organisation_id: projectInfo.organisation_id,
+            user_id: projectInfo.user_id,
+            activity_type: "report_generated",
+            project_id: projectId,
+            metadata: { reportId: reportData.id }
+          });
+      }
+    } catch (logError) {
+      console.error("Failed to log activity:", logError);
+    }
+
     return new Response(
       JSON.stringify({ reportId: reportData.id }),
       {
