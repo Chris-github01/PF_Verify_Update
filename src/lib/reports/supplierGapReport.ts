@@ -28,9 +28,6 @@ export function generateSupplierGapReportHtml(data: SupplierGapReportData): stri
           <h3 style="margin: 0 0 8px 0; color: #991b1b; font-size: 16px; font-weight: 600;">
             ${gap.system}${gap.category ? ` - ${gap.category}` : ''}
           </h3>
-          <p style="margin: 0 0 12px 0; color: #7f1d1d; font-size: 14px;">
-            <strong>Estimated Impact:</strong> ${gap.estimatedImpact}
-          </p>
           ${gap.details.length > 0 ? `
             <ul style="margin: 8px 0 0 0; padding-left: 20px; color: #7f1d1d;">
               ${gap.details.map(detail => `<li style="margin-bottom: 4px;">${detail}</li>`).join('')}
