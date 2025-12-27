@@ -1119,7 +1119,6 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
           </div>
 
           {/* Main Table - Full Width */}
-          <div>
           <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
@@ -1437,7 +1436,6 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
               </div>
             )}
           </div>
-        </div>
       </div>
       )}
 
