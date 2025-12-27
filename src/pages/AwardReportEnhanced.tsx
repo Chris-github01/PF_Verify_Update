@@ -111,7 +111,7 @@ export default function AwardReportEnhanced({
 
   useEffect(() => {
     if (comparisonData.length > 0) {
-      const result = buildEqualisation(comparisonData, 'MODEL');
+      const result = buildEqualisation(comparisonData, 'PEER_MEDIAN');
       setEqualisationResult(result);
     } else {
       setEqualisationResult(null);

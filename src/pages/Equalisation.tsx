@@ -18,7 +18,7 @@ interface EqualisationProps {
 export default function Equalisation({ projectId, onNavigateBack, onNavigateNext, preselectedQuoteIds = [] }: EqualisationProps) {
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [equalisationResult, setEqualisationResult] = useState<EqualisationResult | null>(null);
-  const [mode, setMode] = useState<EqualisationMode>('MODEL');
+  const [mode, setMode] = useState<EqualisationMode>('PEER_MEDIAN');
   const [loading, setLoading] = useState(true);
   const [modeLoaded, setModeLoaded] = useState(false);
 

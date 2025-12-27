@@ -51,6 +51,7 @@ interface ProjectStats {
   hasSelectedQuotes: boolean;
   hasReviewedItems: boolean;
   hasScopeMatrix: boolean;
+  hasEqualisation: boolean;
   hasReports: boolean;
 }
 
@@ -199,6 +200,12 @@ export default function NewProjectDashboard({
         .eq('project_id', projectId)
         .maybeSingle();
 
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('equalisation_completed')
+        .eq('id', projectId)
+        .maybeSingle();
+
       const { data: reportsList } = await supabase
         .from('award_reports')
         .select('id')
@@ -224,6 +231,8 @@ export default function NewProjectDashboard({
         hasReviewedItems: hasLineItems || settings?.settings?.review_clean_completed || false,
         // Scope Matrix is complete if items have been mapped to systems or coverage is 100%
         hasScopeMatrix: hasMappedItems || coveragePercent === 100 || settings?.settings?.scope_matrix_completed || false,
+        // Equalisation is complete if the flag is set in the projects table
+        hasEqualisation: projectData?.equalisation_completed || false,
         hasReports: (reportsList?.length || 0) > 0,
       };
 
@@ -253,13 +262,17 @@ export default function NewProjectDashboard({
           // Completed if items have been reviewed/exist
           status = projectStats.hasReviewedItems ? 'completed' : projectStats.hasSelectedQuotes ? 'in_progress' : 'not_started';
           break;
+        case 'intelligence':
+          // Completed if scope matrix is done (prerequisite for intelligence analysis)
+          status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
+          break;
         case 'matrix':
           // Completed if systems have been mapped
           status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
           break;
-        case 'intelligence':
-          // Completed if scope matrix is done (prerequisite for intelligence analysis)
-          status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
+        case 'equalisation':
+          // Completed if equalisation analysis has been run
+          status = projectStats.hasEqualisation ? 'completed' : projectStats.hasScopeMatrix ? 'in_progress' : 'not_started';
           break;
         case 'reports':
           // Completed if reports have been generated
@@ -596,8 +609,11 @@ export default function NewProjectDashboard({
             </div>
 
             <div className="bg-slate-800/60 rounded-lg border border-slate-700">
-              <div className="px-4 py-3 border-b border-slate-700">
+              <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
                 <h2 className="text-[20px] font-semibold text-slate-100">Project Workflow</h2>
+                <div className="text-sm text-slate-400">
+                  {steps.filter(s => s.status === 'completed').length} of {steps.length} completed
+                </div>
               </div>
               <div>
                 {steps.map((step, index) => {
