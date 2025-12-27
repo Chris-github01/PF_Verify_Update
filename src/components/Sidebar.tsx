@@ -42,15 +42,30 @@ interface SidebarProps {
   onDashboardModeChange: (mode: DashboardMode) => void;
 }
 
-const menuItems = [
-  { id: 'dashboard' as SidebarTab, label: 'Project Dashboard', icon: LayoutDashboard },
-  { id: 'quotes' as SidebarTab, label: 'Import Quotes', icon: FileText },
-  { id: 'quoteselect' as SidebarTab, label: 'Quote Select', icon: CheckSquare },
-  { id: 'review' as SidebarTab, label: 'Review & Clean', icon: ClipboardCheck },
-  { id: 'quoteintel' as SidebarTab, label: 'Quote Intelligence', icon: Sparkles },
-  { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
-  { id: 'reports' as SidebarTab, label: 'Reports', icon: BarChart3 },
-  { id: 'contract' as SidebarTab, label: 'Contract Manager', icon: Briefcase },
+// Navigation structure organized by procurement lifecycle
+const menuStructure = [
+  {
+    section: 'QUOTE AUDIT (PRE-AWARD)',
+    items: [
+      { id: 'dashboard' as SidebarTab, label: 'Project Dashboard', icon: LayoutDashboard },
+      { id: 'quotes' as SidebarTab, label: 'Import Quotes', icon: FileText },
+      { id: 'quoteselect' as SidebarTab, label: 'Quote Select', icon: CheckSquare },
+      { id: 'review' as SidebarTab, label: 'Review & Clean', icon: ClipboardCheck },
+      { id: 'quoteintel' as SidebarTab, label: 'Quote Intelligence', icon: Sparkles },
+      { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
+      { id: 'reports' as SidebarTab, label: 'Award Reports', icon: BarChart3 },
+    ]
+  },
+  {
+    section: 'CONTRACT & HANDOVER (POST-AWARD)',
+    items: [
+      { id: 'contract' as SidebarTab, label: 'Contract Manager', icon: Briefcase },
+    ]
+  }
+];
+
+// Admin items rendered separately at bottom
+const adminItems = [
   { id: 'admincenter' as SidebarTab, label: 'Admin Center', icon: ShieldAlert, requiresAdminAccess: true },
   { id: 'settings' as SidebarTab, label: 'Settings', icon: Settings, requiresAdminAccess: true },
 ];
@@ -126,45 +141,97 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
 
       {/* Main Navigation */}
       <nav className="flex-1 px-3 pb-4 pt-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 px-3 mb-2">
-          Workflow
-        </div>
-        <ul className="space-y-1">
-          {menuItems.map((item) => {
-            if ((item as any).requiresAdminAccess && !isMasterAdmin) {
-              return null;
-            }
+        {menuStructure.map((section, sectionIndex) => (
+          <div key={section.section}>
+            {/* Section Header */}
+            {!collapsed && (
+              <div className={`text-[10px] uppercase tracking-[0.2em] text-slate-500 px-3 mb-2 font-semibold ${sectionIndex > 0 ? 'mt-6 pt-6 border-t border-slate-800/60' : ''}`}>
+                {section.section}
+              </div>
+            )}
 
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            {/* Section Items */}
+            <ul className="space-y-1">
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
 
-            return (
-              <li key={item.id}>
-                <button
-                  onClick={() => onTabChange(item.id)}
-                  className={`
-                    group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
-                    ${
-                      isActive
-                        ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
-                        : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
-                    }
-                    ${collapsed ? 'justify-center' : ''}
-                  `}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
-                    <Icon size={16} />
-                  </span>
-                  {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
-                  {!collapsed && isActive && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                return (
+                  <li key={item.id}>
+                    <button
+                      onClick={() => onTabChange(item.id)}
+                      className={`
+                        group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                        ${
+                          isActive
+                            ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                            : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                        }
+                        ${collapsed ? 'justify-center' : ''}
+                      `}
+                      title={collapsed ? item.label : undefined}
+                    >
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                        <Icon size={16} />
+                      </span>
+                      {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
+                      {!collapsed && isActive && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+
+        {/* Admin Section - only show if admin */}
+        {isMasterAdmin && (
+          <div>
+            {!collapsed && (
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 px-3 mb-2 mt-6 pt-6 border-t border-slate-800/60 font-semibold">
+                ADMINISTRATION
+              </div>
+            )}
+            <ul className="space-y-1">
+              {adminItems.map((item) => {
+                if (item.requiresAdminAccess && !isMasterAdmin) {
+                  return null;
+                }
+
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+
+                return (
+                  <li key={item.id}>
+                    <button
+                      onClick={() => onTabChange(item.id)}
+                      className={`
+                        group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                        ${
+                          isActive
+                            ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                            : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                        }
+                        ${collapsed ? 'justify-center' : ''}
+                      `}
+                      title={collapsed ? item.label : undefined}
+                    >
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                        <Icon size={16} />
+                      </span>
+                      {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
+                      {!collapsed && isActive && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </nav>
 
       {/* Admin Console Button */}
