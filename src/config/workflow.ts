@@ -25,20 +25,26 @@ export const PROJECT_WORKFLOW_STEPS: WorkflowStep[] = [
     description: 'Review and clean imported data'
   },
   {
-    id: 'matrix',
-    name: 'Scope Matrix',
-    route: 'scope-matrix',
-    description: 'Build and analyze scope matrix'
-  },
-  {
     id: 'intelligence',
     name: 'Quote Intelligence',
     route: 'quote-intelligence',
     description: 'AI-powered quote analysis'
   },
   {
+    id: 'matrix',
+    name: 'Scope Matrix',
+    route: 'scope-matrix',
+    description: 'Build and analyze scope matrix'
+  },
+  {
+    id: 'equalisation',
+    name: 'Equalisation Analysis',
+    route: 'equalisation',
+    description: 'Normalize quotes for fair comparison'
+  },
+  {
     id: 'reports',
-    name: 'Reports',
+    name: 'Award Reports',
     route: 'reports',
     description: 'Generate award and analysis reports'
   },

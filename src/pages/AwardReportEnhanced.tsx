@@ -1108,11 +1108,11 @@ export default function AwardReportEnhanced({
 
       {/* Navigation */}
       <WorkflowNav
-        currentStep={5}
-        totalSteps={6}
+        currentStep={6}
+        totalSteps={7}
         onBack={onNavigateBack}
         onNext={() => onNavigate?.('dashboard')}
-        backLabel="Back: Scope Matrix"
+        backLabel="Back: Equalisation Analysis"
         nextLabel="Complete and Finish"
       />
     </div>

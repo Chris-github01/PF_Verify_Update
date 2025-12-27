@@ -783,7 +783,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
 
       <WorkflowNav
         currentStep={3}
-        totalSteps={6}
+        totalSteps={7}
         onBack={onNavigateBack}
         onNext={onNavigateNext}
         backLabel="Back: Review & Clean"

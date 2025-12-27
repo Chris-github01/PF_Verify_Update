@@ -154,6 +154,12 @@ export default function ProjectDashboard({
       description: stats.hasCleanedData ? 'Data cleaned and mapped' : 'Not started'
     },
     {
+      id: 'intelligence',
+      name: 'Quote Intelligence',
+      completed: stats.hasCleanedData,
+      description: stats.hasCleanedData ? 'Ready for analysis' : 'Complete Review & Clean first'
+    },
+    {
       id: 'scope',
       name: 'Scope Matrix',
       completed: stats.scopeMatrixCompleted,
@@ -166,7 +172,7 @@ export default function ProjectDashboard({
       description: stats.equalisationCompleted ? 'Equalisation completed' : 'Not started'
     },
     {
-      id: 'analysis',
+      id: 'reports',
       name: 'Award Reports',
       completed: stats.reportStatus === 'ready',
       description: stats.reportStatus === 'ready' ? 'Reports generated' : 'Not generated'

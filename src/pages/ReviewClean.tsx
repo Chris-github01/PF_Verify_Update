@@ -1436,7 +1436,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
 
       <WorkflowNav
         currentStep={2}
-        totalSteps={6}
+        totalSteps={7}
         onBack={onNavigateBack}
         onNext={onNavigateNext}
         backLabel="Back: Quote Select"

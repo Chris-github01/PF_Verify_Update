@@ -577,11 +577,11 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
 
       <WorkflowNav
         currentStep={5}
-        totalSteps={6}
+        totalSteps={7}
         onBack={onNavigateBack}
         onNext={handleNavigateNext}
         backLabel="Back: Scope Matrix"
-        nextLabel="Next: Award Report"
+        nextLabel="Next: Award Reports"
       />
         </div>
       </div>

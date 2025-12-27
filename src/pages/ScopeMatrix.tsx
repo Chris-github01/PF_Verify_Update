@@ -1666,11 +1666,11 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
 
             <WorkflowNav
               currentStep={4}
-              totalSteps={6}
+              totalSteps={7}
               onBack={onNavigateBack}
               onNext={onNavigateNext}
               backLabel="Back: Quote Intelligence"
-              nextLabel="Next: Award Report"
+              nextLabel="Next: Equalisation Analysis"
             />
           </div>
         )}
