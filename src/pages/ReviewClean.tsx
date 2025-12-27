@@ -104,11 +104,11 @@ function DescriptionCell({ rawDescription, normalizedDescription }: { rawDescrip
   const changed = normalizedDescription && normalizedDescription.trim() !== rawDescription.trim();
 
   return (
-    <div className="flex flex-col text-sm">
-      <span className="font-medium text-gray-900">{finalDesc}</span>
+    <div className="flex flex-col text-sm min-w-0">
+      <span className="font-medium text-slate-100 truncate">{finalDesc}</span>
       {changed && (
-        <span className="text-[11px] text-slate-500">
-          original: {rawDescription}
+        <span className="text-[10px] text-slate-400 truncate">
+          normalised from: {rawDescription}
         </span>
       )}
     </div>
@@ -139,38 +139,31 @@ function AttributesCell({
   const hasNewMapping = mappedServiceType || mappedSystem || mappedPenetration;
 
   return (
-    <div className="text-xs space-y-1 break-words">
+    <div className="text-xs space-y-1 min-w-0">
       {hasNewMapping ? (
         <div className="flex flex-wrap gap-1">
           {mappedServiceType && (
-            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold break-words border border-blue-500/30">
+            <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-medium border border-blue-500/30 truncate">
               {mappedServiceType}
             </span>
           )}
           {mappedSystem && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold break-words border border-emerald-500/30">
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-medium border border-emerald-500/30 truncate">
               {mappedSystem}
             </span>
           )}
           {mappedPenetration && (
-            <span className="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-semibold break-words border border-pink-500/30">
+            <span className="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 font-medium border border-pink-500/30 truncate">
               {mappedPenetration}
-            </span>
-          )}
-          {typeof mappingConfidence === "number" && (
-            <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-200 font-semibold border border-slate-600">
-              {(mappingConfidence * 100).toFixed(0)}%
             </span>
           )}
         </div>
       ) : (
-        <>
-          {size && <div className="text-gray-900 font-medium break-words">Size: <span className="font-semibold">{size}</span></div>}
-          {frr && <div className="text-gray-900 font-medium break-words">FRR: <span className="font-semibold">{frr}</span></div>}
-          {service && <div className="text-blue-800 font-medium break-words">Service: <span className="font-semibold">{service}</span></div>}
-          {subclass && <div className="text-gray-900 font-medium break-words">Type: <span className="font-semibold">{subclass}</span></div>}
-          {material && <div className="text-gray-900 font-medium break-words">Material: <span className="font-semibold">{material}</span></div>}
-        </>
+        <div className="space-y-0.5">
+          {service && <div className="text-blue-300 truncate">{service}</div>}
+          {size && <div className="text-slate-300 truncate">Size: {size}</div>}
+          {frr && <div className="text-slate-300 truncate">FRR: {frr}</div>}
+        </div>
       )}
     </div>
   );
@@ -770,6 +763,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
       service: item.service,
       subclass: item.subclass,
       material: item.material,
+      system_id: item.system_id,
     });
   };
 
@@ -1176,9 +1170,12 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                     return (
                       <tr key={item.id} className={item.is_excluded ? 'bg-slate-800/30 opacity-60' : 'hover:bg-slate-800/20'}>
                         <>
-                            <td className="px-3 py-3 truncate" title={item.raw_description || item.description}>
-                              <div className="flex flex-col gap-1">
-                                <span className="text-sm text-slate-100 truncate">{item.description}</span>
+                            <td className="px-3 py-3">
+                              <div className="flex flex-col gap-0.5 min-w-0">
+                                <DescriptionCell
+                                  rawDescription={item.raw_description || item.description}
+                                  normalizedDescription={item.normalized_description}
+                                />
                                 {needsQuantity(item) && (
                                   <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 w-fit">
                                     Needs Qty
@@ -1187,18 +1184,47 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                               </div>
                             </td>
                             <td className="px-2 py-3 text-sm text-slate-100">{item.quantity}</td>
-                            <td className="px-2 py-3 text-sm text-slate-100 truncate">{item.canonical_unit || item.unit}</td>
+                            <td className="px-2 py-3">
+                              <UnitCell
+                                rawUnit={item.raw_unit || item.unit}
+                                normalizedUnit={item.normalized_unit}
+                                canonicalUnit={item.canonical_unit}
+                              />
+                            </td>
                             <td className="px-2 py-3 text-sm text-slate-100">${item.unit_price.toFixed(2)}</td>
                             <td className="px-2 py-3 text-sm text-slate-100">${item.total_price.toFixed(2)}</td>
                             <td className="px-2 py-3">
-                              <div className="text-xs text-slate-300 truncate" title={item.service || item.mapped_service_type}>
-                                {item.service || item.mapped_service_type || '-'}
-                              </div>
+                              <AttributesCell
+                                mappedServiceType={item.mapped_service_type}
+                                mappedSystem={item.mapped_system}
+                                mappedPenetration={item.mapped_penetration}
+                                mappingConfidence={item.mapping_confidence}
+                                size={item.size}
+                                frr={item.frr}
+                                service={item.service}
+                                subclass={item.subclass}
+                                material={item.material}
+                              />
                             </td>
-                            <td className="px-2 py-3 truncate">
-                              <div className="text-xs text-slate-100 truncate" title={item.system_label}>
-                                {item.system_label || 'Not mapped'}
-                              </div>
+                            <td className="px-2 py-3">
+                              {item.system_label ? (
+                                <div className="space-y-1">
+                                  <div className="text-xs text-slate-100 truncate" title={item.system_label}>
+                                    {item.system_label}
+                                  </div>
+                                  {item.system_confidence !== undefined && (
+                                    <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded border ${
+                                      item.system_confidence >= 0.7 ? 'bg-green-500/20 text-green-300 border-green-500/30' :
+                                      item.system_confidence >= 0.5 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' :
+                                      'bg-red-500/20 text-red-300 border-red-500/30'
+                                    }`}>
+                                      {Math.round(item.system_confidence * 100)}%
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-400">Not mapped</div>
+                              )}
                             </td>
                             <td className="px-2 py-3">
                               {getConfidenceBadge(item.confidence)}
@@ -1346,6 +1372,32 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                     placeholder="e.g., Electrical, Mechanical"
                   />
                 </div>
+              </div>
+
+              {/* System Mapping */}
+              <div className="border-t border-slate-700 pt-4">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  System Mapping
+                  {editForm.system_id && (
+                    <span className="ml-2 text-xs text-blue-400">(mapped)</span>
+                  )}
+                </label>
+                <select
+                  value={editForm.system_id || ''}
+                  onChange={(e) => {
+                    const currentItem = items.find(i => i.id === editingItem);
+                    if (currentItem && e.target.value) {
+                      handleSystemOverride(currentItem.id, e.target.value);
+                      setEditForm({ ...editForm, system_id: e.target.value });
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent [&>option]:text-slate-900 [&>option]:bg-white"
+                >
+                  <option value="">-- Select System --</option>
+                  {availableSystems.map(sys => (
+                    <option key={sys.id} value={sys.id}>{sys.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

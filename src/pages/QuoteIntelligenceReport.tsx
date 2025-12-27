@@ -495,7 +495,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
                             Rev {supplier.revisionNumber}
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-full">
+                          <span className="px-2 py-0.5 bg-slate-700 text-slate-200 text-xs font-semibold rounded-full border border-slate-600">
                             Original
                           </span>
                         )}
