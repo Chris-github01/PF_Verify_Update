@@ -1636,7 +1636,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               onBack={onNavigateBack}
               onNext={onNavigateNext}
               backLabel="Back: Quote Intelligence"
-              nextLabel="Next: Equalisation"
+              nextLabel="Next: Award Report"
             />
           </div>
         )}

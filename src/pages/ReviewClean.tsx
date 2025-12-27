@@ -1111,7 +1111,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                         </span>
                       </div>
                     </div>
-                    </div>
+                  </div>
                   ))}
                 </div>
               </div>
@@ -1443,9 +1443,10 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
 
       <WorkflowNav
         currentStep={2}
+        totalSteps={6}
         onBack={onNavigateBack}
         onNext={onNavigateNext}
-        backLabel="Back: Import Quotes"
+        backLabel="Back: Quote Select"
         nextLabel="Next: Quote Intelligence"
       />
     </div>

@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import ApprovalModal from '../components/ApprovalModal';
 import RevisionRequestModal from '../components/RevisionRequestModal';
+import WorkflowNav from '../components/WorkflowNav';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { exportScheduleOfRates } from '../lib/export/scheduleOfRatesExport';
@@ -56,6 +57,8 @@ interface AwardReportEnhancedProps {
   organisationId: string;
   onToast?: (message: string, type: 'success' | 'error') => void;
   onNavigate?: (page: string) => void;
+  onNavigateBack?: () => void;
+  onNavigateNext?: () => void;
 }
 
 export default function AwardReportEnhanced({
@@ -64,6 +67,8 @@ export default function AwardReportEnhanced({
   organisationId,
   onToast,
   onNavigate,
+  onNavigateBack,
+  onNavigateNext,
 }: AwardReportEnhancedProps) {
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [awardSummary, setAwardSummary] = useState<AwardSummary | null>(null);
@@ -1099,6 +1104,16 @@ export default function AwardReportEnhanced({
       <SupplierDetailModal
         supplier={selectedSupplier}
         onClose={() => setSelectedSupplier(null)}
+      />
+
+      {/* Navigation */}
+      <WorkflowNav
+        currentStep={5}
+        totalSteps={6}
+        onBack={onNavigateBack}
+        onNext={() => onNavigate?.('dashboard')}
+        backLabel="Back: Scope Matrix"
+        nextLabel="Complete and Finish"
       />
     </div>
   );
