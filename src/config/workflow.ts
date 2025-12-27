@@ -13,6 +13,12 @@ export const PROJECT_WORKFLOW_STEPS: WorkflowStep[] = [
     description: 'Import quotes from suppliers'
   },
   {
+    id: 'select',
+    name: 'Quote Select',
+    route: 'quote-select',
+    description: 'Select quotes for processing'
+  },
+  {
     id: 'review',
     name: 'Review & Clean',
     route: 'review-clean',

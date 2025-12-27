@@ -9,6 +9,7 @@ import AppBar from './components/AppBar';
 import { AppShell } from './components/layout/AppShell';
 import NewProjectDashboard from './pages/NewProjectDashboard';
 import EnhancedImportQuotes from './pages/EnhancedImportQuotes';
+import QuoteSelect from './pages/QuoteSelect';
 import ReviewClean from './pages/ReviewClean';
 import QuoteIntelligence from './pages/QuoteIntelligence';
 import ScopeMatrix from './pages/ScopeMatrix';
@@ -497,6 +498,9 @@ function AppContent() {
       case 'quotes':
         setActiveTab('quotes');
         break;
+      case 'select':
+        setActiveTab('quoteselect');
+        break;
       case 'review':
         setActiveTab('review');
         break;
@@ -570,7 +574,34 @@ function AppContent() {
           projectId={projectId}
           onQuotesImported={() => {}}
           onNavigateToDashboard={() => setActiveTab('dashboard')}
-          onNavigateToNext={() => setActiveTab('review')}
+          onNavigateToNext={() => setActiveTab('quoteselect')}
+          dashboardMode={dashboardMode}
+        />;
+
+      case 'quoteselect':
+        if (!projectId) {
+          return <NewProjectDashboard
+            projectId={null}
+            projectName={undefined}
+            allProjects={allProjects}
+            onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
+            onNavigateToQuotes={() => {
+              if (handleNavigationGuard('quotes')) setActiveTab('quotes');
+            }}
+            onNavigateToMatrix={() => {
+              if (handleNavigationGuard('scope')) setActiveTab('scope');
+            }}
+            onNavigateToReports={() => {
+              if (handleNavigationGuard('reports')) setActiveTab('reports');
+            }}
+            dashboardMode={dashboardMode}
+          />;
+        }
+        return <QuoteSelect
+          projectId={projectId}
+          onNavigateBack={() => setActiveTab('quotes')}
+          onNavigateNext={() => setActiveTab('review')}
           dashboardMode={dashboardMode}
         />;
 
@@ -596,7 +627,7 @@ function AppContent() {
         }
         return <ReviewClean
           projectId={projectId}
-          onNavigateBack={() => setActiveTab('quotes')}
+          onNavigateBack={() => setActiveTab('quoteselect')}
           onNavigateNext={() => setActiveTab('quoteintel')}
           dashboardMode={dashboardMode}
         />;

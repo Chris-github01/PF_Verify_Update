@@ -13,6 +13,7 @@ import {
   Briefcase,
   ShieldAlert,
   RefreshCw,
+  CheckSquare,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -21,6 +22,7 @@ import { useAdmin } from '../lib/adminContext';
 export type SidebarTab =
   | 'dashboard'
   | 'quotes'
+  | 'quoteselect'
   | 'review'
   | 'quoteintel'
   | 'scope'
@@ -43,6 +45,7 @@ interface SidebarProps {
 const menuItems = [
   { id: 'dashboard' as SidebarTab, label: 'Project Dashboard', icon: LayoutDashboard },
   { id: 'quotes' as SidebarTab, label: 'Import Quotes', icon: FileText },
+  { id: 'quoteselect' as SidebarTab, label: 'Quote Select', icon: CheckSquare },
   { id: 'review' as SidebarTab, label: 'Review & Clean', icon: ClipboardCheck },
   { id: 'quoteintel' as SidebarTab, label: 'Quote Intelligence', icon: Sparkles },
   { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },

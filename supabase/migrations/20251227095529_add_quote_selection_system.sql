@@ -3,16 +3,17 @@
 
   1. Changes
     - Add `is_selected` boolean column to quotes table
-    - Defaults to true (all quotes selected by default when imported)
+    - Defaults to false (quotes must be explicitly selected before processing)
     - Add index for performance on selection queries
-    
+
   2. Purpose
     - Allow users to select which quotes to process in workflows
     - Only selected quotes flow through Review & Clean → Intelligence → Scope Matrix → Reports
-    
+    - Users must explicitly select quotes in the Quote Select workflow step
+
   3. Notes
-    - Default true ensures backward compatibility
-    - Existing quotes will be automatically selected
+    - Default false ensures users intentionally select quotes for processing
+    - Prevents accidental processing of all quotes
 */
 
 -- Add is_selected column to quotes table
@@ -22,7 +23,7 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'quotes' AND column_name = 'is_selected'
   ) THEN
-    ALTER TABLE quotes ADD COLUMN is_selected boolean DEFAULT true NOT NULL;
+    ALTER TABLE quotes ADD COLUMN is_selected boolean DEFAULT false NOT NULL;
   END IF;
 END $$;
 

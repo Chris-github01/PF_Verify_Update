@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckSquare, Square } from 'lucide-react';
+import { Trash2, Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { normaliseUnit, normaliseNumber, deriveRate, deriveTotal } from '../lib/normaliser/unitNormaliser';
 import { extractAttributes } from '../lib/normaliser/attributeExtractor';
@@ -241,11 +241,12 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
   const loadQuotes = async () => {
     setLoading(true);
 
-    // Filter quotes based on dashboard mode
+    // Filter quotes based on dashboard mode and only show selected quotes
     const { data: allQuotes, error } = await supabase
       .from('quotes')
       .select('*')
       .eq('project_id', projectId)
+      .eq('is_selected', true)
       .order('created_at', { ascending: false });
 
     if (!error && allQuotes) {
@@ -607,10 +608,6 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
       return;
     }
 
-    if (!quoteData.is_selected) {
-      setMessage({ type: 'error', text: 'Please select this quote before processing.' });
-      return;
-    }
 
     console.log('Starting processing for:', quoteData.supplier_name);
     setMessage({ type: 'info', text: `Processing "${quoteData.supplier_name}"...` });
@@ -650,10 +647,10 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
   const handleProcessAllPendingQuotes = async () => {
     if (normalising || mapping || smartCleaning || processingAllQuotes) return;
 
-    const selectedQuotes = cleanableQuotes.filter(q => q.is_selected);
+    const selectedQuotes = cleanableQuotes;
 
     if (selectedQuotes.length === 0) {
-      setMessage({ type: 'error', text: 'Please select at least one quote to process.' });
+      setMessage({ type: 'error', text: 'No quotes available to process.' });
       return;
     }
 
@@ -911,40 +908,6 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
     }
   };
 
-  const toggleQuoteSelection = async (quoteId: string, currentSelection: boolean) => {
-    const { error } = await supabase
-      .from('quotes')
-      .update({ is_selected: !currentSelection })
-      .eq('id', quoteId);
-
-    if (!error) {
-      await loadQuotes();
-    }
-  };
-
-  const selectAllQuotes = async () => {
-    const { error } = await supabase
-      .from('quotes')
-      .update({ is_selected: true })
-      .eq('project_id', projectId);
-
-    if (!error) {
-      await loadQuotes();
-      setMessage({ type: 'success', text: 'All quotes selected' });
-    }
-  };
-
-  const deselectAllQuotes = async () => {
-    const { error } = await supabase
-      .from('quotes')
-      .update({ is_selected: false })
-      .eq('project_id', projectId);
-
-    if (!error) {
-      await loadQuotes();
-      setMessage({ type: 'success', text: 'All quotes deselected' });
-    }
-  };
 
   const getConfidenceBadge = (confidence?: number) => {
     if (confidence === undefined || confidence === 0) {
@@ -1069,61 +1032,47 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
           {/* Quotes Section - Horizontal Display */}
           <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700">
             <div className="p-4 border-b border-slate-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-slate-100">Quotes</h3>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {cleanableQuotes.filter(q => q.is_selected).length} of {cleanableQuotes.length} quotes selected
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={selectAllQuotes}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-md transition-colors"
-                  >
-                    <CheckSquare size={14} />
-                    Select All
-                  </button>
-                  <button
-                    onClick={deselectAllQuotes}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-md transition-colors"
-                  >
-                    <Square size={14} />
-                    Deselect All
-                  </button>
-                </div>
+              <div>
+                <h3 className="font-semibold text-slate-100">Selected Quotes</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  {cleanableQuotes.length} {cleanableQuotes.length === 1 ? 'quote' : 'quotes'} ready for review
+                </p>
               </div>
             </div>
             <div className="p-4">
-              <div className="flex gap-4 overflow-x-auto pb-2">
-                {cleanableQuotes.map((quote) => (
+              {cleanableQuotes.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700 mb-4">
+                    <AlertCircle className="text-slate-400" size={32} />
+                  </div>
+                  <h3 className="text-xl font-semibold text-slate-300 mb-2">No Quotes Selected</h3>
+                  <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                    No quotes have been selected for processing. Go to Quote Select to choose which quotes you want to clean and map.
+                  </p>
+                  {onNavigateBack && (
+                    <button
+                      onClick={onNavigateBack}
+                      className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-colors"
+                    >
+                      Go to Quote Select
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex gap-4 overflow-x-auto pb-2">
+                  {cleanableQuotes.map((quote) => (
                   <div
                     key={quote.id}
-                    className={`flex-shrink-0 w-64 rounded-lg border-2 transition-all ${
+                    className={`flex-shrink-0 w-64 rounded-lg border-2 transition-all cursor-pointer ${
                       selectedQuote === quote.id
                         ? 'bg-slate-700/70 border-blue-500 shadow-lg shadow-blue-500/20'
                         : 'bg-slate-800/40 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500'
-                    } ${quote.is_selected ? 'ring-2 ring-green-500/30' : ''}`}
+                    }`}
+                    onClick={() => setSelectedQuote(quote.id)}
                   >
                     <div className="p-4">
                       <div className="flex items-start gap-3 mb-3">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleQuoteSelection(quote.id, quote.is_selected);
-                          }}
-                          className="flex-shrink-0 mt-0.5"
-                        >
-                          {quote.is_selected ? (
-                            <CheckSquare size={20} className="text-green-400" />
-                          ) : (
-                            <Square size={20} className="text-slate-500 hover:text-slate-300" />
-                          )}
-                        </button>
-                        <div
-                          className="flex-1 min-w-0 cursor-pointer"
-                          onClick={() => setSelectedQuote(quote.id)}
-                        >
+                        <div className="flex-1 min-w-0">
                           <p className="font-semibold text-slate-100 text-sm truncate">{quote.supplier_name}</p>
                           <p className="text-xs text-slate-400 truncate mt-0.5">{quote.quote_reference || 'No reference'}</p>
                         </div>
@@ -1149,9 +1098,10 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                         </span>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1172,18 +1122,18 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleCleanAndMapSelectedQuote}
-                    disabled={smartCleaning || normalising || mapping || !selectedQuote || items.length === 0 || !selectedQuoteData?.is_selected}
+                    disabled={smartCleaning || normalising || mapping || !selectedQuote || items.length === 0}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium"
-                    title={selectedQuoteData && !selectedQuoteData.is_selected ? "Please select this quote first" : "Run normalisation and mapping for this quote"}
+                    title="Run normalisation and mapping for this quote"
                   >
                     <Play size={16} />
                     {smartCleaning ? 'Processing...' : 'Clean & Map Quote'}
                   </button>
                   <button
                     onClick={handleProcessAllPendingQuotes}
-                    disabled={processingAllQuotes || normalising || mapping || smartCleaning || cleanableQuotes.filter(q => q.is_selected).length === 0}
+                    disabled={processingAllQuotes || normalising || mapping || smartCleaning || cleanableQuotes.length === 0}
                     className="flex items-center gap-2 px-3 py-2 border border-slate-600 text-slate-300 rounded-md hover:bg-slate-700 transition-colors disabled:bg-slate-800 disabled:cursor-not-allowed text-sm"
-                    title={cleanableQuotes.filter(q => q.is_selected).length === 0 ? "Please select at least one quote" : "Process all selected pending/error quotes"}
+                    title="Process all pending/error quotes"
                   >
                     <Zap size={14} />
                     {processingAllQuotes ? 'Processing...' : 'Run for All Pending'}
