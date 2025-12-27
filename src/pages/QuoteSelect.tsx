@@ -155,20 +155,24 @@ export default function QuoteSelect({
     switch (status) {
       case 'processed':
       case 'ready':
+      case 'accepted':
+      case 'awarded':
         return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
       case 'processing':
         return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
       case 'failed':
         return 'bg-red-500/20 text-red-300 border-red-500/30';
       default:
-        return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
     }
   };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'processed':
-        return 'Processed';
+      case 'accepted':
+      case 'awarded':
+        return 'Ready';
       case 'ready':
         return 'Ready';
       case 'processing':
@@ -176,7 +180,7 @@ export default function QuoteSelect({
       case 'failed':
         return 'Failed';
       default:
-        return status || 'Unknown';
+        return 'Ready';
     }
   };
 
