@@ -142,7 +142,7 @@ export default function ProjectDashboard({
             <h3 className="text-lg font-semibold text-white">Total Value</h3>
           </div>
           <p className="text-3xl font-bold text-white">
-            ${stats.totalValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            ${stats.totalValue.toLocaleString('en-NZ', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
           <p className="text-sm text-slate-400 mt-1">Combined quote value</p>
         </div>
