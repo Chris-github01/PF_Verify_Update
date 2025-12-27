@@ -995,28 +995,38 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
       )}
 
       {message && (
-        <div className={`p-4 rounded-md ${
-          message.type === 'success' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-          message.type === 'error' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
-          'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+        <div className={`p-4 rounded-xl mb-6 ${
+          message.type === 'success' ? 'bg-green-900/20 border border-green-500/30' :
+          message.type === 'error' ? 'bg-red-900/20 border border-red-500/30' :
+          'bg-blue-900/20 border border-blue-500/30'
         }`}>
           <div className="flex items-start gap-2">
-            <AlertCircle size={18} className="mt-0.5 flex-shrink-0" />
-            <span>{message.text}</span>
+            {message.type === 'success' ? (
+              <CheckCircle size={18} className="mt-0.5 flex-shrink-0 text-green-400" />
+            ) : message.type === 'error' ? (
+              <AlertCircle size={18} className="mt-0.5 flex-shrink-0 text-red-400" />
+            ) : (
+              <AlertCircle size={18} className="mt-0.5 flex-shrink-0 text-blue-400" />
+            )}
+            <span className={
+              message.type === 'success' ? 'text-green-300' :
+              message.type === 'error' ? 'text-red-300' :
+              'text-blue-300'
+            }>{message.text}</span>
           </div>
         </div>
       )}
 
       {cleanableQuotes.length === 0 && !loading ? (
-        <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-12 text-center">
-          <AlertCircle className="mx-auto text-slate-400 mb-4" size={48} />
-          <h3 className="text-xl font-bold text-slate-100 mb-2">No quotes ready to clean</h3>
-          <p className="text-slate-400 mb-6">
+        <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-12 text-center">
+          <AlertCircle className="mx-auto text-slate-400 mb-4" size={32} />
+          <h3 className="text-lg font-bold text-slate-100 mb-2">No quotes ready to clean</h3>
+          <p className="text-sm text-slate-400 mb-6">
             Import supplier quotes or fix failed imports on the Import Quotes page before continuing.
           </p>
           <button
             onClick={() => window.location.href = '#/import'}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm"
           >
             Go to Import Quotes
           </button>
@@ -1030,48 +1040,51 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
           <ScoringWeightsEditor projectId={projectId} />
 
           {/* Quotes Section - Horizontal Display */}
-          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700">
-            <div className="p-4 border-b border-slate-700">
+          <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                <CheckCircle className="text-orange-400" size={20} />
+              </div>
               <div>
-                <h3 className="font-semibold text-slate-100">Selected Quotes</h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <h2 className="text-lg font-bold text-slate-100">Selected Quotes</h2>
+                <p className="text-sm text-slate-400">
                   {cleanableQuotes.length} {cleanableQuotes.length === 1 ? 'quote' : 'quotes'} ready for review
                 </p>
               </div>
             </div>
-            <div className="p-4">
-              {cleanableQuotes.length === 0 ? (
-                <div className="text-center py-16">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700 mb-4">
-                    <AlertCircle className="text-slate-400" size={32} />
-                  </div>
-                  <h3 className="text-xl font-semibold text-slate-300 mb-2">No Quotes Selected</h3>
-                  <p className="text-slate-500 mb-6 max-w-md mx-auto">
-                    No quotes have been selected for processing. Go to Quote Select to choose which quotes you want to clean and map.
-                  </p>
-                  {onNavigateBack && (
-                    <button
-                      onClick={onNavigateBack}
-                      className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-medium transition-colors"
-                    >
-                      Go to Quote Select
-                    </button>
-                  )}
+            {cleanableQuotes.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-900/50 mb-4">
+                  <AlertCircle className="text-slate-400" size={24} />
                 </div>
-              ) : (
-                <div className="flex gap-4 overflow-x-auto pb-2">
+                <h3 className="text-lg font-semibold text-slate-300 mb-2">No Quotes Selected</h3>
+                <p className="text-sm text-slate-500 mb-4 max-w-md mx-auto">
+                  No quotes have been selected for processing. Go to Quote Select to choose which quotes you want to clean and map.
+                </p>
+                {onNavigateBack && (
+                  <button
+                    onClick={onNavigateBack}
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors text-sm"
+                  >
+                    Go to Quote Select
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div className="flex gap-3 overflow-x-auto pb-2 mb-6">
                   {cleanableQuotes.map((quote) => (
                   <div
                     key={quote.id}
-                    className={`flex-shrink-0 w-64 rounded-lg border-2 transition-all cursor-pointer ${
+                    className={`flex-shrink-0 w-56 rounded-lg border transition-all cursor-pointer ${
                       selectedQuote === quote.id
-                        ? 'bg-slate-700/70 border-blue-500 shadow-lg shadow-blue-500/20'
-                        : 'bg-slate-800/40 border-slate-600 hover:bg-slate-700/50 hover:border-slate-500'
+                        ? 'bg-slate-900/50 border-orange-500/50'
+                        : 'bg-slate-900/30 border-slate-700/50 hover:bg-slate-900/40 hover:border-slate-600/50'
                     }`}
                     onClick={() => setSelectedQuote(quote.id)}
                   >
-                    <div className="p-4">
-                      <div className="flex items-start gap-3 mb-3">
+                    <div className="p-3">
+                      <div className="flex items-start gap-2 mb-2">
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-slate-100 text-sm truncate">{quote.supplier_name}</p>
                           <p className="text-xs text-slate-400 truncate mt-0.5">{quote.quote_reference || 'No reference'}</p>
@@ -1083,17 +1096,17 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                           }}
                           className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors flex-shrink-0"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={12} />
                         </button>
                       </div>
                       <div
                         className="flex items-center justify-between cursor-pointer"
                         onClick={() => setSelectedQuote(quote.id)}
                       >
-                        <span className="text-lg font-bold text-slate-100">
+                        <span className="text-base font-bold text-slate-100">
                           ${quote.total_amount.toLocaleString()}
                         </span>
-                        <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-500/20 text-green-300 border border-green-500/30">
+                        <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-500/20 text-green-300 border border-green-500/30">
                           Ready
                         </span>
                       </div>
@@ -1101,44 +1114,45 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Main Table - Full Width */}
           <div>
-          <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700">
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Review & Clean {selectedQuoteData && `– ${selectedQuoteData.supplier_name}`}
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Normalise, clean and map items for this supplier quote.
-                  </p>
-                </div>
+          <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <Play className="text-blue-400" size={20} />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-slate-100">
+                  Review & Clean {selectedQuoteData && `– ${selectedQuoteData.supplier_name}`}
+                </h2>
+                <p className="text-sm text-slate-400">
+                  Normalise, clean and map items for this supplier quote.
+                </p>
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCleanAndMapSelectedQuote}
-                    disabled={smartCleaning || normalising || mapping || !selectedQuote || items.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium"
-                    title="Run normalisation and mapping for this quote"
-                  >
-                    <Play size={16} />
-                    {smartCleaning ? 'Processing...' : 'Clean & Map Quote'}
-                  </button>
-                  <button
-                    onClick={handleProcessAllPendingQuotes}
-                    disabled={processingAllQuotes || normalising || mapping || smartCleaning || cleanableQuotes.length === 0}
-                    className="flex items-center gap-2 px-3 py-2 border border-slate-600 text-slate-300 rounded-md hover:bg-slate-700 transition-colors disabled:bg-slate-800 disabled:cursor-not-allowed text-sm"
-                    title="Process all pending/error quotes"
-                  >
-                    <Zap size={14} />
-                    {processingAllQuotes ? 'Processing...' : 'Run for All Pending'}
-                  </button>
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCleanAndMapSelectedQuote}
+                  disabled={smartCleaning || normalising || mapping || !selectedQuote || items.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-sm font-medium"
+                  title="Run normalisation and mapping for this quote"
+                >
+                  <Play size={16} />
+                  {smartCleaning ? 'Processing...' : 'Clean & Map Quote'}
+                </button>
+                <button
+                  onClick={handleProcessAllPendingQuotes}
+                  disabled={processingAllQuotes || normalising || mapping || smartCleaning || cleanableQuotes.length === 0}
+                  className="flex items-center gap-2 px-3 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-sm"
+                  title="Process all pending/error quotes"
+                >
+                  <Zap size={14} />
+                  {processingAllQuotes ? 'Processing...' : 'Run for All Pending'}
+                </button>
               </div>
             </div>
             <div className="overflow-x-auto">

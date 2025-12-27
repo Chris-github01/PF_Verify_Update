@@ -833,10 +833,10 @@ export default function AwardReportEnhanced({
   if (!awardSummary || enhancedSuppliers.length === 0) {
     return (
       <div className="p-8 bg-slate-900 min-h-screen">
-        <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-12 text-center">
-          <Award className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+        <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-12 text-center">
+          <Award className="w-12 h-12 text-slate-600 mx-auto mb-4" />
           <p className="text-slate-100 text-lg font-semibold mb-2">No Award Report Available</p>
-          <p className="text-slate-400">Generate a report from the Reports Hub to view analysis.</p>
+          <p className="text-sm text-slate-400">Generate a report from the Reports Hub to view analysis.</p>
         </div>
       </div>
     );
@@ -855,7 +855,7 @@ export default function AwardReportEnhanced({
               <button
                 onClick={handleRecalculate}
                 disabled={recalculating}
-                className="flex items-center gap-2 px-3 py-2 border border-slate-600 bg-slate-800/60 text-slate-300 rounded-md hover:bg-slate-700/50 disabled:opacity-50 transition-colors text-sm"
+                className="flex items-center gap-2 px-3 py-2 border border-slate-600 bg-slate-800/60 text-slate-300 rounded-lg hover:bg-slate-700/50 disabled:opacity-50 transition-colors text-sm"
               >
                 <RefreshCw size={16} className={recalculating ? 'animate-spin' : ''} />
                 Recalculate
@@ -863,7 +863,7 @@ export default function AwardReportEnhanced({
 
               <button
                 onClick={() => setShowRevisionModal(true)}
-                className="flex items-center gap-2 px-4 py-2 border border-blue-600 bg-blue-900/30 text-blue-300 rounded-md hover:bg-blue-900/50 transition-all text-sm font-semibold"
+                className="flex items-center gap-2 px-4 py-2 border border-blue-600 bg-blue-900/30 text-blue-300 rounded-lg hover:bg-blue-900/50 transition-all text-sm font-semibold"
               >
                 <Mail size={16} />
                 Request Revisions
@@ -871,7 +871,7 @@ export default function AwardReportEnhanced({
 
               <button
                 onClick={() => setShowApprovalModal(true)}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-md hover:from-orange-700 hover:to-orange-800 transition-all text-sm font-bold shadow-lg"
+                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg hover:from-orange-700 hover:to-orange-800 transition-all text-sm font-bold"
               >
                 <CheckCircle2 size={16} />
                 {approvalData ? 'Change Approval' : 'Approve Award'}
@@ -880,7 +880,7 @@ export default function AwardReportEnhanced({
               <div className="relative" ref={exportDropdownRef}>
                 <button
                   onClick={() => setShowExportDropdown(!showExportDropdown)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md hover:from-blue-700 hover:to-blue-800 transition-all text-sm font-medium shadow-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all text-sm font-medium"
                 >
                   <Download size={16} />
                   Export Report

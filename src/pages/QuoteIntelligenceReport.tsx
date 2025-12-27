@@ -449,22 +449,27 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
             </div>
           </div>
 
-          <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 hover:shadow-md transition-shadow">
+          <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-slate-400 mb-1">Top Supplier</div>
-                <div className="text-xl font-bold text-slate-100 truncate">{analysis.summary.mostCompleteSupplier}</div>
+                <div className="text-xs text-slate-400 mb-1">Top Supplier</div>
+                <div className="text-base font-bold text-slate-100 truncate">{analysis.summary.mostCompleteSupplier}</div>
               </div>
-              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                <Star className="text-blue-400" size={24} />
+              <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                <Star className="text-blue-400" size={20} />
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
-        <h2 className="text-xl font-bold text-slate-100 mb-4">Supplier Comparison</h2>
+      <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+            <Star className="text-blue-400" size={20} />
+          </div>
+          <h2 className="text-lg font-bold text-slate-100">Supplier Comparison</h2>
+        </div>
 
         {supplierQualityData.length === 0 ? (
           <p className="text-slate-400 py-4">No supplier data available.</p>
@@ -536,16 +541,18 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         )}
       </div>
 
-      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none print:break-after-page">
+      <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6">
         <div className="flex items-center gap-3 mb-6">
-          <AlertTriangle className="text-red-400" size={24} />
-          <h2 className="text-xl font-bold text-slate-100">Red Flags</h2>
+          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+            <AlertTriangle className="text-red-400" size={20} />
+          </div>
+          <h2 className="text-lg font-bold text-slate-100">Red Flags</h2>
         </div>
 
         {analysis.redFlags.length === 0 ? (
           <div className="text-center py-8">
-            <CheckCircle className="mx-auto text-green-400 mb-3" size={48} />
-            <p className="text-slate-100 font-medium">No red flags detected</p>
+            <CheckCircle className="mx-auto text-green-400 mb-3" size={32} />
+            <p className="text-base font-medium text-slate-100">No red flags detected</p>
             <p className="text-sm text-slate-400 mt-1">All quotes passed automated quality checks</p>
           </div>
         ) : (
@@ -673,8 +680,13 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         )}
       </div>
 
-      <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700 p-6 print:shadow-none">
-        <h2 className="text-xl font-bold text-slate-100 mb-4">Recommended Actions</h2>
+      <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+            <Target className="text-orange-400" size={20} />
+          </div>
+          <h2 className="text-lg font-bold text-slate-100">Recommended Actions</h2>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="border border-slate-700 rounded-lg p-4 hover:border-blue-500 hover:shadow-md transition-all">

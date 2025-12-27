@@ -1203,15 +1203,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         </div>
 
         {!hasGenerated && !loading && selectedQuoteIds.length === 0 && (
-          <div className="bg-slate-800/60 rounded-lg p-8 border border-slate-700 text-center">
-            <p className="text-gray-600 mb-1">No scope matrix generated yet.</p>
-            <p className="text-sm text-gray-500">Generate a matrix to continue.</p>
+          <div className="bg-slate-800/60 rounded-xl p-12 border border-slate-700 text-center">
+            <p className="text-base text-slate-300 mb-1">No scope matrix generated yet.</p>
+            <p className="text-sm text-slate-400">Generate a matrix to continue.</p>
           </div>
         )}
 
         {loading && (
-          <div className="bg-slate-800/60 rounded-lg p-8 border border-slate-700 text-center">
-            <div className="text-gray-600">Building scope matrix...</div>
+          <div className="bg-slate-800/60 rounded-xl p-12 border border-slate-700 text-center">
+            <div className="text-base text-slate-300">Building scope matrix...</div>
           </div>
         )}
 
@@ -1240,18 +1240,18 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           }
 
           return (
-            <div className="bg-slate-800/60 rounded-xl p-12 border border-slate-700 shadow-sm">
+            <div className="bg-slate-800/60 rounded-xl p-12 border border-slate-700">
               <div className="text-center">
-                <AlertCircle className="mx-auto mb-4 text-amber-500" size={48} />
-                <p className="text-gray-900 text-lg font-semibold mb-2">{title}</p>
-                <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+                <AlertCircle className="mx-auto mb-4 text-amber-400" size={32} />
+                <p className="text-slate-100 text-lg font-semibold mb-2">{title}</p>
+                <p className="text-sm text-slate-400 mb-6 max-w-2xl mx-auto">
                   {description}
                 </p>
 
                 {d && (
-                  <div className="text-left max-w-2xl mx-auto bg-slate-800/40 rounded-lg p-4 text-sm mb-6">
-                    <p className="font-semibold text-gray-900 mb-3">Diagnostics:</p>
-                    <div className="space-y-2 text-gray-700">
+                  <div className="text-left max-w-2xl mx-auto bg-slate-900/50 rounded-lg p-4 text-sm mb-6">
+                    <p className="font-semibold text-slate-100 mb-3">Diagnostics:</p>
+                    <div className="space-y-2 text-slate-300">
                       <div className="flex justify-between">
                         <span>Total items loaded:</span>
                         <span className="font-medium">{d.totalItems}</span>
@@ -1260,15 +1260,15 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                         const quote = availableQuotes.find(q => q.id === quoteId);
                         const mappedCount = d.itemsWithSystemByQuote[quoteId] || 0;
                         return (
-                          <div key={quoteId} className="pl-4 border-l-2 border-gray-300">
-                            <div className="font-medium text-gray-900">{quote?.supplier_name || 'Unknown'}</div>
-                            <div className="text-xs text-gray-600">
+                          <div key={quoteId} className="pl-4 border-l-2 border-slate-600">
+                            <div className="font-medium text-slate-100">{quote?.supplier_name || 'Unknown'}</div>
+                            <div className="text-xs text-slate-400">
                               {count} items • {mappedCount} mapped to systems
                             </div>
                           </div>
                         );
                       })}
-                      <div className="flex justify-between pt-2 border-t border-gray-300">
+                      <div className="flex justify-between pt-2 border-t border-slate-600">
                         <span>Overlapping systems:</span>
                         <span className="font-medium">{d.overlappingSystemsCount}</span>
                       </div>
@@ -1279,7 +1279,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                 <div className="flex items-center justify-center gap-3">
                   <a
                     href={actionUrl}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm"
                   >
                     {actionText}
                   </a>
