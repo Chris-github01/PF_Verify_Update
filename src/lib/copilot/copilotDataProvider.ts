@@ -72,18 +72,21 @@ export async function fetchProjectDataForCopilot(
   console.log(`[Copilot] Fetching data for project ID: ${projectId}`);
 
   try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log(`[Copilot] Current user:`, user?.id, user?.email, userError);
+
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id, name, client, reference, status, created_at, trade')
+      .select('id, name, client, reference, status, created_at, trade, organisation_id')
       .eq('id', projectId)
       .single();
 
     if (projectError || !project) {
-      console.error('Error fetching project:', projectError);
+      console.error('[Copilot] Error fetching project:', projectError);
       return null;
     }
 
-    console.log(`[Copilot] Project found: ${project.name}`);
+    console.log(`[Copilot] Project found: ${project.name} (org: ${project.organisation_id})`);
 
     let { data: quotes, error: quotesError } = await supabase
       .from('quotes')
@@ -234,20 +237,28 @@ export function formatProjectDataForAI(data: CopilotProjectData): string {
 
   lines.push('=== QUOTES SUMMARY ===');
   lines.push(`Total Quotes: ${data.quotes.length}`);
-  data.quotes.forEach((quote, idx) => {
-    lines.push(`\nQuote ${idx + 1}: ${quote.supplier_name}`);
-    lines.push(`  - Total Amount: $${quote.total_amount.toLocaleString()}`);
-    lines.push(`  - Line Items: ${quote.items_count}`);
-    lines.push(`  - Status: ${quote.status}`);
-    if (quote.revision_number) {
-      lines.push(`  - Revision: ${quote.revision_number}`);
-    }
-  });
+
+  if (data.quotes.length === 0) {
+    lines.push('No quotes have been imported yet. The user should navigate to the Quotes tab to import supplier quotes.');
+  } else {
+    let totalValue = 0;
+    data.quotes.forEach((quote, idx) => {
+      lines.push(`\nQuote ${idx + 1}: ${quote.supplier_name}`);
+      lines.push(`  - Total Amount: $${quote.total_amount.toLocaleString()}`);
+      lines.push(`  - Line Items: ${quote.items.length || quote.items_count}`);
+      lines.push(`  - Status: ${quote.status}`);
+      if (quote.revision_number) {
+        lines.push(`  - Revision: ${quote.revision_number}`);
+      }
+      totalValue += quote.total_amount || 0;
+    });
+    lines.push(`\nTotal Value Across All Quotes: $${totalValue.toLocaleString()}`);
+  }
   lines.push('');
 
   const allItems = data.quotes.flatMap(q => q.items);
   if (allItems.length > 0) {
-    lines.push('=== LINE ITEMS SUMMARY ===');
+    lines.push('=== LINE ITEMS DETAILED ANALYSIS ===');
     lines.push(`Total Line Items: ${allItems.length}`);
 
     const serviceTypes = new Set(
@@ -258,19 +269,45 @@ export function formatProjectDataForAI(data: CopilotProjectData): string {
     }
 
     const systems = new Set(
-      allItems.map(item => item.system_label).filter(Boolean)
+      allItems.map(item => item.system_label || item.normalised_system).filter(Boolean)
     );
     if (systems.size > 0) {
       lines.push(`Fire Protection Systems: ${Array.from(systems).join(', ')}`);
     }
 
-    const avgConfidence = allItems
-      .filter(item => item.confidence !== null)
-      .reduce((sum, item) => sum + (item.confidence || 0), 0) / allItems.length;
-
-    if (avgConfidence > 0) {
-      lines.push(`Average Classification Confidence: ${(avgConfidence * 100).toFixed(1)}%`);
+    const scopeCategories = new Set(
+      allItems.map(item => item.scope_category).filter(Boolean)
+    );
+    if (scopeCategories.size > 0) {
+      lines.push(`Scope Categories: ${Array.from(scopeCategories).join(', ')}`);
     }
+
+    const itemsWithConfidence = allItems.filter(item => item.confidence !== null && item.confidence !== undefined);
+    if (itemsWithConfidence.length > 0) {
+      const avgConfidence = itemsWithConfidence.reduce((sum, item) => sum + (item.confidence || 0), 0) / itemsWithConfidence.length;
+      lines.push(`Average Classification Confidence: ${(avgConfidence * 100).toFixed(1)}%`);
+      lines.push(`Items with AI Confidence Scores: ${itemsWithConfidence.length} of ${allItems.length}`);
+    }
+
+    const totalItemsValue = allItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
+    lines.push(`Total Value of All Line Items: $${totalItemsValue.toLocaleString()}`);
+
+    lines.push('');
+
+    lines.push('=== SAMPLE LINE ITEMS (First 10) ===');
+    allItems.slice(0, 10).forEach((item, idx) => {
+      lines.push(`${idx + 1}. ${item.description}`);
+      lines.push(`   Qty: ${item.quantity} ${item.unit} @ $${item.unit_price.toFixed(2)} = $${item.total_price.toFixed(2)}`);
+      if (item.system_label) lines.push(`   System: ${item.system_label}`);
+      if (item.service) lines.push(`   Service: ${item.service}`);
+    });
+    lines.push('');
+  } else if (data.quotes.length > 0) {
+    lines.push('=== LINE ITEMS ===');
+    lines.push('Quotes have been imported but no line items are visible. This could mean:');
+    lines.push('- Quotes are still being processed');
+    lines.push('- Line items failed to extract during import');
+    lines.push('- There may be an access issue with the quote_items table');
     lines.push('');
   }
 
@@ -286,17 +323,26 @@ export function formatProjectDataForAI(data: CopilotProjectData): string {
         lines.push(`Recommended Supplier: ${topSupplier.supplierName}`);
         lines.push(`  - Total: $${topSupplier.total?.toLocaleString() || 'N/A'}`);
         lines.push(`  - Coverage: ${topSupplier.coveragePercent?.toFixed(1) || 'N/A'}%`);
+        if (topSupplier.matchScore) {
+          lines.push(`  - Match Score: ${(topSupplier.matchScore * 100).toFixed(1)}%`);
+        }
       }
     }
     lines.push('');
   }
 
-  lines.push('=== AVAILABLE ACTIONS ===');
-  lines.push('- Navigate to different sections (quotes, review, scope matrix, reports, etc.)');
-  lines.push('- Answer questions about quote details, pricing, and coverage');
-  lines.push('- Provide insights on supplier comparisons');
-  lines.push('- Explain workflow steps and next actions');
-  lines.push('- Help with data interpretation and analysis');
+  lines.push('=== AI COPILOT CAPABILITIES ===');
+  lines.push('I can help you with:');
+  lines.push('- Navigate to different workflow sections (quotes, review, scope matrix, reports, contract manager)');
+  lines.push('- Answer questions about quote details, pricing, line items, and suppliers');
+  lines.push('- Provide insights on supplier comparisons and coverage analysis');
+  lines.push('- Explain workflow steps and recommend next actions');
+  lines.push('- Help interpret data, identify issues, and troubleshoot problems');
+  lines.push('- Analyze pricing trends and identify outliers');
+  lines.push('- Compare supplier quotes and highlight differences');
+  lines.push('- Suggest which items need review or clarification');
+  lines.push('');
+  lines.push('Ask me anything about your project, quotes, or the VerifyPlus platform!');
 
   return lines.join('\n');
 }

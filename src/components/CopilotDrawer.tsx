@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Send, Sparkles, Loader2 } from 'lucide-react';
+import { X, Send, Sparkles, Loader2, Bug } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useOrganisation } from '../lib/organisationContext';
 import { fetchProjectDataForCopilot, type CopilotProjectData } from '../lib/copilot/copilotDataProvider';
 import { sendCopilotMessage, type CopilotMessage } from '../lib/copilot/copilotAI';
+import { supabase } from '../lib/supabase';
 
 interface CopilotDrawerProps {
   isOpen: boolean;
@@ -51,6 +52,59 @@ export default function CopilotDrawer({
       setProjectData(data);
     } catch (error) {
       console.error('[CopilotDrawer] Error loading project data for copilot:', error);
+    }
+  };
+
+  const runDiagnostics = async () => {
+    if (!currentProjectId) {
+      console.error('[Copilot] No project ID for diagnostics');
+      return;
+    }
+
+    try {
+      console.log('[Copilot] Running diagnostics...');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify_copilot_data`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectId: currentProjectId }),
+      });
+
+      const diagnostics = await response.json();
+      console.log('[Copilot] Diagnostics results:', diagnostics);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `🔍 **Diagnostics Results**\n\n` +
+            `**Project:** ${diagnostics.checks.project?.data?.name || 'Not found'}\n` +
+            `**User:** ${diagnostics.checks.user?.email || 'Not authenticated'}\n` +
+            `**Membership:** ${diagnostics.checks.membership?.data?.status || 'None'}\n\n` +
+            `**Quotes with is_latest=true:** ${diagnostics.checks.quotesLatest?.count || 0}\n` +
+            `**Total quotes in project:** ${diagnostics.checks.quotesAll?.count || 0}\n` +
+            `**Service role sees:** ${diagnostics.checks.serviceRoleCount?.totalQuotesInProject || 0} quotes\n\n` +
+            `**Can access project:** ${diagnostics.summary.canAccessProject ? '✅ Yes' : '❌ No'}\n\n` +
+            (diagnostics.recommendations.length > 0
+              ? `**Recommendations:**\n${diagnostics.recommendations.map((r: string) => `- ${r}`).join('\n')}`
+              : 'Everything looks good!')
+        },
+      ]);
+    } catch (error) {
+      console.error('[Copilot] Diagnostics error:', error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Failed to run diagnostics. Error: ${error}`,
+        },
+      ]);
     }
   };
 
@@ -129,12 +183,21 @@ export default function CopilotDrawer({
                 </div>
                 <h2 className="text-lg font-semibold">AI Copilot</h2>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={runDiagnostics}
+                  title="Run diagnostics to troubleshoot data access issues"
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-gray-900"
+                >
+                  <Bug size={18} />
+                </button>
+                <button
+                  onClick={onClose}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
