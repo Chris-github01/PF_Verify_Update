@@ -15,9 +15,16 @@ interface ScoringWeightsEditorProps {
 }
 
 const DEFAULT_WEIGHTS: ScoringWeights = {
-  price: 40,
-  compliance: 25,
-  coverage: 20,
+  price: 60,
+  compliance: 10,
+  coverage: 15,
+  risk: 15,
+};
+
+const RECOMMENDED_WEIGHTS: ScoringWeights = {
+  price: 60,
+  compliance: 10,
+  coverage: 15,
   risk: 15,
 };
 
@@ -97,7 +104,7 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
   };
 
   const handleReset = () => {
-    if (confirm('Reset to default weights (40/25/20/15)?')) {
+    if (confirm('Reset to recommended weights (60/10/15/15)?')) {
       setEditWeights(DEFAULT_WEIGHTS);
     }
   };
@@ -238,25 +245,33 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
                 </div>
 
                 {isEditing ? (
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.1"
-                      value={editWeights[criteria.key]}
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value) || 0;
-                        setEditWeights({ ...editWeights, [criteria.key]: value });
-                      }}
-                      className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white font-bold text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <span className="text-white font-bold text-xl">%</span>
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={editWeights[criteria.key]}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          setEditWeights({ ...editWeights, [criteria.key]: value });
+                        }}
+                        className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white font-bold text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-white font-bold text-xl">%</span>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500 italic">
+                      Recommended: {RECOMMENDED_WEIGHTS[criteria.key]}%
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center">
                     <div className={`text-4xl font-bold ${iconColorClasses}`}>
                       {currentWeight}%
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      Recommended: {RECOMMENDED_WEIGHTS[criteria.key]}%
                     </div>
                   </div>
                 )}
