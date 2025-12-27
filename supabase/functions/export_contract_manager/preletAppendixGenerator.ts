@@ -147,15 +147,15 @@ function renderList(items: any[] | undefined | null, title: string): string {
 
   const listItems = items.map(item => {
     const text = typeof item === 'string' ? item : (item.text || item.description || '');
-    return `<li style="margin-bottom: 8px; line-height: 1.6;">${text}</li>`;
+    return `<li style="margin-bottom: 5px; line-height: 1.4;">${text}</li>`;
   }).join('');
 
   return `
-    <div style="margin-bottom: 24px;">
-      <h4 style="font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px;">
+    <div style="margin-bottom: 16px;">
+      <h4 style="font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px;">
         ${title}
       </h4>
-      <ul style="list-style-type: disc; padding-left: 24px; color: #374151;">
+      <ul style="list-style-type: disc; padding-left: 20px; color: #374151;">
         ${listItems}
       </ul>
     </div>
@@ -169,12 +169,12 @@ function renderContractSummary(data: PreletAppendixData): string {
   const supplier = data.supplierContact || {};
 
   return `
-    <div class="contract-summary-section" style="margin-bottom: 32px; page-break-inside: avoid;">
-      <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+    <div class="contract-summary-section" style="margin-bottom: 20px; page-break-inside: avoid;">
+      <h3 style="font-size: 17px; font-weight: 700; color: #111827; margin-bottom: 12px; border-bottom: 2px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 6px;">
         1. Contract Summary
       </h3>
 
-      <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+      <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px; margin-bottom: 12px;">
         <h4 style="font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 12px;">Project Details</h4>
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
           <div>
@@ -347,8 +347,8 @@ function renderScopeSystems(data: PreletAppendixData): string {
   if (!data.scopeSystems || data.scopeSystems.length === 0) return '';
 
   const systemsHtml = data.scopeSystems.map((system: any) => `
-    <div style="margin-bottom: 20px; page-break-inside: avoid;">
-      <div style="background: #f3f4f6; border-left: 4px solid ${VERIFYTRADE_ORANGE}; padding: 12px 16px; margin-bottom: 8px;">
+    <div style="margin-bottom: 14px; page-break-inside: avoid;">
+      <div style="background: #f3f4f6; border-left: 3px solid ${VERIFYTRADE_ORANGE}; padding: 10px 12px; margin-bottom: 6px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h5 style="font-size: 14px; font-weight: 700; color: #111827; margin: 0;">${system.service_type}</h5>
           <div style="display: flex; gap: 16px; align-items: center;">
@@ -387,18 +387,18 @@ function renderScopeSystems(data: PreletAppendixData): string {
   const totalValue = data.scopeSystems.reduce((sum, sys) => sum + (sys.total || 0), 0);
 
   return `
-    <div class="scope-systems-section" style="margin-bottom: 32px; page-break-inside: avoid;">
-      <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+    <div class="scope-systems-section" style="margin-bottom: 20px; page-break-inside: avoid;">
+      <h3 style="font-size: 17px; font-weight: 700; color: #111827; margin-bottom: 12px; border-bottom: 2px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 6px;">
         2. Scope & Systems Breakdown
       </h3>
-      <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.6;">
+      <p style="font-size: 12px; color: #6b7280; margin-bottom: 12px; line-height: 1.4;">
         Detailed breakdown of all systems and work packages included in this contract.
       </p>
       ${systemsHtml}
-      <div style="background: #111827; color: white; padding: 16px; border-radius: 8px; margin-top: 16px;">
+      <div style="background: #111827; color: white; padding: 12px; border-radius: 6px; margin-top: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="font-size: 14px; font-weight: 600;">Total Scope Value</div>
-          <div style="font-size: 18px; font-weight: 700;">${formatCurrency(totalValue)}</div>
+          <div style="font-size: 13px; font-weight: 600;">Total Scope Value</div>
+          <div style="font-size: 16px; font-weight: 700;">${formatCurrency(totalValue)}</div>
         </div>
       </div>
     </div>
@@ -432,11 +432,11 @@ function renderAllowances(data: PreletAppendixData): string {
   const provisionalCount = data.allowances.filter(a => a.is_provisional).length;
 
   return `
-    <div class="allowances-section" style="margin-bottom: 32px; page-break-inside: avoid;">
-      <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+    <div class="allowances-section" style="margin-bottom: 20px; page-break-inside: avoid;">
+      <h3 style="font-size: 17px; font-weight: 700; color: #111827; margin-bottom: 12px; border-bottom: 2px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 6px;">
         4. Allowances, Provisional Sums & Prime Costs
       </h3>
-      <p style="font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.6;">
+      <p style="font-size: 12px; color: #6b7280; margin-bottom: 12px; line-height: 1.4;">
         Detailed breakdown of all allowances, provisional sums, and prime costs included in the contract value.
         ${provisionalCount > 0 ? `<strong>${provisionalCount} provisional sum(s)</strong> requiring approval before expenditure.` : ''}
       </p>
@@ -483,19 +483,19 @@ function renderAwardOverview(data: PreletAppendixData): string {
     : '';
 
   return `
-    <div style="background: #fef3c7; border: 2px solid ${VERIFYTRADE_ORANGE}; border-radius: 8px; padding: 24px; margin-bottom: 32px; page-break-inside: avoid;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-        <h3 style="font-size: 18px; font-weight: 700; color: #111827; margin: 0;">
+    <div style="background: #fef3c7; border: 2px solid ${VERIFYTRADE_ORANGE}; border-radius: 6px; padding: 16px; margin-bottom: 20px; page-break-inside: avoid;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+        <h3 style="font-size: 16px; font-weight: 700; color: #111827; margin: 0;">
           Awarded Quote Overview
         </h3>
-        <span style="background: #fed7aa; color: #ea580c; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+        <span style="background: #fed7aa; color: #ea580c; padding: 3px 10px; border-radius: 3px; font-size: 10px; font-weight: 600;">
           IMMUTABLE SNAPSHOT
         </span>
       </div>
-      <p style="font-size: 12px; color: #92400e; margin-bottom: 16px;">
+      <p style="font-size: 11px; color: #92400e; margin-bottom: 12px; line-height: 1.3;">
         This award overview was captured at finalization and cannot be changed.
       </p>
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
         <div>
           <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Awarded Subcontractor</div>
           <div style="font-size: 14px; color: #111827; font-weight: 600;">${data.awarded_subcontractor || 'N/A'}</div>
@@ -566,7 +566,7 @@ export function generateFastPreletAppendix(
   <style>
     @page {
       size: A4;
-      margin: 18mm 14mm 18mm 14mm;
+      margin: 10mm;
     }
     * {
       margin: 0;
@@ -575,45 +575,45 @@ export function generateFastPreletAppendix(
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 14px;
-      line-height: 1.6;
+      font-size: 13px;
+      line-height: 1.5;
       color: #111827;
       background: white;
     }
     .page {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 40px;
+      max-width: 100%;
+      margin: 0;
+      padding: 0;
       background: white;
     }
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 32px;
-      padding-bottom: 16px;
-      border-bottom: 3px solid ${VERIFYTRADE_ORANGE};
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid ${VERIFYTRADE_ORANGE};
     }
     .logo-section {
       flex: 1;
     }
     .generated-by {
       text-align: right;
-      font-size: 11px;
+      font-size: 10px;
       color: #6b7280;
     }
     .title-section {
       text-align: center;
-      margin-bottom: 48px;
+      margin-bottom: 24px;
     }
     h1 {
-      font-size: 32px;
+      font-size: 26px;
       font-weight: 800;
       color: #111827;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .subtitle {
-      font-size: 16px;
+      font-size: 14px;
       color: #6b7280;
       font-weight: 500;
     }
@@ -621,41 +621,43 @@ export function generateFastPreletAppendix(
       background: #f9fafb;
       border: 2px solid #e5e7eb;
       border-left: 4px solid ${VERIFYTRADE_ORANGE};
-      border-radius: 8px;
-      padding: 24px;
-      margin-bottom: 32px;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 20px;
     }
     .info-row {
       display: grid;
-      grid-template-columns: 200px 1fr;
-      gap: 12px;
-      margin-bottom: 8px;
+      grid-template-columns: 180px 1fr;
+      gap: 10px;
+      margin-bottom: 6px;
     }
     .info-label {
       font-weight: 600;
       color: #6b7280;
+      font-size: 12px;
     }
     .info-value {
       color: #111827;
       font-weight: 500;
+      font-size: 12px;
     }
     .section {
-      margin-bottom: 32px;
+      margin-bottom: 20px;
     }
     .section-title {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
       color: #111827;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       border-bottom: 2px solid ${VERIFYTRADE_ORANGE};
-      padding-bottom: 8px;
+      padding-bottom: 6px;
     }
     .footer {
-      margin-top: 64px;
-      padding-top: 24px;
+      margin-top: 32px;
+      padding-top: 16px;
       border-top: 2px solid #e5e7eb;
       text-align: center;
-      font-size: 12px;
+      font-size: 10px;
       color: #6b7280;
     }
     .footer-notice {
@@ -668,17 +670,13 @@ export function generateFastPreletAppendix(
       color: #1e40af;
       line-height: 1.6;
     }
-    /* Section page breaks - start major sections on new pages */
+    /* Section page breaks - keep sections together when possible */
+    .contract-summary-section,
     .scope-systems-section,
     .inclusions-exclusions-section,
     .allowances-section {
-      page-break-before: always;
-      break-before: page;
-    }
-
-    /* First section (contract summary) stays with title */
-    .contract-summary-section {
-      page-break-before: avoid;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
 
     /* Table pagination rules */
@@ -704,11 +702,6 @@ export function generateFastPreletAppendix(
         background: white;
         margin: 0;
         padding: 0;
-      }
-
-      /* Hide HTML header/footer in print (Gotenberg adds native ones) */
-      .header, .footer {
-        display: none !important;
       }
 
       /* Ensure tables paginate properly */
@@ -749,8 +742,8 @@ export function generateFastPreletAppendix(
 
     ${renderScopeSystems(appendixData)}
 
-    <div class="inclusions-exclusions-section" style="margin-bottom: 32px;">
-      <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
+    <div class="inclusions-exclusions-section" style="margin-bottom: 20px;">
+      <h3 style="font-size: 17px; font-weight: 700; color: #111827; margin-bottom: 12px; border-bottom: 2px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 6px;">
         3. Inclusions & Exclusions
       </h3>
 
