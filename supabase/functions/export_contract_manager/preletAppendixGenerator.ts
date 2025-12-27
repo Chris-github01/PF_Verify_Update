@@ -169,7 +169,7 @@ function renderContractSummary(data: PreletAppendixData): string {
   const supplier = data.supplierContact || {};
 
   return `
-    <div style="margin-bottom: 32px; page-break-inside: avoid;">
+    <div class="contract-summary-section" style="margin-bottom: 32px; page-break-inside: avoid;">
       <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
         1. Contract Summary
       </h3>
@@ -387,7 +387,7 @@ function renderScopeSystems(data: PreletAppendixData): string {
   const totalValue = data.scopeSystems.reduce((sum, sys) => sum + (sys.total || 0), 0);
 
   return `
-    <div style="margin-bottom: 32px; page-break-inside: avoid;">
+    <div class="scope-systems-section" style="margin-bottom: 32px; page-break-inside: avoid;">
       <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
         2. Scope & Systems Breakdown
       </h3>
@@ -432,7 +432,7 @@ function renderAllowances(data: PreletAppendixData): string {
   const provisionalCount = data.allowances.filter(a => a.is_provisional).length;
 
   return `
-    <div style="margin-bottom: 32px; page-break-inside: avoid;">
+    <div class="allowances-section" style="margin-bottom: 32px; page-break-inside: avoid;">
       <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
         4. Allowances, Provisional Sums & Prime Costs
       </h3>
@@ -668,12 +668,61 @@ export function generateFastPreletAppendix(
       color: #1e40af;
       line-height: 1.6;
     }
+    /* Section page breaks - start major sections on new pages */
+    .scope-systems-section,
+    .inclusions-exclusions-section,
+    .allowances-section {
+      page-break-before: always;
+      break-before: page;
+    }
+
+    /* First section (contract summary) stays with title */
+    .contract-summary-section {
+      page-break-before: avoid;
+    }
+
+    /* Table pagination rules */
+    table {
+      page-break-inside: auto;
+      break-inside: auto;
+    }
+
+    table thead {
+      display: table-header-group;
+    }
+
+    table tbody tr {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
     @media print {
       .page {
         padding: 0;
       }
       body {
         background: white;
+        margin: 0;
+        padding: 0;
+      }
+
+      /* Hide HTML header/footer in print (Gotenberg adds native ones) */
+      .header, .footer {
+        display: none !important;
+      }
+
+      /* Ensure tables paginate properly */
+      table {
+        page-break-inside: auto !important;
+      }
+
+      table thead {
+        display: table-header-group !important;
+      }
+
+      table tbody tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
     }
   </style>
@@ -700,16 +749,16 @@ export function generateFastPreletAppendix(
 
     ${renderScopeSystems(appendixData)}
 
-    <div style="margin-bottom: 32px;">
+    <div class="inclusions-exclusions-section" style="margin-bottom: 32px;">
       <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 16px; border-bottom: 3px solid ${VERIFYTRADE_ORANGE}; padding-bottom: 8px;">
         3. Inclusions & Exclusions
       </h3>
 
-      <div style="page-break-before: always; page-break-after: always; page-break-inside: avoid;">
+      <div style="page-break-inside: avoid;">
         ${renderList(appendixData.inclusions, 'Scope Inclusions')}
       </div>
 
-      <div style="page-break-before: always; page-break-after: always; page-break-inside: avoid;">
+      <div style="page-break-inside: avoid;">
         ${renderList(appendixData.exclusions, 'Scope Exclusions')}
       </div>
 
