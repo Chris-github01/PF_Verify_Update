@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import WorkflowNav from '../components/WorkflowNav';
 import type { DashboardMode } from '../App';
 
 interface Quote {
@@ -197,14 +196,6 @@ export default function QuoteSelect({
 
   return (
     <div className="p-6 max-w-full">
-      <div className="mb-6">
-        <WorkflowNav
-          currentStep="select"
-          onNavigateBack={onNavigateBack}
-          onNavigateNext={canProceed ? onNavigateNext : undefined}
-        />
-      </div>
-
       <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6 mb-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
