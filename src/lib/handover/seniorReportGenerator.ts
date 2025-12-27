@@ -1317,12 +1317,26 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         margin: 0 !important;
         padding: 0 !important;
         padding-bottom: 20mm !important; /* Reserve space for fixed footer */
+        counter-reset: page;
       }
 
       .page {
         min-height: auto !important;
         height: auto !important;
         padding-bottom: 40px;
+        counter-increment: page;
+      }
+
+      header {
+        display: flex !important;
+      }
+
+      footer {
+        display: flex !important;
+      }
+
+      .footer-right::after {
+        content: "Page " counter(page) !important;
       }
 
       .page:last-child {
