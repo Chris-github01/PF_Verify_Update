@@ -18,6 +18,8 @@ interface ProjectStats {
   reportStatus: 'not_generated' | 'ready' | 'out_of_date';
   reportGeneratedAt?: string;
   hasCleanedData: boolean;
+  scopeMatrixCompleted: boolean;
+  equalisationCompleted: boolean;
 }
 
 export default function ProjectDashboard({
@@ -33,6 +35,8 @@ export default function ProjectDashboard({
     supplierCount: 0,
     reportStatus: 'not_generated',
     hasCleanedData: false,
+    scopeMatrixCompleted: false,
+    equalisationCompleted: false,
   });
   const [loading, setLoading] = useState(true);
 
@@ -96,6 +100,13 @@ export default function ProjectDashboard({
         .limit(1)
         .maybeSingle();
 
+      // Check project workflow completion status
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('scope_matrix_completed, equalisation_completed')
+        .eq('id', projectId)
+        .maybeSingle();
+
       setStats({
         quoteCount,
         selectedQuoteCount,
@@ -104,6 +115,8 @@ export default function ProjectDashboard({
         reportStatus: latestReport ? 'ready' : 'not_generated',
         reportGeneratedAt: latestReport?.generated_at,
         hasCleanedData: (processedItems?.length || 0) > 0,
+        scopeMatrixCompleted: projectData?.scope_matrix_completed || false,
+        equalisationCompleted: projectData?.equalisation_completed || false,
       });
     } catch (error) {
       console.error('Error loading project stats:', error);
@@ -141,8 +154,20 @@ export default function ProjectDashboard({
       description: stats.hasCleanedData ? 'Data cleaned and mapped' : 'Not started'
     },
     {
+      id: 'scope',
+      name: 'Scope Matrix',
+      completed: stats.scopeMatrixCompleted,
+      description: stats.scopeMatrixCompleted ? 'Scope analysis completed' : 'Not started'
+    },
+    {
+      id: 'equalisation',
+      name: 'Equalisation Analysis',
+      completed: stats.equalisationCompleted,
+      description: stats.equalisationCompleted ? 'Equalisation completed' : 'Not started'
+    },
+    {
       id: 'analysis',
-      name: 'Analysis & Reports',
+      name: 'Award Reports',
       completed: stats.reportStatus === 'ready',
       description: stats.reportStatus === 'ready' ? 'Reports generated' : 'Not generated'
     },
@@ -243,8 +268,9 @@ export default function ProjectDashboard({
           <p>1. Import quotes from your suppliers using the Import Quotes tab</p>
           <p>2. Select which quotes you want to process in Quote Select</p>
           <p>3. Review and clean the imported data</p>
-          <p>4. Analyze quotes using the Scope Matrix and Quote Intelligence</p>
-          <p>5. Generate award reports to compare suppliers</p>
+          <p>4. Analyze coverage with the Scope Matrix</p>
+          <p>5. Perform Equalisation Analysis to normalize comparisons</p>
+          <p>6. Generate award reports to compare suppliers</p>
         </div>
       </div>
     </div>

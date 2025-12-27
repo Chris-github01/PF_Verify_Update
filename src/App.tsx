@@ -510,6 +510,9 @@ function AppContent() {
       case 'scope':
         setActiveTab('scope');
         break;
+      case 'equalisation':
+        setActiveTab('equalisation');
+        break;
       case 'reports':
       case 'award':
         setActiveTab('reports');

@@ -26,6 +26,7 @@ export type SidebarTab =
   | 'review'
   | 'quoteintel'
   | 'scope'
+  | 'equalisation'
   | 'contract'
   | 'reports'
   | 'insights'
@@ -53,6 +54,7 @@ const menuStructure = [
       { id: 'review' as SidebarTab, label: 'Review & Clean', icon: ClipboardCheck },
       { id: 'quoteintel' as SidebarTab, label: 'Quote Intelligence', icon: Sparkles },
       { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
+      { id: 'equalisation' as SidebarTab, label: 'Equalisation Analysis', icon: BarChart3 },
       { id: 'reports' as SidebarTab, label: 'Award Reports', icon: BarChart3 },
     ]
   },
