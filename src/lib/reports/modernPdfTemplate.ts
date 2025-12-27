@@ -946,7 +946,7 @@ function generateRecommendationCard(rec: RecommendationCard): string {
       <div class="recommendation-stats">
         <div class="stat-row">
           <span class="stat-label">Price</span>
-          <span class="stat-value">$${rec.price.toLocaleString()}</span>
+          <span class="stat-value">$${rec.price.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
         <div class="stat-row">
           <span class="stat-label">Coverage</span>
@@ -1183,7 +1183,7 @@ function generateSupplierComparisonPage(options: ModernPdfOptions): string {
             return `
             <tr class="${supplier.quoteId === approvedQuoteId ? 'rank-1' : ''}">
               <td><strong>${supplier.supplierName}</strong></td>
-              <td class="price-cell">$${supplier.adjustedTotal.toLocaleString()}</td>
+              <td class="price-cell">$${supplier.adjustedTotal.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               <td>${supplier.itemsQuoted} / ${supplier.totalItems}</td>
               <td>${supplier.coveragePercent.toFixed(1)}%</td>
               <td>${(10 - supplier.riskScore).toFixed(1)}/10</td>

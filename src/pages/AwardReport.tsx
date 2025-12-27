@@ -677,6 +677,7 @@ export default function AwardReport({
       style: 'currency',
       currency: 'NZD',
       minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 

@@ -59,8 +59,8 @@ export function RetentionThresholdEditor({
     return new Intl.NumberFormat('en-NZ', {
       style: 'currency',
       currency: 'NZD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(value);
   };
 
