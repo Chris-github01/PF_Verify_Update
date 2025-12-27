@@ -199,26 +199,6 @@ export default function AppBar({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={onCopilotOpen}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-purple-500 hover:text-purple-200 transition-colors group"
-            title="Verify+ Copilot"
-          >
-            <Sparkles size={16} className="group-hover:text-purple-400 transition-colors" />
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onSearchOpen}
-            className="hidden sm:inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-sky-500 hover:text-sky-200 transition-colors"
-            title="Search (Ctrl+K)"
-          >
-            <Search size={16} />
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
             className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-sky-500 hover:text-sky-200 transition-colors"
             title="Notifications"
           >
