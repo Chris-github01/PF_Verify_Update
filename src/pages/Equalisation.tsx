@@ -22,6 +22,24 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
   const [loading, setLoading] = useState(true);
   const [modeLoaded, setModeLoaded] = useState(false);
 
+  const handleNavigateNext = async () => {
+    try {
+      await supabase
+        .from('projects')
+        .update({
+          equalisation_completed: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', projectId);
+    } catch (error) {
+      console.error('Failed to update equalisation workflow status:', error);
+    }
+
+    if (onNavigateNext) {
+      onNavigateNext();
+    }
+  };
+
   const loadData = useCallback(async () => {
     setLoading(true);
 
@@ -561,7 +579,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         currentStep={5}
         totalSteps={6}
         onBack={onNavigateBack}
-        onNext={onNavigateNext}
+        onNext={handleNavigateNext}
         backLabel="Back: Scope Matrix"
         nextLabel="Next: Award Report"
       />

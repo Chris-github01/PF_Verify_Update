@@ -95,6 +95,23 @@ Deno.serve(async (req: Request) => {
 
     console.log("📊 compute_award_report: Generating report", { projectId, quoteIds });
 
+    // Load project scoring weights
+    const { data: projectData } = await supabase
+      .from("projects")
+      .select("scoring_weights")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    // Default weights if not set (matching frontend defaults)
+    const scoringWeights = projectData?.scoring_weights || {
+      price: 45,
+      compliance: 20,
+      coverage: 25,
+      risk: 10
+    };
+
+    console.log("📊 Using scoring weights:", scoringWeights);
+
     let quotesQuery = supabase
       .from("quotes")
       .select("id, supplier_name")
@@ -341,12 +358,13 @@ Deno.serve(async (req: Request) => {
       // Compliance Score: Based on risk factors (fewer missing items = better)
       const complianceScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 5 : 10;
 
-      // Weighted Total: Price 40%, Compliance 25%, Coverage 20%, Risk 15%
+      // Weighted Total: Use custom scoring weights from project settings
+      // Convert percentages to decimal (e.g., 40% -> 0.4)
       const weightedTotal = (
-        (priceScore * 0.4) +
-        (complianceScore * 0.25) +
-        (coverageScore * 0.2) +
-        (riskScore * 0.15)
+        (priceScore * (scoringWeights.price / 100)) +
+        (complianceScore * (scoringWeights.compliance / 100)) +
+        (coverageScore * (scoringWeights.coverage / 100)) +
+        (riskScore * (scoringWeights.risk / 100))
       ) * 10; // Scale to 0-100
 
       return { ...s, weightedTotal };
