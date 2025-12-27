@@ -1154,260 +1154,77 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                 </button>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full table-auto">
+            <div className="overflow-visible">
+              <table className="w-full table-fixed">
                 <thead className="bg-slate-900/50 border-b border-slate-700">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[250px]">Description</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-20">Qty</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-24">Unit</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Rate</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Total</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[180px]">Attributes</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Suggest System</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-32">Confidence</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-28">Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Actions</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[28%]">Description</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[6%]">Qty</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[6%]">Unit</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[8%]">Rate</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[8%]">Total</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[12%]">Attributes</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[14%]">System</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[8%]">Confidence</th>
+                    <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase w-[6%]">Status</th>
+                    <th className="px-2 py-3 text-right text-xs font-medium text-gray-500 uppercase w-[4%]">Edit</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-700">
                   {(isTableExpanded ? items : items.slice(0, 5)).map((item) => {
                     const issues = parseIssues(item.issues);
                     return (
-                      <tr key={item.id} className={item.is_excluded ? 'bg-slate-800/30 opacity-60' : ''}>
-                        {editingItem === item.id ? (
-                          <>
-                            <td className="px-4 py-3">
-                              <input
-                                type="text"
-                                value={editForm.description || ''}
-                                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900"
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <input
-                                type="number"
-                                value={editForm.quantity || ''}
-                                onChange={(e) => setEditForm({ ...editForm, quantity: parseFloat(e.target.value) || 0 })}
-                                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-900"
-                                step="0.01"
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <input
-                                type="text"
-                                value={editForm.unit || ''}
-                                onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
-                                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-900"
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <input
-                                type="number"
-                                value={editForm.unit_price || ''}
-                                onChange={(e) => setEditForm({ ...editForm, unit_price: parseFloat(e.target.value) || 0 })}
-                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-gray-900"
-                                step="0.01"
-                              />
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">
-                              ${((editForm.quantity || 0) * (editForm.unit_price || 0)).toFixed(2)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="text-xs space-y-1">
-                                {editForm.canonical_unit && <div>Unit: {editForm.canonical_unit}</div>}
-                                {editForm.service && <div>Service: {editForm.service}</div>}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="text-sm text-gray-500">Editing...</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="text-sm text-gray-500">Editing</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="text-sm text-gray-500">-</span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={() => saveEdit(item.id)}
-                                  className="p-1 text-green-400 hover:bg-green-500/10 rounded"
-                                >
-                                  <Check size={18} />
-                                </button>
-                                <button
-                                  onClick={cancelEdit}
-                                  className="p-1 text-red-400 hover:bg-red-500/10 rounded"
-                                >
-                                  <X size={18} />
-                                </button>
-                              </div>
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <DescriptionCell
-                                  rawDescription={item.raw_description || item.description}
-                                  normalizedDescription={item.normalized_description}
-                                />
+                      <tr key={item.id} className={item.is_excluded ? 'bg-slate-800/30 opacity-60' : 'hover:bg-slate-800/20'}>
+                        <>
+                            <td className="px-3 py-3 truncate" title={item.raw_description || item.description}>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-sm text-slate-100 truncate">{item.description}</span>
                                 {needsQuantity(item) && (
-                                  <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 whitespace-nowrap">
-                                    Needs quantity
+                                  <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 w-fit">
+                                    Needs Qty
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
-                            <td className="px-4 py-3">
-                              <UnitCell
-                                rawUnit={item.raw_unit || item.unit}
-                                normalizedUnit={item.normalized_unit}
-                                canonicalUnit={item.canonical_unit}
-                              />
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-900">${item.unit_price.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-sm text-gray-900">${item.total_price.toFixed(2)}</td>
-                            <td className="px-4 py-3 max-w-[200px]">
-                              <AttributesCell
-                                mappedServiceType={item.mapped_service_type}
-                                mappedSystem={item.mapped_system}
-                                mappedPenetration={item.mapped_penetration}
-                                mappingConfidence={item.mapping_confidence}
-                                size={item.size}
-                                frr={item.frr}
-                                service={item.service}
-                                subclass={item.subclass}
-                                material={item.material}
-                              />
-                            </td>
-                            <td className="px-4 py-3 max-w-[250px]">
-                              {item.system_label ? (
-                                <div className="space-y-2">
-                                  <div className="flex items-start gap-2">
-                                    <div className="flex-1">
-                                      <div className="text-xs font-medium text-gray-900 break-words">
-                                        {item.system_label}
-                                      </div>
-                                      <div className="text-xs text-gray-300 break-all">{item.system_id}</div>
-                                      {item.system_manual_override && (
-                                        <div className="text-xs text-blue-600 mt-0.5">Manual override</div>
-                                      )}
-                                    </div>
-                                    {item.system_confidence !== undefined && (
-                                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded border ${
-                                        item.system_confidence >= 0.7 ? 'bg-green-500/20 text-green-300 border-green-500/30' :
-                                        item.system_confidence >= 0.5 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' :
-                                        'bg-red-500/20 text-red-300 border-red-500/30'
-                                      }`}>
-                                        {Math.round(item.system_confidence * 100)}%
-                                      </span>
-                                    )}
-                                  </div>
-                                  <select
-                                    value={item.system_id || ''}
-                                    onChange={(e) => handleSystemOverride(item.id, e.target.value)}
-                                    className="w-full text-xs border border-slate-600 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-900/50 text-slate-100 [&>option]:text-slate-900 [&>option]:bg-white"
-                                  >
-                                    <option value="">-- Change System --</option>
-                                    {availableSystems.map(sys => (
-                                      <option key={sys.id} value={sys.id}>{sys.label}</option>
-                                    ))}
-                                  </select>
-                                  {(item.matched_factors || item.missed_factors) && (
-                                    <button
-                                      onClick={() => setShowMatchDetails(showMatchDetails === item.id ? null : item.id)}
-                                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                    >
-                                      <AlertCircle size={12} />
-                                      Match details
-                                    </button>
-                                  )}
-                                  {showMatchDetails === item.id && (
-                                    <div className="mt-1 p-2 bg-slate-800/40 rounded text-xs">
-                                      {item.matched_factors && JSON.parse(item.matched_factors).length > 0 && (
-                                        <div className="mb-2">
-                                          <div className="font-medium text-green-700 mb-1">Matched:</div>
-                                          <ul className="list-disc list-inside text-green-600 space-y-0.5">
-                                            {JSON.parse(item.matched_factors).map((factor: string, idx: number) => (
-                                              <li key={idx}>{factor}</li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      {item.missed_factors && JSON.parse(item.missed_factors).length > 0 && (
-                                        <div>
-                                          <div className="font-medium text-red-700 mb-1">Missed:</div>
-                                          <ul className="list-disc list-inside text-red-400 space-y-0.5">
-                                            {JSON.parse(item.missed_factors).map((factor: string, idx: number) => (
-                                              <li key={idx}>{factor}</li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="text-xs text-gray-400">Not mapped</div>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="space-y-1">
-                                {getConfidenceBadge(item.confidence)}
-                                {issues.length > 0 && (
-                                  <button
-                                    onClick={() => setShowIssues(showIssues === item.id ? null : item.id)}
-                                    className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
-                                  >
-                                    <AlertCircle size={12} />
-                                    {issues.length} issue{issues.length !== 1 ? 's' : ''}
-                                  </button>
-                                )}
+                            <td className="px-2 py-3 text-sm text-slate-100">{item.quantity}</td>
+                            <td className="px-2 py-3 text-sm text-slate-100 truncate">{item.canonical_unit || item.unit}</td>
+                            <td className="px-2 py-3 text-sm text-slate-100">${item.unit_price.toFixed(2)}</td>
+                            <td className="px-2 py-3 text-sm text-slate-100">${item.total_price.toFixed(2)}</td>
+                            <td className="px-2 py-3">
+                              <div className="text-xs text-slate-300 truncate" title={item.service || item.mapped_service_type}>
+                                {item.service || item.mapped_service_type || '-'}
                               </div>
-                              {showIssues === item.id && issues.length > 0 && (
-                                <div className="mt-2 p-2 bg-red-500/20 rounded text-xs text-red-300 border border-red-500/30">
-                                  <ul className="list-disc list-inside space-y-1">
-                                    {issues.map((issue, idx) => (
-                                      <li key={idx}>{issue}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-2 py-3 truncate">
+                              <div className="text-xs text-slate-100 truncate" title={item.system_label}>
+                                {item.system_label || 'Not mapped'}
+                              </div>
+                            </td>
+                            <td className="px-2 py-3">
+                              {getConfidenceBadge(item.confidence)}
+                            </td>
+                            <td className="px-2 py-3">
                               <button
                                 onClick={() => toggleExclude(item.id, item.is_excluded)}
-                                className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
+                                className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded border ${
                                   item.is_excluded
                                     ? 'bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30'
                                     : 'bg-green-500/20 text-green-300 border-green-500/30 hover:bg-green-500/30'
                                 }`}
                               >
-                                {item.is_excluded ? 'Excluded' : 'Included'}
+                                {item.is_excluded ? 'Out' : 'In'}
                               </button>
                             </td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={() => startEdit(item)}
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                >
-                                  <Edit2 size={16} />
-                                </button>
-                                <button
-                                  onClick={() => deleteItem(item.id)}
-                                  className="p-1 text-red-400 hover:bg-red-500/10 rounded"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
+                            <td className="px-2 py-3 text-right">
+                              <button
+                                onClick={() => startEdit(item)}
+                                className="p-1.5 text-blue-400 hover:bg-blue-500/10 rounded transition-colors"
+                                title="Edit item"
+                              >
+                                <Edit2 size={16} />
+                              </button>
                             </td>
                           </>
-                        )}
                       </tr>
                     );
                   })}
@@ -1437,6 +1254,132 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
             )}
           </div>
       </div>
+      )}
+
+      {/* Edit Item Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-slate-100">Edit Line Item</h3>
+              <button
+                onClick={cancelEdit}
+                className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
+                <textarea
+                  value={editForm.description || ''}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Quantity</label>
+                  <input
+                    type="number"
+                    value={editForm.quantity || ''}
+                    onChange={(e) => setEditForm({ ...editForm, quantity: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    step="0.01"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Unit</label>
+                  <input
+                    type="text"
+                    value={editForm.unit || ''}
+                    onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Unit Price</label>
+                  <input
+                    type="number"
+                    value={editForm.unit_price || ''}
+                    onChange={(e) => setEditForm({ ...editForm, unit_price: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-300">Total Price</span>
+                  <span className="text-lg font-bold text-blue-400">
+                    ${((editForm.quantity || 0) * (editForm.unit_price || 0)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Canonical Unit</label>
+                  <input
+                    type="text"
+                    value={editForm.canonical_unit || ''}
+                    onChange={(e) => setEditForm({ ...editForm, canonical_unit: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., lm, No, m²"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Service</label>
+                  <input
+                    type="text"
+                    value={editForm.service || ''}
+                    onChange={(e) => setEditForm({ ...editForm, service: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., Electrical, Mechanical"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-slate-800 border-t border-slate-700 px-6 py-4 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  const currentItem = items.find(i => i.id === editingItem);
+                  if (currentItem) {
+                    deleteItem(currentItem.id);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+              >
+                <Trash2 size={16} />
+                Delete Item
+              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={cancelEdit}
+                  className="px-4 py-2 text-slate-300 hover:text-slate-100 hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => saveEdit(editingItem)}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                >
+                  <Check size={16} />
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <WorkflowNav
