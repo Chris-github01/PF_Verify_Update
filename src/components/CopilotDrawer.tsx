@@ -38,13 +38,19 @@ export default function CopilotDrawer({
   }, [isOpen, currentProjectId]);
 
   const loadProjectData = async () => {
-    if (!currentProjectId) return;
+    if (!currentProjectId) {
+      console.log('[CopilotDrawer] No project ID, skipping data load');
+      return;
+    }
+
+    console.log(`[CopilotDrawer] Loading project data for: ${currentProjectId}`);
 
     try {
       const data = await fetchProjectDataForCopilot(currentProjectId);
+      console.log('[CopilotDrawer] Project data loaded:', data);
       setProjectData(data);
     } catch (error) {
-      console.error('Error loading project data for copilot:', error);
+      console.error('[CopilotDrawer] Error loading project data for copilot:', error);
     }
   };
 

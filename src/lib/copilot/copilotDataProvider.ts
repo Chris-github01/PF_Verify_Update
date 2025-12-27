@@ -69,6 +69,8 @@ export interface CopilotProjectData {
 export async function fetchProjectDataForCopilot(
   projectId: string
 ): Promise<CopilotProjectData | null> {
+  console.log(`[Copilot] Fetching data for project ID: ${projectId}`);
+
   try {
     const { data: project, error: projectError } = await supabase
       .from('projects')
@@ -81,7 +83,9 @@ export async function fetchProjectDataForCopilot(
       return null;
     }
 
-    const { data: quotes, error: quotesError } = await supabase
+    console.log(`[Copilot] Project found: ${project.name}`);
+
+    let { data: quotes, error: quotesError } = await supabase
       .from('quotes')
       .select(`
         id,
@@ -91,19 +95,48 @@ export async function fetchProjectDataForCopilot(
         items_count,
         status,
         revision_number,
-        created_at
+        created_at,
+        is_latest
       `)
       .eq('project_id', projectId)
       .eq('is_latest', true)
       .order('created_at', { ascending: true });
 
     if (quotesError) {
-      console.error('Error fetching quotes:', quotesError);
+      console.error('Error fetching quotes with is_latest filter:', quotesError);
+    }
+
+    if (!quotes || quotes.length === 0) {
+      console.log('No quotes found with is_latest=true, trying without filter...');
+      const { data: allQuotes, error: allQuotesError } = await supabase
+        .from('quotes')
+        .select(`
+          id,
+          supplier_name,
+          total_amount,
+          quoted_total,
+          items_count,
+          status,
+          revision_number,
+          created_at,
+          is_latest
+        `)
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: true });
+
+      if (allQuotesError) {
+        console.error('Error fetching all quotes:', allQuotesError);
+      } else {
+        console.log(`Found ${allQuotes?.length || 0} total quotes for project`);
+        quotes = allQuotes;
+      }
+    } else {
+      console.log(`Found ${quotes.length} quotes with is_latest=true`);
     }
 
     const quotesWithItems = await Promise.all(
       (quotes || []).map(async (quote) => {
-        const { data: items } = await supabase
+        const { data: items, error: itemsError } = await supabase
           .from('quote_items')
           .select(`
             id,
@@ -123,12 +156,20 @@ export async function fetchProjectDataForCopilot(
           .eq('quote_id', quote.id)
           .order('id', { ascending: true });
 
+        if (itemsError) {
+          console.error(`Error fetching items for quote ${quote.id}:`, itemsError);
+        } else {
+          console.log(`Quote ${quote.supplier_name}: ${items?.length || 0} items`);
+        }
+
         return {
           ...quote,
           items: items || [],
         };
       })
     );
+
+    console.log(`Total quotes with items: ${quotesWithItems.length}`);
 
     const { data: awardReports } = await supabase
       .from('award_reports')
@@ -157,6 +198,9 @@ export async function fetchProjectDataForCopilot(
       workflowStatus.hasReports,
     ].filter(Boolean).length;
 
+    const totalItems = quotesWithItems.reduce((sum, q) => sum + q.items.length, 0);
+    console.log(`[Copilot] Data summary: ${quotesWithItems.length} quotes, ${totalItems} total items`);
+
     return {
       project,
       quotes: quotesWithItems,
@@ -164,7 +208,7 @@ export async function fetchProjectDataForCopilot(
       workflowStatus,
     };
   } catch (error) {
-    console.error('Error in fetchProjectDataForCopilot:', error);
+    console.error('[Copilot] Error in fetchProjectDataForCopilot:', error);
     return null;
   }
 }
