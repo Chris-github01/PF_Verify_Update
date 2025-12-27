@@ -15,17 +15,17 @@ interface ScoringWeightsEditorProps {
 }
 
 const DEFAULT_WEIGHTS: ScoringWeights = {
-  price: 60,
-  compliance: 10,
-  coverage: 15,
-  risk: 15,
+  price: 45,
+  compliance: 20,
+  coverage: 25,
+  risk: 10,
 };
 
 const RECOMMENDED_WEIGHTS: ScoringWeights = {
-  price: 60,
-  compliance: 10,
-  coverage: 15,
-  risk: 15,
+  price: 45,
+  compliance: 20,
+  coverage: 25,
+  risk: 10,
 };
 
 export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: ScoringWeightsEditorProps) {
@@ -104,7 +104,7 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
   };
 
   const handleReset = () => {
-    if (confirm('Reset to recommended weights (60/10/15/15)?')) {
+    if (confirm('Reset to recommended weights (45/20/25/10)?')) {
       setEditWeights(DEFAULT_WEIGHTS);
     }
   };
@@ -115,7 +115,7 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
   const criteriaData = [
     {
       key: 'price' as keyof ScoringWeights,
-      label: 'Price Competitiveness',
+      label: 'Price & Cost Certainty',
       icon: TrendingDown,
       color: 'orange',
       description: 'Inverse linear scaling. Lowest price = 10 points.',
@@ -136,7 +136,7 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
     },
     {
       key: 'risk' as keyof ScoringWeights,
-      label: 'Risk Assessment',
+      label: 'Delivery & Risk',
       icon: AlertTriangle,
       color: 'red',
       description: 'Based on missing items and risk flags identified.',
