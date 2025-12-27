@@ -139,73 +139,73 @@ export default function OrganisationAdminCenter() {
   return (
     <div className="h-full bg-slate-900">
       {/* Header */}
-      <div className="bg-slate-800 border-b border-slate-700 px-8 py-6">
+      <div className="bg-slate-800 border-b border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Admin Center</h1>
-            <p className="text-slate-400">
+            <h1 className="text-xl font-bold text-white mb-1">Admin Center</h1>
+            <p className="text-sm text-slate-400">
               Manage your team, track usage, and configure settings for {currentOrganisation.name}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {isPlatformAdmin && (
               <button
                 onClick={() => setShowCreateUserModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors"
                 title="God Mode: Create user without signup"
               >
-                <Zap size={20} />
+                <Zap size={16} />
                 Create User
               </button>
             )}
             <button
               onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
-              <UserPlus size={20} />
+              <UserPlus size={16} />
               Invite Team Member
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-4 mt-6">
+        <div className="flex gap-2 mt-4">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'overview'
                 ? 'bg-blue-600 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <BarChart3 size={18} />
+            <div className="flex items-center gap-1.5">
+              <BarChart3 size={16} />
               Overview
             </div>
           </button>
           <button
             onClick={() => setActiveTab('team')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'team'
                 ? 'bg-blue-600 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <Users size={18} />
+            <div className="flex items-center gap-1.5">
+              <Users size={16} />
               Team Members
             </div>
           </button>
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'analytics'
                 ? 'bg-blue-600 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-700'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <TrendingUp size={18} />
+            <div className="flex items-center gap-1.5">
+              <TrendingUp size={16} />
               Analytics
             </div>
           </button>
@@ -213,13 +213,13 @@ export default function OrganisationAdminCenter() {
       </div>
 
       {/* Content */}
-      <div className="p-8 overflow-y-auto" style={{ height: 'calc(100% - 200px)' }}>
+      <div className="p-6 overflow-y-auto" style={{ height: 'calc(100% - 160px)' }}>
         {activeTab === 'overview' && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
-                icon={<Users size={24} />}
+                icon={<Users size={20} />}
                 label="Team Members"
                 value={stats?.active_users_count || 0}
                 subtitle={`of ${stats?.seat_limit || 5} seats`}
@@ -227,14 +227,14 @@ export default function OrganisationAdminCenter() {
                 progress={(stats?.active_users_count / stats?.seat_limit) * 100}
               />
               <StatCard
-                icon={<FileText size={24} />}
+                icon={<FileText size={20} />}
                 label="Projects"
                 value={stats?.total_projects || 0}
                 subtitle="total projects"
                 color="green"
               />
               <StatCard
-                icon={<BarChart3 size={24} />}
+                icon={<BarChart3 size={20} />}
                 label="Quotes Imported"
                 value={stats?.total_quotes_imported || 0}
                 subtitle={`of ${stats?.monthly_quote_limit || 100} monthly limit`}
@@ -242,7 +242,7 @@ export default function OrganisationAdminCenter() {
                 progress={(stats?.quotes_used_this_month / stats?.monthly_quote_limit) * 100}
               />
               <StatCard
-                icon={<Clock size={24} />}
+                icon={<Clock size={20} />}
                 label="Hours Saved"
                 value={Math.round(stats?.estimated_hours_saved || 0)}
                 subtitle="estimated time saved"
@@ -252,19 +252,19 @@ export default function OrganisationAdminCenter() {
 
             {/* Archived Users Alert */}
             {stats?.archived_users_count > 0 && (
-              <div className="bg-slate-800 border border-amber-500/30 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <Archive className="text-amber-500 mt-0.5" size={20} />
+              <div className="bg-slate-800 border border-amber-500/30 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <Archive className="text-amber-500 mt-0.5" size={18} />
                   <div className="flex-1">
-                    <h3 className="font-semibold text-white mb-1">Archived Users</h3>
-                    <p className="text-sm text-slate-400">
+                    <h3 className="text-sm font-semibold text-white mb-0.5">Archived Users</h3>
+                    <p className="text-xs text-slate-400">
                       You have {stats.archived_users_count} archived user{stats.archived_users_count !== 1 ? 's' : ''}.
                       Their data is preserved and can be transferred to active users.
                     </p>
                   </div>
                   <button
                     onClick={() => setActiveTab('team')}
-                    className="text-amber-500 hover:text-amber-400 text-sm font-medium"
+                    className="text-amber-500 hover:text-amber-400 text-xs font-medium"
                   >
                     View
                   </button>
@@ -273,48 +273,48 @@ export default function OrganisationAdminCenter() {
             )}
 
             {/* Recent Activity */}
-            <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
-              <h2 className="text-xl font-bold text-white mb-4">Organization Insights</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+              <h2 className="text-lg font-bold text-white mb-3">Organization Insights</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-slate-400 mb-3">Usage Statistics</h3>
-                  <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-slate-400 mb-2">Usage Statistics</h3>
+                  <div className="space-y-1.5">
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-300">Reports Generated</span>
-                      <span className="font-semibold text-white">{stats?.total_reports_generated || 0}</span>
+                      <span className="text-sm text-slate-300">Reports Generated</span>
+                      <span className="text-sm font-semibold text-white">{stats?.total_reports_generated || 0}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-300">Avg. Quotes per Project</span>
-                      <span className="font-semibold text-white">
+                      <span className="text-sm text-slate-300">Avg. Quotes per Project</span>
+                      <span className="text-sm font-semibold text-white">
                         {stats?.total_projects > 0
                           ? (stats.total_quotes_imported / stats.total_projects).toFixed(1)
                           : '0'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-300">Avg. Hours Saved per Quote</span>
-                      <span className="font-semibold text-white">2.5h</span>
+                      <span className="text-sm text-slate-300">Avg. Hours Saved per Quote</span>
+                      <span className="text-sm font-semibold text-white">2.5h</span>
                     </div>
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-slate-400 mb-3">Capacity</h3>
-                  <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-slate-400 mb-2">Capacity</h3>
+                  <div className="space-y-1.5">
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-300">Seats Available</span>
-                      <span className="font-semibold text-white">
+                      <span className="text-sm text-slate-300">Seats Available</span>
+                      <span className="text-sm font-semibold text-white">
                         {(stats?.seat_limit || 0) - (stats?.active_users_count || 0)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-300">Quotes Remaining (Monthly)</span>
-                      <span className="font-semibold text-white">
+                      <span className="text-sm text-slate-300">Quotes Remaining (Monthly)</span>
+                      <span className="text-sm font-semibold text-white">
                         {(stats?.monthly_quote_limit || 0) - (stats?.quotes_used_this_month || 0)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-300">Last Updated</span>
-                      <span className="text-slate-400 text-sm">
+                      <span className="text-sm text-slate-300">Last Updated</span>
+                      <span className="text-slate-400 text-xs">
                         {stats?.last_calculated_at
                           ? new Date(stats.last_calculated_at).toLocaleDateString()
                           : 'Never'}
@@ -392,19 +392,27 @@ function StatCard({ icon, label, value, subtitle, color, progress }: StatCardPro
     orange: 'bg-orange-500'
   };
 
+  const iconSize = {
+    blue: 20,
+    green: 20,
+    purple: 20,
+    orange: 20
+  };
+
   return (
-    <div className={`bg-slate-800 rounded-lg border p-6 ${colorClasses[color]}`}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="p-2 rounded-lg bg-slate-700/50">
+    <div className={`bg-slate-800 rounded-lg border p-4 ${colorClasses[color]}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <div className="p-1.5 rounded-md bg-slate-700/50">
           {icon}
         </div>
+        <div className="text-xs font-medium text-slate-400">{label}</div>
       </div>
-      <div className="text-3xl font-bold text-white mb-1">{value}</div>
-      <div className="text-sm text-slate-400 mb-3">{subtitle}</div>
+      <div className="text-2xl font-bold text-white mb-0.5">{value}</div>
+      <div className="text-xs text-slate-400 mb-2">{subtitle}</div>
       {progress !== undefined && (
-        <div className="w-full bg-slate-700 rounded-full h-2">
+        <div className="w-full bg-slate-700 rounded-full h-1.5">
           <div
-            className={`h-2 rounded-full ${progressColors[color]} transition-all duration-300`}
+            className={`h-1.5 rounded-full ${progressColors[color]} transition-all duration-300`}
             style={{ width: `${Math.min(progress, 100)}%` }}
           />
         </div>
