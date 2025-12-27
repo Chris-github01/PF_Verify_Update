@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, FileText, TrendingUp, AlertCircle } from 'lucide-react';
+import { FolderOpen, FileText, TrendingUp, AlertCircle, CheckCircle2, Circle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { PROJECT_WORKFLOW_STEPS } from '../config/workflow';
 
 interface ProjectDashboardProps {
   projectId: string;
@@ -11,10 +12,12 @@ interface ProjectDashboardProps {
 
 interface ProjectStats {
   quoteCount: number;
+  selectedQuoteCount: number;
   totalValue: number;
   supplierCount: number;
   reportStatus: 'not_generated' | 'ready' | 'out_of_date';
   reportGeneratedAt?: string;
+  hasCleanedData: boolean;
 }
 
 export default function ProjectDashboard({
@@ -25,9 +28,11 @@ export default function ProjectDashboard({
 }: ProjectDashboardProps) {
   const [stats, setStats] = useState<ProjectStats>({
     quoteCount: 0,
+    selectedQuoteCount: 0,
     totalValue: 0,
     supplierCount: 0,
     reportStatus: 'not_generated',
+    hasCleanedData: false,
   });
   const [loading, setLoading] = useState(true);
 
@@ -40,12 +45,21 @@ export default function ProjectDashboard({
     try {
       const { data: quotes } = await supabase
         .from('quotes')
-        .select('id, supplier_name, total_amount')
+        .select('id, supplier_name, total_amount, is_selected')
         .eq('project_id', projectId);
 
       const quoteCount = quotes?.length || 0;
+      const selectedQuoteCount = quotes?.filter(q => q.is_selected).length || 0;
       const totalValue = quotes?.reduce((sum, q) => sum + (q.total_amount || 0), 0) || 0;
       const supplierCount = new Set(quotes?.map(q => q.supplier_name)).size;
+
+      // Check if any quote has cleaned/processed items
+      const { data: processedItems } = await supabase
+        .from('quote_items')
+        .select('id')
+        .in('quote_id', quotes?.map(q => q.id) || [])
+        .not('system_id', 'is', null)
+        .limit(1);
 
       const { data: latestReport } = await supabase
         .from('award_reports')
@@ -58,10 +72,12 @@ export default function ProjectDashboard({
 
       setStats({
         quoteCount,
+        selectedQuoteCount,
         totalValue,
         supplierCount,
         reportStatus: latestReport ? 'ready' : 'not_generated',
         reportGeneratedAt: latestReport?.generated_at,
+        hasCleanedData: (processedItems?.length || 0) > 0,
       });
     } catch (error) {
       console.error('Error loading project stats:', error);
@@ -77,6 +93,34 @@ export default function ProjectDashboard({
       </div>
     );
   }
+
+  // Determine workflow step completion
+  const workflowSteps = [
+    {
+      id: 'import',
+      name: 'Import Quotes',
+      completed: stats.quoteCount > 0,
+      description: `${stats.quoteCount} quote${stats.quoteCount === 1 ? '' : 's'} imported`
+    },
+    {
+      id: 'select',
+      name: 'Quote Select',
+      completed: stats.selectedQuoteCount > 0,
+      description: `${stats.selectedQuoteCount} quote${stats.selectedQuoteCount === 1 ? '' : 's'} selected`
+    },
+    {
+      id: 'review',
+      name: 'Review & Clean',
+      completed: stats.hasCleanedData,
+      description: stats.hasCleanedData ? 'Data cleaned and mapped' : 'Not started'
+    },
+    {
+      id: 'analysis',
+      name: 'Analysis & Reports',
+      completed: stats.reportStatus === 'ready',
+      description: stats.reportStatus === 'ready' ? 'Reports generated' : 'Not generated'
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -98,7 +142,7 @@ export default function ProjectDashboard({
             <h3 className="text-lg font-semibold text-white">Total Value</h3>
           </div>
           <p className="text-3xl font-bold text-white">
-            ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            £{stats.totalValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
           <p className="text-sm text-slate-400 mt-1">Combined quote value</p>
         </div>
@@ -129,13 +173,52 @@ export default function ProjectDashboard({
         </div>
       </div>
 
+      <div className="bg-slate-800/60 rounded-xl p-8 border border-slate-700/50">
+        <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+          <div className="h-1 w-1 rounded-full bg-orange-500"></div>
+          Workflow Progress
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {workflowSteps.map((step, index) => (
+            <div
+              key={step.id}
+              className={`flex items-start gap-4 p-4 rounded-xl border transition-all ${
+                step.completed
+                  ? 'bg-emerald-500/10 border-emerald-500/30'
+                  : 'bg-slate-800/50 border-slate-700/50'
+              }`}
+            >
+              <div className="flex-shrink-0 mt-0.5">
+                {step.completed ? (
+                  <CheckCircle2 className="text-emerald-400" size={24} />
+                ) : (
+                  <Circle className="text-slate-500" size={24} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-semibold text-slate-500">STEP {index + 1}</span>
+                </div>
+                <h4 className={`text-base font-semibold mb-1 ${
+                  step.completed ? 'text-emerald-300' : 'text-slate-300'
+                }`}>
+                  {step.name}
+                </h4>
+                <p className="text-sm text-slate-400">{step.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="bg-slate-800/60 rounded-lg p-8 border border-slate-700">
         <h3 className="text-xl font-semibold text-white mb-4">Getting Started</h3>
         <div className="space-y-3 text-slate-300">
-          <p>1. Import quotes from your suppliers using the Import tab</p>
-          <p>2. Review and clean the imported data</p>
-          <p>3. Analyze quotes using the Scope Matrix and other analysis tools</p>
-          <p>4. Generate award reports to compare suppliers</p>
+          <p>1. Import quotes from your suppliers using the Import Quotes tab</p>
+          <p>2. Select which quotes you want to process in Quote Select</p>
+          <p>3. Review and clean the imported data</p>
+          <p>4. Analyze quotes using the Scope Matrix and Quote Intelligence</p>
+          <p>5. Generate award reports to compare suppliers</p>
         </div>
       </div>
     </div>
