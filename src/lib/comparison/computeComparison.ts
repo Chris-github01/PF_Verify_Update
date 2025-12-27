@@ -28,7 +28,7 @@ const clean = (s: any) =>
 
 const num = (v: any) => {
   if (v === null || v === undefined) return NaN;
-  const n = Number(String(v).replace(/[$€£,%\s,()]/g, ""));
+  const n = Number(String(v).replace(/[$€,%\s,()]/g, ""));
   return Number.isFinite(n) ? n : NaN;
 };
 

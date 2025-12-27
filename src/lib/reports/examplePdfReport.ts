@@ -157,7 +157,7 @@ function buildSupplierComparison(data: ExampleReportData): string {
       rows: sorted.map((supplier, idx) => [
         `${idx + 1}`,
         supplier.name,
-        `£${supplier.price.toLocaleString()}`,
+        `$${supplier.price.toLocaleString()}`,
         `${supplier.score.toFixed(1)}/100`,
         `${supplier.coverage.toFixed(1)}%`,
       ]),
@@ -241,7 +241,7 @@ export async function handleExportButtonClick() {
               FireSafe Solutions has been identified as the recommended supplier. This recommendation
               balances competitive pricing with excellent scope coverage and low risk profile.`,
     recommendations: [
-      `Award contract to FireSafe Solutions at £145,000. This represents the best value
+      `Award contract to FireSafe Solutions at $145,000. This represents the best value
        proposition with 98.2% scope coverage and highest weighted score of 87.5/100.`,
       `Ensure all scope gaps identified in the analysis are addressed during contract
        negotiation and mobilization phase.`,

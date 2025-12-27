@@ -328,7 +328,7 @@ export default function QuoteSelect({
                         <div className="flex items-center gap-2">
                           <span className="text-slate-400">Total:</span>
                           <span className="font-bold text-slate-50">
-                            £{(quote.total_amount || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ${(quote.total_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">

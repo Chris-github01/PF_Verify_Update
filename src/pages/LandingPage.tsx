@@ -686,7 +686,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-6">Built by Experts Who've Been There</h2>
               <div className="text-left space-y-6 text-slate-300 leading-relaxed">
                 <p className="text-lg">
-                  VerifyTrade was born from real frustration. Our founding team has collectively audited over <span className="font-bold text-slate-100">£500 million</span> of passive fire work across major construction projects in NZ and Australia.
+                  VerifyTrade was born from real frustration. Our founding team has collectively audited over <span className="font-bold text-slate-100">$500 million</span> of passive fire work across major construction projects in NZ and Australia.
                 </p>
                 <p className="text-lg">
                   We've seen the same problems over and over: quotes that arrive in inconsistent formats, missing critical items, non-compliant systems specified, and procurement teams struggling to make informed decisions under tight deadlines.
@@ -1132,7 +1132,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
             <p className="text-sm text-slate-500 italic">
-              Built by the team that's audited over £500m of passive fire work.
+              Built by the team that's audited over $500m of passive fire work.
             </p>
           </div>
           <div className="grid md:grid-cols-4 gap-8 mb-8">
