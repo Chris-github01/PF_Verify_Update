@@ -9,6 +9,7 @@ interface ProjectReportPageProps {
   projectId: string;
   projectName: string;
   onNavigateToHub: () => void;
+  onNavigateToDashboard?: () => void;
   onToast?: (message: string, type: 'success' | 'error') => void;
 }
 
@@ -16,6 +17,7 @@ export default function ProjectReportPage({
   projectId,
   projectName,
   onNavigateToHub,
+  onNavigateToDashboard,
   onToast
 }: ProjectReportPageProps) {
   const { currentOrganisation } = useOrganisation();
@@ -319,7 +321,21 @@ export default function ProjectReportPage({
           organisationId={currentOrganisation?.id || ''}
           onToast={onToast}
           onNavigate={(page) => {
-            console.log('Navigate to:', page);
+            if (page === 'dashboard' && onNavigateToDashboard) {
+              onNavigateToDashboard();
+            } else {
+              console.log('Navigate to:', page);
+            }
+          }}
+          onNavigateBack={() => {
+            // Navigate back to scope matrix
+            console.log('Navigate back to scope matrix');
+          }}
+          onNavigateNext={() => {
+            // Complete and go to dashboard
+            if (onNavigateToDashboard) {
+              onNavigateToDashboard();
+            }
           }}
         />
       </div>

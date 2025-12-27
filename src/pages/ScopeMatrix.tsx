@@ -280,6 +280,14 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     console.log('=== SCOPE MATRIX GENERATION END ===');
   };
 
+  const handleGenerateAndNext = async () => {
+    await handleGenerateMatrix();
+    // Navigate to Award Reports after generation
+    if (onNavigateNext) {
+      onNavigateNext();
+    }
+  };
+
   const buildMatrixDiagnostics = (itemsData: any[], quoteIds: string[]): MatrixDiagnostics => {
     const itemsByQuote: Record<string, number> = {};
     const itemsWithSystemByQuote: Record<string, number> = {};
@@ -1189,11 +1197,11 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           <div className="flex items-end justify-end mt-6">
             <div className="text-right">
               <button
-                onClick={handleGenerateMatrix}
+                onClick={handleGenerateAndNext}
                 disabled={(selectedQuoteIds.length + selectedOriginalQuoteIds.length) < 2 || isGenerating}
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-sm"
               >
-                {isGenerating ? 'Building Matrix...' : 'Generate Scope Matrix'}
+                {isGenerating ? 'Building Matrix...' : 'Generate Scope Matrix and Next'}
               </button>
               <p className="text-xs text-gray-500 mt-2">
                 Only updated quotes will be reprocessed.

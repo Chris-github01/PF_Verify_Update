@@ -780,6 +780,7 @@ function AppContent() {
           projectId={projectId}
           projectName={projectInfo?.name || 'Project'}
           onNavigateToHub={() => setShowReportsHub(true)}
+          onNavigateToDashboard={() => setActiveTab('dashboard')}
           onToast={(message, type) => setToast({ message, type })}
         />;
 
