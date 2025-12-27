@@ -99,6 +99,7 @@ Deno.serve(async (req: Request) => {
       .from("quotes")
       .select("id, supplier_name")
       .eq("project_id", projectId)
+      .eq("is_selected", true)
       .eq("is_latest", true)
       .order("created_at", { ascending: true });
 

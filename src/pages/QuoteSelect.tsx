@@ -41,24 +41,25 @@ export default function QuoteSelect({
   const loadQuotes = async () => {
     setLoading(true);
     try {
-      let query = supabase
+      const { data: allQuotes, error } = await supabase
         .from('quotes')
         .select('*')
         .eq('project_id', projectId)
         .order('created_at', { ascending: false });
 
-      if (dashboardMode === 'revisions') {
-        query = query.eq('is_revision', true);
-      } else {
-        query = query.or('is_revision.is.null,is_revision.eq.false');
-      }
-
-      const { data, error } = await query;
-
       if (error) throw error;
 
+      const filteredQuotes = allQuotes?.filter(q => {
+        const revisionNumber = q.revision_number ?? 1;
+        if (dashboardMode === 'original') {
+          return revisionNumber === 1;
+        } else {
+          return revisionNumber > 1;
+        }
+      }) || [];
+
       const quotesWithCounts = await Promise.all(
-        (data || []).map(async (quote) => {
+        filteredQuotes.map(async (quote) => {
           const { count } = await supabase
             .from('quote_items')
             .select('*', { count: 'exact', head: true })
@@ -72,9 +73,10 @@ export default function QuoteSelect({
       );
 
       setQuotes(quotesWithCounts);
+      setMessage(null);
     } catch (error) {
       console.error('Error loading quotes:', error);
-      setMessage({ type: 'error', text: 'Failed to load quotes' });
+      setMessage({ type: 'error', text: `Failed to load quotes: ${error instanceof Error ? error.message : 'Unknown error'}` });
     } finally {
       setLoading(false);
     }

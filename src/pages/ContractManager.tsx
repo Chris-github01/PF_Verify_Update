@@ -710,6 +710,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           .from('quotes')
           .select('supplier_name, total_amount, is_awarded')
           .eq('project_id', projectId)
+          .eq('is_selected', true)
           .eq('latest', true)
           .order('total_amount', { ascending: true });
 

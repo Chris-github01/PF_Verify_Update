@@ -50,6 +50,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         .from('quotes')
         .select('id, supplier_name, quote_reference')
         .eq('project_id', projectId)
+        .eq('is_selected', true)
         .or('revision_number.is.null,revision_number.eq.1')
         .order('supplier_name', { ascending: true });
 

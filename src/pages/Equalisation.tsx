@@ -30,6 +30,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         .from('quotes')
         .select('id, supplier_name')
         .eq('project_id', projectId)
+        .eq('is_selected', true)
         .order('supplier_name');
 
       // If preselected quotes are provided, filter to only those
