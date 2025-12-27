@@ -1032,13 +1032,6 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     <div className="min-h-screen">
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className="mb-6">
-          <button
-            onClick={onNavigateBack}
-            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
-          >
-            <ArrowLeft size={16} />
-            Back to Project Dashboard
-          </button>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Scope Matrix</h1>
           <p className="text-base text-gray-600">Compare supplier quotes and generate your scope matrix.</p>
         </div>
