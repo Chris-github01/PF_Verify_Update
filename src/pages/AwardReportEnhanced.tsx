@@ -72,7 +72,7 @@ export default function AwardReportEnhanced({
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [recalculating, setRecalculating] = useState(false);
   const [currentReportId, setCurrentReportId] = useState<string | null>(reportId || null);
-  const [weights] = useState<ScoringWeights>(DEFAULT_WEIGHTS);
+  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
@@ -105,12 +105,17 @@ export default function AwardReportEnhanced({
     try {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, client, approved_quote_id, organisation_id')
+        .select('id, name, client, approved_quote_id, organisation_id, scoring_weights')
         .eq('id', projectId)
         .maybeSingle();
 
       if (data) {
         setCurrentProject(data);
+
+        // Load custom scoring weights if available
+        if (data.scoring_weights) {
+          setWeights(data.scoring_weights as ScoringWeights);
+        }
 
         // Fetch organization logo if available
         if ((data as any).organisation_id) {

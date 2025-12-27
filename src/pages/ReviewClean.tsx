@@ -10,6 +10,7 @@ import WorkflowNav from '../components/WorkflowNav';
 import { needsQuantity } from '../lib/quoteUtils';
 import { getStatusColor, getStatusLabel, type QuoteStatus } from '../lib/quoteProcessing/quotePipeline';
 import { QuoteRevisionsHub } from './QuoteRevisionsHub';
+import ScoringWeightsEditor from '../components/ScoringWeightsEditor';
 import type { DashboardMode } from '../App';
 
 interface Quote {
@@ -1014,6 +1015,9 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Scoring & Weighting Criteria Section */}
+          <ScoringWeightsEditor projectId={projectId} />
+
           {/* Quotes Section - Horizontal Display */}
           <div className="bg-slate-800/60 rounded-lg shadow-sm border border-slate-700">
             <div className="p-4 border-b border-slate-700">
