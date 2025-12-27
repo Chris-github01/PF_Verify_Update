@@ -558,21 +558,29 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       margin: 18mm 14mm 18mm 14mm;
     }
 
-    body {
-      counter-reset: page;
-    }
-
     .page {
-      counter-increment: page;
-      /* REMOVED page-break-after to prevent blank pages */
-      padding: 20px 30px 60px 30px;
+      padding: 20px 30px;
       position: relative;
       box-sizing: border-box;
       margin-bottom: 40px;
     }
 
     .page:last-child {
+      page-break-after: auto;
       margin-bottom: 0;
+    }
+
+    /* Start major sections on new pages */
+    .financial-section, .scope-section, .risks-section, .terms-section,
+    .comparison-section, .breakdown-section, .cashflow-section,
+    .contact-section {
+      page-break-before: always;
+      break-before: page;
+    }
+
+    .cover-page {
+      page-break-after: always;
+      break-after: page;
     }
 
     /* === HEADER & FOOTER === */
@@ -621,10 +629,6 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     }
 
     footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
       padding: 10px 30px;
       border-top: 1px solid #e5e7eb;
       background: white;
@@ -633,6 +637,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       align-items: center;
       font-size: 10px;
       color: #9ca3af;
+      margin-top: 40px;
     }
 
     .footer-left {
@@ -643,10 +648,6 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     .footer-right {
       font-size: 10px;
       color: #6b7280;
-    }
-
-    .footer-right::after {
-      content: "Page " counter(page);
     }
 
     .header-website {
@@ -1316,27 +1317,18 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
         -webkit-print-color-adjust: exact;
         margin: 0 !important;
         padding: 0 !important;
-        padding-bottom: 20mm !important; /* Reserve space for fixed footer */
-        counter-reset: page;
+      }
+
+      /* Hide HTML header/footer in print (Gotenberg adds native ones) */
+      header, footer {
+        display: none !important;
       }
 
       .page {
         min-height: auto !important;
         height: auto !important;
-        padding-bottom: 40px;
-        counter-increment: page;
-      }
-
-      header {
-        display: flex !important;
-      }
-
-      footer {
-        display: flex !important;
-      }
-
-      .footer-right::after {
-        content: "Page " counter(page) !important;
+        padding: 20px 30px;
+        margin-bottom: 0;
       }
 
       .page:last-child {
