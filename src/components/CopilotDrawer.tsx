@@ -26,7 +26,7 @@ export default function CopilotDrawer({
   const [messages, setMessages] = useState<CopilotMessage[]>([
     {
       role: 'assistant',
-      content: "Hi! I'm your AI Copilot. I can help you navigate the app, answer questions about your quotes, and provide insights. What can I help you with?",
+      content: "**Welcome to your AI Copilot.**\n\nI'm here as your Commercial Manager + QS + Contract Administrator assistant.\n\nI can help you with:\n- Quote analysis and commercial decisions\n- Award recommendations and risk assessment\n- Contract document preparation\n- Workflow guidance and troubleshooting\n\n**What can I help you with today?**\n\n_(Tip: Click the 🐛 icon if you need to run diagnostics on your project data)_",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
