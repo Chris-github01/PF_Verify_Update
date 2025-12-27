@@ -3,6 +3,7 @@ import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet, P
 import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { AwardSummary } from '../types/award.types';
+import type { EqualisationResult } from '../types/equalisation.types';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import ApprovalModal from '../components/ApprovalModal';
@@ -17,6 +18,7 @@ import CoverageBreakdownChart from '../components/award/CoverageBreakdownChart';
 import MethodologyFlowchart from '../components/award/MethodologyFlowchart';
 import EnhancedRecommendationsCard from '../components/award/EnhancedRecommendationsCard';
 import SupplierDetailModal from '../components/award/SupplierDetailModal';
+import { buildEqualisation } from '../lib/equalisation/buildEqualisation';
 import {
   calculatePriceScore,
   calculateComplianceScore,
@@ -84,6 +86,7 @@ export default function AwardReportEnhanced({
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<EnhancedSupplierMetrics | null>(null);
+  const [equalisationResult, setEqualisationResult] = useState<EqualisationResult | null>(null);
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -105,6 +108,15 @@ export default function AwardReportEnhanced({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (comparisonData.length > 0) {
+      const result = buildEqualisation(comparisonData, 'MODEL');
+      setEqualisationResult(result);
+    } else {
+      setEqualisationResult(null);
+    }
+  }, [comparisonData]);
 
   const loadProjectInfo = async () => {
     try {
@@ -1047,6 +1059,89 @@ export default function AwardReportEnhanced({
         {enhancedSuppliers.slice(0, 3).map((supplier) => (
           <CoverageBreakdownChart key={supplier.supplierName} supplier={supplier} />
         ))}
+
+        {/* Equalisation Analysis */}
+        {equalisationResult && equalisationResult.supplierTotals.length > 0 && (
+          <div className="bg-slate-800/60 rounded-lg p-6 border border-slate-700">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Award className="text-blue-400" size={20} />
+              Equalisation Analysis
+            </h3>
+            <p className="text-sm text-slate-400 mb-4">
+              Quotes normalized to account for scope differences. Missing items filled using model rates for fair comparison.
+            </p>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="text-left py-3 px-4 text-slate-300 font-semibold">Supplier</th>
+                    <th className="text-right py-3 px-4 text-slate-300 font-semibold">Original Total</th>
+                    <th className="text-right py-3 px-4 text-slate-300 font-semibold">Equalized Total</th>
+                    <th className="text-right py-3 px-4 text-slate-300 font-semibold">Adjustment</th>
+                    <th className="text-right py-3 px-4 text-slate-300 font-semibold">Impact</th>
+                    <th className="text-center py-3 px-4 text-slate-300 font-semibold">Items Added</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {equalisationResult.supplierTotals
+                    .sort((a, b) => a.equalisedTotal - b.equalisedTotal)
+                    .map((supplier, index) => (
+                      <tr key={supplier.supplierName} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            {index === 0 && <Award className="text-yellow-400" size={16} />}
+                            <span className="text-slate-200 font-medium">{supplier.supplierName}</span>
+                          </div>
+                        </td>
+                        <td className="text-right py-3 px-4 text-slate-300">
+                          {formatCurrency(supplier.originalTotal)}
+                        </td>
+                        <td className="text-right py-3 px-4 text-white font-semibold">
+                          {formatCurrency(supplier.equalisedTotal)}
+                        </td>
+                        <td className="text-right py-3 px-4">
+                          <span className={supplier.adjustment >= 0 ? 'text-red-400' : 'text-green-400'}>
+                            {supplier.adjustment >= 0 ? '+' : ''}{formatCurrency(supplier.adjustment)}
+                          </span>
+                        </td>
+                        <td className="text-right py-3 px-4">
+                          <span className={supplier.adjustmentPct >= 0 ? 'text-red-400' : 'text-green-400'}>
+                            {supplier.adjustmentPct >= 0 ? '+' : ''}{supplier.adjustmentPct.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="text-center py-3 px-4 text-slate-300">
+                          {supplier.itemsAdded}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {equalisationResult.equalisationLog.length > 0 && (
+              <div className="mt-6">
+                <h4 className="text-sm font-semibold text-slate-300 mb-3">Adjustment Details</h4>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {equalisationResult.equalisationLog.map((log, index) => (
+                    <div key={index} className="bg-slate-700/30 rounded p-3 text-xs">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-medium text-slate-200">{log.supplierName}</span>
+                        <span className="text-slate-400">{formatCurrency(log.total)}</span>
+                      </div>
+                      <div className="text-slate-400">
+                        {log.systemLabel} - {log.reason}
+                      </div>
+                      <div className="text-slate-500 mt-1">
+                        Source: {log.source} | Rate: {formatCurrency(log.rateUsed)} | Qty: {log.quantity}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Approval Modal */}

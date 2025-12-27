@@ -516,12 +516,12 @@ export default function NewProjectDashboard({
           </div>
         ) : (
           <div className="mt-3 space-y-3">
-            <div className="flex items-center justify-between py-2 px-4 bg-white border-b border-gray-200">
-              <div className="flex items-center gap-2 text-[13px] text-gray-600">
+            <div className="flex items-center justify-between py-2 px-4 bg-slate-800/60 border-b border-slate-700">
+              <div className="flex items-center gap-2 text-[13px] text-slate-300">
                 <Building2 size={14} />
                 <span>{currentOrganisation?.name || 'Loading...'}</span>
               </div>
-              <div className="flex items-center gap-2 text-[13px] text-gray-500">
+              <div className="flex items-center gap-2 text-[13px] text-slate-400">
                 <Clock size={13} />
                 <span>Last updated: {new Date().toLocaleDateString()}</span>
               </div>

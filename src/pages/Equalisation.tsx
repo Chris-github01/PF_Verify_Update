@@ -31,6 +31,8 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
           updated_at: new Date().toISOString()
         })
         .eq('id', projectId);
+
+      window.dispatchEvent(new Event('refresh-dashboard'));
     } catch (error) {
       console.error('Failed to update equalisation workflow status:', error);
     }
