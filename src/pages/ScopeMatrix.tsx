@@ -1087,7 +1087,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               </a>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {readyQuotes.map((quote) => {
                 const isSelected = selectedQuoteIds.includes(quote.id);
 
@@ -1095,64 +1095,34 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                   <button
                     key={quote.id}
                     onClick={() => handleToggleQuote(quote.id)}
-                    className={`group relative w-full p-4 rounded-lg border transition-all text-left ${
+                    className={`w-full flex items-center gap-3 py-3 px-3 rounded-lg border transition-all text-left ${
                       isSelected
-                        ? 'bg-slate-900/50 border-orange-500/50'
-                        : 'bg-slate-900/30 border-slate-700/50 hover:border-slate-600/50 hover:bg-slate-900/40'
+                        ? 'border-slate-600 bg-slate-700/50'
+                        : 'border-slate-700 bg-slate-800/40 hover:bg-slate-700/50'
                     }`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center transition-all ${
-                        isSelected
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-slate-700/50 text-slate-400 group-hover:bg-slate-600'
-                      }`}>
-                        {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4 mb-2">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-base font-bold text-slate-100 mb-0.5 truncate">
-                              {quote.supplier_name}
-                            </h3>
-                            {quote.quote_reference && (
-                              <p className="text-xs text-slate-400">
-                                Reference: {quote.quote_reference}
-                              </p>
-                            )}
-                          </div>
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${
-                            quote.mapped_items_count > 0
-                              ? 'bg-green-500/20 text-green-300 border-green-500/30'
-                              : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                          }`}>
-                            {quote.mapped_items_count > 0 ? 'Ready' : 'Needs Mapping'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-400">Total:</span>
-                            <span className="font-semibold text-slate-100">
-                              ${(quote.total_amount || 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-400">Items:</span>
-                            <span className="font-medium text-slate-300">
-                              {quote.items_count.toLocaleString()}
-                            </span>
-                          </div>
-                          {quote.mapped_items_count > 0 && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-slate-400">Mapped:</span>
-                              <span className="font-medium text-green-300">
-                                {quote.mapped_items_count.toLocaleString()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                    <div className="flex-shrink-0">
+                      {isSelected ? (
+                        <CheckSquare className="text-blue-600" size={18} />
+                      ) : (
+                        <Square className="text-gray-400" size={18} />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-gray-900 text-sm">{quote.supplier_name}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {quote.items_count} items •
+                        {quote.mapped_items_count > 0 ? (
+                          <span className="text-green-600 font-medium"> {quote.mapped_items_count} mapped</span>
+                        ) : (
+                          <span className="text-amber-600 font-medium"> 0 mapped (needs Review & Clean)</span>
+                        )}
+                         • ${quote.total_amount?.toLocaleString() || '0'}
+                        {quote.mapped_items_count > 0 ? (
+                          <span className="text-green-600 font-medium ml-2">✓ Ready</span>
+                        ) : (
+                          <span className="text-amber-600 font-medium ml-2">⚠ Needs mapping</span>
+                        )}
                       </div>
                     </div>
                   </button>
