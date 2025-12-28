@@ -16,6 +16,7 @@ interface ContractManagerProps {
   projectId: string;
   onNavigateBack?: () => void;
   dashboardMode?: DashboardMode;
+  onToast?: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 interface ProjectInfo {
@@ -133,7 +134,7 @@ interface ComplianceDocument {
 
 type TabId = 'summary' | 'scope' | 'inclusions' | 'allowances' | 'onboarding' | 'handover';
 
-export default function ContractManager({ projectId, onNavigateBack, dashboardMode = 'original' }: ContractManagerProps) {
+export default function ContractManager({ projectId, onNavigateBack, dashboardMode = 'original', onToast }: ContractManagerProps) {
   const [activeTab, setActiveTab] = useState<TabId>('summary');
   const [loading, setLoading] = useState(true);
   const [projectInfo, setProjectInfo] = useState<ProjectInfo | null>(null);
@@ -547,10 +548,10 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         useTestMode: import.meta.env.DEV
       });
 
-      alert('Site Team Pack PDF downloaded successfully!');
+      onToast?.('PDF downloaded successfully!', 'success');
     } catch (error) {
       console.error('PDF generation error:', error);
-      alert(`Failed to generate Site Team Pack: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      onToast?.(`Failed to generate Site Team Pack: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     } finally {
       setGeneratingJuniorPdf(false);
     }
@@ -836,10 +837,10 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         useTestMode: import.meta.env.DEV
       });
 
-      alert('Senior Management Pack PDF downloaded successfully!');
+      onToast?.('PDF downloaded successfully!', 'success');
     } catch (error) {
       console.error('PDF generation error:', error);
-      alert(`Failed to generate Senior Management Pack: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      onToast?.(`Failed to generate Senior Management Pack: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     } finally {
       setGeneratingSeniorPdf(false);
     }
@@ -4566,7 +4567,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         reportType: 'Pre-let Appendix'
       });
 
-      alert('Pre-let Appendix PDF downloaded successfully!');
+      onToast?.('PDF downloaded successfully!', 'success');
     } catch (error) {
       console.error('PDF generation error:', error);
 
@@ -4581,7 +4582,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
         }
       }
 
-      alert(errorMessage);
+      onToast?.(errorMessage, 'error');
     } finally {
       setGenerating(false);
     }

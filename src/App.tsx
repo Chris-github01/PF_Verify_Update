@@ -747,6 +747,7 @@ function AppContent() {
             setProjectInfo(null);
             setActiveTab('dashboard');
           }}
+          onToast={(message, type) => setToast({ message, type })}
         />;
 
       case 'reports':
