@@ -3,10 +3,17 @@
  *
  * This module provides PDF generation with quality assurance checks
  * to ensure clean, professional output without blank pages or layout issues.
+ *
+ * UPDATED: Now uses deterministic layout system (pdfLayoutSystem.ts)
  */
 
 import { supabase } from '../supabase';
 import { preparePdfContent } from './pdfQualityAssurance';
+import {
+  wrapContentWithLayout,
+  cleanLegacyPaginationArtifacts,
+  validatePDFLayout
+} from './pdfLayoutSystem';
 
 export interface PdfGenerationOptions {
   htmlContent: string;
@@ -37,11 +44,23 @@ export async function generatePdfWithGotenberg(
   options: PdfGenerationOptions
 ): Promise<PdfGenerationResult> {
   try {
-    // Run QA checks on HTML content before generating PDF
+    // STEP 1: Clean legacy pagination artifacts (old .page divs, fixed footers, etc.)
+    let processedHtml = cleanLegacyPaginationArtifacts(options.htmlContent);
+
+    // STEP 2: Run QA checks on HTML content
     const documentName = `${options.filename} - ${options.projectName || 'Report'}`;
     const cleanedHtml = options.skipQualityCheck
-      ? options.htmlContent
-      : preparePdfContent(options.htmlContent, documentName);
+      ? processedHtml
+      : preparePdfContent(processedHtml, documentName);
+
+    // STEP 3: Wrap with deterministic layout system
+    const layoutHtml = wrapContentWithLayout(cleanedHtml);
+
+    // STEP 4: Validate layout (log warnings if any)
+    const validation = validatePDFLayout(layoutHtml);
+    if (!validation.valid && validation.warnings.length > 0) {
+      console.warn('[PDF Layout] Warnings:', validation.warnings);
+    }
 
     const { data: { session } } = await supabase.auth.getSession();
     const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate_pdf_gotenberg`;
@@ -54,7 +73,7 @@ export async function generatePdfWithGotenberg(
       },
       body: JSON.stringify({
         ...options,
-        htmlContent: cleanedHtml,
+        htmlContent: layoutHtml,
       }),
     });
 
