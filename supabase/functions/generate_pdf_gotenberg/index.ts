@@ -12,6 +12,8 @@ interface GotenbergPdfRequest {
   projectName?: string;
   contractNumber?: string;
   reportType?: string;
+  supplierName?: string;
+  organisationLogoUrl?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -70,6 +72,8 @@ Deno.serve(async (req: Request) => {
       projectName,
       contractNumber,
       reportType: reqReportType,
+      supplierName,
+      organisationLogoUrl,
     } = requestBody;
 
     reportType = reqReportType;
@@ -86,164 +90,13 @@ Deno.serve(async (req: Request) => {
     const today = new Date().toISOString().split('T')[0];
     const pdfFilename = `${filename}_${today}.pdf`;
 
-    // Prepare header/footer content
-    const leftHeader = contractNumber
-      ? `${projectName || 'Project'} | ${contractNumber}`
-      : projectName || 'Project';
-
-    // Build complete HTML with print CSS and header/footer styling
-    const completeHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    /* === PAGE SETUP === */
-    @page {
-      size: A4;
-      /* Margins MUST match Gotenberg formData settings */
-      /* Top: 22mm (header 18mm + buffer 4mm) */
-      /* Bottom: 18mm (footer 14mm + buffer 4mm) */
-      /* Left/Right: 12mm */
-      margin: 22mm 12mm 18mm 12mm;
-    }
-
-    /* === PRINT COLOR PRESERVATION === */
-    * {
-      print-color-adjust: exact;
-      -webkit-print-color-adjust: exact;
-      color-adjust: exact;
-    }
-
-    /* === PAGE BREAKS === */
-    .avoid-break {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .page-break {
-      break-before: page;
-      page-break-before: always;
-    }
-
-    /* === RESPONSIVE IMAGES === */
-    img {
-      max-width: 100%;
-      height: auto;
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    /* === TABLE HANDLING === */
-    table {
-      break-inside: auto;
-      page-break-inside: auto;
-      width: 100%;
-    }
-
-    tr {
-      break-inside: avoid;
-      page-break-inside: avoid;
-      break-after: auto;
-    }
-
-    thead {
-      display: table-header-group;
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    tfoot {
-      display: table-footer-group;
-    }
-
-    tbody tr {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    /* === PREVENT ORPHANS & WIDOWS === */
-    p, li, h1, h2, h3, h4, h5, h6 {
-      orphans: 3;
-      widows: 3;
-    }
-
-    h1, h2, h3, h4, h5, h6 {
-      break-after: avoid;
-      page-break-after: avoid;
-    }
-
-    /* === CARD/SECTION BREAKS === */
-    .card, .section-card, .stat-card {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    /* === CONTENT CONTAINER === */
-    /* Note: Header/footer are handled natively by Gotenberg via headerHtml/footerHtml */
-    /* Do NOT use CSS fixed positioning for header/footer - it conflicts with Gotenberg */
-    .pdf-content {
-      margin: 0;
-      padding: 0;
-    }
-
-    /* === PRINT-SPECIFIC UTILITIES === */
-    @media print {
-      body {
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-
-      /* Remove viewport-based heights */
-      .page {
-        min-height: auto !important;
-        height: auto !important;
-      }
-
-      .page:last-child {
-        page-break-after: auto !important;
-        break-after: auto !important;
-      }
-
-      .no-print {
-        display: none !important;
-      }
-
-      .print-only {
-        display: block !important;
-      }
-
-      ul, ol {
-        break-inside: avoid;
-        page-break-inside: avoid;
-      }
-
-      li {
-        break-inside: avoid;
-        page-break-inside: avoid;
-      }
-
-      /* Keep recommendation cards together */
-      .recommendation-card, .supplier-card {
-        break-inside: avoid !important;
-        page-break-inside: avoid !important;
-      }
-    }
-
-    @media screen {
-      .print-only {
-        display: none !important;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="pdf-content">
-${htmlContent}
-  </div>
-</body>
-</html>
-`;
+    // Note: htmlContent arrives PRE-WRAPPED by pdfGenerator.ts with:
+    // - wrapContentWithLayout() which includes full CSS
+    // - cleanLegacyPaginationArtifacts() to remove manual pagination
+    // - preparePdfContent() for QA
+    //
+    // So we DON'T need to add CSS here - just pass it through
+    const completeHtml = htmlContent;
 
     console.log(`📄 [Gotenberg] Generating PDF: ${pdfFilename}`);
     console.log(`📄 [Gotenberg] HTML size: ${completeHtml.length} bytes`);
@@ -255,137 +108,57 @@ ${htmlContent}
     const htmlBlob = new Blob([completeHtml], { type: 'text/html' });
     formData.append('files', htmlBlob, 'index.html');
 
-    // Add Gotenberg options
-    // CRITICAL: Margins MUST reserve space for header/footer height + buffer
-    // Header height ~18mm + 4mm buffer = 22mm = 0.87"
-    // Footer height ~14mm + 4mm buffer = 18mm = 0.71"
-    formData.append('paperWidth', '8.27'); // A4 width in inches
+    //=============================================================================
+    // GOTENBERG PARAMETERS - MUST MATCH pdfLayoutSystem.ts CONSTANTS
+    //=============================================================================
+    // Margins:
+    //   Top: 25mm = 0.98" (reserves 20mm header + 5mm buffer)
+    //   Bottom: 20mm = 0.79" (reserves 16mm footer + 4mm buffer)
+    //   Left/Right: 15mm = 0.59" (generous for executive feel)
+    //=============================================================================
+
+    formData.append('paperWidth', '8.27');   // A4 width in inches
     formData.append('paperHeight', '11.69'); // A4 height in inches
-    formData.append('marginTop', '0.87'); // 22mm (header 18mm + buffer 4mm)
-    formData.append('marginBottom', '0.71'); // 18mm (footer 14mm + buffer 4mm)
-    formData.append('marginLeft', '0.47'); // 12mm in inches
-    formData.append('marginRight', '0.47'); // 12mm in inches
+    formData.append('marginTop', '0.98');     // 25mm (MUST match PDF_CONSTANTS.MARGINS.TOP_MM)
+    formData.append('marginBottom', '0.79');  // 20mm (MUST match PDF_CONSTANTS.MARGINS.BOTTOM_MM)
+    formData.append('marginLeft', '0.59');    // 15mm (MUST match PDF_CONSTANTS.MARGINS.LEFT_MM)
+    formData.append('marginRight', '0.59');   // 15mm (MUST match PDF_CONSTANTS.MARGINS.RIGHT_MM)
     formData.append('printBackground', 'true');
     formData.append('preferCssPageSize', 'true');
     formData.append('emulatedMediaType', 'print');
-    formData.append('scale', '1.0'); // Explicit scale for consistent rendering
+    formData.append('scale', '1.0');
+    formData.append('waitDelay', '100ms'); // Small delay for font loading
+    formData.append('waitForExpression', ''); // Don't wait for JS
 
-    // ============================================================================
-    // HEADER & FOOTER - GOTENBERG NATIVE SYSTEM
-    // ============================================================================
-    // CRITICAL: Uses Chromium placeholders that Gotenberg auto-populates:
-    // - <span class="pageNumber"></span> → current page number
+    //=============================================================================
+    // EXECUTIVE-GRADE HEADER & FOOTER
+    //=============================================================================
+    // These are generated by pdfLayoutSystem.ts functions:
+    // - generateGotenbergHeader()
+    // - generateGotenbergFooter()
+    //
+    // They use Chromium placeholders that Gotenberg auto-populates:
+    // - <span class="pageNumber"></span> → 1, 2, 3, ...
     // - <span class="totalPages"></span> → total page count
-    // ============================================================================
+    //=============================================================================
 
-    formData.append('headerHtml', `
-      <html>
-        <head>
-          <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-              font-size: 9pt;
-              color: #374151;
-              margin: 0;
-              padding: 8mm 12mm;
-              height: 18mm;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-bottom: 2px solid #f97316;
-              background: white;
-            }
-            .left {
-              display: flex;
-              align-items: center;
-              gap: 8px;
-            }
-            .logo {
-              width: 32px;
-              height: 32px;
-              background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-              border-radius: 8px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-            .brand {
-              font-size: 14px;
-              font-weight: 700;
-              color: #111827;
-            }
-            .right {
-              text-align: right;
-            }
-            .doc-title {
-              font-size: 10pt;
-              font-weight: 600;
-              color: #374151;
-              margin-bottom: 2px;
-            }
-            .page-info {
-              font-size: 8pt;
-              color: #6b7280;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="left">
-            <div class="logo">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
-                <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-              </svg>
-            </div>
-            <div class="brand">VerifyTrade</div>
-          </div>
-          <div class="right">
-            ${reportType ? `<div class="doc-title">${reportType}</div>` : ''}
-            <div class="page-info">
-              ${leftHeader} | ${today} | Page <span class="pageNumber"></span> of <span class="totalPages"></span>
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
+    const leftHeader = contractNumber
+      ? `${projectName || 'Project'} | ${contractNumber}`
+      : projectName || 'Project';
 
-    formData.append('footerHtml', `
-      <html>
-        <head>
-          <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-              font-size: 8pt;
-              color: #9ca3af;
-              margin: 0;
-              padding: 6mm 12mm;
-              height: 14mm;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              border-top: 1px solid #e5e7eb;
-              background: white;
-            }
-            .footer-content {
-              color: #f97316;
-              font-weight: 600;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="footer-content">Generated by VerifyTrade www.verifytrade.co.nz</div>
-        </body>
-      </html>
-    `);
+    const headerHtml = generateGotenbergHeader({
+      projectName: leftHeader,
+      documentTitle: reportType,
+      organisationLogoUrl: organisationLogoUrl,
+    });
+
+    const footerHtml = generateGotenbergFooter({
+      projectName: leftHeader,
+      supplierName: supplierName,
+    });
+
+    formData.append('headerHtml', headerHtml);
+    formData.append('footerHtml', footerHtml);
 
     // Call Gotenberg API with timeout
     const controller = new AbortController();
@@ -459,3 +232,182 @@ ${htmlContent}
     );
   }
 });
+
+//=============================================================================
+// HEADER & FOOTER GENERATORS (FROM pdfLayoutSystem.ts)
+//=============================================================================
+// These are duplicated here because edge functions can't import from src/
+// MUST stay in sync with src/lib/reports/pdfLayoutSystem.ts
+//=============================================================================
+
+const COLORS = {
+  BRAND_ORANGE: '#f97316',
+  BRAND_ORANGE_DARK: '#ea580c',
+  GRAY_900: '#111827',
+  GRAY_700: '#374151',
+  GRAY_600: '#4b5563',
+  GRAY_500: '#6b7280',
+  GRAY_400: '#9ca3af',
+  GRAY_300: '#d1d5db',
+  GRAY_200: '#e5e7eb',
+};
+
+interface HeaderFooterConfig {
+  projectName: string;
+  documentTitle?: string;
+  supplierName?: string;
+  organisationLogoUrl?: string;
+}
+
+function generateGotenbergHeader(config: HeaderFooterConfig): string {
+  const { projectName, documentTitle, organisationLogoUrl } = config;
+  const today = new Date().toLocaleDateString('en-NZ', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  const logoSection = organisationLogoUrl
+    ? `
+      <div class="logo-container" style="display: flex; align-items: center; gap: 10px;">
+        <img
+          src="${organisationLogoUrl}"
+          alt="Organisation Logo"
+          style="max-width: 100px; max-height: 40px; object-fit: contain;"
+        />
+        <div style="width: 1px; height: 32px; background: ${COLORS.GRAY_300}; margin: 0 4px;"></div>
+        <div style="font-size: 15px; font-weight: 700; color: ${COLORS.GRAY_900}; letter-spacing: -0.3px;">VerifyTrade</div>
+      </div>
+    `
+    : `
+      <div class="logo-container" style="display: flex; align-items: center; gap: 10px;">
+        <div style="
+          width: 40px;
+          height: 40px;
+          background: linear-gradient(135deg, ${COLORS.BRAND_ORANGE} 0%, ${COLORS.BRAND_ORANGE_DARK} 100%);
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(249, 115, 22, 0.25);
+        ">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+        </div>
+        <div style="font-size: 16px; font-weight: 700; color: ${COLORS.GRAY_900}; letter-spacing: -0.4px;">VerifyTrade</div>
+      </div>
+    `;
+
+  return `
+    <html>
+      <head>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 9pt;
+            color: ${COLORS.GRAY_600};
+            margin: 0;
+            padding: 4mm 15mm 6mm 15mm;
+            height: 20mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid ${COLORS.BRAND_ORANGE};
+            background: white;
+          }
+          .left {
+            display: flex;
+            align-items: center;
+            gap: 0;
+          }
+          .right {
+            text-align: right;
+          }
+          .doc-title {
+            font-size: 11pt;
+            font-weight: 700;
+            color: ${COLORS.GRAY_900};
+            margin-bottom: 3px;
+            letter-spacing: -0.2px;
+          }
+          .page-info {
+            font-size: 9pt;
+            color: ${COLORS.GRAY_500};
+            font-weight: 500;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="left">${logoSection}</div>
+        <div class="right">
+          ${documentTitle ? `<div class="doc-title">${documentTitle}</div>` : ''}
+          <div class="page-info">
+            ${projectName} | ${today} | Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+function generateGotenbergFooter(config: HeaderFooterConfig): string {
+  const { supplierName } = config;
+
+  return `
+    <html>
+      <head>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 8pt;
+            color: ${COLORS.GRAY_400};
+            margin: 0;
+            padding: 8mm 15mm;
+            height: 16mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid ${COLORS.GRAY_200};
+            background: white;
+          }
+          .left {
+            font-weight: 600;
+            color: ${COLORS.GRAY_600};
+            font-size: 9pt;
+          }
+          .center {
+            color: ${COLORS.BRAND_ORANGE};
+            font-weight: 700;
+            font-size: 9pt;
+            letter-spacing: 0.3px;
+          }
+          .right {
+            font-size: 8pt;
+            color: ${COLORS.GRAY_400};
+            font-style: italic;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="left">${supplierName || ''}</div>
+        <div class="center">VerifyTrade | www.verifytrade.co.nz</div>
+        <div class="right">Confidential</div>
+      </body>
+    </html>
+  `;
+}
