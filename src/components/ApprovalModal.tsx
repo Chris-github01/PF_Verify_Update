@@ -178,7 +178,8 @@ export default function ApprovalModal({
         const existingId = existingApprovals[0].id;
         console.log('🔄 Updating approval:', existingId);
 
-        approvalResult = await supabase
+        // Perform the update
+        const { error: updateError } = await supabase
           .from('award_approvals')
           .update({
             final_approved_supplier: selectedSupplier,
@@ -190,9 +191,31 @@ export default function ApprovalModal({
             weighted_score_difference: scoreDifference,
             metadata_json: approvalRecord.metadata_json,
           })
+          .eq('id', existingId);
+
+        if (updateError) {
+          console.error('❌ Error updating approval:', updateError);
+          throw updateError;
+        }
+
+        // Fetch the updated record separately
+        approvalResult = await supabase
+          .from('award_approvals')
+          .select('*')
           .eq('id', existingId)
-          .select()
-          .single();
+          .maybeSingle();
+
+        if (approvalResult.error) {
+          console.error('❌ Error fetching updated approval:', approvalResult.error);
+          throw approvalResult.error;
+        }
+
+        if (!approvalResult.data) {
+          throw new Error('Failed to fetch updated approval record');
+        }
+
+        approvalData = approvalResult.data;
+        console.log('✅ Approval updated successfully:', approvalData.id);
       } else {
         // Insert new approval
         console.log('➕ Creating new approval');
@@ -200,20 +223,20 @@ export default function ApprovalModal({
           .from('award_approvals')
           .insert(approvalRecord)
           .select()
-          .single();
-      }
+          .maybeSingle();
 
-      if (approvalResult.error) {
-        console.error('❌ Error saving approval:', approvalResult.error);
-        throw approvalResult.error;
-      }
+        if (approvalResult.error) {
+          console.error('❌ Error creating approval:', approvalResult.error);
+          throw approvalResult.error;
+        }
 
-      if (!approvalResult.data) {
-        throw new Error('Failed to save approval record');
-      }
+        if (!approvalResult.data) {
+          throw new Error('Failed to create approval record');
+        }
 
-      approvalData = approvalResult.data;
-      console.log('✅ Approval saved successfully:', approvalData.id);
+        approvalData = approvalResult.data;
+        console.log('✅ Approval created successfully:', approvalData.id);
+      }
 
       // Update award_reports table
       const { error: reportUpdateError } = await supabase
