@@ -119,6 +119,8 @@ export default function ApprovalModal({
         .eq('project_id', projectId)
         .eq('supplier_name', selectedSupplier)
         .eq('is_latest', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       // Create or update approval record
