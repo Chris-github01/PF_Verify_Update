@@ -163,28 +163,56 @@ export default function ApprovalModal({
         },
       };
 
-      console.log('💾 Using UPSERT approach for approval');
-      // Use UPSERT to handle both insert and update cases
-      // The unique constraint on award_report_id will handle conflicts
-      const { data: upsertData, error: upsertError } = await supabase
+      // Check if an approval already exists for this report
+      const { data: existingApprovals } = await supabase
         .from('award_approvals')
-        .upsert(approvalRecord, {
-          onConflict: 'award_report_id',
-          ignoreDuplicates: false
-        })
-        .select()
-        .single();
+        .select('id, approved_by_user_id')
+        .eq('award_report_id', reportId);
 
-      if (upsertError) {
-        console.error('❌ Error upserting approval:', upsertError);
-        throw upsertError;
+      console.log('📋 Existing approvals:', existingApprovals);
+
+      let approvalResult;
+
+      if (existingApprovals && existingApprovals.length > 0) {
+        // Update existing approval
+        const existingId = existingApprovals[0].id;
+        console.log('🔄 Updating approval:', existingId);
+
+        approvalResult = await supabase
+          .from('award_approvals')
+          .update({
+            final_approved_supplier: selectedSupplier,
+            final_approved_quote_id: quoteData?.id || null,
+            is_override: isOverride,
+            override_reason_category: finalOverrideReason,
+            override_reason_detail: isOverride ? overrideDetail : null,
+            approved_at: new Date().toISOString(),
+            weighted_score_difference: scoreDifference,
+            metadata_json: approvalRecord.metadata_json,
+          })
+          .eq('id', existingId)
+          .select()
+          .single();
+      } else {
+        // Insert new approval
+        console.log('➕ Creating new approval');
+        approvalResult = await supabase
+          .from('award_approvals')
+          .insert(approvalRecord)
+          .select()
+          .single();
       }
 
-      if (!upsertData) {
+      if (approvalResult.error) {
+        console.error('❌ Error saving approval:', approvalResult.error);
+        throw approvalResult.error;
+      }
+
+      if (!approvalResult.data) {
         throw new Error('Failed to save approval record');
       }
 
-      approvalData = upsertData;
+      approvalData = approvalResult.data;
       console.log('✅ Approval saved successfully:', approvalData.id);
 
       // Update award_reports table
