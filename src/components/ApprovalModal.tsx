@@ -113,7 +113,8 @@ export default function ApprovalModal({
       }
 
       // Get the quote ID for the selected supplier
-      const { data: quoteData } = await supabase
+      console.log('🔍 Fetching quote for supplier:', selectedSupplier);
+      const { data: quoteData, error: quoteError } = await supabase
         .from('quotes')
         .select('id')
         .eq('project_id', projectId)
@@ -122,6 +123,12 @@ export default function ApprovalModal({
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      if (quoteError) {
+        console.error('❌ Error fetching quote:', quoteError);
+        throw new Error(`Failed to find quote for supplier: ${quoteError.message}`);
+      }
+      console.log('✅ Quote data fetched:', quoteData);
 
       // Create or update approval record
       let approvalData;
@@ -158,28 +165,46 @@ export default function ApprovalModal({
 
       if (existingApprovalId) {
         // Update existing approval
+        console.log('🔄 Updating existing approval:', existingApprovalId);
         const result = await supabase
           .from('award_approvals')
           .update(approvalRecord)
           .eq('id', existingApprovalId)
           .select()
-          .single();
+          .maybeSingle();
 
         approvalData = result.data;
         approvalError = result.error;
+
+        if (approvalError) {
+          console.error('❌ Error updating approval:', approvalError);
+          throw approvalError;
+        }
+        if (!approvalData) {
+          throw new Error('Failed to update approval record');
+        }
+        console.log('✅ Approval updated successfully');
       } else {
         // Insert new approval
+        console.log('➕ Creating new approval');
         const result = await supabase
           .from('award_approvals')
           .insert(approvalRecord)
           .select()
-          .single();
+          .maybeSingle();
 
         approvalData = result.data;
         approvalError = result.error;
-      }
 
-      if (approvalError) throw approvalError;
+        if (approvalError) {
+          console.error('❌ Error creating approval:', approvalError);
+          throw approvalError;
+        }
+        if (!approvalData) {
+          throw new Error('Failed to create approval record');
+        }
+        console.log('✅ Approval created successfully');
+      }
 
       // Update award_reports table
       const { error: reportUpdateError } = await supabase
