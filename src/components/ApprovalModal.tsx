@@ -163,48 +163,29 @@ export default function ApprovalModal({
         },
       };
 
-      if (existingApprovalId) {
-        // Update existing approval
-        console.log('🔄 Updating existing approval:', existingApprovalId);
-        const result = await supabase
-          .from('award_approvals')
-          .update(approvalRecord)
-          .eq('id', existingApprovalId)
-          .select()
-          .maybeSingle();
+      console.log('💾 Using UPSERT approach for approval');
+      // Use UPSERT to handle both insert and update cases
+      // The unique constraint on award_report_id will handle conflicts
+      const { data: upsertData, error: upsertError } = await supabase
+        .from('award_approvals')
+        .upsert(approvalRecord, {
+          onConflict: 'award_report_id',
+          ignoreDuplicates: false
+        })
+        .select()
+        .single();
 
-        approvalData = result.data;
-        approvalError = result.error;
-
-        if (approvalError) {
-          console.error('❌ Error updating approval:', approvalError);
-          throw approvalError;
-        }
-        if (!approvalData) {
-          throw new Error('Failed to update approval record');
-        }
-        console.log('✅ Approval updated successfully');
-      } else {
-        // Insert new approval
-        console.log('➕ Creating new approval');
-        const result = await supabase
-          .from('award_approvals')
-          .insert(approvalRecord)
-          .select()
-          .maybeSingle();
-
-        approvalData = result.data;
-        approvalError = result.error;
-
-        if (approvalError) {
-          console.error('❌ Error creating approval:', approvalError);
-          throw approvalError;
-        }
-        if (!approvalData) {
-          throw new Error('Failed to create approval record');
-        }
-        console.log('✅ Approval created successfully');
+      if (upsertError) {
+        console.error('❌ Error upserting approval:', upsertError);
+        throw upsertError;
       }
+
+      if (!upsertData) {
+        throw new Error('Failed to save approval record');
+      }
+
+      approvalData = upsertData;
+      console.log('✅ Approval saved successfully:', approvalData.id);
 
       // Update award_reports table
       const { error: reportUpdateError } = await supabase
@@ -238,11 +219,10 @@ export default function ApprovalModal({
           .eq('id', quoteData.id);
       }
 
-      const actionText = existingApprovalId ? 'updated' : 'approved';
       onToast?.(
         isOverride
-          ? `Award ${actionText} with override: ${selectedSupplier}`
-          : `Award ${actionText}: ${selectedSupplier}`,
+          ? `Award approved with override: ${selectedSupplier}`
+          : `Award approved: ${selectedSupplier}`,
         'success'
       );
 
