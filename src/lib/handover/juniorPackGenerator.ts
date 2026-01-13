@@ -811,7 +811,7 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
     .inclusions-list li:before {
       content: "✓";
       position: absolute;
-      left: 0;
+      left: 6px;
       color: #10b981;
       font-weight: 700;
       font-size: 18px;
