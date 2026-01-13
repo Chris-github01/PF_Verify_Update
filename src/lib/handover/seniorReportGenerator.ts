@@ -1102,6 +1102,18 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       margin-right: 6px;
     }
 
+    /* === CONFIDENTIAL FOOTER === */
+    .confidential-footer {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      text-align: center;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
     /* === QUOTE COMPARISON TABLE === */
     .quote-comparison-table-wrapper {
       overflow-x: auto;
@@ -1491,7 +1503,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
   </div>
 
   <!-- FOOTER NOTE -->
-  <div style="margin-top: 24px; padding: 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; text-align: center;">
+  <div class="confidential-footer">
     <p style="font-size: 11px; color: #6b7280; line-height: 1.6; margin: 0;">
       <strong style="color: #111827;">Confidential:</strong> This document contains commercial and sensitive information. Distribution restricted to authorized project team members only.
     </p>
