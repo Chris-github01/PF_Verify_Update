@@ -177,25 +177,31 @@ function generateLineItemsHTML(items: LineItem[]): string {
             <table class="line-items-table">
               <thead>
                 <tr>
-                  <th style="width: 35%">DESCRIPTION</th>
-                  <th style="width: 15%">SERVICE</th>
-                  <th style="width: 15%">MATERIAL</th>
-                  <th style="width: 10%">QTY</th>
-                  <th style="width: 10%">UNIT</th>
+                  <th style="width: 30%">DESCRIPTION</th>
+                  <th style="width: 12%">SERVICE</th>
+                  <th style="width: 12%">MATERIAL</th>
+                  <th style="width: 8%">QTY</th>
+                  <th style="width: 8%">UNIT</th>
+                  ${categoryTotal > 0 ? '<th style="width: 15%; text-align: right;">UNIT RATE</th>' : ''}
                   ${categoryTotal > 0 ? '<th style="width: 15%; text-align: right;">TOTAL</th>' : ''}
                 </tr>
               </thead>
               <tbody>
-                ${categoryItems.map(item => `
+                ${categoryItems.map(item => {
+                  const qty = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 1;
+                  const unitRate = (item.totalPrice || 0) / qty;
+                  return `
                   <tr>
                     <td>${item.description}</td>
                     <td>${item.service}</td>
                     <td>${item.material}</td>
                     <td class="text-center">${item.quantity}</td>
                     <td class="text-center">${item.unit}</td>
+                    ${categoryTotal > 0 ? `<td class="text-right">$${unitRate.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</td>` : ''}
                     ${categoryTotal > 0 ? `<td class="text-right">$${(item.totalPrice || 0).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</td>` : ''}
                   </tr>
-                `).join('')}
+                  `;
+                }).join('')}
               </tbody>
             </table>
           </div>
