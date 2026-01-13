@@ -571,7 +571,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     /* Keep sections together when possible */
     .financial-section, .scope-section, .risks-section, .terms-section,
     .comparison-section, .breakdown-section, .cashflow-section,
-    .contact-section {
+    .contact-section, .scope-overview-section {
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -931,6 +931,8 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       grid-template-columns: repeat(3, 1fr);
       gap: 16px;
       margin: 20px 0;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
 
     .system-card-compact {
@@ -1392,9 +1394,11 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
 
   <!-- SCOPE OF WORKS OVERVIEW -->
   <div class="page" style="margin-top: 20px;">
-    <h2>Scope of Works Overview</h2>
-    <div class="systems-grid-compact">
-      ${scopeSystemsHTML}
+    <div class="scope-overview-section">
+      <h2>Scope of Works Overview</h2>
+      <div class="systems-grid-compact">
+        ${scopeSystemsHTML}
+      </div>
     </div>
 
     ${contactHTML}
