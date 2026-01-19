@@ -164,12 +164,18 @@ export default function ApprovalModal({
       };
 
       // Check if an approval already exists for this report
-      const { data: existingApprovals } = await supabase
+      const { data: existingApprovals, error: fetchError } = await supabase
         .from('award_approvals')
         .select('id, approved_by_user_id')
         .eq('award_report_id', reportId);
 
+      if (fetchError) {
+        console.error('❌ Error fetching existing approvals:', fetchError);
+        throw new Error(`Failed to fetch existing approvals: ${fetchError.message}`);
+      }
+
       console.log('📋 Existing approvals:', existingApprovals);
+      console.log('👤 Current user:', user.id, user.email);
 
       let approvalResult;
 
@@ -187,6 +193,7 @@ export default function ApprovalModal({
             is_override: isOverride,
             override_reason_category: finalOverrideReason,
             override_reason_detail: isOverride ? overrideDetail : null,
+            approved_by_user_id: user.id, // Update to current user for audit trail
             approved_at: new Date().toISOString(),
             weighted_score_difference: scoreDifference,
             metadata_json: approvalRecord.metadata_json,
@@ -195,6 +202,15 @@ export default function ApprovalModal({
 
         if (updateError) {
           console.error('❌ Error updating approval:', updateError);
+          console.error('Update details:', {
+            existingId,
+            userId: user.id,
+            userEmail: user.email,
+            organisationId,
+            errorCode: updateError.code,
+            errorMessage: updateError.message,
+            errorDetails: updateError.details
+          });
           throw updateError;
         }
 
@@ -227,6 +243,16 @@ export default function ApprovalModal({
 
         if (approvalResult.error) {
           console.error('❌ Error creating approval:', approvalResult.error);
+          console.error('Insert details:', {
+            userId: user.id,
+            userEmail: user.email,
+            organisationId,
+            projectId,
+            reportId,
+            errorCode: approvalResult.error.code,
+            errorMessage: approvalResult.error.message,
+            errorDetails: approvalResult.error.details
+          });
           throw approvalResult.error;
         }
 
