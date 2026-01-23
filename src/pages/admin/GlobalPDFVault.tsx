@@ -156,10 +156,11 @@ export default function GlobalPDFVault() {
               className="px-4 py-2 bg-slate-800/50 border border-slate-600 text-white rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             >
               <option value="all">All Trades</option>
-              <option value="passive_fire">PassiveFire</option>
+              <option value="passive_fire">Passive Fire</option>
               <option value="electrical">Electrical</option>
+              <option value="hvac">HVAC</option>
               <option value="plumbing">Plumbing</option>
-              <option value="mechanical">Mechanical</option>
+              <option value="active_fire">Active Fire</option>
             </select>
 
             <select
@@ -202,10 +203,12 @@ export default function GlobalPDFVault() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm text-white">{quote.organisation_name}</div>
-                    <div className="text-xs text-gray-400">
-                      {quote.trade_type === 'passive_fire' && 'PassiveFire'}
-                      {quote.trade_type === 'electrical' && 'Electrical'}
-                      {quote.trade_type === 'plumbing' && 'Plumbing'}
+                    <div className="text-xs">
+                      {quote.trade_type === 'passive_fire' && <span className="text-orange-400">🔥 Passive Fire</span>}
+                      {quote.trade_type === 'electrical' && <span className="text-yellow-400">⚡ Electrical</span>}
+                      {quote.trade_type === 'hvac' && <span className="text-cyan-400">💨 HVAC</span>}
+                      {quote.trade_type === 'plumbing' && <span className="text-blue-400">💧 Plumbing</span>}
+                      {quote.trade_type === 'active_fire' && <span className="text-red-400">🛡️ Active Fire</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3">

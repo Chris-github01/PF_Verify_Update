@@ -73,7 +73,7 @@ export async function getAllQuotes(filters?: {
     extraction_confidence: q.avg_confidence,
     organisation_id: q.organisation_id,
     organisation_name: q.organisation_name || 'Unknown',
-    trade_type: 'passive_fire',
+    trade_type: q.trade || 'passive_fire',
     created_at: q.created_at,
     import_date: q.created_at,
     uploaded_by_email: null,
@@ -266,16 +266,18 @@ export async function getTradePricing(): Promise<any> {
 }
 
 export const TRADE_LABELS: Record<string, string> = {
-  'passive_fire': 'VerifyTrade Passive Fire',
+  'passive_fire': 'Verify+ Passive Fire',
   'electrical': 'Verify+ Electrical',
+  'hvac': 'Verify+ HVAC',
   'plumbing': 'Verify+ Plumbing',
-  'mechanical': 'Verify+ Mechanical',
+  'active_fire': 'Verify+ Active Fire',
   'other': 'Other'
 };
 
 export const ALL_TRADES = [
-  { value: 'passive_fire', label: 'VerifyTrade Passive Fire', price: 299, color: 'orange' },
+  { value: 'passive_fire', label: 'Verify+ Passive Fire', price: 299, color: 'orange' },
   { value: 'electrical', label: 'Verify+ Electrical', price: 349, color: 'yellow' },
+  { value: 'hvac', label: 'Verify+ HVAC', price: 329, color: 'cyan' },
   { value: 'plumbing', label: 'Verify+ Plumbing', price: 329, color: 'blue' },
-  { value: 'mechanical', label: 'Verify+ Mechanical', price: 399, color: 'green' }
+  { value: 'active_fire', label: 'Verify+ Active Fire', price: 349, color: 'red' }
 ];
