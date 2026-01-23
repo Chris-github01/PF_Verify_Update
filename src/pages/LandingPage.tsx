@@ -122,7 +122,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-slate-50 mb-4 sm:mb-6 tracking-tight leading-[1.15] sm:leading-tight px-2">
                 Instantly Audit Every<br />
                 <span className="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
-                  Passive Fire Quote
+                  Trade Quote
                 </span> You Receive
               </h1>
 
