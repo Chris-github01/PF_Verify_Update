@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronDown, Bell, User, Building2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
-import TradeModuleBadge from './TradeModuleBadge';
+import TradeSelectorDropdown from './TradeSelectorDropdown';
 
 interface DashboardHeaderProps {
   currentProjectId?: string;
@@ -88,11 +88,9 @@ export default function DashboardHeader({
             </div>
           )}
 
-          {currentProjectId && (
-            <div className="hidden lg:flex border-l border-gray-300 pl-4 ml-4">
-              <TradeModuleBadge trade={currentProjectTrade} />
-            </div>
-          )}
+          <div className="border-l border-gray-300 pl-4 ml-4">
+            <TradeSelectorDropdown />
+          </div>
 
           {currentProjectId && (
             <div className="relative">

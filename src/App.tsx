@@ -41,6 +41,7 @@ import DemoLogin from './pages/DemoLogin';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
+import { TradeProvider, useTrade } from './lib/tradeContext';
 import { toastStore } from './lib/toastStore';
 import { getUserPreferences, updateLastProject } from './lib/userPreferences';
 import type { Session } from '@supabase/supabase-js';
@@ -78,6 +79,7 @@ function AppContent() {
   const [checkingTrial, setCheckingTrial] = useState(false);
   const { currentOrganisation, organisations, loading: orgLoading, isGodMode, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
+  const { currentTrade } = useTrade();
 
   // Use god-mode status from organisation context as master admin indicator
   const effectiveIsMasterAdmin = isGodMode || isMasterAdmin;
@@ -352,6 +354,7 @@ function AppContent() {
           client: client || null,
           reference: reference || null,
           status: 'active',
+          trade: currentTrade,
           created_by_user_id: session.user.id,
           user_id: session.user.id,
         })
@@ -407,8 +410,9 @@ function AppContent() {
 
     const { data: projects, error } = await supabase
       .from('projects')
-      .select('id, name, client, reference, updated_at, approved_quote_id')
+      .select('id, name, client, reference, updated_at, approved_quote_id, trade')
       .eq('organisation_id', currentOrganisation.id)
+      .eq('trade', currentTrade)
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -1150,7 +1154,9 @@ function App() {
   return (
     <AdminProvider>
       <OrganisationProvider>
-        <AppContent />
+        <TradeProvider>
+          <AppContent />
+        </TradeProvider>
       </OrganisationProvider>
     </AdminProvider>
   );
