@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { Building2, Flame, ShieldAlert } from 'lucide-react';
+import TradeSelectionModal, { type Trade } from '../components/TradeSelectionModal';
+import { updateSelectedTrade } from '../lib/userPreferences';
 
 interface ModeSelectorProps {
   onSelectMode: (mode: 'admin' | 'app') => void;
@@ -7,6 +10,7 @@ interface ModeSelectorProps {
 }
 
 export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading }: ModeSelectorProps) {
+  const [showTradeModal, setShowTradeModal] = useState(false);
   console.log('🎯 [ModeSelector] Render:', { isMasterAdmin, adminLoading });
 
   // Wait for admin check to complete before auto-selecting
@@ -22,10 +26,22 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
     );
   }
 
-  if (!isMasterAdmin) {
-    console.log('🎯 [ModeSelector] Not a master admin, auto-selecting app mode');
+  const handleTradeSelect = async (trade: Trade) => {
+    await updateSelectedTrade(trade);
+    setShowTradeModal(false);
     onSelectMode('app');
-    return null;
+  };
+
+  if (!isMasterAdmin) {
+    console.log('🎯 [ModeSelector] Not a master admin, showing trade selection');
+    return (
+      <>
+        <TradeSelectionModal
+          isOpen={true}
+          onSelect={handleTradeSelect}
+        />
+      </>
+    );
   }
 
   console.log('🎯 [ModeSelector] Master admin confirmed, showing Welcome Back page');
@@ -63,7 +79,7 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
           </button>
 
           <button
-            onClick={() => onSelectMode('app')}
+            onClick={() => setShowTradeModal(true)}
             className="bg-slate-900/60 border border-slate-700/60 rounded-2xl shadow-lg hover:shadow-2xl p-10 transition-all duration-200 hover:bg-slate-800/80 hover:scale-105 group relative overflow-hidden"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
@@ -81,6 +97,11 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
               </div>
             </div>
           </button>
+
+          <TradeSelectionModal
+            isOpen={showTradeModal}
+            onSelect={handleTradeSelect}
+          />
         </div>
       </div>
     </div>

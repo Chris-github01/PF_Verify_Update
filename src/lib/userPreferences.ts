@@ -1,10 +1,13 @@
 import { supabase } from './supabase';
 
+export type Trade = 'passive_fire' | 'electrical' | 'hvac' | 'plumbing' | 'active_fire';
+
 export interface UserPreferences {
   id: string;
   user_id: string;
   last_organisation_id: string | null;
   last_project_id: string | null;
+  selected_trade: Trade | null;
   created_at: string;
   updated_at: string;
 }
@@ -118,5 +121,43 @@ export async function clearLastProject(): Promise<void> {
 
   if (error) {
     console.error('[UserPreferences] Error clearing last project:', error);
+  }
+}
+
+/**
+ * Get selected trade for the current user
+ */
+export async function getSelectedTrade(): Promise<Trade> {
+  try {
+    const prefs = await getUserPreferences();
+    return prefs?.selected_trade || 'passive_fire';
+  } catch (err) {
+    return 'passive_fire';
+  }
+}
+
+/**
+ * Update selected trade
+ */
+export async function updateSelectedTrade(trade: Trade): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    console.warn('[UserPreferences] No authenticated user');
+    return;
+  }
+
+  const { error } = await supabase
+    .from('user_preferences')
+    .upsert({
+      user_id: user.id,
+      selected_trade: trade,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'user_id'
+    });
+
+  if (error) {
+    console.error('[UserPreferences] Error updating selected trade:', error);
   }
 }

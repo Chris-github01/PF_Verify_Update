@@ -18,6 +18,7 @@ import {
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
 import { useAdmin } from '../lib/adminContext';
+import { getSelectedTrade, type Trade } from '../lib/userPreferences';
 
 export type SidebarTab =
   | 'dashboard'
@@ -72,17 +73,38 @@ const adminItems = [
   { id: 'settings' as SidebarTab, label: 'Settings', icon: Settings, requiresAdminAccess: true },
 ];
 
+const getTradeDisplayName = (trade: Trade): string => {
+  const tradeNames: Record<Trade, string> = {
+    'passive_fire': 'Passive Fire',
+    'electrical': 'Electrical',
+    'hvac': 'HVAC',
+    'plumbing': 'Plumbing',
+    'active_fire': 'Active Fire',
+  };
+  return tradeNames[trade];
+};
+
 export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMode, onDashboardModeChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved === 'true';
   });
+  const [selectedTrade, setSelectedTrade] = useState<Trade>('passive_fire');
   const { hasPermission } = useOrganisation();
   const { isMasterAdmin } = useAdmin();
 
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', collapsed.toString());
   }, [collapsed]);
+
+  useEffect(() => {
+    loadSelectedTrade();
+  }, []);
+
+  const loadSelectedTrade = async () => {
+    const trade = await getSelectedTrade();
+    setSelectedTrade(trade);
+  };
 
   return (
     <aside
@@ -98,7 +120,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-sm font-semibold tracking-wide text-slate-50">
-              VerifyTrade
+              Verify+ {getTradeDisplayName(selectedTrade)}
             </span>
             <span className="text-[11px] text-slate-400">
               Quote Audit Engine

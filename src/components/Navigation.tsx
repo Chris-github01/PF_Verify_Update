@@ -1,7 +1,20 @@
+import { useState, useEffect } from 'react';
 import { LayoutDashboard, FileUp, ClipboardCheck, Grid3x3, Scale, FileBarChart, Brain, BarChart3, DollarSign, TrendingUp, FileText, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getSelectedTrade, type Trade } from '../lib/userPreferences';
 
 type Tab = 'dashboard' | 'import' | 'review' | 'scope' | 'equalisation' | 'award' | 'quoteintel' | 'basetracker' | 'claimsvariations' | 'tradeanalysis' | 'insights' | 'settings';
+
+const getTradeDisplayName = (trade: Trade): string => {
+  const tradeNames: Record<Trade, string> = {
+    'passive_fire': 'Passive Fire',
+    'electrical': 'Electrical',
+    'hvac': 'HVAC',
+    'plumbing': 'Plumbing',
+    'active_fire': 'Active Fire',
+  };
+  return tradeNames[trade];
+};
 
 interface NavigationProps {
   activeTab: Tab;
@@ -35,13 +48,24 @@ export default function Navigation({
   onProjectChange,
   onBackToDashboard,
 }: NavigationProps) {
+  const [selectedTrade, setSelectedTrade] = useState<Trade>('passive_fire');
+
+  useEffect(() => {
+    loadSelectedTrade();
+  }, []);
+
+  const loadSelectedTrade = async () => {
+    const trade = await getSelectedTrade();
+    setSelectedTrade(trade);
+  };
+
   return (
     <nav className="nav-blur border-b border-cyan-500/30 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold text-white">
-              <span className="cyan-glow">VerifyTrade</span>
+              <span className="cyan-glow">Verify+ {getTradeDisplayName(selectedTrade)}</span>
               {currentProjectName && (
                 <span className="text-gray-300 font-normal text-sm ml-2">— {currentProjectName}</span>
               )}
