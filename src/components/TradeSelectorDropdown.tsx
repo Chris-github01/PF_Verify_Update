@@ -64,11 +64,15 @@ export default function TradeSelectorDropdown() {
   const currentColors = getColorClasses(currentTradeInfo.color, true);
 
   return (
-    <div className="relative">
+    <div className="relative z-30">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          console.log('Trade selector clicked!', isOpen);
+          setIsOpen(!isOpen);
+        }}
         className={`
-          flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all duration-200
+          flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all duration-200 cursor-pointer
+          hover:shadow-md active:scale-95
           ${currentColors.bg} ${currentColors.border} ${currentColors.hover}
         `}
       >
@@ -82,10 +86,10 @@ export default function TradeSelectorDropdown() {
       {isOpen && (
         <>
           <div
-            className="fixed inset-0 z-10"
+            className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 overflow-hidden">
+          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
             <div className="p-2">
               <div className="text-xs uppercase tracking-wider text-gray-500 px-3 py-2 font-semibold">
                 Select Trade Module
