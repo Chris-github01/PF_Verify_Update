@@ -115,7 +115,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                   Quantity Surveyors
                 </span>
                 <span className="px-3 py-1.5 text-xs sm:text-sm font-medium text-green-300 bg-green-900/40 rounded-full border border-green-800/50 backdrop-blur-sm">
-                  Fire Engineers
+                  Estimators
                 </span>
               </div>
 
