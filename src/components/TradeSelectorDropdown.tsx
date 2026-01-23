@@ -28,34 +28,34 @@ export default function TradeSelectorDropdown() {
   const getColorClasses = (color: string, isActive: boolean = false) => {
     const colors: Record<string, { bg: string; text: string; border: string; hover: string }> = {
       orange: {
-        bg: isActive ? 'bg-orange-500/10' : 'hover:bg-orange-500/5',
-        text: 'text-orange-400',
-        border: 'border-orange-500/30',
-        hover: 'hover:border-orange-500/50',
+        bg: isActive ? 'bg-orange-50' : 'hover:bg-orange-50',
+        text: 'text-orange-600',
+        border: 'border-orange-300',
+        hover: 'hover:border-orange-400',
       },
       yellow: {
-        bg: isActive ? 'bg-yellow-500/10' : 'hover:bg-yellow-500/5',
-        text: 'text-yellow-400',
-        border: 'border-yellow-500/30',
-        hover: 'hover:border-yellow-500/50',
+        bg: isActive ? 'bg-yellow-50' : 'hover:bg-yellow-50',
+        text: 'text-yellow-600',
+        border: 'border-yellow-300',
+        hover: 'hover:border-yellow-400',
       },
       cyan: {
-        bg: isActive ? 'bg-cyan-500/10' : 'hover:bg-cyan-500/5',
-        text: 'text-cyan-400',
-        border: 'border-cyan-500/30',
-        hover: 'hover:border-cyan-500/50',
+        bg: isActive ? 'bg-cyan-50' : 'hover:bg-cyan-50',
+        text: 'text-cyan-600',
+        border: 'border-cyan-300',
+        hover: 'hover:border-cyan-400',
       },
       blue: {
-        bg: isActive ? 'bg-blue-500/10' : 'hover:bg-blue-500/5',
-        text: 'text-blue-400',
-        border: 'border-blue-500/30',
-        hover: 'hover:border-blue-500/50',
+        bg: isActive ? 'bg-blue-50' : 'hover:bg-blue-50',
+        text: 'text-blue-600',
+        border: 'border-blue-300',
+        hover: 'hover:border-blue-400',
       },
       red: {
-        bg: isActive ? 'bg-red-500/10' : 'hover:bg-red-500/5',
-        text: 'text-red-400',
-        border: 'border-red-500/30',
-        hover: 'hover:border-red-500/50',
+        bg: isActive ? 'bg-red-50' : 'hover:bg-red-50',
+        text: 'text-red-600',
+        border: 'border-red-300',
+        hover: 'hover:border-red-400',
       },
     };
     return colors[color];
@@ -73,10 +73,10 @@ export default function TradeSelectorDropdown() {
         `}
       >
         <CurrentIcon size={18} className={currentColors.text} />
-        <span className="font-semibold text-slate-200">
+        <span className="font-semibold text-gray-800">
           Verify+ {currentTradeInfo.name}
         </span>
-        <ChevronDown size={16} className={`${currentColors.text} transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={16} className={`text-gray-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
@@ -85,9 +85,9 @@ export default function TradeSelectorDropdown() {
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute top-full left-0 mt-2 w-72 bg-slate-900 rounded-xl shadow-2xl border border-slate-700 z-20 overflow-hidden">
+          <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 overflow-hidden">
             <div className="p-2">
-              <div className="text-xs uppercase tracking-wider text-slate-500 px-3 py-2 font-semibold">
+              <div className="text-xs uppercase tracking-wider text-gray-500 px-3 py-2 font-semibold">
                 Select Trade Module
               </div>
               {trades.map((trade) => {
@@ -102,21 +102,21 @@ export default function TradeSelectorDropdown() {
                     onClick={() => handleTradeSelect(trade.id)}
                     className={`
                       w-full text-left px-3 py-3 rounded-lg transition-all duration-200
-                      border-2 mb-1 ${colors.bg} ${isActive ? colors.border : 'border-transparent hover:border-slate-600'}
+                      border-2 mb-1 ${colors.bg} ${isActive ? colors.border : 'border-transparent hover:border-gray-200'}
                     `}
                   >
                     <div className="flex items-center gap-3">
                       <div className={`
                         w-10 h-10 rounded-lg flex items-center justify-center
-                        ${isActive ? colors.bg : 'bg-slate-800'}
+                        ${isActive ? colors.bg : 'bg-gray-100'}
                       `}>
                         <Icon size={20} className={colors.text} />
                       </div>
                       <div className="flex-1">
-                        <div className={`font-semibold ${isActive ? 'text-white' : 'text-slate-200'}`}>
+                        <div className={`font-semibold ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>
                           {tradeInfo.name}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-gray-500">
                           {tradeInfo.description}
                         </div>
                       </div>
@@ -128,8 +128,8 @@ export default function TradeSelectorDropdown() {
                 );
               })}
             </div>
-            <div className="border-t border-slate-800 px-3 py-2 bg-slate-800/50">
-              <p className="text-xs text-slate-500">
+            <div className="border-t border-gray-200 px-3 py-2 bg-gray-50">
+              <p className="text-xs text-gray-500">
                 Each module has isolated data and trade-specific rules
               </p>
             </div>
