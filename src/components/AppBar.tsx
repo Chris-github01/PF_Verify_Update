@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
-import TradeModuleBadge from './TradeModuleBadge';
+import TradeSelectorDropdown from './TradeSelectorDropdown';
 
 export type PrimaryTab = 'project' | 'import' | 'analysis' | 'reports';
 
@@ -134,11 +134,9 @@ export default function AppBar({
             </button>
           )}
 
-          {currentProjectId && (
-            <div className="hidden md:flex">
-              <TradeModuleBadge trade={currentProjectTrade} compact />
-            </div>
-          )}
+          <div className="hidden md:flex">
+            <TradeSelectorDropdown />
+          </div>
 
           {currentProjectId && currentProjectName && (
             <div className="relative" ref={dropdownRef}>
