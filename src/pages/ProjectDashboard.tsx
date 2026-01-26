@@ -101,15 +101,25 @@ export default function ProjectDashboard({
         processedItems = data || [];
       }
 
+      // Load project settings to check equalisation status
+      const { data: settings } = await supabase
+        .from('project_settings')
+        .select('*')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
       const { data: latestReport } = await supabase
         .from('award_reports')
-        .select('id, generated_at, status, trade')
+        .select('id, generated_at, status')
         .eq('project_id', projectId)
-        .eq('trade', currentTrade)
         .eq('status', 'ready')
         .order('generated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      // Check if equalisation and scope matrix have been completed
+      const hasEqualisation = !!settings?.settings?.last_equalisation_run;
+      const hasScopeMatrix = !!settings?.settings?.scope_matrix_completed;
 
       // For trade isolation, workflow progress is determined by actual data, not project-level flags
       // This ensures each trade has independent workflow tracking
@@ -121,9 +131,9 @@ export default function ProjectDashboard({
         reportStatus: latestReport ? 'ready' : 'not_generated',
         reportGeneratedAt: latestReport?.generated_at,
         hasCleanedData: processedItems.length > 0,
-        // These are determined by actual data existence for the current trade
-        scopeMatrixCompleted: false, // TODO: Implement trade-specific tracking
-        equalisationCompleted: false, // TODO: Implement trade-specific tracking
+        // Check from project settings for completion status
+        scopeMatrixCompleted: hasScopeMatrix,
+        equalisationCompleted: hasEqualisation,
       });
     } catch (error) {
       console.error('Error loading project stats:', error);

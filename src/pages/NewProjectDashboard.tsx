@@ -212,14 +212,16 @@ export default function NewProjectDashboard({
 
       const { data: reportsList } = await supabase
         .from('award_reports')
-        .select('id, trade')
+        .select('id')
         .eq('project_id', projectId)
-        .eq('trade', currentTrade)
         .eq('status', 'ready');
 
       // Better detection of completed steps
       const hasLineItems = lineItems.length > 0;
       const hasMappedItems = lineItems.filter(item => item.system_id).length > 0;
+
+      // Check if equalisation has been run (from project settings)
+      const hasEqualisation = !!settings?.settings?.last_equalisation_run;
 
       const newStats: ProjectStats = {
         quoteCount,
@@ -236,8 +238,8 @@ export default function NewProjectDashboard({
         hasReviewedItems: hasLineItems,
         // Scope Matrix is complete if items have been mapped to systems or coverage is 100% FOR THIS TRADE
         hasScopeMatrix: hasMappedItems || coveragePercent === 100,
-        // Equalisation is trade-specific, determined by actual data
-        hasEqualisation: false,
+        // Equalisation is complete if last_equalisation_run exists in project settings
+        hasEqualisation,
         hasReports: (reportsList?.length || 0) > 0,
       };
 
