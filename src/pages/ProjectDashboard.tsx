@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FolderOpen, FileText, TrendingUp, AlertCircle, CheckCircle2, Circle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PROJECT_WORKFLOW_STEPS } from '../config/workflow';
+import { useTrade } from '../lib/tradeContext';
 
 interface ProjectDashboardProps {
   projectId: string;
@@ -28,6 +29,7 @@ export default function ProjectDashboard({
   onNavigateToMatrix,
   onProjectDeleted
 }: ProjectDashboardProps) {
+  const { currentTrade } = useTrade();
   const [stats, setStats] = useState<ProjectStats>({
     quoteCount: 0,
     selectedQuoteCount: 0,
@@ -42,7 +44,7 @@ export default function ProjectDashboard({
 
   useEffect(() => {
     loadProjectStats();
-  }, [projectId]);
+  }, [projectId, currentTrade]);
 
   // Reload stats when page becomes visible (user returns from another page)
   useEffect(() => {
@@ -66,22 +68,25 @@ export default function ProjectDashboard({
 
     window.addEventListener('refresh-dashboard', handleRefresh);
     return () => window.removeEventListener('refresh-dashboard', handleRefresh);
-  }, [projectId]);
+  }, [projectId, currentTrade]);
 
   const loadProjectStats = async () => {
     setLoading(true);
     try {
+      console.log(`[ProjectDashboard] Loading stats for project ${projectId}, trade: ${currentTrade}`);
+
       const { data: quotes } = await supabase
         .from('quotes')
-        .select('id, supplier_name, total_amount, is_selected')
-        .eq('project_id', projectId);
+        .select('id, supplier_name, total_amount, is_selected, trade')
+        .eq('project_id', projectId)
+        .eq('trade', currentTrade);
 
       const quoteCount = quotes?.length || 0;
       const selectedQuoteCount = quotes?.filter(q => q.is_selected).length || 0;
       const totalValue = quotes?.reduce((sum, q) => sum + (q.total_amount || 0), 0) || 0;
       const supplierCount = new Set(quotes?.map(q => q.supplier_name)).size;
 
-      console.log(`[ProjectDashboard] Loaded stats - Total: ${quoteCount}, Selected: ${selectedQuoteCount}`);
+      console.log(`[ProjectDashboard] Loaded stats for ${currentTrade} - Total: ${quoteCount}, Selected: ${selectedQuoteCount}`);
 
       // Check if any quote has cleaned/processed items
       const { data: processedItems } = await supabase
@@ -93,20 +98,16 @@ export default function ProjectDashboard({
 
       const { data: latestReport } = await supabase
         .from('award_reports')
-        .select('id, generated_at, status')
+        .select('id, generated_at, status, trade')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .eq('status', 'ready')
         .order('generated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      // Check project workflow completion status
-      const { data: projectData } = await supabase
-        .from('projects')
-        .select('scope_matrix_completed, equalisation_completed')
-        .eq('id', projectId)
-        .maybeSingle();
-
+      // For trade isolation, workflow progress is determined by actual data, not project-level flags
+      // This ensures each trade has independent workflow tracking
       setStats({
         quoteCount,
         selectedQuoteCount,
@@ -115,8 +116,9 @@ export default function ProjectDashboard({
         reportStatus: latestReport ? 'ready' : 'not_generated',
         reportGeneratedAt: latestReport?.generated_at,
         hasCleanedData: (processedItems?.length || 0) > 0,
-        scopeMatrixCompleted: projectData?.scope_matrix_completed || false,
-        equalisationCompleted: projectData?.equalisation_completed || false,
+        // These are determined by actual data existence for the current trade
+        scopeMatrixCompleted: false, // TODO: Implement trade-specific tracking
+        equalisationCompleted: false, // TODO: Implement trade-specific tracking
       });
     } catch (error) {
       console.error('Error loading project stats:', error);

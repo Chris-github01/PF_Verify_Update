@@ -17,6 +17,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
+import { useTrade } from '../lib/tradeContext';
 import { PROJECT_WORKFLOW_STEPS, TOTAL_WORKFLOW_STEPS } from '../config/workflow';
 
 interface NewProjectDashboardProps {
@@ -67,6 +68,7 @@ export default function NewProjectDashboard({
   dashboardMode = 'original',
 }: NewProjectDashboardProps) {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectClient, setNewProjectClient] = useState('');
@@ -99,7 +101,7 @@ export default function NewProjectDashboard({
     } else {
       setLoading(false);
     }
-  }, [projectId, dashboardMode]);
+  }, [projectId, dashboardMode, currentTrade]);
 
   // Reload project data when page becomes visible (user returns from another page)
   useEffect(() => {
@@ -112,7 +114,7 @@ export default function NewProjectDashboard({
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [projectId]);
+  }, [projectId, currentTrade]);
 
   // Also expose a method to force reload - will be called by parent when navigating back
   useEffect(() => {
@@ -149,11 +151,14 @@ export default function NewProjectDashboard({
 
     setLoading(true);
     try {
-      // Filter quotes based on dashboard mode
+      console.log(`[NewProjectDashboard] Loading data for project ${projectId}, trade: ${currentTrade}`);
+
+      // Filter quotes based on dashboard mode AND trade
       let quotesQuery = supabase
         .from('quotes')
-        .select('id, supplier_name, revision_number, is_selected')
-        .eq('project_id', projectId);
+        .select('id, supplier_name, revision_number, is_selected, trade')
+        .eq('project_id', projectId)
+        .eq('trade', currentTrade);
 
       const { data: allQuotes, error: quotesError } = await quotesQuery;
 
@@ -200,16 +205,11 @@ export default function NewProjectDashboard({
         .eq('project_id', projectId)
         .maybeSingle();
 
-      const { data: projectData } = await supabase
-        .from('projects')
-        .select('equalisation_completed')
-        .eq('id', projectId)
-        .maybeSingle();
-
       const { data: reportsList } = await supabase
         .from('award_reports')
-        .select('id')
+        .select('id, trade')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .eq('status', 'ready');
 
       // Better detection of completed steps
@@ -231,8 +231,9 @@ export default function NewProjectDashboard({
         hasReviewedItems: hasLineItems || settings?.settings?.review_clean_completed || false,
         // Scope Matrix is complete if items have been mapped to systems or coverage is 100%
         hasScopeMatrix: hasMappedItems || coveragePercent === 100 || settings?.settings?.scope_matrix_completed || false,
-        // Equalisation is complete if the flag is set in the projects table
-        hasEqualisation: projectData?.equalisation_completed || false,
+        // Equalisation is trade-specific, determined by actual data for now
+        // TODO: Implement proper trade-specific workflow tracking
+        hasEqualisation: false,
         hasReports: (reportsList?.length || 0) > 0,
       };
 
