@@ -246,6 +246,13 @@ function AppContent() {
     }
   }, [projectId]);
 
+  // Reload projects when trade changes (but only if already initialized)
+  useEffect(() => {
+    if (currentOrganisation && initializedForOrgRef.current === currentOrganisation.id) {
+      console.log('🔄 [App] Trade changed to:', currentTrade, '- reloading projects');
+      loadAllProjects();
+    }
+  }, [currentTrade]);
 
   // Projects are loaded by initializeApp() - no separate effect needed
   // Removed to prevent duplicate loadAllProjects() calls and loops
