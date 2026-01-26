@@ -219,9 +219,12 @@ export default function NewProjectDashboard({
       // Better detection of completed steps
       const hasLineItems = lineItems.length > 0;
       const hasMappedItems = lineItems.filter(item => item.system_id).length > 0;
+      const hasQuotesForTrade = quoteCount > 0;
 
-      // Check if equalisation has been run (from project settings)
-      const hasEqualisation = !!settings?.settings?.last_equalisation_run;
+      // For trade isolation: only show equalisation and reports as complete if THIS TRADE has quotes
+      // This prevents cross-trade contamination of workflow status
+      const hasEqualisation = hasQuotesForTrade && !!settings?.settings?.last_equalisation_run;
+      const hasReports = hasQuotesForTrade && (reportsList?.length || 0) > 0;
 
       const newStats: ProjectStats = {
         quoteCount,
@@ -238,9 +241,9 @@ export default function NewProjectDashboard({
         hasReviewedItems: hasLineItems,
         // Scope Matrix is complete if items have been mapped to systems or coverage is 100% FOR THIS TRADE
         hasScopeMatrix: hasMappedItems || coveragePercent === 100,
-        // Equalisation is complete if last_equalisation_run exists in project settings
+        // Equalisation and Reports only complete if THIS TRADE has quotes
         hasEqualisation,
-        hasReports: (reportsList?.length || 0) > 0,
+        hasReports,
       };
 
       setStats(newStats);

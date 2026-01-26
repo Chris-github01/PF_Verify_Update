@@ -117,21 +117,25 @@ export default function ProjectDashboard({
         .limit(1)
         .maybeSingle();
 
-      // Check if equalisation and scope matrix have been completed
-      const hasEqualisation = !!settings?.settings?.last_equalisation_run;
-      const hasScopeMatrix = !!settings?.settings?.scope_matrix_completed;
+      // For trade isolation: workflow steps are only complete if THIS TRADE has quotes
+      // If there are no quotes for this trade, none of the later steps can be complete
+      const hasQuotesForTrade = quoteCount > 0;
+      const hasProcessedData = processedItems.length > 0;
 
-      // For trade isolation, workflow progress is determined by actual data, not project-level flags
-      // This ensures each trade has independent workflow tracking
+      // Only show workflow steps as complete if this trade has actual data
+      const hasEqualisation = hasQuotesForTrade && !!settings?.settings?.last_equalisation_run;
+      const hasScopeMatrix = hasProcessedData && !!settings?.settings?.scope_matrix_completed;
+      const hasReports = hasQuotesForTrade && !!latestReport;
+
       setStats({
         quoteCount,
         selectedQuoteCount,
         totalValue,
         supplierCount,
-        reportStatus: latestReport ? 'ready' : 'not_generated',
-        reportGeneratedAt: latestReport?.generated_at,
-        hasCleanedData: processedItems.length > 0,
-        // Check from project settings for completion status
+        reportStatus: hasReports ? 'ready' : 'not_generated',
+        reportGeneratedAt: hasReports ? latestReport?.generated_at : undefined,
+        hasCleanedData: hasProcessedData,
+        // Only show as complete if this trade has data
         scopeMatrixCompleted: hasScopeMatrix,
         equalisationCompleted: hasEqualisation,
       });
