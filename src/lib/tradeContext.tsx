@@ -32,9 +32,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     try {
       await updateSelectedTrade(trade);
       setCurrentTradeState(trade);
-
-      // Trigger a page reload to ensure all components refresh with new trade
-      window.location.reload();
+      // React state change will automatically re-render all components using useTrade()
     } catch (error) {
       console.error('Error updating trade:', error);
     }
