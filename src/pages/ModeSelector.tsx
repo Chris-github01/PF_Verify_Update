@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Building2, Flame, ShieldAlert } from 'lucide-react';
 import TradeSelectionModal, { type Trade } from '../components/TradeSelectionModal';
-import { updateSelectedTrade } from '../lib/userPreferences';
+import { useTrade } from '../lib/tradeContext';
 
 interface ModeSelectorProps {
   onSelectMode: (mode: 'admin' | 'app') => void;
@@ -11,7 +11,8 @@ interface ModeSelectorProps {
 
 export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading }: ModeSelectorProps) {
   const [showTradeModal, setShowTradeModal] = useState(false);
-  console.log('🎯 [ModeSelector] Render:', { isMasterAdmin, adminLoading });
+  const { currentTrade, setCurrentTrade } = useTrade();
+  console.log('🎯 [ModeSelector] Render:', { isMasterAdmin, adminLoading, currentTrade });
 
   // Wait for admin check to complete before auto-selecting
   if (adminLoading) {
@@ -27,7 +28,8 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
   }
 
   const handleTradeSelect = async (trade: Trade) => {
-    await updateSelectedTrade(trade);
+    console.log('🎯 [ModeSelector] Trade selected:', trade);
+    await setCurrentTrade(trade);
     setShowTradeModal(false);
     onSelectMode('app');
   };
@@ -39,6 +41,7 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
         <TradeSelectionModal
           isOpen={true}
           onSelect={handleTradeSelect}
+          currentTrade={currentTrade}
         />
       </>
     );
@@ -101,6 +104,7 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
           <TradeSelectionModal
             isOpen={showTradeModal}
             onSelect={handleTradeSelect}
+            currentTrade={currentTrade}
           />
         </div>
       </div>
