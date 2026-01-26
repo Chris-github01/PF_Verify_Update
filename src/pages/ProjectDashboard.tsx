@@ -89,12 +89,17 @@ export default function ProjectDashboard({
       console.log(`[ProjectDashboard] Loaded stats for ${currentTrade} - Total: ${quoteCount}, Selected: ${selectedQuoteCount}`);
 
       // Check if any quote has cleaned/processed items
-      const { data: processedItems } = await supabase
-        .from('quote_items')
-        .select('id')
-        .in('quote_id', quotes?.map(q => q.id) || [])
-        .not('system_id', 'is', null)
-        .limit(1);
+      // Only query if we have quotes, otherwise skip to avoid .in([]) edge case
+      let processedItems: any[] = [];
+      if (quotes && quotes.length > 0) {
+        const { data } = await supabase
+          .from('quote_items')
+          .select('id')
+          .in('quote_id', quotes.map(q => q.id))
+          .not('system_id', 'is', null)
+          .limit(1);
+        processedItems = data || [];
+      }
 
       const { data: latestReport } = await supabase
         .from('award_reports')
@@ -115,7 +120,7 @@ export default function ProjectDashboard({
         supplierCount,
         reportStatus: latestReport ? 'ready' : 'not_generated',
         reportGeneratedAt: latestReport?.generated_at,
-        hasCleanedData: (processedItems?.length || 0) > 0,
+        hasCleanedData: processedItems.length > 0,
         // These are determined by actual data existence for the current trade
         scopeMatrixCompleted: false, // TODO: Implement trade-specific tracking
         equalisationCompleted: false, // TODO: Implement trade-specific tracking

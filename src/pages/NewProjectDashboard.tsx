@@ -182,10 +182,15 @@ export default function NewProjectDashboard({
       const selectedQuoteCount = quotes?.filter(q => q.is_selected).length || 0;
       const supplierCount = new Set(quotes?.map(q => q.supplier_name)).size;
 
-      const { data: lineItems } = await supabase
-        .from('quote_items')
-        .select('system_id, quote_id')
-        .in('quote_id', quotes?.map(q => q.id) || []);
+      // Only query line items if we have quotes, otherwise skip to avoid .in([]) edge case
+      let lineItems: any[] = [];
+      if (quotes && quotes.length > 0) {
+        const { data } = await supabase
+          .from('quote_items')
+          .select('system_id, quote_id')
+          .in('quote_id', quotes.map(q => q.id));
+        lineItems = data || [];
+      }
 
       const allSystemIds = lineItems?.filter(item => item.system_id).map(item => item.system_id) || [];
       const uniqueSystems = new Set(allSystemIds);
@@ -213,8 +218,8 @@ export default function NewProjectDashboard({
         .eq('status', 'ready');
 
       // Better detection of completed steps
-      const hasLineItems = (lineItems?.length || 0) > 0;
-      const hasMappedItems = (lineItems?.filter(item => item.system_id).length || 0) > 0;
+      const hasLineItems = lineItems.length > 0;
+      const hasMappedItems = lineItems.filter(item => item.system_id).length > 0;
 
       const newStats: ProjectStats = {
         quoteCount,
@@ -227,12 +232,11 @@ export default function NewProjectDashboard({
         totalSteps: TOTAL_WORKFLOW_STEPS,
         hasQuotes: quoteCount > 0,
         hasSelectedQuotes: selectedQuoteCount > 0,
-        // Review & Clean is complete if there are line items with data
-        hasReviewedItems: hasLineItems || settings?.settings?.review_clean_completed || false,
-        // Scope Matrix is complete if items have been mapped to systems or coverage is 100%
-        hasScopeMatrix: hasMappedItems || coveragePercent === 100 || settings?.settings?.scope_matrix_completed || false,
-        // Equalisation is trade-specific, determined by actual data for now
-        // TODO: Implement proper trade-specific workflow tracking
+        // Review & Clean is complete if there are line items with data FOR THIS TRADE
+        hasReviewedItems: hasLineItems,
+        // Scope Matrix is complete if items have been mapped to systems or coverage is 100% FOR THIS TRADE
+        hasScopeMatrix: hasMappedItems || coveragePercent === 100,
+        // Equalisation is trade-specific, determined by actual data
         hasEqualisation: false,
         hasReports: (reportsList?.length || 0) > 0,
       };
