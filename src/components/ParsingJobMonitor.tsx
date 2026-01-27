@@ -78,11 +78,12 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
 
   const loadJobs = async () => {
     try {
-      // Get all jobs for this project
+      // Get all jobs for this project filtered by trade
       const { data: allJobs, error } = await supabase
         .from('parsing_jobs')
         .select('*')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -100,8 +101,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
         const { data: quotes } = await supabase
           .from('quotes')
           .select('id, revision_number, is_latest')
-          .in('id', quoteIds)
-          .eq('trade', currentTrade);
+          .in('id', quoteIds);
 
         const quoteRevisionMap = new Map(quotes?.map(q => [q.id, q.revision_number]) || []);
         const quoteLatestMap = new Map(quotes?.map(q => [q.id, q.is_latest]) || []);

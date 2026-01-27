@@ -41,6 +41,7 @@ Deno.serve(async (req: Request) => {
     const organisationId = formData.get("organisationId") as string;
     const quoteId = formData.get("quoteId") as string | null;
     const dashboardMode = (formData.get("dashboardMode") as string) || "original";
+    const trade = (formData.get("trade") as string) || "passive_fire";
 
     if (!projectId || !supplierName || !file || !organisationId) {
       return new Response(
@@ -133,6 +134,7 @@ Deno.serve(async (req: Request) => {
       user_id: user.id,
       status: "pending",
       progress: 0,
+      trade: trade,
       metadata: { dashboard_mode: dashboardMode },
     };
 

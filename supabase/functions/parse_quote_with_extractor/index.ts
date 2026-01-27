@@ -47,6 +47,7 @@ Deno.serve(async (req: Request) => {
     const projectId = formData.get("projectId") as string;
     const supplierName = formData.get("supplierName") as string;
     const dashboardMode = (formData.get("dashboardMode") as string) || "original";
+    const trade = (formData.get("trade") as string) || "passive_fire";
 
     if (!file || !projectId || !supplierName) {
       return new Response(
@@ -226,6 +227,7 @@ Deno.serve(async (req: Request) => {
         organisation_id: project.organisation_id,
         status: "pending",
         revision_number: revisionNumber,
+        trade: trade,
         metadata: {
           extractor_used: "external_direct",
           num_pages: extractorData.num_pages,

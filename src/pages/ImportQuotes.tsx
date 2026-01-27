@@ -207,6 +207,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
           extractorFormData.append('supplierName', supplierName.trim());
           extractorFormData.append('organisationId', currentOrganisation.id);
           extractorFormData.append('dashboardMode', dashboardMode);
+          extractorFormData.append('trade', currentTrade);
 
           const extractorUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse_quote_with_extractor`;
           const extractorHeaders = {
@@ -263,6 +264,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
         formData.append('supplierName', supplierName.trim());
         formData.append('organisationId', currentOrganisation.id);
         formData.append('dashboardMode', dashboardMode);
+        formData.append('trade', currentTrade);
 
         const jobUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start_parsing_job`;
         const jobHeaders = {
