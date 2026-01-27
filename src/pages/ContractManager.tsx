@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { useOrganisation } from '../lib/organisationContext';
+import { useTrade } from '../lib/tradeContext';
 import { exportTagsClarificationsToExcel } from '../lib/export/tagsExcelExport';
 import EnhancedAllowancesTab from '../components/EnhancedAllowancesTab';
 import ContractWorkflowStepper from '../components/ContractWorkflowStepper';
@@ -148,10 +149,12 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | undefined>(undefined);
   const [workflowProgress, setWorkflowProgress] = useState<WorkflowStepProgress[]>([]);
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
 
+  // CRITICAL: Reload data when trade changes to ensure proper isolation
   useEffect(() => {
     loadData();
-  }, [projectId]);
+  }, [projectId, currentTrade]);
 
   const loadData = async () => {
     setLoading(true);
@@ -189,10 +192,12 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       const approvedQuoteId = (project as any)?.approved_quote_id;
 
       if (approvedQuoteId) {
+        // CRITICAL: Filter by current trade to ensure trade isolation
         const { data: approvedQuote } = await supabase
           .from('quotes')
           .select('supplier_name, total_amount, updated_at, organisation_id')
           .eq('id', approvedQuoteId)
+          .eq('trade', currentTrade)
           .maybeSingle();
 
         if (approvedQuote) {
@@ -706,14 +711,15 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
         const totalItems = scopeSystems.reduce((sum, sys) => sum + sys.item_count, 0);
 
-        // Fetch all quotes for comparison
+        // Fetch all quotes for comparison - CRITICAL: Filter by current trade
         const { data: allQuotes } = await supabase
           .from('quotes')
           .select('supplier_name, total_amount, is_awarded')
           .eq('project_id', projectId)
+          .eq('trade', currentTrade)
           .eq('is_selected', true)
           .eq('latest', true)
-          .order('total_amount', { ascending: true });
+          .order('total_amount', { ascending: true});
 
         // Calculate quote comparison data
         const quoteComparison = allQuotes?.map(q => ({
@@ -4215,16 +4221,20 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
           return;
         }
 
+        // CRITICAL: Filter quote by current trade to ensure correct trade isolation
         const { data: quote } = await supabase
           .from('quotes')
-          .select('id, supplier_id, total_amount, file_url, created_at, suppliers(name)')
+          .select('id, supplier_id, total_amount, file_url, created_at, suppliers(name), trade')
           .eq('id', project.approved_quote_id)
-          .single();
+          .eq('trade', currentTrade)
+          .maybeSingle();
 
+        // CRITICAL: Filter award report by current trade
         const { data: awardReport } = await supabase
           .from('award_reports')
           .select('id, created_at')
           .eq('project_id', projectId)
+          .eq('trade', currentTrade)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
