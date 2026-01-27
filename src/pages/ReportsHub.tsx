@@ -22,9 +22,10 @@ interface ReportsHubProps {
   onNavigate?: (path: 'award-report' | 'equalisation' | 'trade-analysis', reportId?: string) => void;
   dashboardMode?: DashboardMode;
   preselectedQuoteIds?: string[];
+  currentTrade?: string;
 }
 
-export default function ReportsHub({ projects, projectId, onNavigate, dashboardMode = 'original', preselectedQuoteIds = [] }: ReportsHubProps) {
+export default function ReportsHub({ projects, projectId, onNavigate, dashboardMode = 'original', preselectedQuoteIds = [], currentTrade = 'passive_fire' }: ReportsHubProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [generatingProjectId, setGeneratingProjectId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +62,10 @@ export default function ReportsHub({ projects, projectId, onNavigate, dashboardM
       const payload: any = {
         projectId: project.id,
         force,
+        trade: currentTrade, // CRITICAL: Pass current trade to generate report for correct trade
       };
+
+      console.log('📊 ReportsHub: Generating report for trade:', currentTrade);
 
       if (preselectedQuoteIds.length > 0) {
         console.log('📊 ReportsHub: Generating report with preselected quotes:', preselectedQuoteIds);

@@ -86,14 +86,49 @@ export default function AwardReport({
     setQuotesMap(new Map());
     setLoadedReportTrade(null);
 
+    // CRITICAL: Pre-validate reportId against trade BEFORE loading anything
+    const validateAndLoad = async () => {
+      if (reportId) {
+        console.log('🔒 PRE-VALIDATING reportId against current trade:', { reportId, currentTrade });
+
+        // Quick check: Does this reportId belong to the current trade?
+        const { data: tradeCheck, error: tradeError } = await supabase
+          .from('award_reports')
+          .select('trade, id')
+          .eq('id', reportId)
+          .maybeSingle();
+
+        if (tradeError) {
+          console.error('❌ Error checking report trade:', tradeError);
+          setLoading(false);
+          return;
+        }
+
+        if (!tradeCheck) {
+          console.error('❌ Report not found:', reportId);
+          setLoading(false);
+          return;
+        }
+
+        const reportTrade = tradeCheck.trade || 'passive_fire';
+        if (reportTrade !== currentTrade) {
+          console.error('🚫🚫🚫 HARD BLOCK: ReportId belongs to different trade!');
+          console.error('Report trade:', reportTrade, '| Current trade:', currentTrade);
+          console.error('REFUSING TO LOAD - Staying in empty state');
+          setLoading(false);
+          return; // Do not proceed
+        }
+
+        console.log('✅ Trade validation passed, proceeding to load report');
+        loadSavedReport(reportId);
+      } else {
+        console.log('📂 Loading latest report for trade:', currentTrade);
+        loadLatestReport();
+      }
+    };
+
     loadProjectInfo();
-    if (reportId) {
-      console.log('📂 Loading specific report:', reportId);
-      loadSavedReport(reportId);
-    } else {
-      console.log('📂 Loading latest report for trade:', currentTrade);
-      loadLatestReport();
-    }
+    validateAndLoad();
   }, [reportId, projectId, currentTrade]);
 
   useEffect(() => {

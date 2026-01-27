@@ -52,9 +52,10 @@ export default function EnhancedReportsHub(props: EnhancedReportsHubProps) {
   return (
     <ReportsHub
       {...props}
-      onNavigate={(path) => handleNavigate(path)}
+      onNavigate={(path, reportId) => handleNavigate(path, reportId)}
       dashboardMode={props.dashboardMode}
       preselectedQuoteIds={props.preselectedQuoteIds}
+      currentTrade={currentTrade}
     />
   );
 }
