@@ -210,10 +210,12 @@ export default function NewProjectDashboard({
         .eq('project_id', projectId)
         .maybeSingle();
 
+      // CRITICAL: Filter reports by current trade to prevent cross-trade contamination
       const { data: reportsList } = await supabase
         .from('award_reports')
         .select('id')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .eq('status', 'ready');
 
       // Better detection of completed steps

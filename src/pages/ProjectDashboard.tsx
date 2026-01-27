@@ -108,10 +108,12 @@ export default function ProjectDashboard({
         .eq('project_id', projectId)
         .maybeSingle();
 
+      // CRITICAL: Filter reports by current trade to prevent cross-trade contamination
       const { data: latestReport } = await supabase
         .from('award_reports')
         .select('id, generated_at, status')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .eq('status', 'ready')
         .order('generated_at', { ascending: false })
         .limit(1)
