@@ -182,8 +182,37 @@ Return JSON format:
     console.log('[LLM Fallback] Got response from OpenAI, parsing...');
     const parsed: ParseResponse = JSON.parse(content);
 
-    const items = parsed.items || [];
+    let items = parsed.items || [];
     console.log(`[LLM Fallback] Extracted ${items.length} items`);
+
+    // CRITICAL FIX: Detect if parser assigned section subtotal to all items
+    // If 10+ items share the exact same total, this is a parsing error
+    const totalFrequency = new Map<number, number>();
+    items.forEach(item => {
+      const total = item.total || 0;
+      totalFrequency.set(total, (totalFrequency.get(total) || 0) + 1);
+    });
+
+    const maxFrequency = Math.max(...Array.from(totalFrequency.values()));
+    const hasDuplicateTotals = maxFrequency >= 10;
+
+    if (hasDuplicateTotals) {
+      console.warn(`[LLM Fallback] DETECTED PARSING ERROR: ${maxFrequency} items with identical total - recalculating from qty × rate`);
+      items = items.map(item => {
+        const qty = parseFloat(String(item.qty || 0));
+        const rate = parseFloat(String(item.rate || 0));
+        const calculatedTotal = qty * rate;
+
+        if (calculatedTotal > 0 && calculatedTotal !== item.total) {
+          console.log(`[LLM Fallback] Fixed: ${item.description} - Total: ${item.total} → ${calculatedTotal.toFixed(2)}`);
+          return {
+            ...item,
+            total: calculatedTotal
+          };
+        }
+        return item;
+      });
+    }
 
     // Calculate totals
     const subtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
