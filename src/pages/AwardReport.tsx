@@ -805,6 +805,24 @@ export default function AwardReport({
   const criticalGaps = aiAnalysis?.gapsAndRisks?.filter((g: any) => g.severity === 'HIGH') || [];
   const nonCriticalGaps = aiAnalysis?.gapsAndRisks?.filter((g: any) => g.severity !== 'HIGH') || [];
 
+  // CRITICAL RENDER-LEVEL CHECK: Block display if data trade doesn't match current trade
+  const hasData = comparisonData.length > 0 || awardSummary !== null;
+  const tradeMismatch = hasData && loadedReportTrade && loadedReportTrade !== currentTrade;
+
+  console.log('🎨 RENDER CHECK:', {
+    hasData,
+    loadedReportTrade,
+    currentTrade,
+    tradeMismatch,
+    comparisonDataLength: comparisonData.length
+  });
+
+  if (tradeMismatch) {
+    console.error('🚫🚫🚫 RENDER BLOCKED: Trade mismatch detected!');
+    console.error('Loaded trade:', loadedReportTrade, '| Current trade:', currentTrade);
+    console.error('Forcing empty state display');
+  }
+
   return (
     <div className="min-h-screen bg-slate-900">
       <div className="bg-slate-800/60 border-b border-slate-700">
@@ -920,21 +938,21 @@ export default function AwardReport({
               <p className="text-slate-400">Loading report...</p>
             </div>
           </div>
-        ) : loadedReportTrade && loadedReportTrade !== currentTrade ? (
+        ) : tradeMismatch ? (
           <div className="flex items-center justify-center min-h-96">
             <div className="text-center max-w-md">
-              <AlertCircle className="w-16 h-16 text-orange-500 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-slate-100 mb-2">Wrong Trade Selected</h3>
-              <p className="text-slate-400 mb-6">
-                This report is for <span className="font-bold text-orange-400">{loadedReportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade,
-                but you're currently viewing <span className="font-bold text-orange-400">{currentTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade.
+              <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+              <h3 className="text-2xl font-bold text-red-400 mb-2">🚫 Trade Mismatch Detected</h3>
+              <p className="text-slate-400 mb-4">
+                This report belongs to <span className="font-bold text-orange-400">{loadedReportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade,
+                but you're viewing <span className="font-bold text-orange-400">{currentTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade.
               </p>
-              <p className="text-slate-400 mb-6">
-                Switch to {loadedReportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'} trade to view this report, or return to the reports hub.
+              <p className="text-slate-300 font-semibold mb-6">
+                Data from different trades is isolated and cannot be displayed cross-trade.
               </p>
               <button
                 onClick={() => onNavigate?.('reports')}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+                className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-bold shadow-lg"
               >
                 Back to Reports Hub
               </button>
