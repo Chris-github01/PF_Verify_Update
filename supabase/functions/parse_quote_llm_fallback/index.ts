@@ -111,15 +111,25 @@ Extract ALL line items with these fields:
 - description: detailed item description
 - qty: quantity (number)
 - unit: unit of measure (EA, M, Nr, etc)
-- rate: unit price
-- total: total price for this line
+- rate: unit price (calculate from total/qty if not shown)
+- total: total price for THIS INDIVIDUAL LINE ITEM ONLY
 - section: category/section name if visible
 
-IMPORTANT:
-- Extract ONLY actual line items, NOT subtotals or category headers
-- Skip rows that are section summaries
-- Skip grand totals
-- Calculate rate as total/qty if not explicitly shown
+CRITICAL RULES:
+1. Extract ONLY actual line items with their INDIVIDUAL totals
+2. NEVER use section subtotals (like "Sub-Total ex GST", "Total inc GST") as line item totals
+3. Skip ALL rows containing: "Sub-Total", "Total inc", "GST", "Grand Total"
+4. Skip section headers and category names
+5. Each line item should have its OWN unique total, not shared totals
+
+COMMON MISTAKE TO AVOID:
+❌ WRONG: Assigning section subtotal ($598,744.78) to every item in that section
+✅ CORRECT: Each item has its own total based on quantity × rate
+
+Quote Structure Examples:
+- If you see "Pit type 66 - Qty: 10.00 - $1,093.12", the total is $1,093.12 (NOT the section subtotal)
+- If you see "Cable tray 300mm - Qty: 30.00", calculate its individual total
+- Section subtotals like "Sub-Total ex GST $109,312.10" are NOT line items
 
 Additional guidance for ELECTRICAL quotes:
 - Electrical proposals often contain section-level subtotals (e.g., "Electrical TOTAL", "Security & Data TOTAL", "Cable Tray TOTAL") — do NOT extract those as line items.
