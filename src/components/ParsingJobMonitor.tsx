@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrade } from '../lib/tradeContext';
 
 interface ParsingJob {
   id: string;
@@ -23,6 +24,7 @@ interface ParsingJobMonitorProps {
 }
 
 export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboardMode = 'original' }: ParsingJobMonitorProps) {
+  const { currentTrade } = useTrade();
   const [jobs, setJobs] = useState<ParsingJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState<Set<string>>(new Set());
@@ -72,7 +74,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       subscription.unsubscribe();
       clearInterval(pollInterval);
     };
-  }, [projectId, dashboardMode, jobs]);
+  }, [projectId, dashboardMode, currentTrade, jobs]);
 
   const loadJobs = async () => {
     try {
@@ -98,7 +100,8 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
         const { data: quotes } = await supabase
           .from('quotes')
           .select('id, revision_number, is_latest')
-          .in('id', quoteIds);
+          .in('id', quoteIds)
+          .eq('trade', currentTrade);
 
         const quoteRevisionMap = new Map(quotes?.map(q => [q.id, q.revision_number]) || []);
         const quoteLatestMap = new Map(quotes?.map(q => [q.id, q.is_latest]) || []);

@@ -231,6 +231,13 @@ export default function AwardReport({
         throw new Error(`Report not found with ID: ${reportId}. It may have been deleted or you may not have permission to view it.`);
       }
 
+      // Check if report matches current trade
+      const reportTrade = reportData.trade || 'passive_fire';
+      if (reportTrade !== currentTrade) {
+        console.warn('⚠️ Report trade mismatch:', { reportTrade, currentTrade });
+        throw new Error(`This report is for ${reportTrade} trade. Please switch to ${reportTrade} to view it.`);
+      }
+
       if (reportData.result_json) {
         setComparisonData(reportData.result_json.comparisonData || []);
         setAwardSummary(reportData.result_json.awardSummary || null);
