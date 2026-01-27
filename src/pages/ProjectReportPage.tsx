@@ -4,6 +4,7 @@ import AwardReportEnhanced from './AwardReportEnhanced';
 import { supabase } from '../lib/supabase';
 import { generateModernPdfHtml, downloadPdfHtml } from '../lib/reports/modernPdfTemplate';
 import { useOrganisation } from '../lib/organisationContext';
+import { useTrade } from '../lib/tradeContext';
 
 interface ProjectReportPageProps {
   projectId: string;
@@ -21,6 +22,7 @@ export default function ProjectReportPage({
   onToast
 }: ProjectReportPageProps) {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [hasReport, setHasReport] = useState<boolean | null>(null);
   const [reportId, setReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,18 +30,24 @@ export default function ProjectReportPage({
 
   useEffect(() => {
     checkForReport();
-  }, [projectId]);
+  }, [projectId, currentTrade]);
 
   const checkForReport = async () => {
     setLoading(true);
     try {
+      console.log('🔍 ProjectReportPage: Checking for report - projectId:', projectId, 'trade:', currentTrade);
+
+      // CRITICAL: Filter by current trade to prevent cross-trade contamination
       const { data, error } = await supabase
         .from('award_reports')
         .select('id')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      console.log('📊 ProjectReportPage: Report check result:', { found: !!data, reportId: data?.id, error });
 
       if (error) {
         console.error('Error checking for report:', error);
@@ -61,6 +69,8 @@ export default function ProjectReportPage({
   const handleGenerateReport = async () => {
     setGenerating(true);
     try {
+      console.log('🔄 ProjectReportPage: Generating report for trade:', currentTrade);
+
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/compute_award_report`;
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -68,7 +78,10 @@ export default function ProjectReportPage({
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ projectId }),
+        body: JSON.stringify({
+          projectId,
+          trade: currentTrade // CRITICAL: Pass current trade to generate report for correct trade
+        }),
       });
 
       if (!response.ok) {
