@@ -191,14 +191,23 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
       const approvedQuoteId = (project as any)?.approved_quote_id;
 
+      console.log('🔍 Contract Manager: Loading data for trade:', currentTrade, 'approvedQuoteId:', approvedQuoteId);
+
       if (approvedQuoteId) {
         // CRITICAL: Filter by current trade to ensure trade isolation
-        const { data: approvedQuote } = await supabase
+        const { data: approvedQuote, error: quoteError } = await supabase
           .from('quotes')
-          .select('supplier_name, total_amount, updated_at, organisation_id')
+          .select('supplier_name, total_amount, updated_at, organisation_id, trade')
           .eq('id', approvedQuoteId)
           .eq('trade', currentTrade)
           .maybeSingle();
+
+        console.log('📊 Contract Manager: Approved quote result:', {
+          found: !!approvedQuote,
+          quoteTrade: approvedQuote?.trade,
+          currentTrade,
+          error: quoteError
+        });
 
         if (approvedQuote) {
           // Try to find supplier details from suppliers table
@@ -243,12 +252,12 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
 
           // Show Onboarding tab whenever there's an approved quote
           setIsApproved(true);
-        }
 
-        const { data: quoteItems } = await supabase
-          .from('quote_items')
-          .select('scope_category, service, subclass, material, description, quantity, unit, unit_price, total_price')
-          .eq('quote_id', approvedQuoteId);
+          // Fetch quote items for the approved quote (only if it matches current trade)
+          const { data: quoteItems } = await supabase
+            .from('quote_items')
+            .select('scope_category, service, subclass, material, description, quantity, unit, unit_price, total_price')
+            .eq('quote_id', approvedQuoteId);
 
         if (quoteItems && quoteItems.length > 0) {
           const systemsMap = new Map<string, ScopeSystem>();
@@ -280,7 +289,23 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           });
 
           setScopeSystems(Array.from(systemsMap.values()));
+        } else {
+          // No quote items, clear scope systems
+          setScopeSystems([]);
         }
+        } else {
+          // CRITICAL: Quote doesn't match current trade - clear all data
+          console.log('⚠️ Contract Manager: No approved quote found for trade:', currentTrade);
+          setAwardInfo(null);
+          setIsApproved(false);
+          setScopeSystems([]);
+        }
+      } else {
+        // No approved quote ID - clear all data
+        console.log('⚠️ Contract Manager: No approved quote ID found');
+        setAwardInfo(null);
+        setIsApproved(false);
+        setScopeSystems([]);
       }
 
       await loadWorkflowProgress();
