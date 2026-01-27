@@ -60,6 +60,16 @@ export async function saveBOQToDatabase(
 
     console.log('[BOQ Saver] Grouped into suppliers', { supplierCount: supplierMap.size });
 
+    // Get project trade for proper isolation
+    const { data: projectData } = await supabase
+      .from('projects')
+      .select('trade')
+      .eq('id', projectId)
+      .single();
+
+    const projectTrade = projectData?.trade || 'passive_fire';
+    console.log('[BOQ Saver] Project trade:', projectTrade);
+
     let suppliersCreated = 0;
 
     for (const [supplierName, rows] of supplierMap.entries()) {
@@ -110,6 +120,7 @@ export async function saveBOQToDatabase(
           status: 'pending',
           quote_reference: rows[0].sourceSheet || '',
           revision_number: revisionNumber,
+          trade: projectTrade,
         })
         .select()
         .single();
