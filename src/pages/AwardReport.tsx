@@ -69,6 +69,14 @@ export default function AwardReport({
   const moreDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Clear state when trade or report changes
+    setComparisonData([]);
+    setAwardSummary(null);
+    setAiAnalysis(null);
+    setCurrentReportId(null);
+    setReportTimestamp('');
+    setApprovalData(null);
+
     loadProjectInfo();
     if (reportId) {
       loadSavedReport(reportId);
@@ -815,6 +823,33 @@ export default function AwardReport({
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {loading ? (
+          <div className="flex items-center justify-center min-h-96">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+              <p className="text-slate-400">Loading report...</p>
+            </div>
+          </div>
+        ) : !comparisonData || comparisonData.length === 0 ? (
+          <div className="flex items-center justify-center min-h-96">
+            <div className="text-center max-w-md">
+              <AlertCircle className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-slate-100 mb-2">No Report Found</h3>
+              <p className="text-slate-400 mb-6">
+                {currentTrade === 'electrical'
+                  ? 'No award report exists for the Electrical trade yet. Import quotes and generate a report first.'
+                  : 'No award report found for this project. Import quotes and generate a report first.'}
+              </p>
+              <button
+                onClick={() => onNavigate?.('importquotes')}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+              >
+                Import Quotes
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-white mb-3">Award Recommendation Report</h1>
           <p className="text-xl text-slate-300 mb-6">Project Analysis & Supplier Evaluation</p>
@@ -1496,6 +1531,8 @@ export default function AwardReport({
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* Approval Modal */}
