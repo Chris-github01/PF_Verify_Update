@@ -107,41 +107,39 @@ Deno.serve(async (req: Request) => {
     // Create extraction prompt
     const systemPrompt = `You are an expert at extracting line items from construction quotes.
 
-Extract ALL line items with these fields:
-- description: detailed item description
-- qty: quantity (number)
-- unit: unit of measure (EA, M, Nr, etc)
-- rate: unit price (calculate from total/qty if not shown)
-- total: total price for THIS INDIVIDUAL LINE ITEM ONLY
-- section: category/section name if visible
+DETECT QUOTE TYPE FIRST:
 
-CRITICAL RULES:
-1. Extract ONLY actual line items with their INDIVIDUAL totals
-2. NEVER use section subtotals (like "Sub-Total ex GST", "Total inc GST") as line item totals
-3. Skip ALL rows containing: "Sub-Total", "Total inc", "GST", "Grand Total"
-4. Skip section headers and category names
-5. Each line item should have its OWN unique total, not shared totals
+TYPE A - ITEMIZED QUOTE (each line has its own price):
+Item | Qty | Rate | Total
+Switchboard | 1 | $5,000 | $5,000
+Cable tray | 100m | $50/m | $5,000
+→ Extract each line item with its individual total
 
-COMMON MISTAKE TO AVOID:
-❌ WRONG: Assigning section subtotal ($598,744.78) to every item in that section
-✅ CORRECT: Each item has its own total based on quantity × rate
+TYPE B - LUMP SUM QUOTE (only section totals shown):
+Civil work And Cable Tray
+  Pit type 66: 10.00
+  Conduit duct 50mm: 110.00
+  Cable tray 300mm: 30.00
+  Sub-Total ex GST: $109,312.10
+→ Extract ONE line: "Civil work And Cable Tray - Lump Sum" | Qty: 1 | Total: $109,312.10
 
-Quote Structure Examples:
-- If you see "Pit type 66 - Qty: 10.00 - $1,093.12", the total is $1,093.12 (NOT the section subtotal)
-- If you see "Cable tray 300mm - Qty: 30.00", calculate its individual total
-- Section subtotals like "Sub-Total ex GST $109,312.10" are NOT line items
+FOR TYPE A QUOTES:
+- Extract each line item with description, qty, unit, rate, and INDIVIDUAL total
+- Skip subtotals, GST, and grand totals
 
-Additional guidance for ELECTRICAL quotes:
-- Electrical proposals often contain section-level subtotals (e.g., "Electrical TOTAL", "Security & Data TOTAL", "Cable Tray TOTAL") — do NOT extract those as line items.
-- Extract the underlying package lines inside each section (e.g., "Switchboard Panels", "Cable-Power (Installed Terminated)", "Lightning Protection Level 4", "Access Control", "CCTV", "Preliminary and General Overheads", "Seismic Bracing Materials & Installation", "Seismic Engineering").
-- If a quote includes corrections/credits (e.g., "Cable supply price error", "Removal of exit lighting ... -$X"), extract them as line items with negative totals when shown.
-- Preserve the section name if visible (Electrical, Security & Data, Cable Tray, Corrections, etc.).
+FOR TYPE B QUOTES (LUMP SUM):
+- Extract ONE line item PER SECTION using the section subtotal
+- Format: "{Section Name} - Lump Sum" | Qty: 1 | Unit: "LS" | Total: {section subtotal}
+- Example sections: "Civil work And Cable Tray", "First fix", "Second fix", "Audio/Visual"
+
+CRITICAL: If individual line prices are NOT shown (only quantities), this is TYPE B - extract section lump sums.
 
 Return JSON format:
 {
   "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string"}],
   "confidence": number,
-  "warnings": ["string"]
+  "warnings": ["string"],
+  "quoteType": "itemized" or "lumpsum"
 }`;
 
     const userPrompt = `Extract all line items from this quote:\n\n${text}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
