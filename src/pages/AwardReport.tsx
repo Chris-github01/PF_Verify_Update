@@ -75,7 +75,7 @@ export default function AwardReport({
     } else {
       loadLatestReport();
     }
-  }, [reportId, projectId]);
+  }, [reportId, projectId, currentTrade]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -168,6 +168,7 @@ export default function AwardReport({
         .from('award_reports')
         .select('*')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -277,6 +278,7 @@ export default function AwardReport({
         body: JSON.stringify({
           projectId,
           force: true,
+          trade: currentTrade,
         }),
       });
 

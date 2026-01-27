@@ -50,7 +50,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
     } else {
       setLoading(false);
     }
-  }, [projectId, dashboardMode]);
+  }, [projectId, dashboardMode, currentTrade]);
 
   const loadProjectInfo = async () => {
     if (!projectId) return;

@@ -87,13 +87,13 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { projectId, force, quoteIds } = await req.json();
+    const { projectId, force, quoteIds, trade } = await req.json();
 
     if (!projectId) {
       throw new Error("projectId is required");
     }
 
-    console.log("📊 compute_award_report: Generating report", { projectId, quoteIds });
+    console.log("📊 compute_award_report: Generating report", { projectId, quoteIds, trade });
 
     // Load project scoring weights
     const { data: projectData } = await supabase
@@ -119,6 +119,12 @@ Deno.serve(async (req: Request) => {
       .eq("is_selected", true)
       .eq("is_latest", true)
       .order("created_at", { ascending: true });
+
+    // Filter by trade if provided
+    if (trade) {
+      console.log("📊 Filtering to trade:", trade);
+      quotesQuery = quotesQuery.eq("trade", trade);
+    }
 
     // Filter by specific quote IDs if provided
     if (quoteIds && Array.isArray(quoteIds) && quoteIds.length > 0) {
@@ -417,6 +423,7 @@ Deno.serve(async (req: Request) => {
         result_json: resultJson,
         params_json: { equalisationMode: "MODEL" },
         quotes_checksum: quotes.map(q => q.id).join("-"),
+        trade: trade || "passive_fire",
       })
       .select()
       .single();
