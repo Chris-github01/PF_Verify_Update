@@ -248,6 +248,16 @@ Identify all risks including:
 - Access and site condition risks
 - Compliance and quality issues
 
+Additional ELECTRICAL-specific risks to detect (when quote relates to electrical works):
+- Long-lead items (switchboards, luminaires, cables) and any stated lead times
+- Authority / utility dependencies (power authority charges, incoming fibre by Chorus, metering)
+- Commissioning / testing / certification gaps (test sheets, COC/ESC, discrimination studies, DB schedules/load updates)
+- Interface ambiguity (BMS, fire alarm power, UPS/generator, security/data boundaries)
+- Builder's works exclusions (concrete cutting/chasing/penetrations), trenching/reinstatement exclusions
+- Material substitutions and design-driven changes (e.g., copper → aluminium mains cable change; design/build drawing basis)
+- Scope exclusions that commonly cause variations (EV chargers, intruder alarm, PV/solar strings, appliances, storage unit control wiring)
+- Seismic bracing scope ambiguity (allowance counts, engineering included/excluded)
+
 For each risk found, provide:
 - Category (exclusion, assumption, vague, pricing, scope, timeline, quality, access, compliance)
 - Severity (critical, high, medium, low)
@@ -280,7 +290,7 @@ Return JSON:
       messages: [
         {
           role: 'system',
-          content: 'You are an expert construction quantity surveyor specializing in risk analysis. Respond only with valid JSON.'
+          content: 'You are an expert construction quantity surveyor specializing in risk analysis across multiple trades, including passive fire and electrical. Respond only with valid JSON.'
         },
         { role: 'user', content: prompt }
       ],

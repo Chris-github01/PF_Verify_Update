@@ -55,19 +55,42 @@ const DECISION_SCHEMA = {
   required: ['match', 'confidence', 'reasons'],
 };
 
-const SYSTEM_PROMPT = `You are a strict line-item comparator for passive fire protection quotes. You must output only JSON that matches the provided schema. If data is insufficient, choose "review" with confidence 70-89 and explain briefly in reasons.`;
+const SYSTEM_PROMPT = `You are a strict line-item comparator for construction quotes.
+
+If TRADE == "passive_fire":
+- Use passive fire matching rules exactly as provided.
+
+If TRADE == "electrical":
+- Match items by same electrical work package + same technical intent (rating/spec/class), not by FRR/substrate.
+- Output only JSON matching the provided schema.
+- If data is insufficient, choose "review" with confidence 70-89 and explain briefly in reasons.`;
 
 const GRADING_RULES = `Compare A against each B candidate and pick the best one if it is the same physical scope.
 
+PASSIVE FIRE "same scope" definition:
 "Same scope" means identical service + method + size (±2mm tolerance) + same substrate class and equivalent extras (GIB/Batt/Insulation).
 
 Quantity and rate may differ - that's expected and not a reason to reject.
 
-RULES:
+PASSIVE FIRE RULES:
 - Size tolerance: ±2mm = OK, 3-5mm = review, >5mm = reject
 - Substrate class must match (e.g., "2x13mm GIB wall" ~ "gib2x13")
 - Extras: if B bakes an extra into the base rate, still ACCEPT but include in reasons
 - If two B items split the scope, choose the better one and set match = "review"
+
+ELECTRICAL "same scope" definition (only when TRADE == "electrical"):
+"Same scope" means same package + same key spec signals:
+- Switchboards/panels: same board type (MSB/DB/MCC), similar capacity/rating class when stated, and same included studies (e.g., discrimination studies).
+- Cables: same function (mains/submains/finals/ELV), same or equivalent conductor size/class if stated, same install/terminate intent.
+- Containment: same type (tray/basket/ladder/conduit), same finish/class if stated, and similar support/bracing inclusion.
+- Lighting: same count/type intent; emergency/exit/façade lighting must match as a distinct subset.
+- ELV/security/data: same subsystem (CCTV vs access control vs data outlets), not interchangeable.
+- Seismic bracing: compare allowance count and whether engineering is included.
+
+ELECTRICAL Tolerances:
+- Ratings/spec: exact match = accept; close/unknown = review; materially different class = reject.
+- Brand differences alone are not a reject if performance class is equivalent.
+- If one quote splits a package into multiple lines and the other combines it, choose "review" and explain.
 
 OUTPUT REQUIREMENTS:
 - match: "accept" if confidence ≥90, "review" if 70-89, "reject" if <70

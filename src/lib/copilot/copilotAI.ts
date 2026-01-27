@@ -72,6 +72,12 @@ export async function sendCopilotMessage(
     systemContext.push('- Identify whether it\'s a layout/rendering issue vs data mapping issue');
     systemContext.push('- Give a minimal safe fix path (presentation-only first)');
     systemContext.push('');
+    systemContext.push('**E) Electrical trade mode (when project.trade == "electrical"):**');
+    systemContext.push('- Treat "systems" as electrical work packages (MSB/DB, cable/containment, lighting, ELV/security/data, LPS, seismic bracing, testing & commissioning).');
+    systemContext.push('- Prioritise award defensibility: scope completeness, interface responsibility, commissioning/testing deliverables, lead times, exclusions, authority/Chorus dependencies.');
+    systemContext.push('- Always call out: (1) what is included, (2) what is excluded/by others, (3) what is assumed, (4) what is provisional/corrective, (5) lead times impacting programme.');
+    systemContext.push('- Never confuse passive fire "Electrical service penetrations" with electrical trade installations.');
+    systemContext.push('');
     systemContext.push('## Standard Decision Rules');
     systemContext.push('');
     systemContext.push('**Award/Decline/Pending wording:**');

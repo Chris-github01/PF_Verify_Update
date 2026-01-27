@@ -121,6 +121,12 @@ IMPORTANT:
 - Skip grand totals
 - Calculate rate as total/qty if not explicitly shown
 
+Additional guidance for ELECTRICAL quotes:
+- Electrical proposals often contain section-level subtotals (e.g., "Electrical TOTAL", "Security & Data TOTAL", "Cable Tray TOTAL") — do NOT extract those as line items.
+- Extract the underlying package lines inside each section (e.g., "Switchboard Panels", "Cable-Power (Installed Terminated)", "Lightning Protection Level 4", "Access Control", "CCTV", "Preliminary and General Overheads", "Seismic Bracing Materials & Installation", "Seismic Engineering").
+- If a quote includes corrections/credits (e.g., "Cable supply price error", "Removal of exit lighting ... -$X"), extract them as line items with negative totals when shown.
+- Preserve the section name if visible (Electrical, Security & Data, Cable Tray, Corrections, etc.).
+
 Return JSON format:
 {
   "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string"}],
