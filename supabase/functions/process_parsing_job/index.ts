@@ -386,7 +386,8 @@ Deno.serve(async (req: Request) => {
             status: 'pending',
             total_amount: parsedData.totals?.grandTotal || 0,
             created_by: typedJob.user_id,
-            revision_number: revisionNumber
+            revision_number: revisionNumber,
+            trade: typedJob.trade || 'passive_fire'
           })
           .select()
           .single();
