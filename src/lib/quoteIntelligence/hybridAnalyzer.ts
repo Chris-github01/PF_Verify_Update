@@ -39,26 +39,39 @@ interface QuoteItemData {
 export async function analyzeQuoteIntelligenceHybrid(
   projectId: string,
   dashboardMode: DashboardMode = 'original',
-  originalQuoteIdsForComparison?: string[]
+  originalQuoteIdsForComparison?: string[],
+  trade?: string
 ): Promise<QuoteIntelligenceAnalysis> {
-  console.log('🔍 [QuoteIntelligence] Starting analysis:', { projectId, dashboardMode, originalQuoteIdsForComparison });
+  console.log('🔍 [QuoteIntelligence] Starting analysis:', { projectId, dashboardMode, originalQuoteIdsForComparison, trade });
 
   let quotesData: QuoteData[] = [];
 
   // When in revisions mode with original quotes selected for comparison
   if (dashboardMode === 'revisions' && originalQuoteIdsForComparison && originalQuoteIdsForComparison.length > 0) {
     // Fetch BOTH revision quotes AND selected original quotes
+    let revisionsQuery = supabase
+      .from('quotes')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('is_selected', true)
+      .gt('revision_number', 1);
+
+    if (trade) {
+      revisionsQuery = revisionsQuery.eq('trade', trade);
+    }
+
+    let originalsQuery = supabase
+      .from('quotes')
+      .select('*')
+      .in('id', originalQuoteIdsForComparison);
+
+    if (trade) {
+      originalsQuery = originalsQuery.eq('trade', trade);
+    }
+
     const [revisionsResult, originalsResult] = await Promise.all([
-      supabase
-        .from('quotes')
-        .select('*')
-        .eq('project_id', projectId)
-        .eq('is_selected', true)
-        .gt('revision_number', 1),
-      supabase
-        .from('quotes')
-        .select('*')
-        .in('id', originalQuoteIdsForComparison)
+      revisionsQuery,
+      originalsQuery
     ]);
 
     if (revisionsResult.error) {
@@ -83,6 +96,10 @@ export async function analyzeQuoteIntelligenceHybrid(
       .eq('project_id', projectId)
       .eq('is_latest', true)
       .eq('is_selected', true);
+
+    if (trade) {
+      query = query.eq('trade', trade);
+    }
 
     if (dashboardMode === 'original') {
       query = query.eq('revision_number', 1);

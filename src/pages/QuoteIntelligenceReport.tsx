@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileDown, Printer, AlertTriangle, Target, TrendingUp, Shield, Loader2, Download, AlertCircle, Star, CheckCircle, ArrowRight, GitCompare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrade } from '../lib/tradeContext';
 import * as XLSX from 'xlsx';
 import { analyzeQuoteIntelligence } from '../lib/quoteIntelligence/analyzer';
 import type { QuoteIntelligenceAnalysis, RedFlag } from '../types/quoteIntelligence.types';
@@ -23,6 +24,7 @@ interface OriginalQuote {
 }
 
 export default function QuoteIntelligenceReport({ projectId, projectName, onNavigateBack, onNavigateNext, dashboardMode = 'original', onQuotesSelected }: QuoteIntelligenceReportProps) {
+  const { currentTrade } = useTrade();
   const [analysis, setAnalysis] = useState<QuoteIntelligenceAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +52,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         .from('quotes')
         .select('id, supplier_name, quote_reference')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .eq('is_selected', true)
         .or('revision_number.is.null,revision_number.eq.1')
         .order('supplier_name', { ascending: true });
@@ -70,7 +73,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         ? selectedOriginalQuotes
         : undefined;
 
-      const result = await analyzeQuoteIntelligence(projectId, dashboardMode, quoteIdsToAnalyze);
+      const result = await analyzeQuoteIntelligence(projectId, dashboardMode, quoteIdsToAnalyze, currentTrade);
       setAnalysis(result);
 
       // Fetch actual item counts for each quote

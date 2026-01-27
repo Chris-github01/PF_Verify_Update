@@ -5,7 +5,8 @@ import { analyzeQuoteIntelligenceHybrid } from './hybridAnalyzer';
 export async function analyzeQuoteIntelligence(
   projectId: string,
   dashboardMode?: DashboardMode,
-  quoteIds?: string[]
+  quoteIds?: string[],
+  trade?: string
 ): Promise<QuoteIntelligenceAnalysis> {
-  return analyzeQuoteIntelligenceHybrid(projectId, dashboardMode, quoteIds);
+  return analyzeQuoteIntelligenceHybrid(projectId, dashboardMode, quoteIds, trade);
 }

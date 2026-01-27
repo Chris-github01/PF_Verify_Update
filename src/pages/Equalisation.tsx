@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Download, TrendingUp, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrade } from '../lib/tradeContext';
 import { getModelRateProvider } from '../lib/modelRate/modelRateProvider';
 import { compareAgainstModelHybrid } from '../lib/comparison/hybridCompareAgainstModel';
 import { buildEqualisation } from '../lib/equalisation/buildEqualisation';
@@ -16,6 +17,7 @@ interface EqualisationProps {
 }
 
 export default function Equalisation({ projectId, onNavigateBack, onNavigateNext, preselectedQuoteIds = [] }: EqualisationProps) {
+  const { currentTrade } = useTrade();
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [equalisationResult, setEqualisationResult] = useState<EqualisationResult | null>(null);
   const [mode, setMode] = useState<EqualisationMode>('PEER_MEDIAN');
@@ -50,6 +52,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         .from('quotes')
         .select('id, supplier_name')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .eq('is_selected', true)
         .order('supplier_name');
 
