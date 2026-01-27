@@ -120,7 +120,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
     } finally {
       setLoading(false);
     }
-  }, [projectId, preselectedQuoteIds]);
+  }, [projectId, preselectedQuoteIds, currentTrade]);
 
   const calculateEqualisation = useCallback(() => {
     if (comparisonData.length === 0) {

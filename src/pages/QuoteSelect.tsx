@@ -37,7 +37,7 @@ export default function QuoteSelect({
 
   useEffect(() => {
     loadQuotes();
-  }, [projectId, dashboardMode]);
+  }, [projectId, dashboardMode, currentTrade]);
 
   const loadQuotes = async () => {
     setLoading(true);

@@ -225,7 +225,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
 
   useEffect(() => {
     loadQuotes();
-  }, [projectId, dashboardMode]);
+  }, [projectId, dashboardMode, currentTrade]);
 
   useEffect(() => {
     if (selectedQuote) {

@@ -116,7 +116,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     if (dashboardMode === 'revisions') {
       loadOriginalQuotes();
     }
-  }, [projectId, dashboardMode]);
+  }, [projectId, dashboardMode, currentTrade]);
 
   useEffect(() => {
     buildMatrix();
