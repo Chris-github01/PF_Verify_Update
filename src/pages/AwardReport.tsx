@@ -37,6 +37,9 @@ export default function AwardReport({
   preselectedQuoteIds = []
 }: AwardReportProps) {
   const { currentTrade } = useTrade();
+
+  console.log('🎯 AwardReport render:', { currentTrade, projectId, reportId, dashboardMode });
+
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [awardSummary, setAwardSummary] = useState<AwardSummary | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
@@ -69,18 +72,24 @@ export default function AwardReport({
   const moreDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Clear state when trade or report changes
+    console.log('🔄 AwardReport useEffect triggered:', { reportId, projectId, currentTrade });
+
+    // Clear ALL state when trade or report changes
+    console.log('🧹 Clearing all report state...');
     setComparisonData([]);
     setAwardSummary(null);
     setAiAnalysis(null);
     setCurrentReportId(null);
     setReportTimestamp('');
     setApprovalData(null);
+    setQuotesMap(new Map());
 
     loadProjectInfo();
     if (reportId) {
+      console.log('📂 Loading specific report:', reportId);
       loadSavedReport(reportId);
     } else {
+      console.log('📂 Loading latest report for trade:', currentTrade);
       loadLatestReport();
     }
   }, [reportId, projectId, currentTrade]);
@@ -171,6 +180,7 @@ export default function AwardReport({
   const loadLatestReport = async () => {
     try {
       setLoading(true);
+      console.log('🔍 Loading latest report for project:', projectId, 'trade:', currentTrade);
 
       const { data: reportData, error: reportError } = await supabase
         .from('award_reports')
@@ -180,6 +190,8 @@ export default function AwardReport({
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      console.log('📊 Latest report result:', { found: !!reportData, reportTrade: reportData?.trade, error: reportError });
 
       if (reportError || !reportData) {
         throw new Error('No report found');
@@ -219,7 +231,7 @@ export default function AwardReport({
   const loadSavedReport = async (reportId: string) => {
     try {
       setLoading(true);
-      console.log('🔍 Loading saved report:', reportId);
+      console.log('🔍 Loading saved report:', reportId, 'for trade:', currentTrade);
 
       const { data: reportData, error: reportError } = await supabase
         .from('award_reports')
@@ -227,7 +239,7 @@ export default function AwardReport({
         .eq('id', reportId)
         .maybeSingle();
 
-      console.log('📊 Report query result:', { reportData, reportError });
+      console.log('📊 Report query result:', { reportData, reportError, reportTrade: reportData?.trade });
 
       if (reportError) {
         console.error('❌ Report query error:', reportError);
@@ -239,11 +251,12 @@ export default function AwardReport({
         throw new Error(`Report not found with ID: ${reportId}. It may have been deleted or you may not have permission to view it.`);
       }
 
-      // Check if report matches current trade
+      // Check if report matches current trade - CRITICAL CHECK
       const reportTrade = reportData.trade || 'passive_fire';
       if (reportTrade !== currentTrade) {
-        console.warn('⚠️ Report trade mismatch:', { reportTrade, currentTrade });
-        throw new Error(`This report is for ${reportTrade} trade. Please switch to ${reportTrade} to view it.`);
+        console.warn('⚠️ BLOCKING REPORT LOAD - Trade mismatch:', { reportTrade, currentTrade, reportId });
+        // Don't load ANY data - just throw and stay in empty state
+        throw new Error(`This report is for ${reportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'} trade, but you're viewing ${currentTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}. Switch trades to view this report.`);
       }
 
       if (reportData.result_json) {
