@@ -224,7 +224,19 @@ export default function AwardReport({
         setQuotesMap(map);
       }
     } catch (error: any) {
-      console.error('Error loading report:', error);
+      console.error('❌ Error in loadLatestReport:', error);
+
+      // CRITICAL: Clear ALL state on ANY error to prevent stale data display
+      console.log('🧹 Clearing all state due to error...');
+      setComparisonData([]);
+      setAwardSummary(null);
+      setAiAnalysis(null);
+      setCurrentReportId(null);
+      setReportTimestamp('');
+      setLoadedReportTrade(null);
+      setApprovalData(null);
+      setQuotesMap(new Map());
+
       onToast?.(error.message || 'Failed to load report', 'error');
     } finally {
       setLoading(false);
@@ -257,10 +269,24 @@ export default function AwardReport({
       // Check if report matches current trade - CRITICAL CHECK
       const reportTrade = reportData.trade || 'passive_fire';
       if (reportTrade !== currentTrade) {
-        console.warn('⚠️ BLOCKING REPORT LOAD - Trade mismatch:', { reportTrade, currentTrade, reportId });
-        // Don't load ANY data - just throw and stay in empty state
+        console.error('🚫🚫🚫 CRITICAL: TRADE MISMATCH DETECTED 🚫🚫🚫');
+        console.error('Report trade:', reportTrade, '| Current trade:', currentTrade);
+        console.error('CLEARING ALL STATE AND BLOCKING RENDER');
+
+        // IMMEDIATELY clear ALL state before throwing
+        setComparisonData([]);
+        setAwardSummary(null);
+        setAiAnalysis(null);
+        setCurrentReportId(null);
+        setReportTimestamp('');
+        setLoadedReportTrade(null);
+        setApprovalData(null);
+        setQuotesMap(new Map());
+
         throw new Error(`This report is for ${reportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'} trade, but you're viewing ${currentTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}. Switch trades to view this report.`);
       }
+
+      console.log('✅ Trade validation passed, loading report data...');
 
       if (reportData.result_json) {
         setComparisonData(reportData.result_json.comparisonData || []);
@@ -287,7 +313,19 @@ export default function AwardReport({
         setQuotesMap(map);
       }
     } catch (error: any) {
-      console.error('Error loading report:', error);
+      console.error('❌ Error in loadSavedReport:', error);
+
+      // CRITICAL: Clear ALL state on ANY error to prevent stale data display
+      console.log('🧹 Clearing all state due to error...');
+      setComparisonData([]);
+      setAwardSummary(null);
+      setAiAnalysis(null);
+      setCurrentReportId(null);
+      setReportTimestamp('');
+      setLoadedReportTrade(null);
+      setApprovalData(null);
+      setQuotesMap(new Map());
+
       onToast?.(error.message || 'Failed to load report', 'error');
     } finally {
       setLoading(false);
