@@ -50,6 +50,7 @@ export default function AwardReport({
   const [recalculating, setRecalculating] = useState(false);
   const [currentReportId, setCurrentReportId] = useState<string | null>(reportId || null);
   const [reportTimestamp, setReportTimestamp] = useState<string>('');
+  const [loadedReportTrade, setLoadedReportTrade] = useState<string | null>(null);
   const [showItemizedDetails, setShowItemizedDetails] = useState(false);
   const [quotesMap, setQuotesMap] = useState<Map<string, string>>(new Map());
   const [showMethodology, setShowMethodology] = useState(false);
@@ -83,6 +84,7 @@ export default function AwardReport({
     setReportTimestamp('');
     setApprovalData(null);
     setQuotesMap(new Map());
+    setLoadedReportTrade(null);
 
     loadProjectInfo();
     if (reportId) {
@@ -205,6 +207,7 @@ export default function AwardReport({
 
       setCurrentReportId(reportData.id);
       setReportTimestamp(reportData.created_at);
+      setLoadedReportTrade(reportData.trade || 'passive_fire');
 
       // Load approval data for this report
       await loadApprovalData(reportData.id);
@@ -267,6 +270,7 @@ export default function AwardReport({
 
       setCurrentReportId(reportData.id);
       setReportTimestamp(reportData.created_at);
+      setLoadedReportTrade(reportData.trade || 'passive_fire');
 
       // Load approval data for this report
       await loadApprovalData(reportData.id);
@@ -841,6 +845,26 @@ export default function AwardReport({
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
               <p className="text-slate-400">Loading report...</p>
+            </div>
+          </div>
+        ) : loadedReportTrade && loadedReportTrade !== currentTrade ? (
+          <div className="flex items-center justify-center min-h-96">
+            <div className="text-center max-w-md">
+              <AlertCircle className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-slate-100 mb-2">Wrong Trade Selected</h3>
+              <p className="text-slate-400 mb-6">
+                This report is for <span className="font-bold text-orange-400">{loadedReportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade,
+                but you're currently viewing <span className="font-bold text-orange-400">{currentTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade.
+              </p>
+              <p className="text-slate-400 mb-6">
+                Switch to {loadedReportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'} trade to view this report, or return to the reports hub.
+              </p>
+              <button
+                onClick={() => onNavigate?.('reports')}
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+              >
+                Back to Reports Hub
+              </button>
             </div>
           </div>
         ) : !comparisonData || comparisonData.length === 0 ? (
