@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Upload, FileUp, X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
+import { useTrade } from '../lib/tradeContext';
 import { parsePDF } from '../lib/parsers/pdfParser';
 import { parseExcel, parseCSV } from '../lib/parsers/excelParser';
 import ImportPreviewNew from '../components/ImportPreviewNew';
@@ -26,6 +27,7 @@ interface ImportQuotesProps {
 
 export default function ImportQuotes({ projectId, onQuotesImported, onNavigateToDashboard, dashboardMode = 'original' }: ImportQuotesProps) {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
   const [useBackgroundParsing, setUseBackgroundParsing] = useState(true);
@@ -67,7 +69,8 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
         const { data: allQuotes, error } = await supabase
           .from('quotes')
           .select('supplier_name, revision_number')
-          .eq('project_id', projectId);
+          .eq('project_id', projectId)
+          .eq('trade', currentTrade);
 
         if (!error && allQuotes) {
           // Filter quotes by revision number, treating NULL as revision 1
@@ -162,6 +165,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
       .from('quotes')
       .select('id, supplier_name, total_amount, items_count')
       .eq('project_id', projectId)
+      .eq('trade', currentTrade)
       .ilike('supplier_name', `${normalizedSupplier}%`);
 
     if (existingQuotes && existingQuotes.length > 0) {

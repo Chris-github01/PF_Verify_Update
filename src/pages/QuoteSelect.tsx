@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrade } from '../lib/tradeContext';
 import type { DashboardMode } from '../App';
 
 interface Quote {
@@ -28,6 +29,7 @@ export default function QuoteSelect({
   onNavigateNext,
   dashboardMode = 'original'
 }: QuoteSelectProps) {
+  const { currentTrade } = useTrade();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,6 +46,7 @@ export default function QuoteSelect({
         .from('quotes')
         .select('*')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrade } from '../lib/tradeContext';
 import { normaliseUnit, normaliseNumber, deriveRate, deriveTotal } from '../lib/normaliser/unitNormaliser';
 import { extractAttributes } from '../lib/normaliser/attributeExtractor';
 import { calculateConfidence, getConfidenceColor, getConfidenceLabel } from '../lib/normaliser/confidenceScorer';
@@ -170,6 +171,7 @@ function AttributesCell({
 }
 
 export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext, dashboardMode = 'original' }: ReviewCleanProps) {
+  const { currentTrade } = useTrade();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [cleanableQuotes, setCleanableQuotes] = useState<Quote[]>([]);
   const [selectedQuote, setSelectedQuote] = useState<string | null>(null);
@@ -239,6 +241,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
       .from('quotes')
       .select('*')
       .eq('project_id', projectId)
+      .eq('trade', currentTrade)
       .eq('is_selected', true)
       .order('created_at', { ascending: false });
 

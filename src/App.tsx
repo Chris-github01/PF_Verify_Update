@@ -246,28 +246,12 @@ function AppContent() {
     }
   }, [projectId]);
 
-  // Reload projects when trade changes (but only if already initialized)
+  // Reload projects when trade changes to refresh quote counts and status for the new trade
   useEffect(() => {
     if (currentOrganisation && initializedForOrgRef.current === currentOrganisation.id) {
-      console.log('🔄 [App] Trade changed to:', currentTrade, '- reloading projects');
+      console.log('🔄 [App] Trade changed to:', currentTrade, '- reloading project stats for new trade view');
       loadAllProjects();
-
-      // Clear selected project if it doesn't belong to the new trade
-      if (projectId) {
-        supabase
-          .from('projects')
-          .select('id, trade')
-          .eq('id', projectId)
-          .maybeSingle()
-          .then(({ data }) => {
-            if (!data || data.trade !== currentTrade) {
-              console.log('🔄 [App] Clearing project selection - project does not match current trade');
-              setProjectId(null);
-              setProjectInfo(null);
-              localStorage.removeItem('passivefire_current_project_id');
-            }
-          });
-      }
+      // Keep the selected project - one project can have data for multiple trades
     }
   }, [currentTrade]);
 
@@ -304,14 +288,13 @@ function AppContent() {
       }
 
       if (savedProjectId && currentOrganisation) {
-        console.log('🔍 [App] Verifying project', savedProjectId, 'belongs to org', currentOrganisation.id, 'and trade', currentTrade);
-        // Verify the project exists, belongs to this organisation, AND matches the current trade
+        console.log('🔍 [App] Verifying project', savedProjectId, 'belongs to org', currentOrganisation.id);
+        // Verify the project exists and belongs to this organisation (projects can have data for all trades)
         const { data: project, error: projectError } = await supabase
           .from('projects')
           .select('id, name, client, reference')
           .eq('id', savedProjectId)
           .eq('organisation_id', currentOrganisation.id)
-          .eq('trade', currentTrade)
           .maybeSingle();
 
         if (projectError) {
@@ -324,8 +307,8 @@ function AppContent() {
           setProjectInfo(project);
           localStorage.setItem('passivefire_current_project_id', project.id);
         } else {
-          console.warn('⚠️ [App] Saved project not found, does not belong to current org, or does not match current trade');
-          // Project doesn't exist, doesn't belong to this org, or wrong trade - clear it
+          console.warn('⚠️ [App] Saved project not found or does not belong to current org');
+          // Project doesn't exist or doesn't belong to this org - clear it
           localStorage.removeItem('passivefire_current_project_id');
           setProjectId(null);
           setProjectInfo(null);
@@ -437,7 +420,6 @@ function AppContent() {
       .from('projects')
       .select('id, name, client, reference, updated_at, approved_quote_id, trade')
       .eq('organisation_id', currentOrganisation.id)
-      .eq('trade', currentTrade)
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -454,7 +436,8 @@ function AppContent() {
           const { data: quotes } = await supabase
             .from('quotes')
             .select('id, status')
-            .eq('project_id', p.id);
+            .eq('project_id', p.id)
+            .eq('trade', currentTrade);
 
           const hasQuotes = quotes && quotes.length > 0;
           const allQuotesProcessed = quotes && quotes.every(q => q.status === 'processed' || q.status === 'ready');
@@ -472,6 +455,7 @@ function AppContent() {
             .from('award_reports')
             .select('id, generated_at, status, result_json')
             .eq('project_id', p.id)
+            .eq('trade', currentTrade)
             .eq('status', 'ready')
             .order('generated_at', { ascending: false })
             .limit(1)

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Download, MoreHorizontal, RefreshCw, ChevronDown, Award, Shield, TrendingUp, BarChart3, Printer, FileSpreadsheet, Trash2, Edit3, AlertCircle, CheckCircle, Scale, DollarSign, Activity, CheckSquare, Square, ArrowRight, ChevronRight, Target, FileText, AlertOctagon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrade } from '../lib/tradeContext';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { EqualisationMode } from '../types/equalisation.types';
 import type { AwardSummary } from '../types/award.types';
@@ -35,6 +36,7 @@ export default function AwardReport({
   dashboardMode = 'original',
   preselectedQuoteIds = []
 }: AwardReportProps) {
+  const { currentTrade } = useTrade();
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [awardSummary, setAwardSummary] = useState<AwardSummary | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
@@ -189,7 +191,8 @@ export default function AwardReport({
       const { data: quotesData } = await supabase
         .from('quotes')
         .select('id, supplier_name')
-        .eq('project_id', reportData.project_id);
+        .eq('project_id', reportData.project_id)
+        .eq('trade', currentTrade);
 
       if (quotesData) {
         const map = new Map<string, string>();
@@ -242,7 +245,8 @@ export default function AwardReport({
       const { data: quotesData } = await supabase
         .from('quotes')
         .select('id, supplier_name')
-        .eq('project_id', reportData.project_id);
+        .eq('project_id', reportData.project_id)
+        .eq('trade', currentTrade);
 
       if (quotesData) {
         const map = new Map<string, string>();

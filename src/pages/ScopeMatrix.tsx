@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, Filter, X, AlertCircle, Lightbulb, Info, ChevronDown, ChevronUp, CheckSquare, Square, ArrowLeft, ArrowRight, FileSpreadsheet, GitCompare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrade } from '../lib/tradeContext';
 import { getModelRateProvider } from '../lib/modelRate/modelRateProvider';
 import { compareAgainstModelHybrid } from '../lib/comparison/hybridCompareAgainstModel';
 import type { ComparisonRow, MatrixRow, MatrixCell, MatrixFilters } from '../types/comparison.types';
@@ -66,6 +67,7 @@ interface SupplierDetail {
 }
 
 export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext, dashboardMode = 'original', preselectedQuoteIds = [] }: ScopeMatrixProps) {
+  const { currentTrade } = useTrade();
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [matrixRows, setMatrixRows] = useState<MatrixRow[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
@@ -133,6 +135,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         .from('quotes')
         .select('id, supplier_name, quote_reference, total_amount, items_count, revision_number')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .eq('is_selected', true)
         .or('revision_number.is.null,revision_number.eq.1')
         .order('supplier_name');
@@ -180,6 +183,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         .from('quotes')
         .select('id, supplier_name, quote_reference, total_amount, items_count, revision_number')
         .eq('project_id', projectId)
+        .eq('trade', currentTrade)
         .eq('is_selected', true)
         .order('supplier_name');
 
