@@ -562,7 +562,7 @@ export default function AwardReportEnhanced({
         suppliers.forEach((supplier, supplierIdx) => {
           const supplierData = row.suppliers?.[supplier.supplierName];
 
-          if (supplierData && supplierData.unitPrice !== null && !isNaN(supplierData.unitPrice)) {
+          if (supplierData) {
             const qty = supplierData.quantity !== null && supplierData.quantity !== undefined
               ? supplierData.quantity
               : 'N/A';
@@ -573,8 +573,20 @@ export default function AwardReportEnhanced({
               ? supplierData.normalisedUnit
               : 'N/A';
 
-            rowData.push(qty, unit, normUnit, supplierData.unitPrice, supplierData.total);
-            supplierTotals[supplierIdx] += supplierData.total || 0;
+            // For lump sum items (null prices), show "Included" instead of N/A
+            const unitPrice = supplierData.unitPrice !== null && supplierData.unitPrice !== undefined && !isNaN(supplierData.unitPrice)
+              ? supplierData.unitPrice
+              : 'Included';
+            const total = supplierData.total !== null && supplierData.total !== undefined && !isNaN(supplierData.total)
+              ? supplierData.total
+              : 'Included';
+
+            rowData.push(qty, unit, normUnit, unitPrice, total);
+
+            // Only add to totals if it's a numeric value
+            if (typeof supplierData.total === 'number' && !isNaN(supplierData.total)) {
+              supplierTotals[supplierIdx] += supplierData.total;
+            }
           } else {
             rowData.push('N/A', 'N/A', 'N/A', 'N/A', 'N/A');
           }

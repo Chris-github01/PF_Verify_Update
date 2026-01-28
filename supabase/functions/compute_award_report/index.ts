@@ -191,8 +191,8 @@ Deno.serve(async (req: Request) => {
       };
 
       row.suppliers[baselineQuote.supplier_name] = {
-        unitPrice: Number(baseItem.unit_price),
-        total: Number(baseItem.total_price),
+        unitPrice: baseItem.unit_price !== null && baseItem.unit_price !== undefined ? Number(baseItem.unit_price) : null,
+        total: baseItem.total_price !== null && baseItem.total_price !== undefined ? Number(baseItem.total_price) : null,
         originalDescription: baseItem.description,
         quantity: Number(baseItem.quantity),
         unit: baseItem.unit || "",
@@ -219,8 +219,8 @@ Deno.serve(async (req: Request) => {
         if (matchedItem) {
           usedItemIds.add(matchedItem.id);
           row.suppliers[otherQuote.supplier_name] = {
-            unitPrice: Number(matchedItem.unit_price),
-            total: Number(matchedItem.total_price),
+            unitPrice: matchedItem.unit_price !== null && matchedItem.unit_price !== undefined ? Number(matchedItem.unit_price) : null,
+            total: matchedItem.total_price !== null && matchedItem.total_price !== undefined ? Number(matchedItem.total_price) : null,
             originalDescription: matchedItem.description,
             quantity: Number(matchedItem.quantity),
             unit: matchedItem.unit || "",
@@ -288,8 +288,8 @@ Deno.serve(async (req: Request) => {
           };
 
           row.suppliers[otherQuote.supplier_name] = {
-            unitPrice: Number(item.unit_price),
-            total: Number(item.total_price),
+            unitPrice: item.unit_price !== null && item.unit_price !== undefined ? Number(item.unit_price) : null,
+            total: item.total_price !== null && item.total_price !== undefined ? Number(item.total_price) : null,
             originalDescription: item.description,
             quantity: Number(item.quantity),
             unit: item.unit || "",
