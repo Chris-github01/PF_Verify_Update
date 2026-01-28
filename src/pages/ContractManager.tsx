@@ -194,12 +194,11 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
       console.log('🔍 Contract Manager: Loading data for trade:', currentTrade, 'approvedQuoteId:', approvedQuoteId);
 
       if (approvedQuoteId) {
-        // CRITICAL: Filter by current trade to ensure trade isolation
+        // First, fetch the approved quote without trade filter
         const { data: approvedQuote, error: quoteError } = await supabase
           .from('quotes')
           .select('supplier_name, total_amount, updated_at, organisation_id, trade')
           .eq('id', approvedQuoteId)
-          .eq('trade', currentTrade)
           .maybeSingle();
 
         console.log('📊 Contract Manager: Approved quote result:', {
@@ -209,7 +208,10 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           error: quoteError
         });
 
-        if (approvedQuote) {
+        // Check if the quote matches the current trade (only for specific trade modules, not "All Modules")
+        const tradeMatches = currentTrade === 'all_modules' || approvedQuote?.trade === currentTrade;
+
+        if (approvedQuote && tradeMatches) {
           // Try to find supplier details from suppliers table
           let supplierContact = null;
           let supplierEmail = null;
@@ -294,8 +296,15 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           setScopeSystems([]);
         }
         } else {
-          // CRITICAL: Quote doesn't match current trade - clear all data
-          console.log('⚠️ Contract Manager: No approved quote found for trade:', currentTrade);
+          // Quote not found or doesn't match current trade
+          if (approvedQuote && !tradeMatches) {
+            console.log('⚠️ Contract Manager: Quote trade mismatch:', {
+              quoteTrade: approvedQuote.trade,
+              currentTrade
+            });
+          } else {
+            console.log('⚠️ Contract Manager: No approved quote found');
+          }
           setAwardInfo(null);
           setIsApproved(false);
           setScopeSystems([]);

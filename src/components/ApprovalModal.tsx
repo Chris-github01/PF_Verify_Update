@@ -114,7 +114,9 @@ export default function ApprovalModal({
 
       // Get the quote ID for the selected supplier
       console.log('🔍 Fetching quote for supplier:', selectedSupplier);
-      const { data: quoteData, error: quoteError } = await supabase
+
+      // Try exact match first
+      let { data: quoteData, error: quoteError } = await supabase
         .from('quotes')
         .select('id')
         .eq('project_id', projectId)
@@ -124,10 +126,34 @@ export default function ApprovalModal({
         .limit(1)
         .maybeSingle();
 
+      // If exact match fails, try case-insensitive ILIKE
+      if (!quoteData && !quoteError) {
+        console.log('🔍 Trying case-insensitive match for supplier:', selectedSupplier);
+        const ilikeSafeSupplier = selectedSupplier.replace(/[%_]/g, '\\$&');
+        const result = await supabase
+          .from('quotes')
+          .select('id')
+          .eq('project_id', projectId)
+          .ilike('supplier_name', ilikeSafeSupplier)
+          .eq('is_latest', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        quoteData = result.data;
+        quoteError = result.error;
+      }
+
       if (quoteError) {
         console.error('❌ Error fetching quote:', quoteError);
         throw new Error(`Failed to find quote for supplier: ${quoteError.message}`);
       }
+
+      if (!quoteData) {
+        console.error('❌ No quote found for supplier:', selectedSupplier);
+        throw new Error(`No quote found for supplier "${selectedSupplier}". Please ensure quotes have been imported for this supplier.`);
+      }
+
       console.log('✅ Quote data fetched:', quoteData);
 
       // Create or update approval record
