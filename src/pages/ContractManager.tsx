@@ -536,7 +536,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             unit: item.unit || 'N/A'
           }));
 
-          const defaultData = getDefaultJuniorPackData();
+          const defaultData = getDefaultJuniorPackData(currentTrade);
 
           console.log('Building junior data object...');
           const juniorData = {

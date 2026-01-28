@@ -1059,38 +1059,123 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
   `.trim();
 }
 
-export function getDefaultJuniorPackData(): Partial<JuniorPackData> {
+function getPassiveFireChecklists() {
+  return [
+    {
+      title: 'Pre-Start Checklist',
+      items: [
+        'Site induction completed',
+        'SWMS reviewed and signed',
+        'All required materials and equipment on site'
+      ]
+    },
+    {
+      title: 'Installation Checklist',
+      items: [
+        'Verify penetration dimensions against drawings',
+        'Check FRR requirements',
+        'Apply products as per manufacturer specifications'
+      ]
+    },
+    {
+      title: 'Quality Control',
+      items: [
+        'Photograph all completed penetrations',
+        'Complete QA documentation for each penetration',
+        'Ensure PS3 documentation is prepared'
+      ]
+    }
+  ];
+}
+
+function getElectricalChecklists() {
+  return [
+    {
+      title: 'Pre-Start Checklist (Electrical)',
+      items: [
+        'Site induction completed (project + electrical-specific hazards)',
+        'Electrical SWMS reviewed, approved, and signed',
+        'Electrical supervisor and licence details verified',
+        'Approved electrical drawings and latest revisions available on site',
+        'Temporary power arrangements confirmed and compliant (AS/NZS 3012)',
+        'Isolation procedures reviewed and lock-out/tag-out systems in place',
+        'Required permits approved (hot works, live works if applicable)',
+        'Materials and equipment on site match approved submittals',
+        'Long-lead items confirmed (switchboards, luminaires, control gear)',
+        'Interface responsibilities confirmed (BMS, fire alarm, UPS/generator, security, data)'
+      ]
+    },
+    {
+      title: 'Installation Checklist (Electrical Works)',
+      items: [
+        'Electrical installation matches approved drawings and specifications',
+        'Correct cable types, sizes, and installation methods used',
+        'Cable containment installed correctly and adequately supported',
+        'Earthing and bonding installed and tested',
+        'Switchboards and distribution boards installed, labelled, and secured',
+        'Circuit protection devices installed as specified (MCB/MCCB/RCD/RCBO)',
+        'IP ratings suitable for installed locations',
+        'Emergency lighting and exit signage installed where required',
+        'Lightning protection system installed (if applicable)',
+        'Seismic bracing installed in accordance with drawings/engineering (NZ & AU seismic regions)',
+        'No unauthorised deviations from approved scope without written approval'
+      ]
+    },
+    {
+      title: 'Quality Control & Testing',
+      items: [
+        'Visual inspection completed for all electrical installations',
+        'Electrical testing completed in accordance with AS/NZS 3000',
+        'Test results recorded (continuity, insulation resistance, polarity, RCD tests)',
+        'Switchboard testing and verification completed',
+        'Emergency lighting testing completed (functional + duration where required)',
+        'Interfaces tested (fire alarm power, BMS inputs, UPS/generator changeover if applicable)',
+        'Defects identified, recorded, and rectified',
+        'QA documentation completed and internally reviewed'
+      ]
+    },
+    {
+      title: 'Documentation & Certification (Critical)',
+      items: [
+        'Certificates of Compliance (CoC) prepared (NZ)',
+        'Electrical Safety Certificates (ESC) prepared where applicable (NZ)',
+        'Test certificates compiled and signed',
+        'As-built drawings completed and issued',
+        'Updated switchboard schedules and circuit lists provided',
+        'O&M manuals compiled (including warranties and datasheets)',
+        'Manufacturer warranties provided for major equipment',
+        'PS3 Electrical Producer Statement prepared (if required by contract / NZ councils)'
+      ]
+    },
+    {
+      title: 'Final Handover & Close-Out',
+      items: [
+        'All electrical scope items completed',
+        'All variations agreed and documented',
+        'All exclusions and "by others" items formally closed or transferred',
+        'Site left clean and safe',
+        'Electrical systems demonstrated to main contractor/client',
+        'Final documentation pack submitted and accepted',
+        'Handover sign-off obtained'
+      ]
+    }
+  ];
+}
+
+export function getDefaultJuniorPackData(trade?: string): Partial<JuniorPackData> {
+  // Determine checklists based on trade
+  const checklists = trade === 'electrical'
+    ? getElectricalChecklists()
+    : getPassiveFireChecklists();
+
   return {
     safetyNotes: [
       'All personnel must complete site induction before commencing work',
       'Use appropriate PPE: Hard hat, safety glasses, high-vis vest, safety boots',
-      'Follow manufacturer\'s instructions for all fire protection materials'
+      trade === 'electrical'
+        ? 'Follow AS/NZS 3000 requirements for all electrical installations'
+        : 'Follow manufacturer\'s instructions for all fire protection materials'
     ],
-    checklists: [
-      {
-        title: 'Pre-Start Checklist',
-        items: [
-          'Site induction completed',
-          'SWMS reviewed and signed',
-          'All required materials and equipment on site'
-        ]
-      },
-      {
-        title: 'Installation Checklist',
-        items: [
-          'Verify penetration dimensions against drawings',
-          'Check FRR requirements',
-          'Apply products as per manufacturer specifications'
-        ]
-      },
-      {
-        title: 'Quality Control',
-        items: [
-          'Photograph all completed penetrations',
-          'Complete QA documentation for each penetration',
-          'Ensure PS3 documentation is prepared'
-        ]
-      }
-    ]
+    checklists
   };
 }
