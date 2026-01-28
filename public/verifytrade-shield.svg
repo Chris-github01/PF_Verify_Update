@@ -1,0 +1,88 @@
+<svg width="400" height="480" viewBox="0 0 400 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shield base shape with 3D effect -->
+  <defs>
+    <linearGradient id="topLeftGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5DADE2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2E86AB;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="topRightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1B4F72;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0E2C40;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bottomLeftGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A8D08D;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7FB069;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bottomRightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A9D5F;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2D6A40;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Shield outline path -->
+  <path d="M 200 30 Q 90 40 70 60 L 70 250 Q 70 350 200 450 Q 330 350 330 250 L 330 60 Q 310 40 200 30 Z"
+        fill="#0E2C40" stroke="none"/>
+
+  <!-- Top left quadrant (Light Blue - Fire) -->
+  <path d="M 200 30 Q 90 40 70 60 L 70 250 Q 90 240 130 210 Q 160 185 200 155 L 200 30 Z"
+        fill="url(#topLeftGrad)"/>
+
+  <!-- Top right quadrant (Dark Blue - Water) -->
+  <path d="M 200 30 Q 310 40 330 60 L 330 250 Q 310 240 270 210 Q 240 185 200 155 L 200 30 Z"
+        fill="url(#topRightGrad)"/>
+
+  <!-- Bottom left quadrant (Light Green - Gear) -->
+  <path d="M 200 155 Q 160 185 130 210 Q 90 240 70 250 L 70 250 Q 70 350 200 450 L 200 295 Q 180 275 160 260 Q 140 245 130 235 Q 90 240 130 210 Q 160 185 200 155 Z"
+        fill="url(#bottomLeftGrad)"/>
+
+  <!-- Bottom right quadrant (Dark Green - Leaf) -->
+  <path d="M 200 155 Q 240 185 270 210 Q 310 240 330 250 L 330 250 Q 330 350 200 450 L 200 295 Q 220 275 240 260 Q 260 245 270 235 Q 310 240 270 210 Q 240 185 200 155 Z"
+        fill="url(#bottomRightGrad)"/>
+
+  <!-- Curved dividing lines (white) -->
+  <path d="M 200 30 Q 160 185 70 250" stroke="white" stroke-width="6" fill="none" opacity="0.9"/>
+  <path d="M 200 155 Q 180 275 200 450" stroke="white" stroke-width="6" fill="none" opacity="0.9"/>
+
+  <!-- Fire icon (top left) -->
+  <g transform="translate(130, 110)">
+    <path d="M 20 0 Q 15 10 18 20 Q 20 30 25 35 Q 30 30 32 20 Q 34 10 30 0 Q 28 8 25 10 Q 23 8 20 0 Z"
+          fill="white"/>
+    <path d="M 15 12 Q 12 18 14 25 Q 16 32 20 35 Q 24 32 26 25 Q 28 18 25 12 Q 24 16 22 18 Q 20 16 15 12 Z"
+          fill="white" opacity="0.9"/>
+  </g>
+
+  <!-- Water droplet icon (top right) -->
+  <g transform="translate(245, 125)">
+    <path d="M 20 5 Q 15 15 15 25 Q 15 35 20 40 Q 25 35 25 25 Q 25 15 20 5 Z"
+          fill="white"/>
+    <ellipse cx="18" cy="28" rx="3" ry="5" fill="white" opacity="0.3"/>
+  </g>
+
+  <!-- Gear/cog icon (bottom left) -->
+  <g transform="translate(150, 310)">
+    <circle cx="20" cy="20" r="15" fill="white"/>
+    <circle cx="20" cy="20" r="8" fill="url(#bottomLeftGrad)"/>
+    <!-- Gear teeth -->
+    <rect x="18" y="3" width="4" height="6" fill="white"/>
+    <rect x="18" y="31" width="4" height="6" fill="white"/>
+    <rect x="3" y="18" width="6" height="4" fill="white"/>
+    <rect x="31" y="18" width="6" height="4" fill="white"/>
+    <rect x="8" y="8" width="4" height="4" fill="white" transform="rotate(45 20 20)"/>
+    <rect x="28" y="8" width="4" height="4" fill="white" transform="rotate(45 20 20)"/>
+    <rect x="8" y="28" width="4" height="4" fill="white" transform="rotate(45 20 20)"/>
+    <rect x="28" y="28" width="4" height="4" fill="white" transform="rotate(45 20 20)"/>
+  </g>
+
+  <!-- Leaf icon (bottom right) -->
+  <g transform="translate(230, 330)">
+    <path d="M 10 35 Q 8 20 15 10 Q 22 2 30 5 Q 25 15 20 22 Q 15 28 10 35 Z"
+          fill="white"/>
+    <path d="M 10 35 Q 15 28 20 22" stroke="white" stroke-width="1.5" fill="none" opacity="0.6"/>
+  </g>
+
+  <!-- 3D Shield edge highlights -->
+  <path d="M 200 30 Q 90 40 70 60 L 75 65 Q 95 45 200 35 Z"
+        fill="white" opacity="0.15"/>
+  <path d="M 200 30 Q 310 40 330 60 L 325 65 Q 305 45 200 35 Z"
+        fill="white" opacity="0.1"/>
+</svg>
