@@ -573,18 +573,18 @@ export default function AwardReportEnhanced({
               ? supplierData.normalisedUnit
               : 'N/A';
 
-            // For lump sum items (null prices), show "Included" instead of N/A
-            const unitPrice = supplierData.unitPrice !== null && supplierData.unitPrice !== undefined && !isNaN(supplierData.unitPrice)
+            // For lump sum detail items (0 or null prices), show "Included" instead of the price
+            const unitPrice = supplierData.unitPrice !== null && supplierData.unitPrice !== undefined && !isNaN(supplierData.unitPrice) && supplierData.unitPrice !== 0
               ? supplierData.unitPrice
-              : 'Included';
-            const total = supplierData.total !== null && supplierData.total !== undefined && !isNaN(supplierData.total)
+              : (supplierData.unitPrice === 0 ? 'Included' : 'Included');
+            const total = supplierData.total !== null && supplierData.total !== undefined && !isNaN(supplierData.total) && supplierData.total !== 0
               ? supplierData.total
-              : 'Included';
+              : (supplierData.total === 0 ? 'Included' : 'Included');
 
             rowData.push(qty, unit, normUnit, unitPrice, total);
 
-            // Only add to totals if it's a numeric value
-            if (typeof supplierData.total === 'number' && !isNaN(supplierData.total)) {
+            // Only add to totals if it's a numeric value and not zero
+            if (typeof supplierData.total === 'number' && !isNaN(supplierData.total) && supplierData.total !== 0) {
               supplierTotals[supplierIdx] += supplierData.total;
             }
           } else {
