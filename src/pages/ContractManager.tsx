@@ -804,8 +804,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           amount: (awardInfo.total_amount * percentages[idx]) / 100
         }));
 
-        // Get default risks from generator
-        const defaults = getDefaultSeniorReportData();
+        // Get default risks from generator based on current trade
+        const defaults = getDefaultSeniorReportData(currentTrade);
 
         const retentionDescription = retentionMethod === 'flat'
           ? `${retentionPercentage}% standard retention held until practical completion`

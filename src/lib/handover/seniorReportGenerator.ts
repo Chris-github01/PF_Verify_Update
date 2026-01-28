@@ -1607,7 +1607,110 @@ function getChartColor(index: number): string {
   return colors[index % colors.length];
 }
 
-export function getDefaultSeniorReportData(): Partial<SeniorReportData> {
+function getPassiveFireRisks() {
+  return [
+    {
+      category: 'Programme Risk',
+      description: 'Delays in preceding trades may impact fire stopping schedule',
+      mitigation: 'Weekly coordination meetings, early warning system, float buffer in programme',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Scope Clarity',
+      description: 'Potential for additional penetrations not shown on drawings',
+      mitigation: 'Allowance included for additional works, variation process established',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Quality & Compliance',
+      description: 'Non-compliant installations could fail fire engineer inspection',
+      mitigation: 'Site supervision, QA checks, photo documentation, regular inspections',
+      severity: 'high' as const
+    },
+    {
+      category: 'Commercial',
+      description: 'Payment delays or retention release disputes',
+      mitigation: 'Clear payment terms agreed, retention bond option, regular invoice tracking',
+      severity: 'low' as const
+    },
+    {
+      category: 'Access & Coordination',
+      description: 'Access limitations due to concurrent trades',
+      mitigation: 'Access equipment allowance, coordination with other trades, flexible resourcing',
+      severity: 'medium' as const
+    }
+  ];
+}
+
+function getElectricalRisks() {
+  return [
+    {
+      category: 'Programme Risk',
+      description: 'Delays to preceding trades (structure, walls, ceilings, services rough-in) may delay electrical installation, testing, and commissioning activities',
+      mitigation: 'Integrated programme with float allowances, early trade coordination meetings, milestone tracking for switchboards and long-lead items, staged testing and partial commissioning where feasible',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Scope Clarity',
+      description: 'Electrical scope gaps or ambiguities (e.g. builders works, trenching, authority charges, ELV/security boundaries, temporary power, fibre by utility) may result in variations or disputes',
+      mitigation: 'Detailed scope review against drawings and specifications, clear inclusions/exclusions schedule, interface responsibility matrix agreed pre-award, formal variation process established',
+      severity: 'high' as const
+    },
+    {
+      category: 'Quality & Compliance',
+      description: 'Non-compliant electrical installations may fail inspection, testing, or certification requirements under AS/NZS 3000',
+      mitigation: 'Licensed supervision, inspection and testing in accordance with AS/NZS 3000, QA checklists, internal audits, documented test results, staged inspections prior to concealment',
+      severity: 'high' as const
+    },
+    {
+      category: 'Testing & Commissioning',
+      description: 'Incomplete testing, commissioning, or documentation (test sheets, DB schedules, CoC/ESC) may delay practical completion and handover',
+      mitigation: 'Commissioning plan agreed early, progressive testing regime, dedicated commissioning resources, early preparation of certification and as-built documentation',
+      severity: 'high' as const
+    },
+    {
+      category: 'Interface Risk',
+      description: 'Unclear responsibility at interfaces (fire alarm power, BMS controls, UPS/generator changeover, mechanical plant isolators, security/data systems) may cause delays or rework',
+      mitigation: 'Interface matrix agreed with all services trades, coordination workshops, documented boundary responsibilities, witnessed interface testing',
+      severity: 'high' as const
+    },
+    {
+      category: 'Supply Chain & Lead Times',
+      description: 'Long lead times for switchboards, luminaires, control gear, or specialist equipment may impact programme',
+      mitigation: 'Early procurement, confirmed lead times at award, approved alternatives where acceptable, expediting strategies and programme resequencing',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Access & Coordination',
+      description: 'Restricted access due to concurrent trades or late ceiling/wall closures may impact installation productivity',
+      mitigation: 'Access planning, coordination with other trades, staged access zones, allowance for access equipment (EWPs/scissor lifts), flexible resourcing',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Commercial',
+      description: 'Payment delays, retention release disputes, or variation valuation disagreements may impact cash flow',
+      mitigation: 'Clear payment terms agreed, timely claim submission, variation tracking, retention provisions documented, regular commercial reviews',
+      severity: 'low' as const
+    },
+    {
+      category: 'Authority & Utility Dependencies',
+      description: 'Delays or changes from power authorities or utility providers (e.g. metering, incoming supply, fibre) may impact energisation and commissioning',
+      mitigation: 'Early engagement with authorities, responsibility clearly defined, authority scope excluded or included explicitly, programme allowances for approvals',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Health & Safety',
+      description: 'Electrical works present risks including live work, isolation failures, or temporary power hazards',
+      mitigation: 'Approved SWMS, strict isolation and lock-out/tag-out procedures, compliance with AS/NZS 3012, regular safety audits and toolbox talks',
+      severity: 'high' as const
+    }
+  ];
+}
+
+export function getDefaultSeniorReportData(trade?: string): Partial<SeniorReportData> {
+  // Determine risks based on trade
+  const risks = trade === 'electrical' ? getElectricalRisks() : getPassiveFireRisks();
+
   return {
     keyTerms: [
       { term: 'Payment Terms', value: '20th following month, 22 working days' },
@@ -1616,37 +1719,6 @@ export function getDefaultSeniorReportData(): Partial<SeniorReportData> {
       { term: 'Variations', value: 'Rate-based as per schedule of rates' },
       { term: 'Insurance', value: 'Public liability $10M, Professional indemnity as required' }
     ],
-    risks: [
-      {
-        category: 'Programme Risk',
-        description: 'Delays in preceding trades may impact fire stopping schedule',
-        mitigation: 'Weekly coordination meetings, early warning system, float buffer in programme',
-        severity: 'medium'
-      },
-      {
-        category: 'Scope Clarity',
-        description: 'Potential for additional penetrations not shown on drawings',
-        mitigation: 'Allowance included for additional works, variation process established',
-        severity: 'medium'
-      },
-      {
-        category: 'Quality & Compliance',
-        description: 'Non-compliant installations could fail fire engineer inspection',
-        mitigation: 'Site supervision, QA checks, photo documentation, regular inspections',
-        severity: 'high'
-      },
-      {
-        category: 'Commercial',
-        description: 'Payment delays or retention release disputes',
-        mitigation: 'Clear payment terms agreed, retention bond option, regular invoice tracking',
-        severity: 'low'
-      },
-      {
-        category: 'Access & Coordination',
-        description: 'Access limitations due to concurrent trades',
-        mitigation: 'Access equipment allowance, coordination with other trades, flexible resourcing',
-        severity: 'medium'
-      }
-    ]
+    risks
   };
 }
