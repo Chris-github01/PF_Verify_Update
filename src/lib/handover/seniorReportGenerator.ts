@@ -1707,9 +1707,192 @@ function getElectricalRisks() {
   ];
 }
 
+function getHVACRisks() {
+  return [
+    {
+      category: 'Programme Risk',
+      description: 'Plant delivery lead times, cranage access, ceiling closures',
+      mitigation: 'Early procurement, hold point register, coordination workshops',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Scope Clarity',
+      description: 'BMS scope boundaries, electrical interfaces, builders works',
+      mitigation: 'Interface matrix agreed pre-award, written clarifications',
+      severity: 'high' as const
+    },
+    {
+      category: 'Quality & Compliance',
+      description: 'TAB requirements, fire damper compliance, acoustic performance',
+      mitigation: 'Commissioning plan, staged testing, specialist subcontractors',
+      severity: 'high' as const
+    },
+    {
+      category: 'Testing & Commissioning',
+      description: 'TAB delays, seasonal commissioning, IST coordination',
+      mitigation: 'TAB specialist engaged early, IST schedule, seasonal commissioning plan',
+      severity: 'high' as const
+    },
+    {
+      category: 'Interface Risk',
+      description: 'BMS/electrical/fire/passive fire boundary disputes',
+      mitigation: 'Written interface matrix, coordination workshops, RFI process',
+      severity: 'high' as const
+    },
+    {
+      category: 'Supply Chain & Lead Times',
+      description: 'Plant equipment, specialist dampers, controls components',
+      mitigation: 'Early procurement, approved alternatives, supply chain monitoring',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Access & Coordination',
+      description: 'Plantroom access, ceiling grid coordination, penetration clashes',
+      mitigation: '3D coordination, access schedule, coordination drawings',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Commercial',
+      description: 'Variations, PS/PC exposure, retention/payment timing',
+      mitigation: 'Variation process agreed, PS/PC register, payment schedule',
+      severity: 'low' as const
+    },
+    {
+      category: 'Documentation',
+      description: 'O&M manuals, TAB reports, commissioning records incomplete',
+      mitigation: 'Documentation tracker, hold points, staged sign-off',
+      severity: 'medium' as const
+    }
+  ];
+}
+
+function getPlumbingRisks() {
+  return [
+    {
+      category: 'Programme Risk',
+      description: 'Shutdown windows, ceiling closures, access constraints',
+      mitigation: 'Tie-in plan + hold points + resequencing provisions',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Scope Clarity',
+      description: 'Builders works/trenching/authority connections unclear',
+      mitigation: 'Confirm inclusion schedule + interface matrix pre-award',
+      severity: 'high' as const
+    },
+    {
+      category: 'Quality & Compliance',
+      description: 'TMV/backflow compliance risk, pressure test failures',
+      mitigation: 'Commissioning sheets + authorised testing + records',
+      severity: 'high' as const
+    },
+    {
+      category: 'Testing & Commissioning',
+      description: 'Pressure/drain tests not witnessed/recorded, backflow certification delays',
+      mitigation: 'Testing plan + scheduled inspections + signed records',
+      severity: 'high' as const
+    },
+    {
+      category: 'Interface Risk',
+      description: 'Civil/fire/mechanical/electrical boundary disputes',
+      mitigation: 'Written interface matrix + coordination workshops',
+      severity: 'high' as const
+    },
+    {
+      category: 'Supply Chain & Lead Times',
+      description: 'Fixtures, pumps, TMVs, backflow devices, tanks on long lead',
+      mitigation: 'Early procurement + approved alternatives + supply tracking',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Access & Coordination',
+      description: 'Stack alignment, risers, ceiling grids, penetration clashes',
+      mitigation: '3D coordination + setout workshops + coordination drawings',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Commercial',
+      description: 'Variations, PS/PC exposure, retention/payment timing',
+      mitigation: 'Variation process agreed + PS/PC register + payment schedule',
+      severity: 'low' as const
+    },
+    {
+      category: 'Authority/Utility Dependencies',
+      description: 'Water authority delays, meter connections, approvals',
+      mitigation: 'Early engagement + programme float + contingency plans',
+      severity: 'medium' as const
+    }
+  ];
+}
+
+function getActiveFireRisks() {
+  return [
+    {
+      category: 'Compliance',
+      description: 'Failure to meet fire engineer/authority requirements',
+      mitigation: 'Early review, staged inspections, compliant commissioning',
+      severity: 'high' as const
+    },
+    {
+      category: 'Inspections',
+      description: 'Delayed or failed inspections',
+      mitigation: 'Advance booking, pre-inspection checks',
+      severity: 'high' as const
+    },
+    {
+      category: 'Interfaces',
+      description: 'Electrical/mechanical boundary disputes',
+      mitigation: 'Interface matrix agreed pre-start',
+      severity: 'high' as const
+    },
+    {
+      category: 'Documentation',
+      description: 'Missing PS3 / test records',
+      mitigation: 'Documentation tracker + hold points',
+      severity: 'high' as const
+    },
+    {
+      category: 'Programme',
+      description: 'Authority dependency delays',
+      mitigation: 'Programme float + early engagement',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Testing & Commissioning',
+      description: 'Cause & effect failures, interface testing delays',
+      mitigation: 'Commissioning plan + staged testing + IST coordination',
+      severity: 'high' as const
+    },
+    {
+      category: 'Supply Chain',
+      description: 'Fire panel, detection devices, sprinkler heads on long lead',
+      mitigation: 'Early procurement + approved product list + supply monitoring',
+      severity: 'medium' as const
+    },
+    {
+      category: 'Certification',
+      description: 'Fire engineer sign-off delayed, PS3 not accepted',
+      mitigation: 'Early fire engineer engagement + compliant installation + documentation readiness',
+      severity: 'high' as const
+    }
+  ];
+}
+
 export function getDefaultSeniorReportData(trade?: string): Partial<SeniorReportData> {
   // Determine risks based on trade
-  const risks = trade === 'electrical' ? getElectricalRisks() : getPassiveFireRisks();
+  let risks;
+
+  if (trade === 'electrical') {
+    risks = getElectricalRisks();
+  } else if (trade === 'hvac') {
+    risks = getHVACRisks();
+  } else if (trade === 'plumbing') {
+    risks = getPlumbingRisks();
+  } else if (trade === 'active_fire') {
+    risks = getActiveFireRisks();
+  } else {
+    risks = getPassiveFireRisks();
+  }
 
   return {
     keyTerms: [

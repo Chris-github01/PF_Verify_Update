@@ -1162,19 +1162,238 @@ function getElectricalChecklists() {
   ];
 }
 
+function getHVACChecklists() {
+  return [
+    {
+      title: 'Pre-Start Checklist',
+      items: [
+        'Site induction completed (HVAC-specific hazards)',
+        'HVAC SWMS reviewed and approved',
+        'Supervisor competency verified',
+        'Latest drawings/specs available',
+        'Shop drawings approved (duct, pipe, plant layouts)',
+        'Builders works responsibilities confirmed',
+        'Plant access/cranage confirmed',
+        'Temporary services confirmed',
+        'Interfaces agreed (BMS/electrical/fire/passive fire)',
+        'Long-lead procurement confirmed'
+      ]
+    },
+    {
+      title: 'Installation Checklist',
+      items: [
+        'Ductwork installed to drawings/standards',
+        'Pipework installed (materials/supports/insulation)',
+        'Equipment installed with access clearances',
+        'Seismic restraints installed where required',
+        'Acoustic treatment installed as specified',
+        'Fire/smoke dampers installed and accessible',
+        'Condensate drainage installed and tested',
+        'Penetrations coordinated with passive fire trade',
+        'No unapproved deviations'
+      ]
+    },
+    {
+      title: 'Quality Control & Testing',
+      items: [
+        'Visual inspections completed',
+        'Pipework pressure testing recorded',
+        'Duct leakage testing where required',
+        'TAB (air & water balancing) completed',
+        'Controls point-to-point testing completed',
+        'Fire/smoke damper testing completed',
+        'Noise/vibration checks completed',
+        'Defects logged and closed'
+      ]
+    },
+    {
+      title: 'Documentation & Certification (Critical)',
+      items: [
+        'Commissioning plan approved',
+        'Commissioning records signed',
+        'TAB reports issued',
+        'Equipment datasheets/warranties provided',
+        'As-builts completed',
+        'O&M manuals issued',
+        'Fire/smoke control compliance documentation provided',
+        'Energy efficiency documentation provided (where contract requires)',
+        'PS3 prepared where required in NZ (if applicable)'
+      ]
+    },
+    {
+      title: 'Final Handover & Close-Out',
+      items: [
+        'All HVAC systems operational',
+        'Integrated services testing completed',
+        'Seasonal commissioning scheduled/confirmed if required',
+        'Training provided to FM/client',
+        'Defects list closed',
+        'Variations finalised',
+        'Final documentation accepted',
+        'PC sign-off obtained'
+      ]
+    }
+  ];
+}
+
+function getPlumbingChecklists() {
+  return [
+    {
+      title: 'Pre-Start Checklist',
+      items: [
+        'Site induction completed (plumbing/hydraulics hazards)',
+        'Plumbing SWMS reviewed and approved',
+        'Supervisor/licence/competency verified (NZ: licensed certifier where applicable; AU: licensed plumber requirements)',
+        'Latest drawings/specs and coordination drawings available',
+        'Penetration / setout coordination confirmed (builder + passive fire interface)',
+        'Builders works responsibilities confirmed (core holes, trenches, plinths, roof penetrations)',
+        'Material approvals confirmed (pipe types, valves, fixtures, backflow devices)',
+        'Long-lead items confirmed (fixtures, pumps, TMVs, backflow devices, tanks)',
+        'Water shutdowns / tie-in windows confirmed (if live building)',
+        'Interface responsibilities confirmed (civil drainage, fire services, mechanical plant, electrical for pumps/heaters)'
+      ]
+    },
+    {
+      title: 'Installation Checklist',
+      items: [
+        'Pipework installed to drawings/specs with correct materials and supports',
+        'Pipe gradients/falls confirmed for drainage (where applicable)',
+        'Isolation valves installed and accessible',
+        'Backflow prevention devices installed to approved locations and standards',
+        'Hot water systems installed and temperature control devices fitted (TMVs where required)',
+        'Fixtures and fit-off installed as specified',
+        'Pump sets, PRVs, strainers installed where applicable',
+        'Acoustic and seismic restraints installed where required',
+        'Insulation installed where specified (thermal/condensation)',
+        'Roof penetrations and flashings coordinated and completed (if in scope)',
+        'No unapproved deviations from approved scope'
+      ]
+    },
+    {
+      title: 'Quality Control & Testing',
+      items: [
+        'Visual inspection completed for all pipework',
+        'Pressure testing completed and recorded (water services, heated lines as required)',
+        'Drainage testing completed where required (water test/air test per spec)',
+        'Backflow devices tested/commissioned by authorised person; results recorded',
+        'Hot water temperatures verified and recorded (TMVs set and tested)',
+        'Leak checks completed at all joints/fixtures',
+        'Pumps and controls tested (including power/interface by electrical as applicable)',
+        'Defects logged and rectified'
+      ]
+    },
+    {
+      title: 'Documentation & Certification (Critical)',
+      items: [
+        'Test certificates compiled (pressure tests, drainage tests, backflow test sheets)',
+        'Backflow prevention certification provided and asset register updated',
+        'As-built drawings completed',
+        'O&M manuals compiled (pumps, heaters, valves, backflow devices, controls)',
+        'Warranties provided for fixtures and equipment',
+        'Commissioning sheets provided (pumps, heaters, control valves)',
+        'Producer Statements / compliance documentation prepared where contract requires',
+        'Maintenance schedules provided (filters, backflow retest intervals)'
+      ]
+    },
+    {
+      title: 'Final Handover & Close-Out',
+      items: [
+        'Systems operational and demonstrated',
+        'Final tie-ins completed and water services restored',
+        'Training provided to FM/client (pumps, heaters, isolation locations, backflow maintenance)',
+        'Defects list closed',
+        'Variations agreed and finalised',
+        'Final documentation accepted',
+        'Practical Completion sign-off obtained'
+      ]
+    }
+  ];
+}
+
+function getActiveFireChecklists() {
+  return [
+    {
+      title: 'Pre-Start Checklist',
+      items: [
+        'Site induction completed (fire systems hazards)',
+        'SWMS approved',
+        'Supervisor competency verified',
+        'Latest fire drawings & fire report available',
+        'Inspection regime agreed',
+        'Interface responsibilities confirmed',
+        'Authority requirements understood'
+      ]
+    },
+    {
+      title: 'Installation Checklist',
+      items: [
+        'Systems installed to drawings/specs',
+        'Devices, pipework, and equipment correctly located',
+        'Supports and fixings compliant',
+        'Penetrations coordinated',
+        'Power and interfaces coordinated'
+      ]
+    },
+    {
+      title: 'Quality Control & Testing',
+      items: [
+        'Visual inspections completed',
+        'Functional testing completed',
+        'Cause & effect testing completed',
+        'Interface testing completed',
+        'Defects logged and closed'
+      ]
+    },
+    {
+      title: 'Documentation & Certification (Critical)',
+      items: [
+        'Commissioning records complete',
+        'As-builts issued',
+        'O&M manuals compiled',
+        'PS3 prepared (NZ if required)',
+        'Compliance certificates prepared'
+      ]
+    },
+    {
+      title: 'Final Handover & Close-Out',
+      items: [
+        'Systems operational',
+        'Training provided',
+        'Inspections passed',
+        'Final documentation accepted',
+        'PC sign-off obtained'
+      ]
+    }
+  ];
+}
+
 export function getDefaultJuniorPackData(trade?: string): Partial<JuniorPackData> {
   // Determine checklists based on trade
-  const checklists = trade === 'electrical'
-    ? getElectricalChecklists()
-    : getPassiveFireChecklists();
+  let checklists;
+  let safetyNote = 'Follow manufacturer\'s instructions for all fire protection materials';
+
+  if (trade === 'electrical') {
+    checklists = getElectricalChecklists();
+    safetyNote = 'Follow AS/NZS 3000 requirements for all electrical installations';
+  } else if (trade === 'hvac') {
+    checklists = getHVACChecklists();
+    safetyNote = 'Follow relevant HVAC standards and manufacturer requirements for all mechanical installations';
+  } else if (trade === 'plumbing') {
+    checklists = getPlumbingChecklists();
+    safetyNote = 'Follow applicable plumbing codes and standards for all hydraulic installations';
+  } else if (trade === 'active_fire') {
+    checklists = getActiveFireChecklists();
+    safetyNote = 'Follow fire engineering requirements and applicable standards for all active fire installations';
+  } else {
+    checklists = getPassiveFireChecklists();
+    safetyNote = 'Follow manufacturer\'s instructions for all fire protection materials';
+  }
 
   return {
     safetyNotes: [
       'All personnel must complete site induction before commencing work',
       'Use appropriate PPE: Hard hat, safety glasses, high-vis vest, safety boots',
-      trade === 'electrical'
-        ? 'Follow AS/NZS 3000 requirements for all electrical installations'
-        : 'Follow manufacturer\'s instructions for all fire protection materials'
+      safetyNote
     ],
     checklists
   };
