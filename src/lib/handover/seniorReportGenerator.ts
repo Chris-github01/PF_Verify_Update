@@ -354,6 +354,37 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
     </div>
   `).join('');
 
+  // Add Electrical Compliance Basis section (NZ-specific) if Electrical items exist
+  const hasElectricalItems = data.scopeSystems.some(s =>
+    s.service_type.toLowerCase().includes('electrical')
+  );
+
+  const electricalComplianceHTML = hasElectricalItems ? `
+    <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 20px; margin-top: 24px;">
+      <h4 style="font-size: 16px; font-weight: 700; color: #92400e; margin-bottom: 12px;">
+        Electrical Compliance Basis (New Zealand)
+      </h4>
+      <div style="font-size: 13px; color: #78350f; line-height: 1.7;">
+        <p style="margin-bottom: 10px;">
+          <strong>Scope Limitation:</strong> Electrical scope relates <strong>ONLY</strong> to firestopping of electrical services penetrations.
+          No electrical installation, alteration, or connection works are included.
+        </p>
+        <p style="margin-bottom: 10px;">
+          <strong>Applicable NZ Standards:</strong>
+        </p>
+        <ul style="list-style-type: disc; padding-left: 24px; margin-bottom: 10px;">
+          <li>NZ Building Code C/AS2 and C/AS7 (Fire design and spread of fire)</li>
+          <li>AS 4072.1 (Components for the protection of openings in fire-resistant separating elements – Service penetrations)</li>
+          <li>AS/NZS 3000 (Electrical installations – interface only, no live electrical work)</li>
+          <li>AS 1530.4 (Methods for fire tests on building materials, components and structures – Fire-resistance tests)</li>
+        </ul>
+        <p style="margin-bottom: 0;">
+          <strong>Installation Requirements:</strong> All works are installed strictly within tested and manufacturer-approved fire protection systems.
+        </p>
+      </div>
+    </div>
+  ` : '';
+
   const hasAnyContacts = data.supplierContact || data.supplierEmail || data.supplierPhone || data.supplierAddress ||
     (data.subcontractorContacts && (
       data.subcontractorContacts.quantitySurveyor?.name ||
@@ -1417,6 +1448,7 @@ export function generateSeniorReportHTML(data: SeniorReportData): string {
       <div class="systems-grid-compact">
         ${scopeSystemsHTML}
       </div>
+      ${electricalComplianceHTML}
     </div>
 
     ${contactHTML}

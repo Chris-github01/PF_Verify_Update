@@ -181,6 +181,43 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
     `<li class="safety-item">${note}</li>`
   ).join('');
 
+  // Add Electrical Interface Limitation section (NZ-specific) if Electrical items exist
+  const hasElectricalItems = data.scopeSystems.some(s =>
+    s.service_type.toLowerCase().includes('electrical')
+  );
+
+  const electricalInterfaceHTML = hasElectricalItems ? `
+    <div style="background: #fef2f2; border: 2px solid #ef4444; border-radius: 8px; padding: 18px; margin-top: 20px;">
+      <h4 style="font-size: 15px; font-weight: 700; color: #991b1b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #ef4444; color: white; border-radius: 50%; font-size: 14px;">⚠</span>
+        Electrical Interface Limitation (NZ Compliance)
+      </h4>
+      <div style="font-size: 13px; color: #7f1d1d; line-height: 1.7;">
+        <p style="margin-bottom: 12px; font-weight: 600;">
+          Passive fire installers must NOT:
+        </p>
+        <ul style="list-style-type: none; padding-left: 0; margin-bottom: 12px;">
+          <li style="padding: 8px 0; padding-left: 28px; position: relative; border-bottom: 1px solid #fecaca;">
+            <span style="position: absolute; left: 6px; color: #ef4444; font-weight: 700;">✗</span>
+            Alter, disconnect, re-route, or modify electrical services
+          </li>
+          <li style="padding: 8px 0; padding-left: 28px; position: relative; border-bottom: 1px solid #fecaca;">
+            <span style="position: absolute; left: 6px; color: #ef4444; font-weight: 700;">✗</span>
+            Work on live electrical installations
+          </li>
+          <li style="padding: 8px 0; padding-left: 28px; position: relative;">
+            <span style="position: absolute; left: 6px; color: #ef4444; font-weight: 700;">✗</span>
+            Proceed with firestopping if electrical installations are non-compliant
+          </li>
+        </ul>
+        <p style="margin: 0; padding: 12px; background: #fee2e2; border-radius: 6px; font-weight: 600;">
+          <strong>Important:</strong> Any non-compliant electrical installations must be referred back to the Electrical Contractor
+          prior to firestopping. This clause exists to protect PS3 compliance and site safety under NZ regulations.
+        </p>
+      </div>
+    </div>
+  ` : '';
+
   const scopeSystemsHTML = data.scopeSystems.map(system => `
     <div class="system-card">
       <h4>${system.service_type}</h4>
@@ -996,6 +1033,8 @@ export function generateJuniorPackHTML(data: JuniorPackData): string {
         ${safetyNotesHTML}
       </ul>
     </div>
+
+    ${electricalInterfaceHTML}
 
     <h2>Site Handover Checklists</h2>
     ${checklistsHTML}

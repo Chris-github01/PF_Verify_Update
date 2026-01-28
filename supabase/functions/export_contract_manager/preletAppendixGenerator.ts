@@ -346,13 +346,19 @@ function renderRetentionSummary(project: any, awardedTotal: number | undefined):
 function renderScopeSystems(data: PreletAppendixData): string {
   if (!data.scopeSystems || data.scopeSystems.length === 0) return '';
 
-  const systemsHtml = data.scopeSystems.map((system: any) => `
+  const systemsHtml = data.scopeSystems.map((system: any) => {
+    // Apply NZ-specific wording for Electrical systems
+    const displayName = system.service_type.toLowerCase().includes('electrical')
+      ? `Electrical Service Penetration Firestopping (${system.item_count} items)`
+      : system.service_type;
+
+    return `
     <div style="margin-bottom: 14px; page-break-inside: avoid;">
       <div style="background: #f3f4f6; border-left: 3px solid ${VERIFYTRADE_ORANGE}; padding: 10px 12px; margin-bottom: 6px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h5 style="font-size: 14px; font-weight: 700; color: #111827; margin: 0;">${system.service_type}</h5>
+          <h5 style="font-size: 14px; font-weight: 700; color: #111827; margin: 0;">${displayName}</h5>
           <div style="display: flex; gap: 16px; align-items: center;">
-            <div style="font-size: 12px; color: #6b7280;">${system.item_count} items</div>
+            ${!displayName.includes('items') ? `<div style="font-size: 12px; color: #6b7280;">${system.item_count} items</div>` : ''}
             <div style="font-size: 14px; font-weight: 700; color: #111827;">${formatCurrency(system.total)}</div>
           </div>
         </div>
@@ -382,7 +388,8 @@ function renderScopeSystems(data: PreletAppendixData): string {
         </table>
       ` : ''}
     </div>
-  `).join('');
+    `;
+  }).join('');
 
   const totalValue = data.scopeSystems.reduce((sum, sys) => sum + (sys.total || 0), 0);
 
