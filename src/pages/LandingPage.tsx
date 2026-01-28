@@ -15,17 +15,6 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
 
-  const activeModules = [
-    '🔥 Verify+ Passive Fire',
-    '⚡ Verify+ Electrical'
-  ];
-
-  const comingSoonTrades = [
-    '❄️ Verify+ HVAC',
-    '🚿 Verify+ Plumbing',
-    '🚨 Verify+ Active Fire'
-  ];
-
   if (showPrivacyPolicy) {
     return <PrivacyPolicy onBack={() => setShowPrivacyPolicy(false)} />;
   }
@@ -77,31 +66,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         </div>
       </nav>
 
-      {/* Active Modules Banner */}
-      <div className="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg border-b border-green-400 overflow-hidden">
-        <div className="h-9 flex items-center">
-          <div className="animate-scroll-seamless flex items-center whitespace-nowrap">
-            {/* Repeat content 3 times for seamless loop */}
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center">
-                <span className="inline-block px-6 text-sm font-bold">
-                  ✓ Active Modules
-                </span>
-                {activeModules.map((module, idx) => (
-                  <div key={idx} className="flex items-center">
-                    <span className="inline-block px-2 text-emerald-200">•</span>
-                    <span className="inline-block px-6 text-sm font-semibold">
-                      {module}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <main className="pt-[100px]">
+      <main className="pt-16">
         <section className="relative overflow-hidden py-12 sm:py-24 lg:py-32 min-h-[85vh] sm:min-h-[90vh] flex items-center">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="text-center max-w-5xl mx-auto">
@@ -132,40 +97,40 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 Built for Main Contractors & Quantity Surveyors across NZ & Australia who need defensible, risk-free awards
               </p>
 
-              {/* Active and Coming Soon Modules */}
-              <div className="mb-8 sm:mb-12 max-w-4xl mx-auto px-4">
-                <div className="grid sm:grid-cols-2 gap-4 sm:gap-6">
-                  {/* Active Modules */}
-                  <div className="bg-gradient-to-br from-green-900/40 to-emerald-900/40 backdrop-blur-sm rounded-xl p-6 border border-green-700/50">
-                    <div className="flex items-center gap-2 mb-4">
-                      <CheckCircle className="text-green-400" size={24} />
-                      <h3 className="text-xl font-bold text-green-300">Active Modules</h3>
-                    </div>
-                    <div className="space-y-3">
-                      {activeModules.map((module, idx) => (
-                        <div key={idx} className="flex items-center gap-3 text-slate-200">
-                          <span className="text-2xl">{module.split(' ')[0]}</span>
-                          <span className="font-medium">{module.substring(module.indexOf(' ') + 1)}</span>
-                        </div>
-                      ))}
+              {/* Trade Suite Rollout Section */}
+              <div className="mb-10 sm:mb-14 max-w-4xl mx-auto px-4">
+                <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 sm:p-8 border border-slate-700/50 shadow-xl">
+                  <div className="flex items-center justify-center gap-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs sm:text-sm font-bold text-orange-400 uppercase tracking-wider">Suite Rollout</span>
                     </div>
                   </div>
 
-                  {/* Coming Soon Modules */}
-                  <div className="bg-gradient-to-br from-orange-900/40 to-red-900/40 backdrop-blur-sm rounded-xl p-6 border border-orange-700/50">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Clock className="text-orange-400" size={24} />
-                      <h3 className="text-xl font-bold text-orange-300">Coming Soon</h3>
+                  <h3 className="text-xl sm:text-2xl font-bold text-slate-50 mb-3">Trade Suite Rollout</h3>
+
+                  <p className="text-sm sm:text-base text-slate-300 mb-6 leading-relaxed">
+                    Verify+ is expanding across major trades. Request early access for upcoming modules.
+                  </p>
+
+                  <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-6">
+                    <div className="px-4 py-2 bg-green-900/40 text-green-300 rounded-full text-xs sm:text-sm font-semibold border border-green-700/50 flex items-center gap-2">
+                      <CheckCircle size={14} />
+                      <span>Active: Passive Fire, Electrical</span>
                     </div>
-                    <div className="space-y-3">
-                      {comingSoonTrades.map((trade, idx) => (
-                        <div key={idx} className="flex items-center gap-3 text-slate-200">
-                          <span className="text-2xl">{trade.split(' ')[0]}</span>
-                          <span className="font-medium">{trade.substring(trade.indexOf(' ') + 1)}</span>
-                        </div>
-                      ))}
+                    <div className="px-4 py-2 bg-blue-900/40 text-blue-300 rounded-full text-xs sm:text-sm font-semibold border border-blue-700/50 flex items-center gap-2">
+                      <Clock size={14} />
+                      <span>Launching: HVAC, Plumbing, Active Fire</span>
                     </div>
                   </div>
+
+                  <button
+                    onClick={() => setShowDemoModal(true)}
+                    className="inline-flex items-center gap-2 px-6 py-3 text-sm sm:text-base font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl"
+                  >
+                    Request Early Access
+                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -1210,31 +1175,6 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         isOpen={showDemoModal}
         onClose={() => setShowDemoModal(false)}
       />
-
-      <style>{`
-        @keyframes scroll {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-33.333%);
-          }
-        }
-        @keyframes scroll-seamless {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-33.333%);
-          }
-        }
-        .animate-scroll {
-          animation: scroll 25s linear infinite;
-        }
-        .animate-scroll-seamless {
-          animation: scroll-seamless 20s linear infinite;
-        }
-      `}</style>
     </div>
   );
 }
