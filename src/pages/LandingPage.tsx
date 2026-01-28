@@ -41,9 +41,13 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
               <img
-                src="/verifytrade-shield.svg"
+                src="/verifytrade-shield.svg?v=2"
                 alt="VerifyTrade Shield"
-                className="h-10 w-10"
+                className="h-10 w-auto object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  console.error('Logo failed to load');
+                }}
               />
               <span className="text-xl font-bold text-slate-50">VerifyTrade</span>
             </div>
