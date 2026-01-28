@@ -40,7 +40,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
+              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-sky-500 via-blue-600 to-green-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
                 <Shield className="text-white" size={20} />
               </div>
               <span className="text-xl font-bold text-slate-50">VerifyTrade</span>
