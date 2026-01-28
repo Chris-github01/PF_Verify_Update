@@ -15,13 +15,15 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
 
+  const activeModules = [
+    '🔥 Verify+ Passive Fire',
+    '⚡ Verify+ Electrical'
+  ];
+
   const comingSoonTrades = [
-    'PassiveFire Verify+ • Now Available',
-    'Verify+ Electrical • Q1 2026',
-    'Verify+ Plumbing • Q1 2026',
-    'Verify+ HVAC • Q1 2026',
-    'Verify+ Active Fire • Q1 2026',
-    'Trade Analysis Suite • Expanding'
+    '❄️ Verify+ HVAC',
+    '🚿 Verify+ Plumbing',
+    '🚨 Verify+ Active Fire'
   ];
 
   if (showPrivacyPolicy) {
@@ -70,9 +72,33 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         </div>
       </nav>
 
-      {/* Breaking News Banner */}
-      <div className="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400 overflow-hidden">
-        <div className="h-10 flex items-center">
+      {/* Active Modules Banner */}
+      <div className="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg border-b border-green-400 overflow-hidden">
+        <div className="h-9 flex items-center">
+          <div className="animate-scroll-seamless flex items-center whitespace-nowrap">
+            {/* Repeat content 3 times for seamless loop */}
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex items-center">
+                <span className="inline-block px-6 text-sm font-bold">
+                  ✓ Active Modules
+                </span>
+                {activeModules.map((module, idx) => (
+                  <div key={idx} className="flex items-center">
+                    <span className="inline-block px-2 text-emerald-200">•</span>
+                    <span className="inline-block px-6 text-sm font-semibold">
+                      {module}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Coming Soon Banner */}
+      <div className="fixed top-25 left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400 overflow-hidden">
+        <div className="h-9 flex items-center">
           <div className="animate-scroll-seamless flex items-center whitespace-nowrap">
             {/* Repeat content 3 times for seamless loop */}
             {[...Array(3)].map((_, i) => (
@@ -80,30 +106,21 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <span className="inline-block px-6 text-sm font-bold">
                   Coming Soon!
                 </span>
-                <span className="inline-block px-2 text-slate-200">•</span>
-                <span className="inline-block px-6 text-sm font-semibold">
-                  🔌 Verify+ Electrical
-                </span>
-                <span className="inline-block px-2 text-slate-200">•</span>
-                <span className="inline-block px-6 text-sm font-semibold">
-                  ❄️ Verify+ HVAC
-                </span>
-                <span className="inline-block px-2 text-slate-200">•</span>
-                <span className="inline-block px-6 text-sm font-semibold">
-                  🚿 Verify+ Plumbing
-                </span>
-                <span className="inline-block px-2 text-slate-200">•</span>
-                <span className="inline-block px-6 text-sm font-semibold">
-                  🚨 Verify+ Active Fire
-                </span>
-                <span className="inline-block px-2 text-slate-200">•</span>
+                {comingSoonTrades.map((trade, idx) => (
+                  <div key={idx} className="flex items-center">
+                    <span className="inline-block px-2 text-slate-200">•</span>
+                    <span className="inline-block px-6 text-sm font-semibold">
+                      {trade}
+                    </span>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <main className="pt-26">
+      <main className="pt-34">
         <section className="relative overflow-hidden py-12 sm:py-24 lg:py-32 min-h-[85vh] sm:min-h-[90vh] flex items-center">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="text-center max-w-5xl mx-auto">
@@ -597,7 +614,14 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="relative overflow-hidden py-4 rounded-lg">
               <div className="flex animate-scroll whitespace-nowrap">
-                {[...comingSoonTrades, ...comingSoonTrades, ...comingSoonTrades].map((trade, idx) => (
+                {[
+                  ...activeModules.map(m => `${m} • Active`),
+                  ...comingSoonTrades.map(m => `${m} • Coming Soon`),
+                  ...activeModules.map(m => `${m} • Active`),
+                  ...comingSoonTrades.map(m => `${m} • Coming Soon`),
+                  ...activeModules.map(m => `${m} • Active`),
+                  ...comingSoonTrades.map(m => `${m} • Coming Soon`)
+                ].map((trade, idx) => (
                   <span key={idx} className="inline-block px-8 text-sm font-medium text-slate-500">
                     {trade}
                   </span>
