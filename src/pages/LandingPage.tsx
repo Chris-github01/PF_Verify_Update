@@ -97,7 +97,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
       </div>
 
       {/* Coming Soon Banner */}
-      <div className="fixed top-25 left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400 overflow-hidden">
+      <div className="fixed top-[100px] left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400 overflow-hidden">
         <div className="h-9 flex items-center">
           <div className="animate-scroll-seamless flex items-center whitespace-nowrap">
             {/* Repeat content 3 times for seamless loop */}
@@ -120,7 +120,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         </div>
       </div>
 
-      <main className="pt-34">
+      <main className="pt-[136px]">
         <section className="relative overflow-hidden py-12 sm:py-24 lg:py-32 min-h-[85vh] sm:min-h-[90vh] flex items-center">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="text-center max-w-5xl mx-auto">
