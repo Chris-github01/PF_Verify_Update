@@ -96,31 +96,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         </div>
       </div>
 
-      {/* Coming Soon Banner */}
-      <div className="fixed top-[100px] left-0 right-0 z-40 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg border-b-2 border-orange-400 overflow-hidden">
-        <div className="h-9 flex items-center">
-          <div className="animate-scroll-seamless flex items-center whitespace-nowrap">
-            {/* Repeat content 3 times for seamless loop */}
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center">
-                <span className="inline-block px-6 text-sm font-bold">
-                  Coming Soon!
-                </span>
-                {comingSoonTrades.map((trade, idx) => (
-                  <div key={idx} className="flex items-center">
-                    <span className="inline-block px-2 text-slate-200">•</span>
-                    <span className="inline-block px-6 text-sm font-semibold">
-                      {trade}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <main className="pt-[136px]">
+      <main className="pt-[100px]">
         <section className="relative overflow-hidden py-12 sm:py-24 lg:py-32 min-h-[85vh] sm:min-h-[90vh] flex items-center">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="text-center max-w-5xl mx-auto">
@@ -150,6 +126,43 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <p className="text-sm sm:text-base md:text-lg text-slate-400 mb-8 sm:mb-12 max-w-3xl mx-auto px-4">
                 Built for Main Contractors & Quantity Surveyors across NZ & Australia who need defensible, risk-free awards
               </p>
+
+              {/* Active and Coming Soon Modules */}
+              <div className="mb-8 sm:mb-12 max-w-4xl mx-auto px-4">
+                <div className="grid sm:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Active Modules */}
+                  <div className="bg-gradient-to-br from-green-900/40 to-emerald-900/40 backdrop-blur-sm rounded-xl p-6 border border-green-700/50">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CheckCircle className="text-green-400" size={24} />
+                      <h3 className="text-xl font-bold text-green-300">Active Modules</h3>
+                    </div>
+                    <div className="space-y-3">
+                      {activeModules.map((module, idx) => (
+                        <div key={idx} className="flex items-center gap-3 text-slate-200">
+                          <span className="text-2xl">{module.split(' ')[0]}</span>
+                          <span className="font-medium">{module.substring(module.indexOf(' ') + 1)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Coming Soon Modules */}
+                  <div className="bg-gradient-to-br from-orange-900/40 to-red-900/40 backdrop-blur-sm rounded-xl p-6 border border-orange-700/50">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Clock className="text-orange-400" size={24} />
+                      <h3 className="text-xl font-bold text-orange-300">Coming Soon</h3>
+                    </div>
+                    <div className="space-y-3">
+                      {comingSoonTrades.map((trade, idx) => (
+                        <div key={idx} className="flex items-center gap-3 text-slate-200">
+                          <span className="text-2xl">{trade.split(' ')[0]}</span>
+                          <span className="font-medium">{trade.substring(trade.indexOf(' ') + 1)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Hero Video */}
@@ -606,27 +619,6 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               >
                 Book a Live Demo
               </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="py-12 bg-slate-900/30 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="relative overflow-hidden py-4 rounded-lg">
-              <div className="flex animate-scroll whitespace-nowrap">
-                {[
-                  ...activeModules.map(m => `${m} • Active`),
-                  ...comingSoonTrades.map(m => `${m} • Coming Soon`),
-                  ...activeModules.map(m => `${m} • Active`),
-                  ...comingSoonTrades.map(m => `${m} • Coming Soon`),
-                  ...activeModules.map(m => `${m} • Active`),
-                  ...comingSoonTrades.map(m => `${m} • Coming Soon`)
-                ].map((trade, idx) => (
-                  <span key={idx} className="inline-block px-8 text-sm font-medium text-slate-500">
-                    {trade}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
         </section>
