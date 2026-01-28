@@ -121,22 +121,41 @@ Civil work And Cable Tray
   Conduit duct 50mm: 110.00
   Cable tray 300mm: 30.00
   Sub-Total ex GST: $109,312.10
-→ Extract ONE line: "Civil work And Cable Tray - Lump Sum" | Qty: 1 | Total: $109,312.10
 
 FOR TYPE A QUOTES:
 - Extract each line item with description, qty, unit, rate, and INDIVIDUAL total
 - Skip subtotals, GST, and grand totals
 
-FOR TYPE B QUOTES (LUMP SUM):
-- Extract ONE line item PER SECTION using the section subtotal
-- Format: "{Section Name} - Lump Sum" | Qty: 1 | Unit: "LS" | Total: {section subtotal}
-- Example sections: "Civil work And Cable Tray", "First fix", "Second fix", "Audio/Visual"
+FOR TYPE B QUOTES (LUMP SUM) - TWO-LEVEL EXTRACTION:
+STEP 1: Extract the section header as a lump sum line:
+- Format: "{Section Name} - Lump Sum"
+- Qty: 1, Unit: "LS", Rate: section subtotal, Total: section subtotal
+- Example: "Civil work And Cable Tray - Lump Sum" | Qty: 1 | Rate: 109312.10 | Total: 109312.10
 
-CRITICAL: If individual line prices are NOT shown (only quantities), this is TYPE B - extract section lump sums.
+STEP 2: Extract ALL detail items under that section:
+- Extract each line item with description and quantity
+- Set rate: null, total: null (these will display as "Included" in UI)
+- Preserve the section name so items can be grouped
+- Example: "Pit type 66 665x665x620mm" | Qty: 10 | Unit: "EA" | Rate: null | Total: null | Section: "Civil work And Cable Tray"
+
+SKIP THESE ROWS:
+- "Apprentice Electrician", "Assistant Electrician", "Registered Electrician" (labor aggregates)
+- "Miscellaneous" (unless it has a specific description)
+- "Sub-Total", "GST", "Total inc GST"
+
+EXAMPLE OUTPUT FOR LUMP SUM SECTION:
+{
+  "items": [
+    {"description": "Civil work And Cable Tray - Lump Sum", "qty": 1, "unit": "LS", "rate": 109312.10, "total": 109312.10, "section": "Civil work And Cable Tray"},
+    {"description": "Pit type 66 665x665x620mm", "qty": 10, "unit": "EA", "rate": null, "total": null, "section": "Civil work And Cable Tray"},
+    {"description": "Conduit duct 50mm 6m GN", "qty": 110, "unit": "M", "rate": null, "total": null, "section": "Civil work And Cable Tray"},
+    {"description": "Cable tray 300mm UT3 3m GB", "qty": 30, "unit": "M", "rate": null, "total": null, "section": "Civil work And Cable Tray"}
+  ]
+}
 
 Return JSON format:
 {
-  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string"}],
+  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number|null, "total": number|null, "section": "string"}],
   "confidence": number,
   "warnings": ["string"],
   "quoteType": "itemized" or "lumpsum"

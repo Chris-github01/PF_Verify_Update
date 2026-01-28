@@ -244,14 +244,20 @@ Deno.serve(async (req: Request) => {
     }
 
     if (items.length > 0) {
-      const quoteItems = items.map((item: any) => ({
-        quote_id: quote.id,
-        description: item.description || item.desc || "",
-        quantity: parseFloat(item.qty || item.quantity || "0"),
-        unit: item.unit || "",
-        unit_price: parseFloat(item.unit_price || item.unitPrice || item.rate || "0"),
-        total_price: parseFloat(item.total || item.amount || "0"),
-      }));
+      const quoteItems = items.map((item: any) => {
+        // For lump sum items, preserve null values for rate/total
+        const unitPrice = item.unit_price ?? item.unitPrice ?? item.rate;
+        const totalPrice = item.total ?? item.amount;
+
+        return {
+          quote_id: quote.id,
+          description: item.description || item.desc || "",
+          quantity: parseFloat(item.qty || item.quantity || "0"),
+          unit: item.unit || "",
+          unit_price: unitPrice !== null && unitPrice !== undefined ? parseFloat(unitPrice) : null,
+          total_price: totalPrice !== null && totalPrice !== undefined ? parseFloat(totalPrice) : null,
+        };
+      });
 
       const { error: itemsError } = await supabase
         .from("quote_items")

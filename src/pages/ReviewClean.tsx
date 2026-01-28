@@ -33,8 +33,8 @@ interface QuoteItem {
   description: string;
   quantity: number;
   unit: string;
-  unit_price: number;
-  total_price: number;
+  unit_price: number | null;
+  total_price: number | null;
   is_excluded: boolean;
   canonical_unit?: string;
   size?: string;
@@ -342,14 +342,18 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
     try {
       const updates = targetItems.map(item => {
         const qty = normaliseNumber(item.quantity);
-        const rate = normaliseNumber(item.unit_price);
-        let total = normaliseNumber(item.total_price);
 
-        const derivedRate = deriveRate(total, qty);
-        const derivedTotal = deriveTotal(qty, rate);
+        // For lump sum items (null prices), preserve null values
+        const isLumpSumItem = item.unit_price === null && item.total_price === null;
 
-        const finalRate = rate || derivedRate;
-        const finalTotal = total || derivedTotal;
+        const rate = isLumpSumItem ? null : normaliseNumber(item.unit_price);
+        let total = isLumpSumItem ? null : normaliseNumber(item.total_price);
+
+        const derivedRate = isLumpSumItem ? null : deriveRate(total, qty);
+        const derivedTotal = isLumpSumItem ? null : deriveTotal(qty, rate);
+
+        const finalRate = isLumpSumItem ? null : (rate || derivedRate);
+        const finalTotal = isLumpSumItem ? null : (total || derivedTotal);
 
         const unitResult = normaliseUnit(item.unit);
         const attributes = extractAttributes(item.description);
@@ -372,8 +376,8 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         return {
           id: item.id,
           quantity: qty || item.quantity,
-          unit_price: finalRate || item.unit_price,
-          total_price: finalTotal || item.total_price,
+          unit_price: finalRate !== null ? finalRate : item.unit_price,
+          total_price: finalTotal !== null ? finalTotal : item.total_price,
           canonical_unit: unitResult.canonical || '',
           size: attributes.size || '',
           frr: attributes.frr || '',
@@ -1194,8 +1198,20 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                 canonicalUnit={item.canonical_unit}
                               />
                             </td>
-                            <td className="px-2 py-3 text-sm text-slate-100">${item.unit_price.toFixed(2)}</td>
-                            <td className="px-2 py-3 text-sm text-slate-100">${item.total_price.toFixed(2)}</td>
+                            <td className="px-2 py-3 text-sm text-slate-100">
+                              {item.unit_price === null || item.unit_price === 0 ? (
+                                <span className="text-slate-400 italic">Included</span>
+                              ) : (
+                                `$${item.unit_price.toFixed(2)}`
+                              )}
+                            </td>
+                            <td className="px-2 py-3 text-sm text-slate-100">
+                              {item.total_price === null || item.total_price === 0 ? (
+                                <span className="text-slate-400 italic">Included</span>
+                              ) : (
+                                `$${item.total_price.toFixed(2)}`
+                              )}
+                            </td>
                             <td className="px-2 py-3">
                               <AttributesCell
                                 mappedServiceType={item.mapped_service_type}
