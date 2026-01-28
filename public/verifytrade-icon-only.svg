@@ -1,0 +1,43 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2E86AB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1B4F72;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Shield Shape -->
+  <path d="M 40 8
+           L 12 18
+           L 12 42
+           Q 12 58 40 72
+           Q 68 58 68 42
+           L 68 18
+           Z"
+        fill="url(#shieldGradient)"
+        stroke="#2E86AB"
+        stroke-width="2"/>
+
+  <!-- White Border Inside Shield -->
+  <path d="M 40 12
+           L 16 20
+           L 16 42
+           Q 16 55 40 67
+           Q 64 55 64 42
+           L 64 20
+           Z"
+        fill="none"
+        stroke="white"
+        stroke-width="1.5"
+        opacity="0.3"/>
+
+  <!-- Checkmark -->
+  <path d="M 26 38
+           L 35 47
+           L 56 24"
+        stroke="white"
+        stroke-width="6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"/>
+</svg>

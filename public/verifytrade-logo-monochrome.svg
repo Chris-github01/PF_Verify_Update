@@ -1,0 +1,28 @@
+<svg width="320" height="80" viewBox="0 0 320 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shield Shape (Monochrome) -->
+  <path d="M 40 12
+           L 15 22
+           L 15 45
+           Q 15 60 40 72
+           Q 65 60 65 45
+           L 65 22
+           Z"
+        fill="#000000"
+        stroke="#000000"
+        stroke-width="2"/>
+
+  <!-- Checkmark -->
+  <path d="M 28 42
+           L 36 50
+           L 53 30"
+        stroke="white"
+        stroke-width="5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"/>
+
+  <!-- Text: VerifyTrade (Monochrome) -->
+  <text x="85" y="50" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#000000">
+    VerifyTrade
+  </text>
+</svg>

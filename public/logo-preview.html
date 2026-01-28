@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VerifyTrade Logo Variations - Preview</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f8fafc;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #1e293b;
+      margin-bottom: 10px;
+      font-size: 36px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #64748b;
+      margin-bottom: 50px;
+      font-size: 18px;
+    }
+
+    .logo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 30px;
+      margin-bottom: 40px;
+    }
+
+    .logo-card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+      border: 1px solid #e2e8f0;
+    }
+
+    .logo-card h3 {
+      color: #1e293b;
+      margin-bottom: 8px;
+      font-size: 20px;
+    }
+
+    .logo-card .filename {
+      color: #64748b;
+      font-size: 13px;
+      font-family: monospace;
+      margin-bottom: 15px;
+      background: #f1f5f9;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .logo-card .use-case {
+      color: #475569;
+      font-size: 14px;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .logo-display {
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 15px;
+    }
+
+    .dark-bg {
+      background: #0f172a;
+    }
+
+    .light-bg {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+    }
+
+    .white-bg {
+      background: white;
+      border: 1px solid #e2e8f0;
+    }
+
+    .logo-display img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .specs {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .spec-item {
+      background: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+
+    .spec-label {
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .color-swatches {
+      display: flex;
+      gap: 10px;
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .swatch {
+      flex: 1;
+      text-align: center;
+    }
+
+    .swatch-color {
+      width: 100%;
+      height: 60px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .swatch-label {
+      font-size: 12px;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .swatch-value {
+      font-size: 11px;
+      color: #94a3b8;
+      font-family: monospace;
+    }
+
+    @media (max-width: 768px) {
+      .logo-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>VerifyTrade Logo Variations</h1>
+    <p class="subtitle">Complete brand identity system - All SVG formats with transparent backgrounds</p>
+
+    <div class="logo-grid">
+      <!-- Horizontal White Logo -->
+      <div class="logo-card">
+        <h3>Horizontal Logo - White</h3>
+        <span class="filename">verifytrade-logo-white.svg</span>
+        <p class="use-case">
+          <strong>Primary logo</strong> for navigation bars and headers on dark backgrounds.
+          Currently used on the landing page.
+        </p>
+        <div class="logo-display dark-bg">
+          <img src="verifytrade-logo-white.svg" alt="VerifyTrade White Logo" style="height: 60px;">
+        </div>
+        <div class="specs">
+          <div class="spec-item">
+            <span class="spec-label">Size:</span> 320x80px
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">File:</span> 1.0 KB
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Background:</span> Dark
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Format:</span> SVG
+          </div>
+        </div>
+      </div>
+
+      <!-- Horizontal Color Logo -->
+      <div class="logo-card">
+        <h3>Horizontal Logo - Color</h3>
+        <span class="filename">verifytrade-logo-horizontal.svg</span>
+        <p class="use-case">
+          Full-color version for light backgrounds, documents, presentations,
+          and marketing materials.
+        </p>
+        <div class="logo-display white-bg">
+          <img src="verifytrade-logo-horizontal.svg" alt="VerifyTrade Color Logo" style="height: 60px;">
+        </div>
+        <div class="specs">
+          <div class="spec-item">
+            <span class="spec-label">Size:</span> 320x80px
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">File:</span> 1.3 KB
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Background:</span> Light
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Format:</span> SVG
+          </div>
+        </div>
+      </div>
+
+      <!-- Icon Only -->
+      <div class="logo-card">
+        <h3>Icon Only (Square)</h3>
+        <span class="filename">verifytrade-icon-only.svg</span>
+        <p class="use-case">
+          Perfect for app icons, favicons, social media profiles, and anywhere
+          a square format is needed.
+        </p>
+        <div class="logo-display light-bg">
+          <img src="verifytrade-icon-only.svg" alt="VerifyTrade Icon" style="height: 80px;">
+        </div>
+        <div class="specs">
+          <div class="spec-item">
+            <span class="spec-label">Size:</span> 80x80px
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">File:</span> 1.1 KB
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Ratio:</span> 1:1
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Format:</span> SVG
+          </div>
+        </div>
+      </div>
+
+      <!-- Simple Logo Large -->
+      <div class="logo-card">
+        <h3>Simple Logo (Large Format)</h3>
+        <span class="filename">verifytrade-logo-simple.svg</span>
+        <p class="use-case">
+          Large-scale icon for hero sections, promotional banners, and
+          high-resolution displays.
+        </p>
+        <div class="logo-display light-bg">
+          <img src="verifytrade-logo-simple.svg" alt="VerifyTrade Simple Logo" style="height: 100px;">
+        </div>
+        <div class="specs">
+          <div class="spec-item">
+            <span class="spec-label">Size:</span> 200x200px
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">File:</span> 1.1 KB
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Detail:</span> High
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Format:</span> SVG
+          </div>
+        </div>
+      </div>
+
+      <!-- Monochrome Logo -->
+      <div class="logo-card">
+        <h3>Monochrome Logo (Print)</h3>
+        <span class="filename">verifytrade-logo-monochrome.svg</span>
+        <p class="use-case">
+          Black and white version for print materials, faxes, and
+          single-color applications.
+        </p>
+        <div class="logo-display white-bg">
+          <img src="verifytrade-logo-monochrome.svg" alt="VerifyTrade Monochrome Logo" style="height: 60px;">
+        </div>
+        <div class="specs">
+          <div class="spec-item">
+            <span class="spec-label">Size:</span> 320x80px
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">File:</span> 741 bytes
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Colors:</span> B&W
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Format:</span> SVG
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Brand Colors -->
+    <div class="logo-card">
+      <h3>Brand Color Palette</h3>
+      <p class="use-case" style="margin-bottom: 20px;">
+        Official VerifyTrade colors used throughout the brand identity system.
+      </p>
+      <div class="color-swatches">
+        <div class="swatch">
+          <div class="swatch-color" style="background: #2E86AB;"></div>
+          <div class="swatch-label">Light Blue</div>
+          <div class="swatch-value">#2E86AB</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #1B4F72;"></div>
+          <div class="swatch-label">Dark Blue</div>
+          <div class="swatch-value">#1B4F72</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: white; border: 2px solid #e2e8f0;"></div>
+          <div class="swatch-label">White</div>
+          <div class="swatch-value">#FFFFFF</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-color" style="background: #000000;"></div>
+          <div class="swatch-label">Black</div>
+          <div class="swatch-value">#000000</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
