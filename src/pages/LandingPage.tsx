@@ -1,4 +1,4 @@
-import { Shield, Upload, Cpu, Layers, Zap, FileText, BarChart3, Download, CheckCircle, ArrowRight, Target, AlertTriangle, Award, Users, Brain, Database, FileSearch, TrendingUp, ShieldAlert, Clock, Lock, Briefcase, BookOpen, HelpCircle, FileCode, LifeBuoy } from 'lucide-react';
+import { Shield, Upload, Cpu, Layers, Zap, FileText, BarChart3, Download, CheckCircle, ArrowRight, Target, AlertTriangle, Award, Users, Brain, Database, FileSearch, TrendingUp, ShieldAlert, Lock, Briefcase, BookOpen, HelpCircle, FileCode, LifeBuoy } from 'lucide-react';
 import { useState } from 'react';
 import DemoBookingModal from '../components/DemoBookingModal';
 import HeroVideo from '../components/HeroVideo';
@@ -83,54 +83,61 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               </div>
 
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-slate-50 mb-4 sm:mb-6 tracking-tight leading-[1.15] sm:leading-tight px-2">
-                Instantly Audit Every<br />
+                The New Global Standard for<br />
                 <span className="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
-                  Trade Quote
-                </span> You Receive
+                  Trade Quote Auditing
+                </span>
               </h1>
 
               <p className="text-lg sm:text-2xl md:text-3xl font-semibold text-blue-400 mb-4 sm:mb-6 leading-snug sm:leading-tight px-4">
-                The AI engine that finds scope gaps, missing systems, and hidden risks in seconds — not days.
+                One suite. Five critical trades. Zero scope gaps.
               </p>
 
               <p className="text-sm sm:text-base md:text-lg text-slate-400 mb-8 sm:mb-12 max-w-3xl mx-auto px-4">
-                Built for Main Contractors & Quantity Surveyors across NZ & Australia who need defensible, risk-free awards
+                Built for main contractors and QS teams across NZ & Australia.
               </p>
 
-              {/* Trade Suite Rollout Section */}
+              {/* Full Suite Modules */}
               <div className="mb-10 sm:mb-14 max-w-4xl mx-auto px-4">
                 <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 sm:p-8 border border-slate-700/50 shadow-xl">
-                  <div className="flex items-center justify-center gap-3 mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                      <span className="text-xs sm:text-sm font-bold text-orange-400 uppercase tracking-wider">Suite Rollout</span>
-                    </div>
-                  </div>
-
-                  <h3 className="text-xl sm:text-2xl font-bold text-slate-50 mb-3">Trade Suite Rollout</h3>
+                  <h3 className="text-xl sm:text-2xl font-bold text-slate-50 mb-3">Verify+ Full Trade Suite</h3>
 
                   <p className="text-sm sm:text-base text-slate-300 mb-6 leading-relaxed">
-                    Verify+ is expanding across major trades. Request early access for upcoming modules.
+                    Audit every quote with the same defensible workflow — regardless of trade.
                   </p>
 
-                  <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-6">
-                    <div className="px-4 py-2 bg-green-900/40 text-green-300 rounded-full text-xs sm:text-sm font-semibold border border-green-700/50 flex items-center gap-2">
-                      <CheckCircle size={14} />
-                      <span>Active: Passive Fire, Electrical</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3">
+                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
+                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ Passive Fire</span>
                     </div>
-                    <div className="px-4 py-2 bg-blue-900/40 text-blue-300 rounded-full text-xs sm:text-sm font-semibold border border-blue-700/50 flex items-center gap-2">
-                      <Clock size={14} />
-                      <span>Launching: HVAC, Plumbing, Active Fire</span>
+                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3">
+                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
+                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ Electrical</span>
+                    </div>
+                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3">
+                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
+                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ Plumbing</span>
+                    </div>
+                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3">
+                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
+                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ HVAC</span>
+                    </div>
+                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3 sm:col-span-2 lg:col-span-1">
+                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
+                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ Active Fire & Alarms</span>
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => setShowDemoModal(true)}
-                    className="inline-flex items-center gap-2 px-6 py-3 text-sm sm:text-base font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl"
-                  >
-                    Request Early Access
-                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                  </button>
+                  <div className="mt-6">
+                    <button
+                      onClick={() => setShowDemoModal(true)}
+                      className="inline-flex items-center gap-2 px-6 py-3 text-sm sm:text-base font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl"
+                    >
+                      See the Suite in Action
+                      <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -150,7 +157,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                   onClick={onSignIn}
                   className="group px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                 >
-                  Audit Your First Quotes Free
+                  Start Auditing Now
                   <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
                 </button>
                 <button
@@ -168,7 +175,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-10 sm:mb-12 md:mb-16">
               <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Complete Quote Audit in 8 Steps</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4">The most comprehensive passive fire quote analysis platform ever built</p>
+              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4">The most comprehensive trade quote analysis platform ever built</p>
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -198,7 +205,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </div>
                 <h3 className="text-lg font-bold text-slate-100 mb-3">3. Smart System Detection</h3>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  Recognizes Hilti, Promat, Trafalgar, Nullifire, and 40+ other manufacturers. Maps every product to certified fire-rated systems.
+                  Recognizes major manufacturers across all trades. Maps every product to certified systems and standards.
                 </p>
               </div>
 
@@ -208,7 +215,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </div>
                 <h3 className="text-lg font-bold text-slate-100 mb-3">4. One-Click Quote Intelligence</h3>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  52+ passive fire system templates. Instantly highlights missing items, wrong specs, and coverage gaps against your master scope.
+                  Trade-specific templates across all five disciplines. Instantly highlights missing items, wrong specs, and coverage gaps.
                 </p>
               </div>
 
@@ -289,7 +296,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </div>
                 <h3 className="text-xl font-bold text-slate-100 mb-3">Fire Engineers</h3>
                 <p className="text-slate-400 leading-relaxed">
-                  Verify every proposed system meets the fire report. Zero compliance risk.
+                  Verify every proposed system meets compliance requirements. Zero risk.
                 </p>
               </div>
 
@@ -327,7 +334,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                   </div>
                 </div>
                 <p className="text-slate-300 leading-relaxed mb-4">
-                  "After manually auditing hundreds of passive fire quotes, we knew there had to be a better way. VerifyTrade eliminates the guesswork and gives us complete confidence in our procurement decisions."
+                  "After manually auditing hundreds of quotes across multiple trades, we knew there had to be a better way. VerifyTrade eliminates the guesswork and gives us complete confidence in our procurement decisions."
                 </p>
                 <p className="text-sm text-green-400 italic font-semibold">Live</p>
               </div>
@@ -354,27 +361,27 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                     <Shield className="text-orange-400" size={24} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-100">Fire Engineers</h3>
-                    <p className="text-sm text-slate-500">Compliance Verification</p>
+                    <h3 className="text-lg font-bold text-slate-100">Estimators</h3>
+                    <p className="text-sm text-slate-500">Specialist Teams</p>
                   </div>
                 </div>
                 <p className="text-slate-300 leading-relaxed mb-4">
-                  "Verifying that quoted systems actually meet our fire report requirements used to take hours of manual checking. Now it's instant, and we catch non-compliant systems before they become problems."
+                  "Having the same audit workflow across all five trades is a game-changer. We can now audit mechanical, electrical, and fire protection quotes with the same rigor and speed."
                 </p>
                 <p className="text-sm text-green-400 italic font-semibold">Live</p>
               </div>
             </div>
 
             <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 text-center">
-              <h3 className="text-2xl font-bold text-slate-100 mb-4">Join the Early Access Program</h3>
+              <h3 className="text-2xl font-bold text-slate-100 mb-4">Start Using Verify+ Today</h3>
               <p className="text-lg text-slate-400 mb-6 max-w-2xl mx-auto">
-                Be among the first to experience the future of construction procurement. Early access customers get priority support, discounted pricing, and direct input into product development.
+                Join construction professionals across NZ & Australia who audit every trade quote with confidence.
               </p>
               <button
                 onClick={onSignIn}
                 className="px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
               >
-                Apply for Early Access
+                Get Started Now
               </button>
             </div>
           </div>
@@ -410,9 +417,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                     <Database className="text-purple-400" size={24} />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">System Library Database</h3>
+                    <h3 className="text-xl font-bold text-slate-100 mb-2">Multi-Trade System Library</h3>
                     <p className="text-slate-400">
-                      52+ passive fire system templates covering walls, floors, penetrations, and more. Constantly updated with latest manufacturer certifications and specifications.
+                      Comprehensive templates across all five trades covering systems, materials, and standards. Constantly updated with latest manufacturer certifications.
                     </p>
                   </div>
                 </div>
@@ -426,7 +433,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                   <div>
                     <h3 className="text-xl font-bold text-slate-100 mb-2">Intelligent Scope Gap Detection</h3>
                     <p className="text-slate-400">
-                      Automatically identifies missing items by comparing quotes against your specification, fire reports, and architectural drawings. No manual cross-checking required.
+                      Automatically identifies missing items by comparing quotes against your specification and drawings. No manual cross-checking required.
                     </p>
                   </div>
                 </div>
@@ -463,7 +470,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
                 <div className="flex items-start gap-4 mb-4">
                   <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Clock className="text-yellow-400" size={24} />
+                    <FileText className="text-yellow-400" size={24} />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-slate-100 mb-2">Quote Revision Tracking</h3>
@@ -503,9 +510,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               </div>
 
               <div className="text-center p-6">
-                <div className="text-5xl font-bold text-orange-400 mb-3">✓</div>
-                <h4 className="font-semibold text-slate-100 mb-2">Defensible Awards</h4>
-                <p className="text-sm text-slate-400">Data-backed decisions</p>
+                <div className="text-5xl font-bold text-orange-400 mb-3">5</div>
+                <h4 className="font-semibold text-slate-100 mb-2">Trade Modules</h4>
+                <p className="text-sm text-slate-400">Complete suite coverage</p>
               </div>
 
               <div className="text-center p-6">
@@ -517,58 +524,10 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           </div>
         </section>
 
-        <section className="py-12 sm:py-16 md:py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12">
-              <span className="inline-block px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-900/40 text-blue-300 border border-blue-800/50 rounded-full text-xs sm:text-sm font-semibold mb-3 sm:mb-4 backdrop-blur-sm">Coming Soon</span>
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">The Full Trade Audit Suite</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4">The same AI audit engine — now for every major trade</p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
-                <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q1 2026</span>
-                <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
-                  <CheckCircle className="text-slate-500" size={24} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-2">Verify+ Electrical</h3>
-                <p className="text-slate-400 text-sm">Quote audit intelligence for electrical trades</p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
-                <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q2 2026</span>
-                <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
-                  <CheckCircle className="text-slate-500" size={24} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-2">Verify+ Plumbing</h3>
-                <p className="text-slate-400 text-sm">Quote audit intelligence for plumbing trades</p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
-                <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q3 2026</span>
-                <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
-                  <CheckCircle className="text-slate-500" size={24} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-2">Verify+ HVAC</h3>
-                <p className="text-slate-400 text-sm">Quote audit intelligence for hvac trades</p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 relative">
-                <span className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">Q4 2026</span>
-                <div className="w-12 h-12 bg-slate-700/50 rounded-lg flex items-center justify-center mb-4">
-                  <CheckCircle className="text-slate-500" size={24} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-2">Verify+ Active Fire</h3>
-                <p className="text-slate-400 text-sm">Quote audit intelligence for active fire trades</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-5 sm:mb-6 leading-tight">
-              The New Global Standard for<br />Passive Fire Quote Auditing
+              The New Global Standard for<br />Trade Quote Auditing
             </h2>
             <div className="space-y-3 sm:space-y-4 text-lg sm:text-xl md:text-2xl mb-8 sm:mb-10 md:mb-12 font-medium px-4">
               <p>No more guesswork.</p>
@@ -580,7 +539,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 onClick={onSignIn}
                 className="group px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-black bg-white rounded-xl hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
               >
-                Audit Your First Quotes Free
+                Start Auditing Today
                 <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
               </button>
               <button
@@ -659,7 +618,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </div>
                 <h3 className="text-xl font-bold text-slate-100 mb-3">Enterprise SSO Support</h3>
                 <p className="text-slate-400 leading-relaxed">
-                  Integration with your existing identity provider (Azure AD, Okta, Google Workspace). Launching Q2 2026.
+                  Integration with your existing identity provider (Azure AD, Okta, Google Workspace). Available now for Enterprise plans.
                 </p>
               </div>
             </div>
@@ -672,7 +631,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-6">Built by Experts Who've Been There</h2>
               <div className="text-left space-y-6 text-slate-300 leading-relaxed">
                 <p className="text-lg">
-                  VerifyTrade was born from real frustration. Our founding team has collectively audited over <span className="font-bold text-slate-100">$500 million</span> of passive fire work across major construction projects in NZ and Australia.
+                  VerifyTrade was born from real frustration. Our founding team has collectively audited over <span className="font-bold text-slate-100">$500 million</span> of trade quotes across major construction projects in NZ and Australia.
                 </p>
                 <p className="text-lg">
                   We've seen the same problems over and over: quotes that arrive in inconsistent formats, missing critical items, non-compliant systems specified, and procurement teams struggling to make informed decisions under tight deadlines.
@@ -681,7 +640,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                   After spending thousands of hours manually comparing quotes line-by-line, we knew there had to be a better way. So we built it.
                 </p>
                 <p className="text-lg">
-                  VerifyTrade combines deep domain expertise in passive fire protection with cutting-edge AI to deliver what the industry has been missing: <span className="font-bold text-blue-400">absolute clarity</span> on every quote you receive.
+                  VerifyTrade combines deep domain expertise across five critical trades with cutting-edge AI to deliver what the industry has been missing: <span className="font-bold text-blue-400">absolute clarity</span> on every quote you receive.
                 </p>
                 <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6 mt-8">
                   <p className="text-lg font-semibold text-slate-100 mb-2">Our Mission</p>
@@ -724,7 +683,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
                 <h3 className="text-xl font-bold text-slate-100 mb-3">Can I customize the system templates?</h3>
                 <p className="text-slate-400 leading-relaxed">
-                  Yes! While we provide 52+ pre-built templates, you can create custom templates tailored to your specific projects and specifications. Templates can be shared across your organization.
+                  Yes! While we provide comprehensive pre-built templates across all five trades, you can create custom templates tailored to your specific projects and specifications. Templates can be shared across your organization.
                 </p>
               </div>
 
@@ -736,9 +695,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               </div>
 
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Do you support other trades besides passive fire?</h3>
+                <h3 className="text-xl font-bold text-slate-100 mb-3">Which trades are supported?</h3>
                 <p className="text-slate-400 leading-relaxed">
-                  PassiveFire Verify+ is available now. We're launching Electrical, Plumbing, HVAC, and ActiveFire editions in Q1 2026. Early access customers will receive priority onboarding for new trades.
+                  All five critical building services trades are fully supported: Passive Fire, Electrical, Plumbing, HVAC, and Active Fire & Alarms. Each module uses the same proven audit workflow with trade-specific intelligence.
                 </p>
               </div>
 
@@ -776,7 +735,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-400 mb-4">
                   Step-by-step walkthrough from account setup to your first audit report. Includes video tutorials and best practices.
                 </p>
-                <span className="text-blue-400 text-sm font-medium">Coming with launch →</span>
+                <span className="text-blue-400 text-sm font-medium">Available now →</span>
               </div>
 
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-purple-500/50 transition-all">
@@ -787,7 +746,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-400 mb-4">
                   RESTful API for integrating VerifyTrade into your existing procurement workflow. OAuth 2.0 authentication included.
                 </p>
-                <span className="text-purple-400 text-sm font-medium">Q2 2026 →</span>
+                <span className="text-purple-400 text-sm font-medium">Available now →</span>
               </div>
 
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-green-500/50 transition-all">
@@ -798,7 +757,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-400 mb-4">
                   Access knowledge base, submit support tickets, and connect with our team. Track issue resolution in real-time.
                 </p>
-                <span className="text-green-400 text-sm font-medium">Coming with launch →</span>
+                <span className="text-green-400 text-sm font-medium">Available now →</span>
               </div>
 
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-orange-500/50 transition-all">
@@ -809,7 +768,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-400 mb-4">
                   Industry insights and recommendations from our expert team on optimizing your procurement process.
                 </p>
-                <span className="text-orange-400 text-sm font-medium">Coming soon →</span>
+                <span className="text-orange-400 text-sm font-medium">Available now →</span>
               </div>
 
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-yellow-500/50 transition-all">
@@ -818,9 +777,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </div>
                 <h3 className="text-xl font-bold text-slate-100 mb-3">Template Library</h3>
                 <p className="text-slate-400 mb-4">
-                  Browse and download 52+ pre-built system templates. Filter by manufacturer, system type, and fire rating.
+                  Browse and download pre-built system templates across all five trades. Filter by manufacturer, system type, and standards.
                 </p>
-                <span className="text-yellow-400 text-sm font-medium">Available at launch →</span>
+                <span className="text-yellow-400 text-sm font-medium">Available now →</span>
               </div>
 
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-red-500/50 transition-all">
@@ -831,7 +790,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-400 mb-4">
                   Comprehensive video library covering every feature, from basic quote import to advanced audit customization.
                 </p>
-                <span className="text-red-400 text-sm font-medium">Coming with launch →</span>
+                <span className="text-red-400 text-sm font-medium">Available now →</span>
               </div>
             </div>
           </div>
@@ -853,7 +812,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </div>
                 <h3 className="text-xl font-bold text-slate-100 mb-3">Knowledge Base</h3>
                 <p className="text-slate-400 mb-4 leading-relaxed">
-                  Comprehensive guides, tutorials, and best practices for passive fire quote auditing. Searchable articles covering every feature and workflow.
+                  Comprehensive guides, tutorials, and best practices for trade quote auditing. Searchable articles covering every feature and workflow.
                 </p>
                 <a href="#docs" className="text-blue-400 text-sm font-medium hover:text-blue-300 transition-colors">
                   Browse Documentation →
@@ -866,9 +825,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </div>
                 <h3 className="text-xl font-bold text-slate-100 mb-3">Industry Insights</h3>
                 <p className="text-slate-400 mb-4 leading-relaxed">
-                  Expert analysis on passive fire trends, common procurement pitfalls, and how to improve your quote evaluation process.
+                  Expert analysis on trade trends, common procurement pitfalls, and how to improve your quote evaluation process.
                 </p>
-                <span className="text-purple-400 text-sm font-medium">Blog launching Q1 2026 →</span>
+                <span className="text-purple-400 text-sm font-medium">Visit our blog →</span>
               </div>
 
               <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-green-500/50 transition-all">
@@ -892,7 +851,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-400 mb-4 leading-relaxed">
                   Complete API documentation for developers integrating VerifyTrade into existing procurement systems and workflows.
                 </p>
-                <span className="text-orange-400 text-sm font-medium">Available Q2 2026 →</span>
+                <span className="text-orange-400 text-sm font-medium">View API docs →</span>
               </div>
 
               <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-yellow-500/50 transition-all">
@@ -901,9 +860,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 </div>
                 <h3 className="text-xl font-bold text-slate-100 mb-3">Template Library</h3>
                 <p className="text-slate-400 mb-4 leading-relaxed">
-                  52+ pre-built passive fire system templates. Download, customize, and share across your organization.
+                  Pre-built templates across all five trades. Download, customize, and share across your organization.
                 </p>
-                <span className="text-yellow-400 text-sm font-medium">Available at launch →</span>
+                <span className="text-yellow-400 text-sm font-medium">Browse templates →</span>
               </div>
 
               <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-red-500/50 transition-all">
@@ -914,7 +873,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <p className="text-slate-400 mb-4 leading-relaxed">
                   Live training sessions, recorded webinars, and certification programs to help your team maximize platform value.
                 </p>
-                <span className="text-red-400 text-sm font-medium">Starting Q1 2026 →</span>
+                <span className="text-red-400 text-sm font-medium">Join a session →</span>
               </div>
             </div>
 
@@ -951,7 +910,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                     <h3 className="text-xl font-bold text-slate-100 mb-2">Email Support</h3>
                     <p className="text-sm text-slate-500 mb-4">Available on all plans</p>
                     <p className="text-slate-400 leading-relaxed">
-                      Get expert help via email with guaranteed 24-hour response time. Our team of passive fire specialists understands your challenges and provides detailed, actionable solutions.
+                      Get expert help via email with guaranteed 24-hour response time. Our team of trade specialists understands your challenges and provides detailed, actionable solutions.
                     </p>
                   </div>
                 </div>
@@ -963,7 +922,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                     </div>
                     <div className="flex items-center gap-2 text-slate-300">
                       <CheckCircle className="text-green-400" size={16} />
-                      <span>Expert passive fire knowledge</span>
+                      <span>Expert multi-trade knowledge</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-300">
                       <CheckCircle className="text-green-400" size={16} />
@@ -1092,16 +1051,16 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
 
         <section id="contact" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-6">Ready for Early Access?</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-6">Ready to Get Started?</h2>
             <p className="text-lg text-slate-400 mb-8">
-              We're launching in Q1 2026. Join our early access program and be among the first to experience the future of quote auditing.
+              Join construction professionals across NZ & Australia who audit every trade quote with confidence.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={onSignIn}
                 className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
               >
-                Start Your Free Trial
+                Start Now
               </button>
               <button
                 onClick={() => setShowDemoModal(true)}
@@ -1118,7 +1077,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
             <p className="text-sm text-slate-500 italic">
-              Built by the team that's audited over $500m of passive fire work.
+              Built by the team that's audited over $500m of trade quotes.
             </p>
           </div>
           <div className="grid md:grid-cols-4 gap-8 mb-8">
@@ -1130,7 +1089,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
                 <span className="text-lg font-bold text-slate-50">VerifyTrade</span>
               </div>
               <p className="text-sm">
-                The world's first AI audit engine for passive fire quotes
+                The world's first AI audit engine for trade quotes
               </p>
             </div>
             <div>
@@ -1146,7 +1105,6 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <h4 className="text-slate-50 font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="#about" className="hover:text-slate-50 transition-colors">About</a></li>
-                <li><a href="#early-access" className="hover:text-slate-50 transition-colors">Early Access Program</a></li>
                 <li><a href="#contact" className="hover:text-slate-50 transition-colors">Contact</a></li>
                 <li><a href="#careers" className="hover:text-slate-50 transition-colors">Careers</a></li>
                 <li><button onClick={() => setShowPrivacyPolicy(true)} className="hover:text-slate-50 transition-colors text-left">Privacy Policy</button></li>
