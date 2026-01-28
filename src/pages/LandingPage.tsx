@@ -41,7 +41,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
               <img
-                src="/verifytrade-shield.svg?v=2"
+                src="/verifytrade_logo_2.jpg"
                 alt="VerifyTrade Shield"
                 className="h-10 w-auto object-contain"
                 onError={(e) => {
