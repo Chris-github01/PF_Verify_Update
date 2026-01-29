@@ -99,11 +99,12 @@ export default function Login() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-6">
-            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
-              <Shield className="text-white" size={24} />
-            </div>
-            <span className="text-2xl font-bold text-slate-50">VerifyTrade</span>
+          <div className="inline-flex items-center justify-center mb-6">
+            <img
+              src="/verifytrade-new-logo.png"
+              alt="VerifyTrade"
+              className="h-10 w-auto object-contain"
+            />
           </div>
           <h1 className="text-3xl font-bold text-slate-50 mb-2">
             {isSignUp ? 'Create your account' : isAdminMode ? 'Admin Center Login' : 'Sign in to VerifyTrade'}

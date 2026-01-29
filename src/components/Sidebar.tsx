@@ -105,18 +105,16 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
       } hidden md:flex flex-col border-r border-slate-800 bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] transition-all duration-200 fixed left-0 top-0 h-screen z-40`}
     >
       {/* Brand Header */}
-      <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'} px-5 pt-5 pb-4`}>
-        <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30 flex-shrink-0">
-          <Flame className="w-5 h-5 text-white" />
-        </div>
-        {!collapsed && (
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold tracking-wide text-slate-50">
-              Verify+ {getTradeDisplayName(selectedTrade)}
-            </span>
-            <span className="text-[11px] text-slate-400">
-              Quote Audit Engine
-            </span>
+      <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-5 pt-5 pb-4`}>
+        {!collapsed ? (
+          <img
+            src="/verifytrade-new-logo.png"
+            alt="VerifyTrade"
+            className="h-8 w-auto object-contain"
+          />
+        ) : (
+          <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30 flex-shrink-0">
+            <Flame className="w-5 h-5 text-white" />
           </div>
         )}
       </div>

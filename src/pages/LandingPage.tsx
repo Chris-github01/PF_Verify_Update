@@ -30,9 +30,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <img
-                src="/verifytrade-logo-white.svg"
+                src="/verifytrade-new-logo.png"
                 alt="VerifyTrade - Trust & Verification"
-                className="h-12 w-auto object-contain"
+                className="h-10 w-auto object-contain"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                   console.error('Logo failed to load');
@@ -1082,11 +1082,12 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           </div>
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
-                  <Shield className="text-white" size={14} />
-                </div>
-                <span className="text-lg font-bold text-slate-50">VerifyTrade</span>
+              <div className="flex items-center mb-4">
+                <img
+                  src="/verifytrade-new-logo.png"
+                  alt="VerifyTrade"
+                  className="h-8 w-auto object-contain"
+                />
               </div>
               <p className="text-sm">
                 The world's first AI audit engine for trade quotes
