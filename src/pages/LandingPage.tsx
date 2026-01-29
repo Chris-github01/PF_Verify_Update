@@ -28,16 +28,9 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
       <nav className="fixed top-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <img
-                src="/verifytrade-new-logo.png"
-                alt="VerifyTrade - Trust & Verification"
-                className="h-10 w-auto object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  console.error('Logo failed to load');
-                }}
-              />
+            <div className="flex items-center gap-3">
+              <Shield className="h-8 w-8 text-white" strokeWidth={2} />
+              <span className="text-xl font-bold text-white tracking-tight">VerifyTrade</span>
             </div>
 
             <div className="hidden md:flex items-center gap-8">
@@ -1082,12 +1075,11 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           </div>
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center mb-4">
-                <img
-                  src="/verifytrade-new-logo.png"
-                  alt="VerifyTrade"
-                  className="h-8 w-auto object-contain"
-                />
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
+                  <Shield className="text-white" size={14} />
+                </div>
+                <span className="text-lg font-bold text-slate-50">VerifyTrade</span>
               </div>
               <p className="text-sm">
                 The world's first AI audit engine for trade quotes
