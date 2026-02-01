@@ -363,8 +363,7 @@ function AppContent() {
           reference: reference || null,
           status: 'active',
           trade: currentTrade,
-          created_by_user_id: session.user.id,
-          user_id: session.user.id,
+          created_by: session.user.id,
         })
         .select()
         .single();
