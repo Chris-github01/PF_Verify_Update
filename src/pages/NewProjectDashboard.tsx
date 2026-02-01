@@ -336,9 +336,19 @@ export default function NewProjectDashboard({
     e.preventDefault();
     if (!newProjectName.trim()) return;
 
+    console.log('[NewProjectDashboard] Submitting project creation:', {
+      name: newProjectName,
+      client: newProjectClient,
+      reference: newProjectReference,
+      currentOrganisation: currentOrganisation?.id,
+      currentTrade: currentTrade
+    });
+
     setIsCreating(true);
     const projectId = await onCreateProject(newProjectName, newProjectClient, newProjectReference);
     setIsCreating(false);
+
+    console.log('[NewProjectDashboard] Project creation returned:', projectId);
 
     if (projectId) {
       handleCloseModal();

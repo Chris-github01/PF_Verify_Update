@@ -354,6 +354,15 @@ function AppContent() {
     }
 
     try {
+      console.log('Creating project with:', {
+        organisation_id: currentOrganisation.id,
+        name,
+        client,
+        reference,
+        trade: currentTrade,
+        user_id: session.user.id
+      });
+
       const { data: project, error } = await supabase
         .from('projects')
         .insert({
@@ -364,11 +373,18 @@ function AppContent() {
           status: 'active',
           trade: currentTrade,
           created_by: session.user.id,
+          created_by_user_id: session.user.id,
+          user_id: session.user.id,
         })
         .select()
         .single();
 
-      if (error) throw error;
+      console.log('Project creation result:', { project, error });
+
+      if (error) {
+        console.error('Project creation error details:', error);
+        throw error;
+      }
 
       await loadAllProjects();
 
