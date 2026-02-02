@@ -111,57 +111,86 @@ class PDFPlumberParser:
                 print(f"[PDFPlumber] Table {table_idx+1}: Skipped (too few rows)")
                 continue
 
+            print(f"[PDFPlumber] Table {table_idx+1}: Processing {len(rows)} rows from page {table['page']}")
+
             # Try to identify header row
             header = rows[0]
             data_rows = rows[1:]
 
+            # Look for "Line ID" column - indicates detailed BOQ
+            line_id_col = self._find_column_index(header, ['line id', 'item no', 'line no', '#'])
+
             # Look for common column patterns
-            # Be more flexible with description column - it could be "Service Type", "Description", "Item", etc.
             desc_col = self._find_column_index(header, ['service type', 'description', 'item', 'desc', 'service', 'work description', 'details'])
-            qty_col = self._find_column_index(header, ['qty', 'quantity', 'quant', 'no.', 'qnty'])
+            qty_col = self._find_column_index(header, ['qty', 'quantity', 'quant', 'qnty'])
             unit_col = self._find_column_index(header, ['unit', 'uom', 'um', 'u/m'])
-            rate_col = self._find_column_index(header, ['unit rate', 'rate', 'unit price', 'price', 'unit cost', 'unit_rate'])
-            total_col = self._find_column_index(header, ['total', 'amount', 'value', 'line total', 'ext'])
+            rate_col = self._find_column_index(header, ['unit rate', 'rate', 'unit price', 'price', 'unit cost'])
+            total_col = self._find_column_index(header, ['total', 'amount', 'value', 'line total'])
 
             # If we can't find key columns, try to infer from position
-            # Many quotes have: [Item#] [Description...] [...other cols...] [Qty] [Rate] [Total]
             if desc_col == -1 and len(header) >= 3:
-                # Description is often the widest column or in first few positions
-                desc_col = 0 if len(header) <= 5 else 1
+                # For detailed BOQs with Line ID column, description is usually around column 3-4
+                if line_id_col >= 0:
+                    desc_col = 3  # Usually "Service Type" column
+                else:
+                    desc_col = 0 if len(header) <= 5 else 1
                 print(f"[PDFPlumber] Table {table_idx+1}: No description column found, inferring position {desc_col}")
 
             if total_col == -1 and len(header) >= 2:
-                # Total is usually the last column
                 total_col = len(header) - 1
                 print(f"[PDFPlumber] Table {table_idx+1}: No total column found, using last column {total_col}")
 
-            print(f"[PDFPlumber] Table {table_idx+1}: Found columns - desc:{desc_col}, qty:{qty_col}, unit:{unit_col}, rate:{rate_col}, total:{total_col}")
-            print(f"[PDFPlumber] Table {table_idx+1}: Header: {header}")
+            print(f"[PDFPlumber] Table {table_idx+1}: Columns - line_id:{line_id_col}, desc:{desc_col}, qty:{qty_col}, unit:{unit_col}, rate:{rate_col}, total:{total_col}")
+            print(f"[PDFPlumber] Table {table_idx+1}: Header sample: {header[:8] if len(header) > 8 else header}")
 
             items_from_this_table = 0
+            skipped_rows = 0
+
             for row_idx, row in enumerate(data_rows):
+                # Check if row is completely empty
                 if not row or all(cell is None or str(cell).strip() == '' for cell in row):
+                    skipped_rows += 1
+                    continue
+
+                # Check if this looks like a continuation of headers
+                first_cell = str(row[0] if row else '').lower().strip()
+                if first_cell in ['line id', 'item', 'no.', '#', 'description']:
+                    skipped_rows += 1
                     continue
 
                 try:
+                    desc = self._get_cell_value(row, desc_col)
+
+                    # Skip if no description
+                    if not desc or len(desc.strip()) == 0:
+                        skipped_rows += 1
+                        continue
+
+                    # Skip obvious summary/footer lines
+                    desc_lower = desc.lower()
+                    if any(skip in desc_lower for skip in ['sub-total', 'grand total', 'p&g', 'margin', 'ps3', 'please note']):
+                        skipped_rows += 1
+                        continue
+
                     item = {
                         'line_number': row_idx + 1,
-                        'description': self._get_cell_value(row, desc_col),
+                        'description': desc,
                         'quantity': self._parse_number(self._get_cell_value(row, qty_col)),
                         'unit': self._get_cell_value(row, unit_col),
                         'unit_price': self._parse_number(self._get_cell_value(row, rate_col)),
                         'total_price': self._parse_number(self._get_cell_value(row, total_col)),
                     }
 
-                    # Only add if we have at least description and some numeric value
+                    # Add if we have description AND at least one numeric value
                     if item['description'] and (item['quantity'] or item['unit_price'] or item['total_price']):
                         line_items.append(item)
                         items_from_this_table += 1
 
                 except Exception as e:
+                    skipped_rows += 1
                     continue
 
-            print(f"[PDFPlumber] Table {table_idx+1}: Extracted {items_from_this_table} items")
+            print(f"[PDFPlumber] Table {table_idx+1}: Extracted {items_from_this_table} items, skipped {skipped_rows} rows")
 
         return line_items
 
