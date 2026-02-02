@@ -311,17 +311,79 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
 
     if (!error && data) {
       console.log('loadItems: Loaded', data.length, 'items');
-      if (data.length > 0) {
+
+      // CRITICAL: Remove lump sum items if we have itemized items
+      const lumpSumItems = data.filter(item => {
+        const unit = String(item.unit || '').toUpperCase().trim();
+        return ['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM'].includes(unit);
+      });
+
+      const itemizedItems = data.filter(item => {
+        const unit = String(item.unit || '').toUpperCase().trim();
+        return !['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM'].includes(unit);
+      });
+
+      console.log('loadItems: Item breakdown -', lumpSumItems.length, 'LS items,', itemizedItems.length, 'itemized items');
+
+      // HARD RULE: If we have ANY itemized items, REMOVE ALL lump sum items
+      let filteredData = data;
+      if (itemizedItems.length > 0) {
+        console.log('loadItems: FILTERING - Removing ALL', lumpSumItems.length, 'lump sum items, keeping', itemizedItems.length, 'itemized items');
+        filteredData = itemizedItems;
+      } else {
+        console.log('loadItems: Only LS items found - keeping all', data.length, 'items');
+      }
+
+      if (filteredData.length > 0) {
         console.log('loadItems: First item sample:', {
-          id: data[0].id,
-          size: data[0].size,
-          frr: data[0].frr,
-          service: data[0].service,
-          confidence: data[0].confidence,
-          system_label: data[0].system_label
+          id: filteredData[0].id,
+          size: filteredData[0].size,
+          frr: filteredData[0].frr,
+          service: filteredData[0].service,
+          confidence: filteredData[0].confidence,
+          system_label: filteredData[0].system_label
         });
       }
-      setItems(data);
+      setItems(filteredData);
+
+      // Recalculate quote total based on filtered items AND delete LS items from database
+      if (filteredData.length !== data.length && lumpSumItems.length > 0) {
+        const recalculatedTotal = filteredData.reduce((sum, item) => {
+          return sum + (item.total_price || 0);
+        }, 0);
+
+        console.log('loadItems: Recalculated total after filtering:', recalculatedTotal);
+
+        // DELETE lump sum items from database permanently
+        const lsItemIds = lumpSumItems.map(item => item.id);
+        const { error: deleteError } = await supabase
+          .from('quote_items')
+          .delete()
+          .in('id', lsItemIds);
+
+        if (deleteError) {
+          console.error('loadItems: Error deleting LS items:', deleteError);
+        } else {
+          console.log('loadItems: DELETED', lsItemIds.length, 'LS items from database');
+        }
+
+        // Update the quote in the database with the correct total
+        const { error: updateError } = await supabase
+          .from('quotes')
+          .update({
+            total_amount: recalculatedTotal,
+            items_count: filteredData.length
+          })
+          .eq('id', quoteId);
+
+        if (updateError) {
+          console.error('loadItems: Error updating quote total:', updateError);
+        } else {
+          console.log('loadItems: Updated quote - items:', data.length, '→', filteredData.length, ', total: $' + recalculatedTotal.toLocaleString());
+          // Reload quotes to reflect updated total
+          loadQuotes();
+        }
+      }
     } else if (error) {
       console.error('loadItems: Error loading items:', error);
     }
