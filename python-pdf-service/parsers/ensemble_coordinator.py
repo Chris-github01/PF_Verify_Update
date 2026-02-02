@@ -75,8 +75,15 @@ class EnsembleCoordinator:
         # Build consensus from all results
         consensus_items = self._build_consensus(results)
 
+        # Remove duplicate summary/lump sum items
+        consensus_items = self._remove_summary_duplicates(consensus_items)
+
         # Select best result
         best_result = self._select_best_result(results)
+
+        # Also clean the best result
+        if best_result.get('items'):
+            best_result['items'] = self._remove_summary_duplicates(best_result['items'])
 
         # Calculate metrics
         success_count = sum(1 for r in results if r['success'])
@@ -270,6 +277,71 @@ class EnsembleCoordinator:
         total_unique = len(item_keys)
 
         return multi_source / total_unique if total_unique > 0 else 0.0
+
+    def _remove_summary_duplicates(self, items: List[Dict]) -> List[Dict]:
+        """
+        Detect and remove summary/lump sum items when detailed line items exist.
+
+        Some quotes have BOTH:
+        - Summary/lump sum items (e.g., "Electrical Services - Fixed Price Lump Sum")
+        - Detailed line items that break down the same work
+
+        This function detects this pattern and removes the summaries to avoid double-counting.
+        """
+        if not items or len(items) < 5:
+            # If there are very few items, likely no duplicates
+            return items
+
+        # Identify potential summary items (lump sum descriptions)
+        summary_items = []
+        detailed_items = []
+
+        summary_keywords = [
+            'lump sum', 'fixed price', 'total', 'sub-total', 'subtotal',
+            'grand total', 'summary', 'allowance', 'optional'
+        ]
+
+        for item in items:
+            desc = item.get('description', '').lower()
+
+            # Check if this looks like a summary item
+            is_summary = any(keyword in desc for keyword in summary_keywords)
+
+            if is_summary:
+                summary_items.append(item)
+            else:
+                detailed_items.append(item)
+
+        # If we have NO summary items, return all items
+        if not summary_items:
+            return items
+
+        # If we have NO detailed items, return all items (including summaries)
+        if not detailed_items:
+            return items
+
+        # Calculate totals
+        summary_total = sum(item.get('total_price', 0) for item in summary_items)
+        detailed_total = sum(item.get('total_price', 0) for item in detailed_items)
+
+        # If the summary total is roughly equal to the detailed total (within 10%),
+        # they are likely duplicates - keep only detailed items
+        if summary_total > 0 and detailed_total > 0:
+            ratio = abs(summary_total - detailed_total) / summary_total
+
+            # If totals are within 10% of each other, it's likely a duplicate
+            if ratio <= 0.10:
+                print(f"[Deduplication] Detected duplicate summary items. "
+                      f"Summary total: ${summary_total:,.2f}, "
+                      f"Detailed total: ${detailed_total:,.2f}, "
+                      f"Difference: {ratio*100:.1f}%")
+                print(f"[Deduplication] Removing {len(summary_items)} summary items, "
+                      f"keeping {len(detailed_items)} detailed items")
+                return detailed_items
+
+        # If totals are significantly different, keep everything
+        # (might be separate optionals, allowances, etc.)
+        return items
 
     def _parse_with_unstructured_wrapper(self, pdf_bytes: bytes, filename: str) -> Dict:
         """
