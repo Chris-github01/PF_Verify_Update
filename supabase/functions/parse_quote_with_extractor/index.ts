@@ -174,10 +174,33 @@ Deno.serve(async (req: Request) => {
     }
 
     const parseResult = await llmResponse.json();
-    const items = parseResult.lines || parseResult.items || [];
+    let items = parseResult.lines || parseResult.items || [];
     const grandTotal = parseResult.totals?.grandTotal || parseResult.grandTotal || parseResult.quoteTotalAmount;
 
     console.log(`AI parser extracted ${items.length} items, grand total: ${grandTotal}`);
+
+    // CRITICAL: Remove lump sum items if we have itemized items
+    const lumpSumItems = items.filter((item: any) => {
+      const unit = String(item.unit || '').toUpperCase().trim();
+      return ['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM'].includes(unit);
+    });
+
+    const itemizedItems = items.filter((item: any) => {
+      const unit = String(item.unit || '').toUpperCase().trim();
+      return !['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM'].includes(unit);
+    });
+
+    console.log(`Item breakdown: ${lumpSumItems.length} LS items, ${itemizedItems.length} itemized items`);
+
+    // HARD RULE: If we have ANY itemized items, remove ALL lump sum items
+    if (itemizedItems.length > 0) {
+      console.log(`FILTERING: Removing ALL ${lumpSumItems.length} lump sum items - keeping ${itemizedItems.length} itemized items`);
+      items = itemizedItems;
+    } else {
+      console.log(`Only LS items found - keeping all ${items.length} items`);
+    }
+
+    console.log(`After filtering: ${items.length} items`);
 
     const lineItemsTotal = items.reduce((sum: number, item: any) => {
       const itemTotal = parseFloat(item.total || item.amount || "0");

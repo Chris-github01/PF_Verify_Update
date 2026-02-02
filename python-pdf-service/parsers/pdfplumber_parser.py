@@ -34,8 +34,22 @@ class PDFPlumberParser:
 
                 # Extract tables and text from each page
                 for page_num, page in enumerate(pdf.pages, 1):
-                    # Extract tables
-                    page_tables = page.extract_tables()
+                    # Extract tables with more aggressive settings
+                    table_settings = {
+                        "vertical_strategy": "lines_strict",
+                        "horizontal_strategy": "lines_strict",
+                        "intersection_tolerance": 5,
+                    }
+                    page_tables = page.extract_tables(table_settings)
+
+                    # If strict mode doesn't find tables, try text-based extraction
+                    if not page_tables:
+                        table_settings = {
+                            "vertical_strategy": "text",
+                            "horizontal_strategy": "text",
+                        }
+                        page_tables = page.extract_tables(table_settings)
+
                     if page_tables:
                         for table_idx, table in enumerate(page_tables):
                             tables.append({
@@ -109,7 +123,13 @@ class PDFPlumberParser:
         """Extract line items from detected tables."""
         line_items = []
 
-        for table_idx, table in enumerate(tables):
+        # CRITICAL: Prioritize tables from later pages (detailed schedules usually on page 2+)
+        # Sort tables: larger tables first, then by page number (later pages first)
+        sorted_tables = sorted(tables, key=lambda t: (-t['row_count'], -t['page']))
+
+        print(f"[PDFPlumber] Processing {len(sorted_tables)} tables in priority order (largest first, later pages first)")
+
+        for table_idx, table in enumerate(sorted_tables):
             rows = table['rows']
             if not rows or len(rows) < 2:
                 print(f"[PDFPlumber] Table {table_idx+1}: Skipped (too few rows)")
@@ -195,6 +215,13 @@ class PDFPlumberParser:
                     continue
 
             print(f"[PDFPlumber] Table {table_idx+1}: Extracted {items_from_this_table} items, skipped {skipped_rows} rows")
+
+        print(f"[PDFPlumber] Total items extracted from all tables: {len(line_items)}")
+
+        # CRITICAL: Check if we have both LS and non-LS items
+        ls_count = sum(1 for item in line_items if str(item.get('unit', '')).upper().strip() in ['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM'])
+        non_ls_count = len(line_items) - ls_count
+        print(f"[PDFPlumber] Breakdown: {ls_count} LS items, {non_ls_count} itemized items")
 
         return line_items
 
