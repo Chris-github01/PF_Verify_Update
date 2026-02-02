@@ -34,7 +34,10 @@ class PDFPlumberParser:
 
                 # Extract tables and text from each page
                 for page_num, page in enumerate(pdf.pages, 1):
-                    # Extract tables with more aggressive settings
+                    # Try multiple strategies to find tables
+                    page_tables = []
+
+                    # Strategy 1: Lines-strict (for bordered tables)
                     table_settings = {
                         "vertical_strategy": "lines_strict",
                         "horizontal_strategy": "lines_strict",
@@ -42,13 +45,44 @@ class PDFPlumberParser:
                     }
                     page_tables = page.extract_tables(table_settings)
 
-                    # If strict mode doesn't find tables, try text-based extraction
+                    # Strategy 2: Lines (less strict)
+                    if not page_tables:
+                        table_settings = {
+                            "vertical_strategy": "lines",
+                            "horizontal_strategy": "lines",
+                            "intersection_tolerance": 10,
+                        }
+                        page_tables = page.extract_tables(table_settings)
+
+                    # Strategy 3: Text-based extraction (for non-bordered tables)
                     if not page_tables:
                         table_settings = {
                             "vertical_strategy": "text",
                             "horizontal_strategy": "text",
+                            "min_words_vertical": 2,
+                            "min_words_horizontal": 2,
                         }
                         page_tables = page.extract_tables(table_settings)
+
+                    # Strategy 4: Explicit extraction for large schedules (page 2+)
+                    if not page_tables and page_num >= 2:
+                        # Try explicit table extraction with very permissive settings
+                        table_settings = {
+                            "vertical_strategy": "explicit",
+                            "horizontal_strategy": "explicit",
+                            "explicit_vertical_lines": [],
+                            "explicit_horizontal_lines": [],
+                        }
+                        # Extract all text and try to parse as table-like structure
+                        text = page.extract_text()
+                        if text:
+                            # Parse text into pseudo-table (split by newlines)
+                            lines = [line for line in text.split('\n') if line.strip()]
+                            if len(lines) > 10:  # If we have substantial content
+                                # Create a pseudo-table where each line is a row
+                                pseudo_table = [[line] for line in lines]
+                                page_tables = [pseudo_table]
+                                print(f"[PDFPlumber] Page {page_num}: Using text-to-table conversion with {len(lines)} lines")
 
                     if page_tables:
                         for table_idx, table in enumerate(page_tables):
