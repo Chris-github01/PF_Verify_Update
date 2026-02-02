@@ -82,17 +82,19 @@ class EnsembleCoordinator:
 
         print(f"[Ensemble] After deduplication: {len(consensus_items)} consensus items")
 
-        # Select best result
+        # CRITICAL: Clean ALL results before selection to remove LS items
+        for result in results:
+            if result.get('success') and result.get('items'):
+                items_before = len(result['items'])
+                result['items'] = self._remove_summary_duplicates(result['items'])
+                items_after = len(result['items'])
+                if items_before != items_after:
+                    print(f"[Ensemble] Cleaned {result['parser_name']}: {items_before} -> {items_after} items")
+
+        # Select best result (after cleaning)
         best_result = self._select_best_result(results)
 
         print(f"[Ensemble] Best result from {best_result.get('parser_name')}: {len(best_result.get('items', []))} items")
-
-        # Also clean the best result
-        if best_result.get('items'):
-            items_before = len(best_result['items'])
-            best_result['items'] = self._remove_summary_duplicates(best_result['items'])
-            items_after = len(best_result['items'])
-            print(f"[Ensemble] Best result after deduplication: {items_before} -> {items_after} items")
 
         # Calculate metrics
         success_count = sum(1 for r in results if r['success'])

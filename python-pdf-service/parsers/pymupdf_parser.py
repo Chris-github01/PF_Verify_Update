@@ -64,6 +64,10 @@ class PyMuPDFParser:
             # Extract line items from text using patterns
             line_items = self._extract_line_items_from_text(full_text, blocks)
 
+            # CRITICAL: Remove lump sum items if we have itemized items
+            line_items = self._filter_lump_sum_items(line_items)
+            print(f"[PyMuPDF] After LS filtering: {len(line_items)} items")
+
             # Extract financials
             financials = self._extract_financials(full_text)
 
@@ -200,6 +204,38 @@ class PyMuPDFParser:
                     })
 
         return line_items
+
+    def _filter_lump_sum_items(self, items: List[Dict]) -> List[Dict]:
+        """
+        Remove lump sum items if we have itemized items.
+        This handles quotes with BOTH a summary page AND a detailed schedule.
+        """
+        if not items:
+            return items
+
+        # Separate lump sum items from itemized items
+        lump_sum_items = []
+        itemized_items = []
+
+        for item in items:
+            unit = str(item.get('unit', '')).upper().strip()
+
+            # Lump sum indicators
+            if unit in ['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM']:
+                lump_sum_items.append(item)
+            else:
+                itemized_items.append(item)
+
+        print(f"[PyMuPDF Filtering] {len(lump_sum_items)} LS items, {len(itemized_items)} itemized items")
+
+        # HARD RULE: If we have ANY itemized items, remove ALL lump sum items
+        if len(itemized_items) > 0:
+            print(f"[PyMuPDF Filtering] REMOVING ALL {len(lump_sum_items)} lump sum items - keeping {len(itemized_items)} itemized items")
+            return itemized_items
+
+        # If we only have lump sum items, keep them (better than nothing)
+        print(f"[PyMuPDF Filtering] Only LS items found - keeping them")
+        return lump_sum_items
 
     def _parse_number(self, value: str) -> float:
         """Parse numeric value from string."""
