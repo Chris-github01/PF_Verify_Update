@@ -235,6 +235,7 @@ class EnsembleCoordinator:
     def _select_best_result(self, results: List[Dict]) -> Dict:
         """
         Select the best result from multiple parser outputs.
+        Strongly prefers LLM-based parsers over simple table extractors.
         """
         successful = [r for r in results if r['success'] and r.get('items')]
 
@@ -249,15 +250,40 @@ class EnsembleCoordinator:
                 'extraction_time_ms': 0,
             }
 
+        # LLM-based parsers are strongly preferred
+        llm_parsers = ['docai', 'textract', 'unstructured', 'pymupdf']
+        simple_parsers = ['pdfplumber', 'ocr']
+
+        # First, check if any LLM parser has good results (10+ items)
+        llm_results = [r for r in successful if r['parser_name'] in llm_parsers and len(r['items']) >= 10]
+
+        if llm_results:
+            print(f"[Selection] Found {len(llm_results)} LLM parsers with 10+ items - preferring them")
+            # Among LLM parsers, choose the one with most items
+            best_llm = max(llm_results, key=lambda r: len(r['items']))
+            print(f"[Selection] Selected {best_llm['parser_name']} with {len(best_llm['items'])} items")
+            return best_llm
+
         # Score = 70% confidence + 30% item count (normalized)
+        # But apply a heavy penalty to simple parsers
         max_items = max(len(r['items']) for r in successful)
 
         def score(result):
             conf = result['confidence_score']
             items_norm = len(result['items']) / max(max_items, 1)
-            return conf * 0.7 + items_norm * 0.3
+            base_score = conf * 0.7 + items_norm * 0.3
 
-        return max(successful, key=score)
+            # Apply parser type bonus/penalty
+            if result['parser_name'] in llm_parsers:
+                base_score *= 1.5  # 50% bonus for LLM parsers
+            elif result['parser_name'] in simple_parsers:
+                base_score *= 0.6  # 40% penalty for simple parsers
+
+            return base_score
+
+        best = max(successful, key=score)
+        print(f"[Selection] Selected {best['parser_name']} with score {score(best):.3f}, {len(best['items'])} items")
+        return best
 
     def _calculate_agreement(self, results: List[Dict]) -> float:
         """
@@ -300,103 +326,95 @@ class EnsembleCoordinator:
         if not items or len(items) < 2:
             return items
 
-        # Identify potential summary items (lump sum descriptions)
+        # STEP 1: Separate items by unit type
+        lump_sum_items = []
+        itemized_items = []
+
+        for item in items:
+            unit = str(item.get('unit', '')).upper().strip()
+
+            # Anything with unit "LS" or similar is automatically a lump sum
+            if unit in ['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM']:
+                lump_sum_items.append(item)
+            else:
+                itemized_items.append(item)
+
+        print(f"[Deduplication] Found {len(lump_sum_items)} items with unit 'LS' and {len(itemized_items)} itemized items")
+
+        # CRITICAL RULE: If we have ANY itemized items, ALWAYS remove lump sum items
+        # This handles quotes that have BOTH a summary page (with LS) and a detailed schedule (with actual units)
+        if len(itemized_items) >= 3:
+            print(f"[Deduplication] HARD RULE: Found {len(itemized_items)} itemized items - REMOVING ALL {len(lump_sum_items)} lump sum items")
+            return itemized_items
+
+        # If we only have lump sum items, keep them
+        if not itemized_items:
+            print(f"[Deduplication] Only lump sum items found - keeping them")
+            return lump_sum_items
+
+        # STEP 2: Additional content-based detection for remaining items
         summary_items = []
         detailed_items = []
 
-        # Keywords that indicate summary/lump sum items
         summary_keywords = [
             'lump sum', 'fixed price', 'sub-total', 'subtotal',
             'grand total', 'summary', '- fixed price', 'fixed price lump sum',
             '- fixed pr', 'fire stopping - fixed', 'services fire stopping'
         ]
 
-        for item in items:
+        for item in itemized_items:
             desc = item.get('description', '').lower()
 
-            # Skip items with no description
             if not desc.strip():
                 detailed_items.append(item)
                 continue
 
-            # AGGRESSIVE DETECTION: Check if this looks like a summary/lump sum item
+            # Check for summary keywords in description
             is_summary = any(keyword in desc for keyword in summary_keywords)
 
             # Check if it's a service-level summary
             is_service_summary = (
                 ('services' in desc and ('fire stopping' in desc or 'firestopping' in desc)) or
-                ('optional -' in desc and len(desc) < 60) or
-                ('heritage building' in desc and len(desc) < 60) or
-                ('new building' in desc and len(desc) < 60)
+                ('optional -' in desc and len(desc) < 60)
             )
 
-            # Check for lump sum unit indicators
-            unit = str(item.get('unit', '')).upper().strip()
-            is_lump_sum_unit = unit in ['LS', 'LUMP SUM', 'L.S.', 'SUM']
-
-            # Check if high-value, low-quantity item (typical of lump sums)
+            # High-value, low-quantity items with short descriptions
             is_high_value_summary = (
-                item.get('total_price', 0) > 5000 and
+                item.get('total_price', 0) > 10000 and
                 item.get('quantity', 0) <= 1 and
-                len(desc) < 100 and
-                (is_lump_sum_unit or 'fixed' in desc or 'lump' in desc or 'optional' in desc)
+                len(desc) < 80
             )
 
-            # If ANY of these conditions are true, treat as summary
-            if is_summary or is_service_summary or is_lump_sum_unit or is_high_value_summary:
+            if is_summary or is_service_summary or is_high_value_summary:
                 summary_items.append(item)
             else:
                 detailed_items.append(item)
 
-        print(f"[Deduplication] Found {len(summary_items)} summary items and {len(detailed_items)} detailed items")
+        print(f"[Deduplication] Content analysis: {len(summary_items)} summary items, {len(detailed_items)} detailed items")
 
-        # If we have NO summary items, return all items
-        if not summary_items:
-            print(f"[Deduplication] No summary items found, returning all {len(items)} items")
-            return items
+        # If we have detailed items, prefer them
+        if len(detailed_items) >= 5:
+            summary_total = sum(item.get('total_price', 0) for item in summary_items)
+            detailed_total = sum(item.get('total_price', 0) for item in detailed_items)
 
-        # If we have NO detailed items, return all items (including summaries)
-        if not detailed_items:
-            print(f"[Deduplication] No detailed items found, returning all {len(items)} items (including summaries)")
-            return items
+            print(f"[Deduplication] Summary total: ${summary_total:,.2f}, Detailed total: ${detailed_total:,.2f}")
 
-        # CRITICAL: If we have ANY detailed items (even just 5+), prefer them over summaries
-        # This is for cases where the quote has BOTH a summary page AND a detailed schedule
-        has_substantial_detail = len(detailed_items) >= 5
-
-        # Calculate totals
-        summary_total = sum(item.get('total_price', 0) for item in summary_items)
-        detailed_total = sum(item.get('total_price', 0) for item in detailed_items)
-
-        print(f"[Deduplication] Summary total: ${summary_total:,.2f}, Detailed total: ${detailed_total:,.2f}")
-
-        # AGGRESSIVE: If we have 5+ detailed items, always prefer them
-        if has_substantial_detail:
             if summary_total > 0 and detailed_total > 0:
-                # If detailed items account for at least 50% of summary total, remove summaries
                 coverage_ratio = detailed_total / summary_total if summary_total > 0 else 0
 
-                if coverage_ratio >= 0.50:
-                    print(f"[Deduplication] AGGRESSIVE MODE: Detailed items cover {coverage_ratio*100:.1f}% of summary. "
-                          f"Removing ALL {len(summary_items)} summary items, keeping {len(detailed_items)} detailed items")
+                if coverage_ratio >= 0.30:  # Even more aggressive - 30% coverage is enough
+                    print(f"[Deduplication] Detailed items cover {coverage_ratio*100:.1f}% - removing summary items")
                     return detailed_items
 
-        # If the totals are within 30% of each other, they are likely duplicates
-        if summary_total > 0 and detailed_total > 0:
-            ratio = abs(summary_total - detailed_total) / summary_total
-
-            if ratio <= 0.30:
-                print(f"[Deduplication] Totals within {ratio*100:.1f}% - removing summary items")
+            # If we have 10+ detailed items, always prefer them
+            if len(detailed_items) >= 10:
+                print(f"[Deduplication] Have {len(detailed_items)} detailed items - preferring them")
                 return detailed_items
 
-        # If we get here and we have 10+ detailed items, still prefer them
-        if len(detailed_items) >= 10:
-            print(f"[Deduplication] Have {len(detailed_items)} detailed items - preferring them over summaries")
-            return detailed_items
-
-        # Otherwise keep everything
-        print(f"[Deduplication] Keeping all {len(items)} items (mixed summary and detail)")
-        return items
+        # Return all itemized items (no lump sums)
+        all_itemized = summary_items + detailed_items
+        print(f"[Deduplication] Returning {len(all_itemized)} itemized items (no lump sums)")
+        return all_itemized
 
     def _parse_with_unstructured_wrapper(self, pdf_bytes: bytes, filename: str) -> Dict:
         """
