@@ -44,45 +44,48 @@ class PDFPlumberParser:
                         "intersection_tolerance": 5,
                     }
                     page_tables = page.extract_tables(table_settings)
+                    if page_tables:
+                        print(f"[PDFPlumber] Page {page_num}: Found {len(page_tables)} tables with lines-strict")
 
                     # Strategy 2: Lines (less strict)
                     if not page_tables:
                         table_settings = {
                             "vertical_strategy": "lines",
                             "horizontal_strategy": "lines",
-                            "intersection_tolerance": 10,
+                            "intersection_tolerance": 15,
                         }
                         page_tables = page.extract_tables(table_settings)
+                        if page_tables:
+                            print(f"[PDFPlumber] Page {page_num}: Found {len(page_tables)} tables with lines")
 
                     # Strategy 3: Text-based extraction (for non-bordered tables)
                     if not page_tables:
                         table_settings = {
                             "vertical_strategy": "text",
                             "horizontal_strategy": "text",
-                            "min_words_vertical": 2,
-                            "min_words_horizontal": 2,
+                            "min_words_vertical": 1,
+                            "min_words_horizontal": 1,
                         }
                         page_tables = page.extract_tables(table_settings)
+                        if page_tables:
+                            print(f"[PDFPlumber] Page {page_num}: Found {len(page_tables)} tables with text strategy")
 
-                    # Strategy 4: Explicit extraction for large schedules (page 2+)
+                    # Strategy 4: Very aggressive text extraction (last resort for page 2+)
                     if not page_tables and page_num >= 2:
-                        # Try explicit table extraction with very permissive settings
+                        print(f"[PDFPlumber] Page {page_num}: All strategies failed, trying aggressive text extraction")
+                        # Try with snap_tolerance and edge_min_length
                         table_settings = {
-                            "vertical_strategy": "explicit",
-                            "horizontal_strategy": "explicit",
-                            "explicit_vertical_lines": [],
-                            "explicit_horizontal_lines": [],
+                            "vertical_strategy": "text",
+                            "horizontal_strategy": "text",
+                            "snap_tolerance": 5,
+                            "join_tolerance": 5,
+                            "edge_min_length": 1,
+                            "min_words_vertical": 1,
+                            "text_tolerance": 5,
                         }
-                        # Extract all text and try to parse as table-like structure
-                        text = page.extract_text()
-                        if text:
-                            # Parse text into pseudo-table (split by newlines)
-                            lines = [line for line in text.split('\n') if line.strip()]
-                            if len(lines) > 10:  # If we have substantial content
-                                # Create a pseudo-table where each line is a row
-                                pseudo_table = [[line] for line in lines]
-                                page_tables = [pseudo_table]
-                                print(f"[PDFPlumber] Page {page_num}: Using text-to-table conversion with {len(lines)} lines")
+                        page_tables = page.extract_tables(table_settings)
+                        if page_tables:
+                            print(f"[PDFPlumber] Page {page_num}: Found {len(page_tables)} tables with aggressive text strategy")
 
                     if page_tables:
                         for table_idx, table in enumerate(page_tables):
