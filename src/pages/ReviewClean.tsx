@@ -334,6 +334,25 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         console.log('loadItems: Only LS items found - keeping all', data.length, 'items');
       }
 
+      // CRITICAL: Remove items marked as "Optional" to avoid double-counting
+      const optionalItems = filteredData.filter(item => {
+        const desc = String(item.description || '').toLowerCase();
+        return desc.includes('optional');
+      });
+
+      const nonOptionalItems = filteredData.filter(item => {
+        const desc = String(item.description || '').toLowerCase();
+        return !desc.includes('optional');
+      });
+
+      console.log('loadItems: Optional filtering -', optionalItems.length, 'optional items,', nonOptionalItems.length, 'base items');
+
+      // If we have both optional and non-optional items, keep only non-optional
+      if (nonOptionalItems.length > 0 && optionalItems.length > 0) {
+        console.log('loadItems: FILTERING - Removing', optionalItems.length, 'optional items to avoid double-counting');
+        filteredData = nonOptionalItems;
+      }
+
       if (filteredData.length > 0) {
         console.log('loadItems: First item sample:', {
           id: filteredData[0].id,
@@ -346,25 +365,29 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
       }
       setItems(filteredData);
 
-      // Recalculate quote total based on filtered items AND delete LS items from database
-      if (filteredData.length !== data.length && lumpSumItems.length > 0) {
+      // Recalculate quote total based on filtered items AND delete unwanted items from database
+      if (filteredData.length !== data.length) {
         const recalculatedTotal = filteredData.reduce((sum, item) => {
           return sum + (item.total_price || 0);
         }, 0);
 
         console.log('loadItems: Recalculated total after filtering:', recalculatedTotal);
 
-        // DELETE lump sum items from database permanently
-        const lsItemIds = lumpSumItems.map(item => item.id);
-        const { error: deleteError } = await supabase
-          .from('quote_items')
-          .delete()
-          .in('id', lsItemIds);
+        // DELETE lump sum AND optional items from database permanently
+        const itemsToDelete = [...lumpSumItems, ...optionalItems];
+        const uniqueIdsToDelete = [...new Set(itemsToDelete.map(item => item.id))];
 
-        if (deleteError) {
-          console.error('loadItems: Error deleting LS items:', deleteError);
-        } else {
-          console.log('loadItems: DELETED', lsItemIds.length, 'LS items from database');
+        if (uniqueIdsToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('quote_items')
+            .delete()
+            .in('id', uniqueIdsToDelete);
+
+          if (deleteError) {
+            console.error('loadItems: Error deleting filtered items:', deleteError);
+          } else {
+            console.log('loadItems: DELETED', uniqueIdsToDelete.length, 'items from database (LS + Optional)');
+          }
         }
 
         // Update the quote in the database with the correct total

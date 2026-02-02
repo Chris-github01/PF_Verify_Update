@@ -200,7 +200,27 @@ Deno.serve(async (req: Request) => {
       console.log(`Only LS items found - keeping all ${items.length} items`);
     }
 
-    console.log(`After filtering: ${items.length} items`);
+    // CRITICAL: Remove items marked as "Optional" to avoid double-counting
+    const optionalItems = items.filter((item: any) => {
+      const desc = String(item.description || '').toLowerCase();
+      return desc.includes('optional');
+    });
+
+    const nonOptionalItems = items.filter((item: any) => {
+      const desc = String(item.description || '').toLowerCase();
+      return !desc.includes('optional');
+    });
+
+    console.log(`Optional filtering: ${optionalItems.length} optional items, ${nonOptionalItems.length} base items`);
+
+    // If we have both optional and non-optional items, keep only non-optional
+    // (optional items are usually marked-up versions listed separately on summary pages)
+    if (nonOptionalItems.length > 0 && optionalItems.length > 0) {
+      console.log(`FILTERING: Removing ${optionalItems.length} optional items to avoid double-counting - keeping ${nonOptionalItems.length} base items`);
+      items = nonOptionalItems;
+    }
+
+    console.log(`After all filtering: ${items.length} items`);
 
     const lineItemsTotal = items.reduce((sum: number, item: any) => {
       const itemTotal = parseFloat(item.total || item.amount || "0");
