@@ -75,15 +75,24 @@ class EnsembleCoordinator:
         # Build consensus from all results
         consensus_items = self._build_consensus(results)
 
+        print(f"[Ensemble] Before deduplication: {len(consensus_items)} consensus items")
+
         # Remove duplicate summary/lump sum items
         consensus_items = self._remove_summary_duplicates(consensus_items)
+
+        print(f"[Ensemble] After deduplication: {len(consensus_items)} consensus items")
 
         # Select best result
         best_result = self._select_best_result(results)
 
+        print(f"[Ensemble] Best result from {best_result.get('parser_name')}: {len(best_result.get('items', []))} items")
+
         # Also clean the best result
         if best_result.get('items'):
+            items_before = len(best_result['items'])
             best_result['items'] = self._remove_summary_duplicates(best_result['items'])
+            items_after = len(best_result['items'])
+            print(f"[Ensemble] Best result after deduplication: {items_before} -> {items_after} items")
 
         # Calculate metrics
         success_count = sum(1 for r in results if r['success'])
@@ -288,7 +297,7 @@ class EnsembleCoordinator:
 
         This function detects this pattern and removes the summaries to avoid double-counting.
         """
-        if not items or len(items) < 5:
+        if not items or len(items) < 3:
             # If there are very few items, likely no duplicates
             return items
 
@@ -296,21 +305,49 @@ class EnsembleCoordinator:
         summary_items = []
         detailed_items = []
 
+        # Keywords that indicate summary/lump sum items
         summary_keywords = [
-            'lump sum', 'fixed price', 'total', 'sub-total', 'subtotal',
-            'grand total', 'summary', 'allowance', 'optional'
+            'lump sum', 'fixed price', 'sub-total', 'subtotal',
+            'grand total', 'summary', '- fixed price', 'fixed price lump sum'
         ]
+
+        # Keywords that indicate optional/additional items (might be legitimate separate items)
+        optional_keywords = ['optional', 'allowance', 'provisional']
 
         for item in items:
             desc = item.get('description', '').lower()
 
-            # Check if this looks like a summary item
+            # Skip items with no description
+            if not desc.strip():
+                detailed_items.append(item)
+                continue
+
+            # Check if this looks like a summary/lump sum item
+            # Be more specific - look for patterns like "Services Fire stopping - Fixed Price Lump Sum"
             is_summary = any(keyword in desc for keyword in summary_keywords)
 
-            if is_summary:
+            # Check if it's a service-level summary (e.g., "Electrical Services Fire stopping - Fixed Price")
+            is_service_summary = (
+                (('services' in desc or 'service' in desc) and
+                 ('fire stopping' in desc or 'firestopping' in desc)) or
+                ('optional -' in desc and len(desc) < 50)  # "Optional - Heritage Building" etc
+            )
+
+            # Check if this is a very short description with a high value (likely a summary)
+            # Detailed items usually have longer, more specific descriptions
+            is_likely_summary = (
+                len(desc) < 80 and  # Short description
+                item.get('total_price', 0) > 10000 and  # High value
+                item.get('quantity', 0) <= 1 and  # Usually qty of 1
+                ('fixed' in desc or 'lump' in desc or 'optional' in desc or 'total' in desc)
+            )
+
+            if is_summary or is_service_summary or is_likely_summary:
                 summary_items.append(item)
             else:
                 detailed_items.append(item)
+
+        print(f"[Deduplication] Found {len(summary_items)} summary items and {len(detailed_items)} detailed items")
 
         # If we have NO summary items, return all items
         if not summary_items:
@@ -320,27 +357,38 @@ class EnsembleCoordinator:
         if not detailed_items:
             return items
 
+        # Check if we have enough detailed items to suggest this is a proper BOQ
+        # If we have 10+ detailed items, it's likely a full bill of quantities
+        has_substantial_detail = len(detailed_items) >= 10
+
         # Calculate totals
         summary_total = sum(item.get('total_price', 0) for item in summary_items)
         detailed_total = sum(item.get('total_price', 0) for item in detailed_items)
 
-        # If the summary total is roughly equal to the detailed total (within 10%),
-        # they are likely duplicates - keep only detailed items
+        print(f"[Deduplication] Summary total: ${summary_total:,.2f}, Detailed total: ${detailed_total:,.2f}")
+
+        # If we have substantial detailed items (10+), strongly prefer them
+        if has_substantial_detail:
+            if summary_total > 0 and detailed_total > 0:
+                # If detailed items account for at least 80% of summary total,
+                # it's very likely the summary is a duplicate
+                coverage_ratio = detailed_total / summary_total if summary_total > 0 else 0
+
+                if coverage_ratio >= 0.80:
+                    print(f"[Deduplication] Detailed items cover {coverage_ratio*100:.1f}% of summary. "
+                          f"Removing {len(summary_items)} summary items, keeping {len(detailed_items)} detailed items")
+                    return detailed_items
+
+        # If the totals are within 15% of each other, they are likely duplicates
         if summary_total > 0 and detailed_total > 0:
             ratio = abs(summary_total - detailed_total) / summary_total
 
-            # If totals are within 10% of each other, it's likely a duplicate
-            if ratio <= 0.10:
-                print(f"[Deduplication] Detected duplicate summary items. "
-                      f"Summary total: ${summary_total:,.2f}, "
-                      f"Detailed total: ${detailed_total:,.2f}, "
-                      f"Difference: {ratio*100:.1f}%")
-                print(f"[Deduplication] Removing {len(summary_items)} summary items, "
-                      f"keeping {len(detailed_items)} detailed items")
+            if ratio <= 0.15:
+                print(f"[Deduplication] Totals within {ratio*100:.1f}% - removing summary items")
                 return detailed_items
 
         # If totals are significantly different, keep everything
-        # (might be separate optionals, allowances, etc.)
+        print(f"[Deduplication] Keeping all items (totals too different)")
         return items
 
     def _parse_with_unstructured_wrapper(self, pdf_bytes: bytes, filename: str) -> Dict:

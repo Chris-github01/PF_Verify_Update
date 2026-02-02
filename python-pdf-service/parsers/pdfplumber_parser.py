@@ -54,7 +54,12 @@ class PDFPlumberParser:
                         })
 
             # Extract line items from tables
+            print(f"[PDFPlumber] Found {len(tables)} tables across {num_pages} pages")
+            for i, table in enumerate(tables):
+                print(f"[PDFPlumber] Table {i+1}: Page {table['page']}, {table['row_count']} rows")
+
             line_items = self._extract_line_items_from_tables(tables)
+            print(f"[PDFPlumber] Extracted {len(line_items)} line items total")
 
             # Extract financials from text
             full_text = '\n'.join([p['text'] for p in text_content if p['text']])
@@ -100,9 +105,10 @@ class PDFPlumberParser:
         """Extract line items from detected tables."""
         line_items = []
 
-        for table in tables:
+        for table_idx, table in enumerate(tables):
             rows = table['rows']
             if not rows or len(rows) < 2:
+                print(f"[PDFPlumber] Table {table_idx+1}: Skipped (too few rows)")
                 continue
 
             # Try to identify header row
@@ -110,12 +116,29 @@ class PDFPlumberParser:
             data_rows = rows[1:]
 
             # Look for common column patterns
-            desc_col = self._find_column_index(header, ['description', 'item', 'desc'])
-            qty_col = self._find_column_index(header, ['qty', 'quantity', 'quant'])
-            unit_col = self._find_column_index(header, ['unit', 'uom', 'um'])
-            rate_col = self._find_column_index(header, ['rate', 'unit price', 'price'])
-            total_col = self._find_column_index(header, ['total', 'amount', 'value'])
+            # Be more flexible with description column - it could be "Service Type", "Description", "Item", etc.
+            desc_col = self._find_column_index(header, ['service type', 'description', 'item', 'desc', 'service', 'work description', 'details'])
+            qty_col = self._find_column_index(header, ['qty', 'quantity', 'quant', 'no.', 'qnty'])
+            unit_col = self._find_column_index(header, ['unit', 'uom', 'um', 'u/m'])
+            rate_col = self._find_column_index(header, ['unit rate', 'rate', 'unit price', 'price', 'unit cost', 'unit_rate'])
+            total_col = self._find_column_index(header, ['total', 'amount', 'value', 'line total', 'ext'])
 
+            # If we can't find key columns, try to infer from position
+            # Many quotes have: [Item#] [Description...] [...other cols...] [Qty] [Rate] [Total]
+            if desc_col == -1 and len(header) >= 3:
+                # Description is often the widest column or in first few positions
+                desc_col = 0 if len(header) <= 5 else 1
+                print(f"[PDFPlumber] Table {table_idx+1}: No description column found, inferring position {desc_col}")
+
+            if total_col == -1 and len(header) >= 2:
+                # Total is usually the last column
+                total_col = len(header) - 1
+                print(f"[PDFPlumber] Table {table_idx+1}: No total column found, using last column {total_col}")
+
+            print(f"[PDFPlumber] Table {table_idx+1}: Found columns - desc:{desc_col}, qty:{qty_col}, unit:{unit_col}, rate:{rate_col}, total:{total_col}")
+            print(f"[PDFPlumber] Table {table_idx+1}: Header: {header}")
+
+            items_from_this_table = 0
             for row_idx, row in enumerate(data_rows):
                 if not row or all(cell is None or str(cell).strip() == '' for cell in row):
                     continue
@@ -133,9 +156,12 @@ class PDFPlumberParser:
                     # Only add if we have at least description and some numeric value
                     if item['description'] and (item['quantity'] or item['unit_price'] or item['total_price']):
                         line_items.append(item)
+                        items_from_this_table += 1
 
                 except Exception as e:
                     continue
+
+            print(f"[PDFPlumber] Table {table_idx+1}: Extracted {items_from_this_table} items")
 
         return line_items
 
