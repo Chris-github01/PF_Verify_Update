@@ -115,8 +115,8 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
 
       setTags(tagsData || []);
 
-      // Load tenderers
-      const { data: quotes } = await supabase
+      // Load tenderers - try with trade filter first, then without
+      let quotesResult = await supabase
         .from('quotes')
         .select(`
           id,
@@ -128,6 +128,24 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         `)
         .eq('project_id', projectId)
         .eq('trade', moduleKey);
+
+      let quotes = quotesResult.data;
+
+      // Fallback: if no quotes with trade filter, try without
+      if (!quotes || quotes.length === 0) {
+        const fallbackResult = await supabase
+          .from('quotes')
+          .select(`
+            id,
+            supplier_id,
+            suppliers (
+              id,
+              name
+            )
+          `)
+          .eq('project_id', projectId);
+        quotes = fallbackResult.data;
+      }
 
       const uniqueTenderers = quotes?.map(q => ({
         id: q.supplier_id,

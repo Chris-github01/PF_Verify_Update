@@ -32,11 +32,16 @@ export async function generateBaselineBOQ(
   moduleKey: ModuleKey
 ): Promise<BOQGenerationResult> {
   // Step 1: Get all tenderers and their quotes for this project
-  const { data: quotes, error: quotesError } = await supabase
+  // First try with trade filter, then without if nothing found
+  let quotes: any[] | null = null;
+  let quotesError: any = null;
+
+  const result = await supabase
     .from('quotes')
     .select(`
       id,
       supplier_id,
+      trade,
       suppliers (
         id,
         name
@@ -44,6 +49,29 @@ export async function generateBaselineBOQ(
     `)
     .eq('project_id', projectId)
     .eq('trade', moduleKey);
+
+  quotes = result.data;
+  quotesError = result.error;
+
+  // If no quotes found with trade filter, try without it (for backward compatibility)
+  if (!quotesError && (!quotes || quotes.length === 0)) {
+    console.log('No quotes found with trade filter, trying without trade filter...');
+    const fallbackResult = await supabase
+      .from('quotes')
+      .select(`
+        id,
+        supplier_id,
+        trade,
+        suppliers (
+          id,
+          name
+        )
+      `)
+      .eq('project_id', projectId);
+
+    quotes = fallbackResult.data;
+    quotesError = fallbackResult.error;
+  }
 
   if (quotesError) throw quotesError;
 
@@ -54,7 +82,7 @@ export async function generateBaselineBOQ(
   })) || [];
 
   if (tenderers.length === 0) {
-    throw new Error('No quotes found for this project');
+    throw new Error('No quotes found for this project. Please import quotes first using the "Import Quotes" step.');
   }
 
   // Step 2: Get all quote items from all tenderers

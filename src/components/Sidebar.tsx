@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   RefreshCw,
   CheckSquare,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -29,6 +30,7 @@ export type SidebarTab =
   | 'quoteintel'
   | 'scope'
   | 'equalisation'
+  | 'boq-builder'
   | 'contract'
   | 'reports'
   | 'insights'
@@ -57,6 +59,7 @@ const menuStructure = [
       { id: 'quoteintel' as SidebarTab, label: 'Quote Intelligence', icon: Sparkles },
       { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
       { id: 'equalisation' as SidebarTab, label: 'Equalisation Analysis', icon: BarChart3 },
+      { id: 'boq-builder' as SidebarTab, label: 'BOQ Builder', icon: FileSpreadsheet },
       { id: 'reports' as SidebarTab, label: 'Award Reports', icon: BarChart3 },
     ]
   },
