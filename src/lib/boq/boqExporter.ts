@@ -35,11 +35,32 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     .eq('project_id', options.project_id)
     .eq('module_key', options.module_key);
 
-  // Get tenderers
-  const { data: tenderers } = await supabase
-    .from('suppliers')
-    .select('id, name')
-    .in('id', options.tenderer_ids || []);
+  // Get tenderers and their quotes
+  const { data: quotes } = await supabase
+    .from('quotes')
+    .select(`
+      id,
+      supplier_id,
+      suppliers (
+        id,
+        name
+      )
+    `)
+    .eq('project_id', options.project_id)
+    .in('supplier_id', options.tenderer_ids || []);
+
+  const tenderers = quotes?.map(q => ({
+    id: q.supplier_id,
+    name: (q.suppliers as any)?.name || 'Unknown',
+    quote_id: q.id
+  })) || [];
+
+  // Get ALL quote items from all tenderers
+  const { data: allQuoteItems } = await supabase
+    .from('quote_items')
+    .select('*')
+    .in('quote_id', tenderers.map(t => t.quote_id))
+    .order('line_number');
 
   // Get scope gaps
   const { data: gaps } = await supabase
@@ -57,15 +78,18 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
   // Tab 3: BOQ_TENDERER_COMPARISON
   createTendererComparisonTab(workbook, boqLines || [], mappings || [], tenderers || []);
 
-  // Tab 4: SCOPE_GAPS_REGISTER
+  // Tab 4: SUPPLIER_QUOTE_ITEMS (NEW - All actual quote items)
+  createSupplierQuoteItemsTab(workbook, tenderers || [], allQuoteItems || [], boqLines || []);
+
+  // Tab 5: SCOPE_GAPS_REGISTER
   if (options.include_gaps) {
     createScopeGapsTab(workbook, gaps || []);
   }
 
-  // Tab 5: ASSUMPTIONS_EXCLUSIONS
+  // Tab 6: ASSUMPTIONS_EXCLUSIONS
   createAssumptionsTab(workbook, project);
 
-  // Tab 6: ATTRIBUTES_DICTIONARY
+  // Tab 7: ATTRIBUTES_DICTIONARY
   createAttributesDictionaryTab(workbook, options.module_key);
 
   // Generate buffer
@@ -157,6 +181,23 @@ function createREADMETab(
   sheet.getCell(`B${row}`).value = 'Unclear - Item partially included or unclear specifications';
   row++;
   sheet.getCell(`B${row}`).value = 'Missing - Item not found in tender';
+  row += 2;
+
+  // Tab Guide
+  sheet.getCell(`A${row}`).value = 'Tab Guide:';
+  sheet.getCell(`A${row}`).style = labelStyle;
+  row++;
+  sheet.getCell(`B${row}`).value = 'BOQ_OWNER_BASELINE - Normalized baseline BOQ with tenderer mappings';
+  row++;
+  sheet.getCell(`B${row}`).value = 'BOQ_TENDERER_COMPARISON - Quick comparison of tenderer pricing';
+  row++;
+  sheet.getCell(`B${row}`).value = 'SUPPLIER_QUOTE_ITEMS - All actual line items from supplier quotes';
+  row++;
+  sheet.getCell(`B${row}`).value = 'SCOPE_GAPS_REGISTER - Identified scope gaps and missing items';
+  row++;
+  sheet.getCell(`B${row}`).value = 'ASSUMPTIONS_EXCLUSIONS - Project assumptions and exclusions';
+  row++;
+  sheet.getCell(`B${row}`).value = 'ATTRIBUTES_DICTIONARY - Definitions of BOQ attributes';
   row++;
 }
 
@@ -371,6 +412,152 @@ function createTendererComparisonTab(
   });
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
+}
+
+function createSupplierQuoteItemsTab(
+  workbook: ExcelJS.Workbook,
+  tenderers: any[],
+  allQuoteItems: any[],
+  boqLines: BOQLine[]
+): void {
+  const sheet = workbook.addWorksheet('SUPPLIER_QUOTE_ITEMS');
+
+  sheet.columns = [
+    { header: 'Supplier', key: 'supplier', width: 25 },
+    { header: 'Line #', key: 'line_number', width: 8 },
+    { header: 'System / Description', key: 'system_name', width: 40 },
+    { header: 'Location', key: 'location', width: 20 },
+    { header: 'FRR Rating', key: 'frr_rating', width: 12 },
+    { header: 'Substrate', key: 'substrate', width: 15 },
+    { header: 'Service Type', key: 'service_type', width: 15 },
+    { header: 'Size / Opening', key: 'size_opening', width: 15 },
+    { header: 'Quantity', key: 'quantity', width: 12 },
+    { header: 'Unit', key: 'unit', width: 10 },
+    { header: 'Rate', key: 'rate', width: 12 },
+    { header: 'Amount', key: 'amount', width: 15 },
+    { header: 'Product', key: 'product', width: 25 },
+    { header: 'Install Method', key: 'install_method', width: 25 },
+    { header: 'Notes', key: 'notes', width: 30 },
+    { header: 'Maps to BOQ Line', key: 'mapped_boq_line', width: 15 },
+    { header: 'Mapping Status', key: 'mapping_status', width: 15 }
+  ];
+
+  const headerRow = sheet.getRow(1);
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0891B2' } };
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  headerRow.height = 40;
+
+  let rowIndex = 0;
+  tenderers.forEach(tenderer => {
+    const quoteItems = allQuoteItems.filter(item => item.quote_id === tenderer.quote_id);
+
+    quoteItems.forEach(item => {
+      // Find which BOQ line this item maps to
+      let mappedBOQLine = '';
+      let mappingStatus = 'Not Mapped';
+
+      const matchingBOQLine = findBestMatchingBOQLine(item, boqLines);
+      if (matchingBOQLine) {
+        mappedBOQLine = matchingBOQLine.boq_line_id;
+        mappingStatus = 'Mapped';
+      }
+
+      const rowData = {
+        supplier: tenderer.name,
+        line_number: item.line_number || '',
+        system_name: item.system_name || item.description || '',
+        location: item.location || '',
+        frr_rating: item.frr_rating || '',
+        substrate: item.substrate || '',
+        service_type: item.service_type || '',
+        size_opening: item.size_opening || '',
+        quantity: item.quantity || 0,
+        unit: item.unit || '',
+        rate: item.rate || 0,
+        amount: item.amount || 0,
+        product: item.product || '',
+        install_method: item.install_method || '',
+        notes: item.notes || '',
+        mapped_boq_line: mappedBOQLine,
+        mapping_status: mappingStatus
+      };
+
+      sheet.addRow(rowData);
+
+      // Alternate row colors per supplier
+      const supplierRowIndex = quoteItems.indexOf(item);
+      if (supplierRowIndex % 2 === 1) {
+        const row = sheet.getRow(rowIndex + 2);
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
+      }
+
+      rowIndex++;
+    });
+  });
+
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+}
+
+function findBestMatchingBOQLine(item: any, boqLines: BOQLine[]): BOQLine | null {
+  // Try to find best match based on system name and attributes
+  for (const boqLine of boqLines) {
+    const itemKey = createItemKey(item);
+    const boqKey = createBOQKey(boqLine);
+
+    if (itemKey === boqKey) {
+      return boqLine;
+    }
+  }
+
+  // Try fuzzy match on system name
+  for (const boqLine of boqLines) {
+    if (fuzzyMatchSystem(item.system_name, boqLine.system_name)) {
+      return boqLine;
+    }
+  }
+
+  return null;
+}
+
+function createItemKey(item: any): string {
+  const parts = [
+    item.system_name || '',
+    item.location || '',
+    item.frr_rating || '',
+    item.substrate || '',
+    item.service_type || '',
+    item.size_opening || ''
+  ];
+  return parts.join('|').toLowerCase().trim();
+}
+
+function createBOQKey(boqLine: BOQLine): string {
+  const parts = [
+    boqLine.system_name || '',
+    boqLine.location_zone || '',
+    boqLine.frr_rating || '',
+    boqLine.substrate || '',
+    boqLine.service_type || '',
+    boqLine.penetration_size_opening || ''
+  ];
+  return parts.join('|').toLowerCase().trim();
+}
+
+function fuzzyMatchSystem(str1: string, str2: string): boolean {
+  if (!str1 || !str2) return false;
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
+
+  // Check if one contains the other
+  if (s1.includes(s2) || s2.includes(s1)) return true;
+
+  // Check for high word overlap
+  const words1 = s1.split(/\s+/);
+  const words2 = s2.split(/\s+/);
+  const commonWords = words1.filter(w => words2.includes(w) && w.length > 3);
+
+  return commonWords.length >= Math.min(words1.length, words2.length) * 0.5;
 }
 
 function createScopeGapsTab(workbook: ExcelJS.Workbook, gaps: ScopeGap[]): void {
