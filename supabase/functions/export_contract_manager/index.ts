@@ -149,6 +149,7 @@ Deno.serve(async (req: Request) => {
         .from('contract_allowances')
         .select('*')
         .eq('project_id', projectId)
+        .eq('include_in_prelet_appendix', true)
         .order('sort_order');
 
       console.log('[PRELET] Generating HTML...');

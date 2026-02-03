@@ -27,6 +27,9 @@ interface Allowance {
   ps_status?: string | null;
   ps_standardised?: boolean;
   ps_notes_internal?: string | null;
+  include_in_prelet_appendix?: boolean;
+  include_in_site_handover?: boolean;
+  include_in_senior_mgmt_pack?: boolean;
 }
 
 const PS_TYPES = [
@@ -65,7 +68,10 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
     total: 0,
     category: 'general',
     is_provisional: false,
-    ps_spend_to_date: 0
+    ps_spend_to_date: 0,
+    include_in_prelet_appendix: true,
+    include_in_site_handover: true,
+    include_in_senior_mgmt_pack: true
   });
   const [expandedPSIds, setExpandedPSIds] = useState<Set<string>>(new Set());
   const [psSpendModal, setPsSpendModal] = useState<Allowance | null>(null);
@@ -171,7 +177,10 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
         total: 0,
         category: 'general',
         is_provisional: false,
-        ps_spend_to_date: 0
+        ps_spend_to_date: 0,
+        include_in_prelet_appendix: true,
+        include_in_site_handover: true,
+        include_in_senior_mgmt_pack: true
       });
     } catch (error) {
       console.error('Error adding allowance:', error);
@@ -196,6 +205,26 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
     }
   };
 
+  const handleInclusionToggle = async (id: string, field: 'include_in_prelet_appendix' | 'include_in_site_handover' | 'include_in_senior_mgmt_pack', currentValue: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('contract_allowances')
+        .update({ [field]: !currentValue })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Optimistic UI update
+      setAllowances(prev => prev.map(a =>
+        a.id === id ? { ...a, [field]: !currentValue } : a
+      ));
+    } catch (error) {
+      console.error('Error updating inclusion flag:', error);
+      alert('Failed to update inclusion flag');
+      await loadAllowances(); // Reload on error
+    }
+  };
+
   const togglePSExpand = (id: string) => {
     const newExpanded = new Set(expandedPSIds);
     if (newExpanded.has(id)) {
@@ -217,7 +246,7 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
 
     return (
       <tr className="bg-slate-900/50">
-        <td colSpan={5} className="px-4 py-4">
+        <td colSpan={8} className="px-4 py-4">
           <div className="space-y-4 border-l-2 border-orange-500 pl-4">
             <div className="text-sm font-medium text-orange-400 mb-3">Provisional Sum (PS) Controls</div>
 
@@ -376,7 +405,7 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
 
     return (
       <tr className="bg-slate-900/30">
-        <td colSpan={5} className="px-4 py-4">
+        <td colSpan={8} className="px-4 py-4">
           <div className="border-l-2 border-orange-500 pl-4 space-y-3">
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
@@ -456,6 +485,14 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Qty / Basis</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Rate</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Total</th>
+                <th colSpan={3} className="px-4 py-2 text-center text-xs font-medium text-slate-400 uppercase tracking-wider border-l border-slate-700">
+                  <div className="mb-1">Include in Packs</div>
+                  <div className="grid grid-cols-3 gap-2 text-[10px] font-normal normal-case">
+                    <div className="text-center" title="Include in Prelet Appendix PDF">Prelet</div>
+                    <div className="text-center" title="Include in Site Handover PDF">Handover</div>
+                    <div className="text-center" title="Include in Senior Management Pack PDF">Senior Mgmt</div>
+                  </div>
+                </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -525,6 +562,33 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
                         </label>
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-center border-l border-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={newForm.include_in_prelet_appendix ?? true}
+                        onChange={(e) => setNewForm({ ...newForm, include_in_prelet_appendix: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900"
+                        title="Include in Prelet Appendix PDF"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={newForm.include_in_site_handover ?? true}
+                        onChange={(e) => setNewForm({ ...newForm, include_in_site_handover: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900"
+                        title="Include in Site Handover PDF"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={newForm.include_in_senior_mgmt_pack ?? true}
+                        onChange={(e) => setNewForm({ ...newForm, include_in_senior_mgmt_pack: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900"
+                        title="Include in Senior Management Pack PDF"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <button
@@ -545,7 +609,10 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
                               total: 0,
                               category: 'general',
                               is_provisional: false,
-                              ps_spend_to_date: 0
+                              ps_spend_to_date: 0,
+                              include_in_prelet_appendix: true,
+                              include_in_site_handover: true,
+                              include_in_senior_mgmt_pack: true
                             });
                           }}
                           className="p-1 text-slate-400 hover:text-slate-300 transition-colors"
@@ -622,6 +689,33 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
                             </label>
                           </div>
                         </td>
+                        <td className="px-4 py-3 text-center border-l border-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={editForm.include_in_prelet_appendix ?? true}
+                            onChange={(e) => setEditForm({ ...editForm, include_in_prelet_appendix: e.target.checked })}
+                            className="rounded border-slate-700 bg-slate-900"
+                            title="Include in Prelet Appendix PDF"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={editForm.include_in_site_handover ?? true}
+                            onChange={(e) => setEditForm({ ...editForm, include_in_site_handover: e.target.checked })}
+                            className="rounded border-slate-700 bg-slate-900"
+                            title="Include in Site Handover PDF"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={editForm.include_in_senior_mgmt_pack ?? true}
+                            onChange={(e) => setEditForm({ ...editForm, include_in_senior_mgmt_pack: e.target.checked })}
+                            className="rounded border-slate-700 bg-slate-900"
+                            title="Include in Senior Management Pack PDF"
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-2">
                             <button
@@ -673,6 +767,33 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
                         <td className="px-4 py-3 text-sm font-medium text-white text-right">
                           ${allowance.total.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                         </td>
+                        <td className="px-4 py-3 text-center border-l border-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={allowance.include_in_prelet_appendix ?? true}
+                            onChange={() => handleInclusionToggle(allowance.id, 'include_in_prelet_appendix', allowance.include_in_prelet_appendix ?? true)}
+                            className="rounded border-slate-700 bg-slate-900 cursor-pointer"
+                            title="Include in Prelet Appendix PDF"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={allowance.include_in_site_handover ?? true}
+                            onChange={() => handleInclusionToggle(allowance.id, 'include_in_site_handover', allowance.include_in_site_handover ?? true)}
+                            className="rounded border-slate-700 bg-slate-900 cursor-pointer"
+                            title="Include in Site Handover PDF"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={allowance.include_in_senior_mgmt_pack ?? true}
+                            onChange={() => handleInclusionToggle(allowance.id, 'include_in_senior_mgmt_pack', allowance.include_in_senior_mgmt_pack ?? true)}
+                            className="rounded border-slate-700 bg-slate-900 cursor-pointer"
+                            title="Include in Senior Management Pack PDF"
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-2">
                             <button
@@ -704,7 +825,7 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
 
               {allowances.length === 0 && !isAdding && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                     No allowances added yet. Click "Add Allowance" to create one.
                   </td>
                 </tr>
@@ -716,7 +837,7 @@ export default function EnhancedAllowancesTab({ projectId }: { projectId: string
                   <td className="px-4 py-3 text-base font-bold text-blue-400 text-right">
                     ${totalAllowances.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                   </td>
-                  <td></td>
+                  <td colSpan={4}></td>
                 </tr>
               )}
             </tbody>

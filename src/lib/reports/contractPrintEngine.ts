@@ -52,6 +52,9 @@ export interface NormalizedAllowance {
   ps_status?: string | null;
   ps_standardised?: boolean;
   ps_notes_internal?: string | null;
+  include_in_prelet_appendix?: boolean;
+  include_in_site_handover?: boolean;
+  include_in_senior_mgmt_pack?: boolean;
 }
 
 export interface ContractPackData {
@@ -207,7 +210,10 @@ class ContractDataNormalizer {
       ps_conversion_rule: rawAllowance.ps_conversion_rule,
       ps_status: rawAllowance.ps_status,
       ps_standardised: rawAllowance.ps_standardised,
-      ps_notes_internal: rawAllowance.ps_notes_internal
+      ps_notes_internal: rawAllowance.ps_notes_internal,
+      include_in_prelet_appendix: rawAllowance.include_in_prelet_appendix ?? true,
+      include_in_site_handover: rawAllowance.include_in_site_handover ?? true,
+      include_in_senior_mgmt_pack: rawAllowance.include_in_senior_mgmt_pack ?? true
     };
   }
 
