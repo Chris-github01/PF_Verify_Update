@@ -43,6 +43,12 @@ export const PROJECT_WORKFLOW_STEPS: WorkflowStep[] = [
     description: 'Normalize quotes for fair comparison'
   },
   {
+    id: 'boq-builder',
+    name: 'BOQ Builder',
+    route: 'boq-builder',
+    description: 'Build normalised BOQ and detect scope gaps'
+  },
+  {
     id: 'reports',
     name: 'Award Reports',
     route: 'reports',

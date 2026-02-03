@@ -14,6 +14,7 @@ import ReviewClean from './pages/ReviewClean';
 import QuoteIntelligence from './pages/QuoteIntelligence';
 import ScopeMatrix from './pages/ScopeMatrix';
 import Equalisation from './pages/Equalisation';
+import BOQBuilder from './pages/BOQBuilder';
 import ContractManager from './pages/ContractManager';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import ProjectReportPage from './pages/ProjectReportPage';
@@ -541,6 +542,9 @@ function AppContent() {
       case 'equalisation':
         setActiveTab('equalisation');
         break;
+      case 'boq-builder':
+        setActiveTab('boq-builder');
+        break;
       case 'reports':
       case 'award':
         setActiveTab('reports');
@@ -743,9 +747,31 @@ function AppContent() {
         return <Equalisation
           projectId={projectId}
           onNavigateBack={() => setActiveTab('scope')}
-          onNavigateNext={() => setActiveTab('reports')}
+          onNavigateNext={() => setActiveTab('boq-builder')}
           preselectedQuoteIds={selectedQuoteIds}
         />;
+
+      case 'boq-builder':
+        if (!projectId) {
+          return <NewProjectDashboard
+            projectId={null}
+            projectName={undefined}
+            allProjects={allProjects}
+            onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
+            onNavigateToQuotes={() => {
+              if (handleNavigationGuard('quotes')) setActiveTab('quotes');
+            }}
+            onNavigateToMatrix={() => {
+              if (handleNavigationGuard('scope')) setActiveTab('scope');
+            }}
+            onNavigateToReports={() => {
+              if (handleNavigationGuard('reports')) setActiveTab('reports');
+            }}
+            dashboardMode={dashboardMode}
+          />;
+        }
+        return <BOQBuilder projectId={projectId} />;
 
       case 'contract':
         if (!projectId) {
