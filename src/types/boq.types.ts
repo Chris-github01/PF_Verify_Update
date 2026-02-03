@@ -214,3 +214,108 @@ export interface ExportOptions {
   include_gaps?: boolean;
   include_tags?: boolean;
 }
+
+// Fire Engineer Schedule Types (Passive Fire Only)
+export interface FireEngineerSchedule {
+  id: string;
+  project_id: string;
+  module_key: 'passive_fire';
+
+  schedule_name: string | null;
+  revision_label: string | null;
+
+  source_file_name: string;
+  source_storage_key: string | null;
+
+  imported_by_user_id: string | null;
+  imported_at: string;
+
+  is_active: boolean;
+  notes: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FireEngineerScheduleRow {
+  id: string;
+  schedule_id: string;
+
+  page_number: number | null;
+  row_index: number;
+
+  solution_id: string | null;
+  system_classification: string | null;
+
+  substrate: string | null;
+  orientation: string | null;
+  frr_rating: string | null;
+  service_type: string | null;
+
+  service_size_text: string | null;
+  service_size_min_mm: number | null;
+  service_size_max_mm: number | null;
+
+  insulation_type: string | null;
+  insulation_thickness_mm: number | null;
+  test_reference: string | null;
+  notes: string | null;
+
+  raw_text: string;
+  parse_confidence: number;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export type LinkType = 'manual' | 'auto';
+export type MatchType = 'exact' | 'strong' | 'weak' | 'none';
+
+export interface ScheduleBOQLink {
+  id: string;
+  project_id: string;
+  module_key: 'passive_fire';
+
+  schedule_row_id: string;
+  boq_line_id: string;
+
+  link_type: LinkType;
+  match_type: MatchType | null;
+  match_confidence: number | null;
+  mismatch_reason: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export type BOQSource = 'quote' | 'issued_boq' | 'fire_schedule' | 'mixed';
+
+// Extended BOQ Line with source tracking
+export interface BOQLineExtended extends BOQLine {
+  source?: BOQSource;
+}
+
+// Fire Schedule Import Result
+export interface FireScheduleImportResult {
+  schedule_id: string;
+  rows_imported: number;
+  average_confidence: number;
+  low_confidence_count: number;
+}
+
+// Matching Result
+export interface ScheduleMatchResult {
+  schedule_row_id: string;
+  boq_line_id: string | null;
+  match_type: MatchType;
+  match_confidence: number;
+  mismatch_reason: string | null;
+}
+
+// Schedule comparison view
+export interface ScheduleComparisonRow {
+  schedule_row: FireEngineerScheduleRow;
+  boq_line: BOQLine | null;
+  link: ScheduleBOQLink | null;
+  match_result: ScheduleMatchResult | null;
+}
