@@ -1,17 +1,17 @@
 services:
   - type: web
     name: pdf-parser-ensemble
-    env: python
+    runtime: python
     region: oregon
     plan: starter
-    buildCommand: pip install -r requirements.txt && chmod +x start.sh
-    startCommand: ./start.sh
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: bash start.sh
     envVars:
       - key: API_KEY
         generateValue: true
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11"
       - key: MAX_FILE_SIZE_MB
-        value: 10
+        value: "10"
       - key: ENABLE_MEMORY_OPTIMIZATION
-        value: true
+        value: "true"
