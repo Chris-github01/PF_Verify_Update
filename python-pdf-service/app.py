@@ -270,7 +270,8 @@ def parse_ensemble():
         # Get parser selection from request (optional)
         parsers_to_use = request.form.get('parsers', 'all')
         if parsers_to_use == 'all':
-            parsers_to_use = ['pdfplumber', 'pymupdf', 'ocr']
+            # Only use parsers that don't require system dependencies
+            parsers_to_use = ['pdfplumber', 'pymupdf']
 
             # Add cloud parsers if credentials available
             if os.getenv('AWS_ACCESS_KEY_ID'):
