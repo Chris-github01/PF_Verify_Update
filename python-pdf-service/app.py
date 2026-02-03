@@ -93,17 +93,27 @@ def index():
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
+    # Check which parsers are actually available
+    available_parsers = {
+        'pdfplumber': True,
+        'pymupdf': True,
+    }
+
+    # Check optional parsers
+    try:
+        import pytesseract
+        available_parsers['ocr'] = True
+    except ImportError:
+        available_parsers['ocr'] = False
+
+    available_parsers['textract'] = bool(os.getenv('AWS_ACCESS_KEY_ID'))
+    available_parsers['docai'] = bool(os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))
+
     return jsonify({
         'status': 'healthy',
         'service': 'pdf-parser-ensemble',
         'version': '1.0.0',
-        'parsers': {
-            'pdfplumber': True,
-            'pymupdf': True,
-            'ocr': True,
-            'textract': bool(os.getenv('AWS_ACCESS_KEY_ID')),
-            'docai': bool(os.getenv('GOOGLE_APPLICATION_CREDENTIALS'))
-        }
+        'parsers': available_parsers
     })
 
 @app.route('/parse/pdfplumber', methods=['POST'])

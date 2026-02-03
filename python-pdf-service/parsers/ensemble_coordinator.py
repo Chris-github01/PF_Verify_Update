@@ -4,10 +4,31 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .pdfplumber_parser import PDFPlumberParser
 from .pymupdf_parser import PyMuPDFParser
-from .ocr_parser import OCRParser
-from .textract_parser import TextractParser
-from .docai_parser import DocAIParser
-from .unstructured_parser import parse_with_unstructured, extract_line_items_from_tables
+
+# Optional imports (may not be available in minimal install)
+try:
+    from .ocr_parser import OCRParser
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
+try:
+    from .textract_parser import TextractParser
+    TEXTRACT_AVAILABLE = True
+except ImportError:
+    TEXTRACT_AVAILABLE = False
+
+try:
+    from .docai_parser import DocAIParser
+    DOCAI_AVAILABLE = True
+except ImportError:
+    DOCAI_AVAILABLE = False
+
+try:
+    from .unstructured_parser import parse_with_unstructured, extract_line_items_from_tables
+    UNSTRUCTURED_AVAILABLE = True
+except ImportError:
+    UNSTRUCTURED_AVAILABLE = False
 
 
 class EnsembleCoordinator:
@@ -20,12 +41,18 @@ class EnsembleCoordinator:
         self.parsers = {
             'pdfplumber': PDFPlumberParser(),
             'pymupdf': PyMuPDFParser(),
-            'ocr': OCRParser(),
-            'textract': TextractParser(),
-            'docai': DocAIParser(),
         }
+
+        # Add optional parsers if available
+        if OCR_AVAILABLE:
+            self.parsers['ocr'] = OCRParser()
+        if TEXTRACT_AVAILABLE:
+            self.parsers['textract'] = TextractParser()
+        if DOCAI_AVAILABLE:
+            self.parsers['docai'] = DocAIParser()
+
         # Unstructured is handled separately (function-based, not class-based)
-        self.unstructured_available = True
+        self.unstructured_available = UNSTRUCTURED_AVAILABLE
 
     def parse_with_ensemble(
         self,
@@ -424,6 +451,18 @@ class EnsembleCoordinator:
         """
         import os
         start_time = time.time()
+
+        if not UNSTRUCTURED_AVAILABLE:
+            return {
+                'parser_name': 'unstructured',
+                'success': False,
+                'items': [],
+                'metadata': {},
+                'financials': {},
+                'confidence_score': 0.0,
+                'extraction_time_ms': 0,
+                'errors': ['Unstructured library not available']
+            }
 
         # Check if API key is available (for enterprise mode)
         api_key = os.getenv('UNSTRUCTURED_API_KEY')
