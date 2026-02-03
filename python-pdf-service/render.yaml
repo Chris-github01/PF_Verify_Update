@@ -3,11 +3,15 @@ services:
     name: pdf-parser-ensemble
     runtime: python
     region: oregon
-    plan: starter
-    buildCommand: pip install --no-cache-dir -r requirements-bootstrap.txt
-    startCommand: gunicorn app_minimal:app --bind 0.0.0.0:$PORT --workers 1 --timeout 60 --log-level info
+    plan: standard
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: bash start.sh
     envVars:
       - key: API_KEY
         generateValue: true
       - key: PYTHON_VERSION
         value: "3.11"
+      - key: MAX_FILE_SIZE_MB
+        value: "10"
+      - key: ENABLE_MEMORY_OPTIMIZATION
+        value: "true"
