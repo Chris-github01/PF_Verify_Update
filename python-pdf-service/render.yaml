@@ -3,14 +3,12 @@ services:
     name: pdf-parser-ensemble
     env: python
     region: oregon
-    plan: starter  # Upgrade from free (512MB) to starter (2GB) to handle PDF processing
+    plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300 --graceful-timeout 300 --worker-class gthread --max-requests 50 --max-requests-jitter 10 --worker-tmp-dir /dev/shm app:app
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 300 --log-level info
     envVars:
       - key: API_KEY
         generateValue: true
-      - key: PORT
-        value: 5000
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: MAX_FILE_SIZE_MB
