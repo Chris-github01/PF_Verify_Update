@@ -4,7 +4,7 @@ services:
     env: python
     region: oregon
     plan: starter  # Upgrade from free (512MB) to starter (2GB) to handle PDF processing
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements-minimal.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300 --graceful-timeout 300 --worker-class gthread --max-requests 50 --max-requests-jitter 10 --worker-tmp-dir /dev/shm app:app
     envVars:
       - key: API_KEY
