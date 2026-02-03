@@ -25,33 +25,57 @@ class ParserFactory:
 
     @staticmethod
     def get_pdfplumber():
-        from parsers.pdfplumber_parser import PDFPlumberParser
-        return PDFPlumberParser()
+        try:
+            from parsers.pdfplumber_parser import PDFPlumberParser
+            return PDFPlumberParser()
+        except ImportError as e:
+            logger.error(f"Failed to import PDFPlumberParser: {e}")
+            return None
 
     @staticmethod
     def get_pymupdf():
-        from parsers.pymupdf_parser import PyMuPDFParser
-        return PyMuPDFParser()
+        try:
+            from parsers.pymupdf_parser import PyMuPDFParser
+            return PyMuPDFParser()
+        except ImportError as e:
+            logger.error(f"Failed to import PyMuPDFParser: {e}")
+            return None
 
     @staticmethod
     def get_ocr():
-        from parsers.ocr_parser import OCRParser
-        return OCRParser()
+        try:
+            from parsers.ocr_parser import OCRParser
+            return OCRParser()
+        except ImportError as e:
+            logger.warning(f"OCR parser not available (missing dependencies): {e}")
+            return None
 
     @staticmethod
     def get_textract():
-        from parsers.textract_parser import TextractParser
-        return TextractParser()
+        try:
+            from parsers.textract_parser import TextractParser
+            return TextractParser()
+        except ImportError as e:
+            logger.warning(f"Textract parser not available (missing dependencies): {e}")
+            return None
 
     @staticmethod
     def get_docai():
-        from parsers.docai_parser import DocAIParser
-        return DocAIParser()
+        try:
+            from parsers.docai_parser import DocAIParser
+            return DocAIParser()
+        except ImportError as e:
+            logger.warning(f"DocAI parser not available (missing dependencies): {e}")
+            return None
 
     @staticmethod
     def get_ensemble():
-        from parsers.ensemble_coordinator import EnsembleCoordinator
-        return EnsembleCoordinator()
+        try:
+            from parsers.ensemble_coordinator import EnsembleCoordinator
+            return EnsembleCoordinator()
+        except ImportError as e:
+            logger.error(f"Failed to import EnsembleCoordinator: {e}")
+            return None
 
 def cleanup_memory():
     """Force garbage collection to free memory."""
