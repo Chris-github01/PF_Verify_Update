@@ -46,9 +46,9 @@ interface ParseResponse {
 
 const SYSTEM_PROMPT = `You are an expert at extracting structured data from Fire Engineer schedules (also called Passive Fire Schedules, Fire Stopping Schedules, or Appendix A).
 
-You will receive:
-1. Extracted text from the PDF
-2. Extracted table data with rows and columns
+You will receive extracted data from a PDF which may include:
+1. Full text content
+2. Extracted table data with rows and columns (if available)
 3. Page-by-page text content
 
 Your task is to:
@@ -120,69 +120,104 @@ Return a JSON object with this structure:
 
 const PDF_EXTRACTOR_URL = 'https://verify-pdf-extractor.onrender.com';
 
-async function callRenderParser(pdfBase64: string): Promise<any> {
-  const PDF_PARSER_API_KEY = Deno.env.get("RENDER_PDF_EXTRACTOR_API_KEY");
+async function tryRenderParser(pdfBase64: string): Promise<any | null> {
+  try {
+    const PDF_PARSER_API_KEY = Deno.env.get("RENDER_PDF_EXTRACTOR_API_KEY");
 
-  console.log("Calling Render PDF parser service...");
+    console.log("Attempting Render PDF parser service...");
 
-  // Convert base64 to blob for form data
-  const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
-  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
 
-  const formData = new FormData();
-  formData.append('file', blob, 'fire_schedule.pdf');
+    const formData = new FormData();
+    formData.append('file', blob, 'fire_schedule.pdf');
 
-  const response = await fetch(`${PDF_EXTRACTOR_URL}/parse/pdfplumber`, {
-    method: 'POST',
-    headers: {
-      'X-API-Key': PDF_PARSER_API_KEY || 'dev-key-change-in-production',
-    },
-    body: formData
-  });
+    const response = await fetch(`${PDF_EXTRACTOR_URL}/parse/pdfplumber`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': PDF_PARSER_API_KEY || 'dev-key-change-in-production',
+      },
+      body: formData
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Render parser error:", errorText);
-    throw new Error(`Render PDF parser failed: ${response.status} ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn("Render parser failed:", response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log("Render parser succeeded:", JSON.stringify(data).substring(0, 300));
+    return data;
+
+  } catch (error) {
+    console.warn("Render parser error (will use fallback):", error);
+    return null;
   }
-
-  const data = await response.json();
-  console.log("Render parser response:", JSON.stringify(data).substring(0, 500));
-
-  return data;
 }
 
-async function callOpenAIWithExtractedData(renderData: any, pdfBase64: string): Promise<any> {
+async function fallbackTextExtraction(pdfBase64: string): Promise<string> {
+  try {
+    console.log("Using fallback text extraction...");
+
+    // Import pdf-parse from npm
+    const pdfParse = (await import("npm:pdf-parse@1.1.1")).default;
+
+    const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
+    const buffer = Buffer.from(pdfBytes);
+
+    const data = await pdfParse(buffer);
+
+    if (!data.text || data.text.length < 100) {
+      throw new Error("PDF appears to be empty or image-based");
+    }
+
+    console.log(`Fallback extraction: ${data.text.length} characters from ${data.numpages} pages`);
+
+    return data.text;
+  } catch (error) {
+    console.error("Fallback extraction error:", error);
+    throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function callOpenAIWithData(extractionData: any, extractionMethod: string): Promise<any> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
   }
 
-  // Build comprehensive context from Render extraction
-  let context = "PDF EXTRACTION RESULTS:\n\n";
+  // Build context based on extraction method
+  let context = `EXTRACTION METHOD: ${extractionMethod}\n\nPDF CONTENT:\n\n`;
 
-  if (renderData.text) {
-    context += `FULL TEXT:\n${renderData.text}\n\n`;
+  if (typeof extractionData === 'string') {
+    // Simple text extraction
+    context += `FULL TEXT:\n${extractionData}`;
+  } else {
+    // Render extraction with tables
+    if (extractionData.text) {
+      context += `FULL TEXT:\n${extractionData.text}\n\n`;
+    }
+
+    if (extractionData.tables && Array.isArray(extractionData.tables)) {
+      context += `EXTRACTED TABLES (${extractionData.tables.length} found):\n`;
+      extractionData.tables.forEach((table: any, idx: number) => {
+        context += `\nTable ${idx + 1} (Page ${table.page || 'unknown'}):\n`;
+        if (table.rows && Array.isArray(table.rows)) {
+          table.rows.forEach((row: string[], rowIdx: number) => {
+            context += `Row ${rowIdx + 1}: ${row.join(' | ')}\n`;
+          });
+        }
+      });
+    }
+
+    if (extractionData.metadata) {
+      context += `\nMETADATA:\n${JSON.stringify(extractionData.metadata, null, 2)}\n`;
+    }
   }
 
-  if (renderData.tables && Array.isArray(renderData.tables)) {
-    context += `EXTRACTED TABLES (${renderData.tables.length} found):\n`;
-    renderData.tables.forEach((table: any, idx: number) => {
-      context += `\nTable ${idx + 1} (Page ${table.page || 'unknown'}):\n`;
-      if (table.rows && Array.isArray(table.rows)) {
-        table.rows.forEach((row: string[], rowIdx: number) => {
-          context += `Row ${rowIdx + 1}: ${row.join(' | ')}\n`;
-        });
-      }
-    });
-  }
-
-  if (renderData.metadata) {
-    context += `\nMETADATA:\n${JSON.stringify(renderData.metadata, null, 2)}\n`;
-  }
-
-  console.log(`Sending ${context.length} characters to OpenAI for intelligent parsing...`);
+  console.log(`Sending ${context.length} characters to OpenAI GPT-4 LMM for intelligent parsing...`);
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -199,7 +234,7 @@ async function callOpenAIWithExtractedData(renderData: any, pdfBase64: string): 
         },
         {
           role: "user",
-          content: `Please extract all fire schedule rows from the following extracted PDF data. Look for sections titled 'Passive Fire Schedule', 'Fire Stopping Schedule', 'Appendix A', or similar. Extract every row with maximum detail.\n\n${context}`
+          content: `Please extract all fire schedule rows from the following PDF data. Look for sections titled 'Passive Fire Schedule', 'Fire Stopping Schedule', 'Appendix A', or similar. Extract every row with maximum detail.\n\n${context}`
         }
       ],
       response_format: { type: "json_object" },
@@ -243,28 +278,38 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Parsing fire schedule: ${fileName} for project ${projectId}`);
 
-    // Step 1: Extract structured data using Render Python service
-    console.log("Step 1: Calling Render PDF parser (pdfplumber with table extraction)...");
-    const renderData = await callRenderParser(pdfBase64);
+    let extractionData: any;
+    let extractionMethod: string;
 
-    if (!renderData || (!renderData.text && !renderData.tables)) {
-      throw new Error("Render parser returned empty results. PDF may be image-based or corrupted.");
+    // Step 1: Try Render PDF parser (preferred)
+    console.log("Step 1: Attempting professional Render PDF parser...");
+    const renderData = await tryRenderParser(pdfBase64);
+
+    if (renderData && (renderData.text || renderData.tables)) {
+      console.log("✓ Render parser succeeded - using high-quality extraction");
+      extractionData = renderData;
+      extractionMethod = "Render pdfplumber (professional table extraction)";
+    } else {
+      console.log("✗ Render parser unavailable - using fallback extraction");
+      extractionData = await fallbackTextExtraction(pdfBase64);
+      extractionMethod = "Fallback text extraction (pdf-parse)";
     }
 
-    console.log(`Step 1 complete: Extracted ${renderData.text?.length || 0} chars, ${renderData.tables?.length || 0} tables`);
-
-    // Step 2: Use OpenAI's LMM to intelligently parse the extracted data
-    console.log("Step 2: Sending to OpenAI LMM for intelligent fire schedule parsing...");
-    const result = await callOpenAIWithExtractedData(renderData, pdfBase64);
+    // Step 2: ALWAYS use OpenAI LMM for intelligent parsing (PRIMARY FUNCTION)
+    console.log("Step 2: Sending to OpenAI GPT-4 LMM (PRIMARY INTELLIGENCE)...");
+    const result = await callOpenAIWithData(extractionData, extractionMethod);
 
     if (!result.rows || !Array.isArray(result.rows)) {
-      throw new Error("Invalid response structure from OpenAI");
+      throw new Error("Invalid response structure from OpenAI LMM");
     }
 
     const rows: ScheduleRow[] = result.rows;
     const totalRows = rows.length;
     const avgConfidence = rows.reduce((sum, r) => sum + (r.parse_confidence || 0), 0) / totalRows;
     const lowConfidenceCount = rows.filter(r => (r.parse_confidence || 0) < 0.7).length;
+
+    const parsingNotes = result.metadata?.parsing_notes ||
+      `Successfully parsed using ${extractionMethod} + OpenAI GPT-4 LMM intelligence`;
 
     const response: ParseResponse = {
       success: true,
@@ -273,11 +318,11 @@ Deno.serve(async (req: Request) => {
         total_rows: totalRows,
         average_confidence: avgConfidence,
         low_confidence_count: lowConfidenceCount,
-        parsing_notes: result.metadata?.parsing_notes || "Successfully parsed fire schedule using Render + OpenAI pipeline"
+        parsing_notes: parsingNotes
       }
     };
 
-    console.log(`Success: Parsed ${totalRows} rows with ${(avgConfidence * 100).toFixed(1)}% avg confidence`);
+    console.log(`✓ Success: ${totalRows} rows, ${(avgConfidence * 100).toFixed(1)}% confidence via ${extractionMethod}`);
 
     return new Response(
       JSON.stringify(response),
