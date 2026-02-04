@@ -84,41 +84,55 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
   const parsePDFWithOpenAI = async (pdfBase64: string, filename: string) => {
     try {
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse_fire_schedule`;
+      console.log('Calling edge function:', apiUrl);
+      console.log('PDF size:', pdfBase64.length, 'bytes (base64)');
+      console.log('Project ID:', projectId);
+
       const headers = {
         'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       };
 
+      const payload = {
+        pdfBase64,
+        fileName: filename,
+        projectId
+      };
+
+      console.log('Sending request with payload:', { fileName: filename, projectId, pdfSize: pdfBase64.length });
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          pdfBase64,
-          fileName: filename,
-          projectId
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`API error: ${response.status} ${errorText}`);
+        console.error('Edge function error response:', response.status, errorText);
+        throw new Error(`API error: ${response.status} - ${errorText}`);
       }
 
       const result: ParseResponse = await response.json();
+      console.log('Parse result received:', result);
 
       if (!result.success || !result.rows || result.rows.length === 0) {
-        setParseError(result.error || 'No schedule rows could be extracted. The PDF may not contain a valid fire schedule.');
-        alert('No schedule rows found. Please ensure the PDF contains a Passive Fire Schedule section.');
+        const errorMsg = result.error || 'No schedule rows could be extracted. The PDF may not contain a valid fire schedule.';
+        console.error('Parse failed:', errorMsg);
+        setParseError(errorMsg);
+        alert(`Parse failed: ${errorMsg}`);
         return;
       }
 
+      console.log(`Successfully parsed ${result.rows.length} rows`);
       setParsedRows(result.rows);
       setMetadata(result.metadata);
       setShowPreview(true);
     } catch (error) {
-      console.error('Error parsing PDF with OpenAI:', error);
-      setParseError(error instanceof Error ? error.message : 'Unknown error');
-      alert('Failed to parse PDF. Please try again or contact support if the issue persists.');
+      console.error('Error parsing PDF:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setParseError(errorMsg);
+      alert(`Failed to parse PDF: ${errorMsg}\n\nCheck browser console for details.`);
     }
   };
 

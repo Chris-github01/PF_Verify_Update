@@ -253,7 +253,10 @@ async function callOpenAIWithData(extractionData: any, extractionMethod: string)
 }
 
 Deno.serve(async (req: Request) => {
+  console.log(`Incoming request: ${req.method} ${req.url}`);
+
   if (req.method === "OPTIONS") {
+    console.log("Handling OPTIONS preflight request");
     return new Response(null, {
       status: 200,
       headers: corsHeaders,
@@ -261,9 +264,14 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { pdfBase64, fileName, projectId }: ParseRequest = await req.json();
+    console.log("Parsing request body...");
+    const requestBody = await req.json();
+    console.log("Request body parsed, keys:", Object.keys(requestBody));
+
+    const { pdfBase64, fileName, projectId } = requestBody as ParseRequest;
 
     if (!pdfBase64 || !projectId) {
+      console.error("Missing required fields. pdfBase64:", !!pdfBase64, "projectId:", !!projectId);
       return new Response(
         JSON.stringify({
           success: false,
@@ -276,7 +284,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Parsing fire schedule: ${fileName} for project ${projectId}`);
+    console.log(`✓ Valid request - Parsing fire schedule: ${fileName} for project ${projectId}`);
+    console.log(`PDF size: ${pdfBase64.length} bytes (base64)`);
 
     let extractionData: any;
     let extractionMethod: string;
