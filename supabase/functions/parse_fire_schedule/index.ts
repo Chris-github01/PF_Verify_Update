@@ -158,46 +158,49 @@ async function tryRenderParser(pdfBase64: string): Promise<any | null> {
 
 async function fallbackTextExtraction(pdfBase64: string): Promise<string> {
   try {
-    console.log("Using fallback text extraction...");
+    console.log("Using ultra-lightweight fallback extraction (basic text extraction)...");
 
     // Decode base64 to bytes
     const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
     console.log(`PDF decoded: ${pdfBytes.length} bytes`);
 
-    // Use pdfjs-dist for text extraction (works in Deno)
-    const pdfjsLib = await import("npm:pdfjs-dist@4.0.379");
+    // Convert to string and extract text between parentheses (PDF text objects)
+    const pdfString = new TextDecoder('latin1').decode(pdfBytes);
 
-    // Load the PDF
-    const loadingTask = pdfjsLib.getDocument({
-      data: pdfBytes,
-      useSystemFonts: true,
-    });
+    // Extract text from PDF string objects: (text content)
+    const textMatches = pdfString.match(/\(([^)]{2,})\)/g);
 
-    const pdf = await loadingTask.promise;
-    console.log(`PDF loaded: ${pdf.numPages} pages`);
-
-    let fullText = '';
-
-    // Extract text from each page
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      fullText += pageText + '\n\n';
+    if (!textMatches || textMatches.length === 0) {
+      console.warn("No text objects found in PDF - may be image-based or compressed");
+      throw new Error("PDF appears to be image-based or uses unsupported compression. The Render service is required for this PDF.");
     }
 
-    if (!fullText || fullText.length < 100) {
-      throw new Error("PDF appears to be empty or image-based (less than 100 characters extracted)");
+    // Clean and combine text
+    let fullText = textMatches
+      .map(match => {
+        // Remove parentheses and unescape PDF strings
+        let text = match.slice(1, -1);
+        text = text.replace(/\\n/g, '\n');
+        text = text.replace(/\\r/g, '\r');
+        text = text.replace(/\\t/g, '\t');
+        text = text.replace(/\\\(/g, '(');
+        text = text.replace(/\\\)/g, ')');
+        text = text.replace(/\\\\/g, '\\');
+        return text;
+      })
+      .filter(text => text.trim().length > 0)
+      .join(' ');
+
+    if (!fullText || fullText.length < 50) {
+      throw new Error(`PDF text extraction failed (only ${fullText.length} chars). This PDF requires the Render service for proper extraction.`);
     }
 
-    console.log(`Fallback extraction: ${fullText.length} characters from ${pdf.numPages} pages`);
+    console.log(`✓ Fallback extraction: ${fullText.length} characters extracted (basic mode)`);
 
     return fullText;
   } catch (error) {
     console.error("Fallback extraction error:", error);
-    throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(`Fallback extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}. The Render PDF service is recommended for optimal results.`);
   }
 }
 

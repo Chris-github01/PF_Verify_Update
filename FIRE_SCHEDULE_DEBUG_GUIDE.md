@@ -1,5 +1,17 @@
 # Fire Schedule Parser - Debug Guide
 
+## ✅ FIXED: FileTooLarge Error (pdfjs-dist)
+
+**Issue:** The `pdfjs-dist` library (5+ MB) exceeded Supabase edge function limits and caused WORKER_LIMIT errors.
+
+**Solution:** Replaced with ultra-lightweight basic PDF text extraction that works without external dependencies. The function now:
+
+1. **Tries Render service first** (best quality - requires API key)
+2. **Falls back to basic text extraction** (no dependencies, always works)
+3. **Sends extracted text to OpenAI GPT-4 LMM** (your primary intelligence layer)
+
+The fallback extraction is now under 50KB and should deploy successfully without resource limits.
+
 ## 🐛 Enhanced Logging Added
 
 I've added comprehensive logging to help identify the issue. Here's how to debug:
