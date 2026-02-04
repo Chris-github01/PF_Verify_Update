@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { FileSpreadsheet, Download, RefreshCw, AlertTriangle, CheckCircle, Tag as TagIcon, FileText, ChevronRight } from 'lucide-react';
+import { FileSpreadsheet, Download, RefreshCw, AlertTriangle, CheckCircle, Tag as TagIcon, FileText, ChevronRight, Flame } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generateBaselineBOQ } from '../lib/boq/boqGenerator';
 import { exportBOQPack, exportTagsClarifications } from '../lib/boq/boqExporter';
 import TagLibraryModal from '../components/TagLibraryModal';
+import FireScheduleImport from '../components/FireScheduleImport';
 import type { BOQLine, BOQTendererMap, ScopeGap, ProjectTag, ModuleKey } from '../types/boq.types';
 
-type TabType = 'baseline' | 'mapping' | 'gaps' | 'tags';
+type TabType = 'baseline' | 'mapping' | 'gaps' | 'tags' | 'fire-schedule';
 
 interface BOQBuilderProps {
   projectId?: string;
@@ -376,6 +377,29 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
               )}
             </button>
+            {moduleKey === 'passive_fire' && (
+              <button
+                onClick={() => setActiveTab('fire-schedule')}
+                className={`px-6 py-3 font-medium transition-colors relative ${
+                  activeTab === 'fire-schedule'
+                    ? 'text-orange-400'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Flame size={18} />
+                  Fire Engineer Schedule
+                </span>
+                {project?.fire_schedule_imported && (
+                  <span className="ml-2 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">
+                    ✓
+                  </span>
+                )}
+                {activeTab === 'fire-schedule' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -428,6 +452,16 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
                 onAddTags={() => setShowTagLibrary(true)}
                 onRefresh={loadBOQData}
                 onExport={handleExportTags}
+              />
+            )}
+            {activeTab === 'fire-schedule' && moduleKey === 'passive_fire' && (
+              <FireScheduleImport
+                projectId={projectId || ''}
+                moduleKey={moduleKey}
+                onImportComplete={(result) => {
+                  console.log('Fire schedule imported:', result);
+                  loadProject();
+                }}
               />
             )}
           </>
