@@ -1,11 +1,7 @@
 import { useState, useRef } from 'react';
-import { Upload, FileText, CheckCircle, AlertTriangle, Download, X } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertTriangle, Download, X, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { detectScheduleSection, extractScheduleRows, validateScheduleRows, type ParsedScheduleRow } from '../lib/parsers/fireScheduleParser';
 import type { FireEngineerSchedule, FireScheduleImportResult } from '../types/boq.types';
-import * as pdfjsLib from 'pdfjs-dist';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface FireScheduleImportProps {
   projectId: string;
@@ -13,15 +9,47 @@ interface FireScheduleImportProps {
   onImportComplete?: (result: FireScheduleImportResult) => void;
 }
 
+interface ParsedScheduleRow {
+  solution_id: string | null;
+  system_classification: string | null;
+  substrate: string | null;
+  orientation: string | null;
+  frr_rating: string | null;
+  service_type: string | null;
+  service_size_text: string | null;
+  service_size_min_mm: number | null;
+  service_size_max_mm: number | null;
+  insulation_type: string | null;
+  insulation_thickness_mm: number | null;
+  test_reference: string | null;
+  notes: string | null;
+  raw_text: string;
+  parse_confidence: number;
+  page_number: number;
+  row_index: number;
+}
+
+interface ParseResponse {
+  success: boolean;
+  rows: ParsedScheduleRow[];
+  metadata: {
+    total_rows: number;
+    average_confidence: number;
+    low_confidence_count: number;
+    parsing_notes: string;
+  };
+  error?: string;
+}
+
 export default function FireScheduleImport({ projectId, moduleKey, onImportComplete }: FireScheduleImportProps) {
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
-  const [pdfText, setPdfText] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [parsedRows, setParsedRows] = useState<ParsedScheduleRow[]>([]);
-  const [validation, setValidation] = useState<any>(null);
+  const [metadata, setMetadata] = useState<any>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [parseError, setParseError] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -32,62 +60,65 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
     }
 
     setUploading(true);
+    setParsing(true);
     setFileName(file.name);
+    setParseError('');
 
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
 
-      let fullText = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        fullText += pageText + '\n';
-      }
-
-      setPdfText(fullText);
-      await parsePDF(fullText, file.name);
+      await parsePDFWithOpenAI(base64, file.name);
     } catch (error) {
       console.error('Error reading PDF:', error);
+      setParseError('Failed to read PDF file. Please ensure it is a valid PDF.');
       alert('Failed to read PDF file. Please ensure it is a valid PDF.');
     } finally {
       setUploading(false);
+      setParsing(false);
     }
   };
 
-  const parsePDF = async (text: string, filename: string) => {
-    setParsing(true);
-
+  const parsePDFWithOpenAI = async (pdfBase64: string, filename: string) => {
     try {
-      const detection = detectScheduleSection(text);
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse_fire_schedule`;
+      const headers = {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      };
 
-      if (!detection.found || detection.startPage === null || detection.endPage === null) {
-        alert('No passive fire schedule section found in this PDF. Please ensure the PDF contains a section titled "Passive Fire Schedule", "Appendix A", or similar.');
-        setParsing(false);
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          pdfBase64,
+          fileName: filename,
+          projectId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} ${errorText}`);
+      }
+
+      const result: ParseResponse = await response.json();
+
+      if (!result.success || !result.rows || result.rows.length === 0) {
+        setParseError(result.error || 'No schedule rows could be extracted. The PDF may not contain a valid fire schedule.');
+        alert('No schedule rows found. Please ensure the PDF contains a Passive Fire Schedule section.');
         return;
       }
 
-      const rows = extractScheduleRows(text, detection.startPage, detection.endPage);
-
-      if (rows.length === 0) {
-        alert('No schedule rows could be extracted. The PDF may have a non-standard format.');
-        setParsing(false);
-        return;
-      }
-
-      const validationResults = validateScheduleRows(rows);
-
-      setParsedRows(rows);
-      setValidation(validationResults);
+      setParsedRows(result.rows);
+      setMetadata(result.metadata);
       setShowPreview(true);
     } catch (error) {
-      console.error('Error parsing PDF:', error);
-      alert('Failed to parse PDF. The schedule format may not be supported.');
-    } finally {
-      setParsing(false);
+      console.error('Error parsing PDF with OpenAI:', error);
+      setParseError(error instanceof Error ? error.message : 'Unknown error');
+      alert('Failed to parse PDF. Please try again or contact support if the issue persists.');
     }
   };
 
@@ -153,11 +184,11 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
       const result: FireScheduleImportResult = {
         schedule_id: schedule.id,
         rows_imported: parsedRows.length,
-        average_confidence: validation.averageConfidence,
-        low_confidence_count: validation.lowConfidenceCount,
+        average_confidence: metadata.average_confidence,
+        low_confidence_count: metadata.low_confidence_count,
       };
 
-      alert(`Successfully imported ${parsedRows.length} schedule rows with ${(validation.averageConfidence * 100).toFixed(1)}% average confidence.`);
+      alert(`Successfully imported ${parsedRows.length} schedule rows with ${(metadata.average_confidence * 100).toFixed(1)}% average confidence.`);
 
       if (onImportComplete) {
         onImportComplete(result);
@@ -173,11 +204,11 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
   };
 
   const resetImport = () => {
-    setPdfText('');
     setFileName('');
     setParsedRows([]);
-    setValidation(null);
+    setMetadata(null);
     setShowPreview(false);
+    setParseError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -207,7 +238,10 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
             <h3 className="text-xl font-semibold text-white mb-2">Import Fire Engineer Schedule</h3>
             <p className="text-slate-400 mb-6 max-w-2xl mx-auto">
               Upload a PDF containing the Passive Fire Schedule (Appendix A, Fire Stopping Schedule, etc.).
-              The system will automatically detect and extract the schedule section.
+              <span className="flex items-center justify-center gap-2 mt-2 text-purple-400">
+                <Sparkles size={16} />
+                AI-powered extraction using OpenAI GPT-4 Vision
+              </span>
             </p>
 
             <input
@@ -226,7 +260,7 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
               {uploading || parsing ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  {uploading ? 'Reading PDF...' : 'Parsing Schedule...'}
+                  {uploading ? 'Reading PDF...' : 'AI Analyzing Schedule...'}
                 </>
               ) : (
                 <>
@@ -246,29 +280,38 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
       )}
 
       {/* Preview Section */}
-      {showPreview && validation && (
+      {showPreview && metadata && (
         <div className="space-y-6">
+          {/* AI Processing Banner */}
+          <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <Sparkles className="text-purple-400" size={24} />
+              </div>
+              <div>
+                <div className="text-white font-medium">AI-Powered Schedule Extraction</div>
+                <div className="text-sm text-slate-400 mt-1">
+                  {metadata.parsing_notes || 'OpenAI GPT-4 Vision analyzed your fire schedule and extracted structured data with high accuracy.'}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-              <div className="text-sm text-slate-400 mb-1">Total Rows</div>
-              <div className="text-2xl font-bold text-white">{validation.totalRows}</div>
+              <div className="text-sm text-slate-400 mb-1">Total Rows Detected</div>
+              <div className="text-2xl font-bold text-white">{metadata.total_rows}</div>
             </div>
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-              <div className="text-sm text-slate-400 mb-1">Avg Confidence</div>
-              <div className={`text-2xl font-bold ${getConfidenceColor(validation.averageConfidence)}`}>
-                {(validation.averageConfidence * 100).toFixed(1)}%
+              <div className="text-sm text-slate-400 mb-1">Avg Parse Quality</div>
+              <div className={`text-2xl font-bold ${getConfidenceColor(metadata.average_confidence)}`}>
+                {(metadata.average_confidence * 100).toFixed(1)}%
               </div>
             </div>
             <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-              <div className="text-sm text-slate-400 mb-1">Low Confidence</div>
-              <div className="text-2xl font-bold text-yellow-400">{validation.lowConfidenceCount}</div>
-            </div>
-            <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-              <div className="text-sm text-slate-400 mb-1">Missing Fields</div>
-              <div className="text-2xl font-bold text-red-400">
-                {validation.missingCriticalFields.solution_id + validation.missingCriticalFields.frr_rating + validation.missingCriticalFields.service_size}
-              </div>
+              <div className="text-sm text-slate-400 mb-1">Needs Review</div>
+              <div className="text-2xl font-bold text-yellow-400">{metadata.low_confidence_count}</div>
             </div>
           </div>
 
