@@ -1,34 +1,68 @@
 # Fire Schedule Parser - Debug Guide
 
-## ✅ FIXED: Token Limit Exceeded (1.5M tokens → 800k limit)
+## ✅ FINAL FIX: Chunked Processing (Like Quote Parsing)
 
-**Issue #1:** The `pdfjs-dist` library (5+ MB) exceeded Supabase edge function limits and caused WORKER_LIMIT errors.
+**Issue History:**
+1. **Issue #1:** `pdfjs-dist` library (5+ MB) exceeded edge function limits ❌
+2. **Issue #2:** OpenAI error: 1.5M tokens requested, 800k limit ❌
+3. **Issue #3:** After filtering: 286k tokens sent, 128k limit ❌
+4. **Issue #4:** Even with aggressive truncation, large PDFs still exceeded limits ❌
 
-**Solution #1:** Replaced with ultra-lightweight basic PDF text extraction that works without external dependencies.
-
-**Issue #2:** OpenAI API error: "Request too large for gpt-4o - Requested 1,532,405 tokens, Limit 800,000"
-
-**Solution #2:** Added intelligent content filtering that:
-1. **Finds schedule sections** - Searches for keywords like "Passive Fire Schedule", "Appendix A", etc.
-2. **Extracts relevant content** - Only sends the schedule section, not the entire PDF
-3. **Truncates aggressively** - Hard limit of 80k characters (~20k tokens) to stay well under GPT-4o's 128k context limit
-4. **Preserves context** - Includes surrounding text for better parsing accuracy
-
-**Issue #3:** Still exceeding token limit - 286k tokens sent when limit is 128k
-
-**Solution #3:** Reduced from 300k chars to 80k chars (20k tokens) with conservative estimation to ensure we never exceed the 128k token context window.
+**FINAL SOLUTION:** Implemented chunked processing (same as quote parsing)
 
 ## 🎯 How It Works Now
 
-**Three-tier extraction with intelligent filtering:**
+**Chunked PDF Processing Pipeline:**
 
-1. **Render Service** (best) - Professional table extraction
-2. **Basic Text Extraction** (fallback) - Lightweight, no dependencies
-3. **Intelligent Filtering** - Finds and extracts only the fire schedule section
-4. **Aggressive Truncation** - Hard limit of 80k characters (~20k tokens)
-5. **OpenAI GPT-4o** (always) - Parses the filtered content safely under 128k context limit
+1. **PDF Chunking** - Splits PDF into 5-page chunks using `pdf-lib`
+2. **Parallel Processing** - Each chunk is sent to `parse_fire_schedule_chunk` edge function
+3. **Individual Parsing** - Each chunk is parsed independently with OpenAI GPT-4o
+4. **Result Aggregation** - All chunk results are combined into a single result set
 
-The function now intelligently extracts only the relevant fire schedule content with aggressive truncation, ensuring it stays well under OpenAI's 128k token context limit (leaves 108k tokens buffer for system prompt and response).
+**Architecture:**
+
+```
+User uploads PDF
+    ↓
+parse_fire_schedule (main)
+    ├─ Splits PDF into 5-page chunks
+    ├─ Calls parse_fire_schedule_chunk for each chunk (parallel)
+    │   ├─ Chunk 1: Pages 1-5 → OpenAI → Rows
+    │   ├─ Chunk 2: Pages 6-10 → OpenAI → Rows
+    │   └─ Chunk N: Pages N-N+5 → OpenAI → Rows
+    └─ Combines all rows from all chunks
+    ↓
+Returns complete result
+```
+
+**Benefits:**
+- ✅ No token limit issues (each chunk is small)
+- ✅ Processes entire PDF regardless of size
+- ✅ Parallel processing for faster results
+- ✅ Same proven approach as quote parsing
+- ✅ Each chunk stays well under 128k token limit
+
+## 📋 Edge Functions
+
+**Main Function:** `parse_fire_schedule`
+- Receives full PDF
+- Splits into 5-page chunks
+- Coordinates chunk parsing
+- Aggregates results
+
+**Chunk Function:** `parse_fire_schedule_chunk`
+- Receives one PDF chunk (5 pages)
+- Extracts text (Render service or fallback)
+- Sends to OpenAI GPT-4o
+- Returns parsed rows for that chunk
+
+## 🧪 Testing
+
+Upload your fire schedule PDF - it will now:
+1. Split into manageable chunks automatically
+2. Process each chunk independently
+3. Combine all results seamlessly
+4. Handle PDFs of any size without token limit errors
 
 ## 🐛 Enhanced Logging Added
 
