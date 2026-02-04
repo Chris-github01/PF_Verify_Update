@@ -160,21 +160,41 @@ async function fallbackTextExtraction(pdfBase64: string): Promise<string> {
   try {
     console.log("Using fallback text extraction...");
 
-    // Import pdf-parse from npm
-    const pdfParse = (await import("npm:pdf-parse@1.1.1")).default;
-
+    // Decode base64 to bytes
     const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
-    const buffer = Buffer.from(pdfBytes);
+    console.log(`PDF decoded: ${pdfBytes.length} bytes`);
 
-    const data = await pdfParse(buffer);
+    // Use pdfjs-dist for text extraction (works in Deno)
+    const pdfjsLib = await import("npm:pdfjs-dist@4.0.379");
 
-    if (!data.text || data.text.length < 100) {
-      throw new Error("PDF appears to be empty or image-based");
+    // Load the PDF
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfBytes,
+      useSystemFonts: true,
+    });
+
+    const pdf = await loadingTask.promise;
+    console.log(`PDF loaded: ${pdf.numPages} pages`);
+
+    let fullText = '';
+
+    // Extract text from each page
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      fullText += pageText + '\n\n';
     }
 
-    console.log(`Fallback extraction: ${data.text.length} characters from ${data.numpages} pages`);
+    if (!fullText || fullText.length < 100) {
+      throw new Error("PDF appears to be empty or image-based (less than 100 characters extracted)");
+    }
 
-    return data.text;
+    console.log(`Fallback extraction: ${fullText.length} characters from ${pdf.numPages} pages`);
+
+    return fullText;
   } catch (error) {
     console.error("Fallback extraction error:", error);
     throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
