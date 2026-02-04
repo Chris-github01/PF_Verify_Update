@@ -64,10 +64,21 @@ async function chunkPdfDocument(pdfBase64: string, pagesPerChunk: number = 5): P
     pages.forEach((p) => newDoc.addPage(p));
 
     const chunkBytes = await newDoc.save();
-    const chunkBase64 = btoa(String.fromCharCode(...chunkBytes));
+
+    // Convert to base64 safely (avoid stack overflow from spreading large arrays)
+    let binary = '';
+    const len = chunkBytes.length;
+    const chunkSize = 8192; // Process in 8KB chunks to avoid stack overflow
+
+    for (let j = 0; j < len; j += chunkSize) {
+      const slice = chunkBytes.slice(j, Math.min(j + chunkSize, len));
+      binary += String.fromCharCode(...slice);
+    }
+
+    const chunkBase64 = btoa(binary);
 
     chunks.push(chunkBase64);
-    console.log(`Created chunk ${chunks.length}: pages ${i + 1}-${end}`);
+    console.log(`Created chunk ${chunks.length}: pages ${i + 1}-${end} (${chunkBase64.length} bytes base64)`);
   }
 
   return chunks;

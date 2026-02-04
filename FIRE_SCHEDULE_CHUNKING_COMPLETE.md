@@ -150,3 +150,23 @@ Fire schedules are typically denser with more tabular data, so smaller chunks en
 2. ✅ `parse_fire_schedule_chunk` - Individual chunk parser
 
 Both functions are deployed and ready to use.
+
+## Bug Fixes Applied
+
+### Stack Overflow Fix ✅
+**Issue:** `btoa(String.fromCharCode(...chunkBytes))` caused "Maximum call stack size exceeded" error when spreading large arrays.
+
+**Solution:** Process bytes in 8KB chunks instead of spreading entire array:
+```typescript
+// Before (caused stack overflow):
+const chunkBase64 = btoa(String.fromCharCode(...chunkBytes));
+
+// After (safe for any size):
+let binary = '';
+const chunkSize = 8192;
+for (let j = 0; j < len; j += chunkSize) {
+  const slice = chunkBytes.slice(j, Math.min(j + chunkSize, len));
+  binary += String.fromCharCode(...slice);
+}
+const chunkBase64 = btoa(binary);
+```
