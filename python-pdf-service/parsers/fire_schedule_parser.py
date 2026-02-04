@@ -269,21 +269,45 @@ class FireScheduleParser:
         """
         Identify which column contains which field.
         Returns dict mapping field_name -> column_index.
+
+        For Beca-style schedules, typical columns are:
+        - Service
+        - Material
+        - Size (mm)
+        - Insulation
+        - Orientation / Overall Required FRR / Type / Build up
+        - Multiple substrate columns (Masonry 120, Plasterboard 120, etc.)
+        Each substrate column contains:
+          - Fire Stop Reference (PFP001, etc.)
+          - Fire Stop Products
+          - Substrate Requirements
         """
         col_map = {}
 
+        # Column patterns for different schedule types
         column_patterns = {
-            'solution_id': ['passive solution', 'solution id', 'ps-', 'ps id', 'ref'],
-            'system_classification': ['system classification', 'classification', 'fire protection', 'system'],
-            'substrate': ['substrate', 'wall type', 'construction'],
-            'orientation': ['substrate orientation', 'orientation'],
-            'frr_rating': ['frr', 'fire resistance', 'rating', 'fire rating'],
-            'service_type': ['service type', 'penetration', 'service'],
-            'service_size': ['size', 'service size', 'diameter', 'mm'],
-            'insulation_type': ['insulation type', 'insulation'],
-            'insulation_thickness': ['insulation thickness', 'thickness'],
-            'test_reference': ['test reference', 'test ref', 'certificate', 'test'],
-            'notes': ['notes', 'comments', 'remarks'],
+            # Basic service info columns
+            'service_type': ['service', 'fire hydrant', 'heating', 'cable', 'storm water', 'sanitary'],
+            'material': ['material'],
+            'service_size': ['size', 'size (mm)', 'diameter'],
+            'insulation_thickness': ['insulation', 'insulation...'],
+
+            # FRR and substrate info
+            'orientation': ['orientation'],
+            'frr_rating': ['required frr', 'frr'],
+            'substrate_type': ['type', 'masonry', 'plasterboard', 'korok', 'flatdeck', 'clt'],
+            'build_up': ['build up', 'overall thickness'],
+
+            # Fire stopping products and references
+            'fire_stop_reference': ['fire stop reference', 'passive fire code', 'pfp'],
+            'fire_stop_products': ['fire stop products', 'passive fire solution'],
+            'substrate_requirements': ['substrate requirements', 'limitations', 'build up requirements'],
+
+            # For detailed tables (page 2)
+            'passive_fire_code': ['passive fire code', 'pfp'],
+            'passive_fire_type': ['passive fire type'],
+            'passive_fire_solutions': ['passive fire solution'],
+            'limitations': ['limitations'],
         }
 
         for field, patterns in column_patterns.items():
@@ -310,28 +334,51 @@ class FireScheduleParser:
             val = row[col_idx]
             return str(val).strip() if val is not None else ""
 
-        # Extract all fields
-        solution_id = get_cell('solution_id')
-        system_classification = get_cell('system_classification')
-        substrate = get_cell('substrate')
+        # Extract service information
+        service_type = get_cell('service_type')
+        material = get_cell('material')
+        service_size = get_cell('service_size')
+        insulation_thickness = get_cell('insulation_thickness')
+
+        # Extract substrate and FRR info
         orientation = get_cell('orientation')
         frr_rating = get_cell('frr_rating')
-        service_type = get_cell('service_type')
-        service_size = get_cell('service_size')
-        insulation_type = get_cell('insulation_type')
-        insulation_thickness = get_cell('insulation_thickness')
-        test_reference = get_cell('test_reference')
-        notes = get_cell('notes')
+        substrate_type = get_cell('substrate_type')
+        build_up = get_cell('build_up')
+
+        # Extract fire stopping details
+        fire_stop_reference = get_cell('fire_stop_reference') or get_cell('passive_fire_code')
+        fire_stop_products = get_cell('fire_stop_products') or get_cell('passive_fire_solutions')
+        substrate_requirements = get_cell('substrate_requirements') or get_cell('limitations')
+
+        # For page 2 style tables
+        passive_fire_type = get_cell('passive_fire_type')
 
         # Build raw text from entire row
         raw_text = " | ".join(str(cell) for cell in row if cell is not None and str(cell).strip())
 
+        # Extract solution ID from fire_stop_reference (e.g., "PFP001")
+        solution_id = None
+        if fire_stop_reference:
+            # Look for PFP codes
+            pfp_match = re.search(r'PFP\d+[A-Z]?', fire_stop_reference, re.IGNORECASE)
+            if pfp_match:
+                solution_id = pfp_match.group(0).upper()
+
+        # Combine material into service type if both exist
+        if material and service_type:
+            full_service_type = f"{service_type} - {material}"
+        elif material:
+            full_service_type = material
+        else:
+            full_service_type = service_type
+
         # Calculate confidence
         confidence = self._calculate_row_confidence({
             'solution_id': solution_id,
-            'system_classification': system_classification,
-            'substrate': substrate,
-            'service_type': service_type,
+            'fire_stop_reference': fire_stop_reference,
+            'service_type': full_service_type,
+            'fire_stop_products': fire_stop_products,
             'raw_text': raw_text
         })
 
@@ -344,19 +391,22 @@ class FireScheduleParser:
         thickness_mm = self._parse_number(insulation_thickness)
 
         return {
-            'solution_id': solution_id if solution_id else None,
-            'system_classification': system_classification if system_classification else None,
-            'substrate': substrate if substrate else None,
+            'solution_id': solution_id,
+            'system_classification': passive_fire_type if passive_fire_type else substrate_type,
+            'substrate': substrate_type if substrate_type else None,
             'orientation': orientation if orientation else None,
             'frr_rating': frr_rating if frr_rating else None,
-            'service_type': service_type if service_type else None,
+            'service_type': full_service_type if full_service_type else None,
             'service_size_text': service_size if service_size else None,
             'service_size_min_mm': size_min,
             'service_size_max_mm': size_max,
-            'insulation_type': insulation_type if insulation_type else None,
+            'insulation_type': None,  # Not typically a separate column in Beca schedules
             'insulation_thickness_mm': thickness_mm,
-            'test_reference': test_reference if test_reference else None,
-            'notes': notes if notes else None,
+            'test_reference': fire_stop_reference if fire_stop_reference else None,
+            'fire_stop_products': fire_stop_products if fire_stop_products else None,
+            'substrate_requirements': substrate_requirements if substrate_requirements else None,
+            'build_up': build_up if build_up else None,
+            'notes': None,
             'raw_text': raw_text,
             'parse_confidence': confidence,
             'page_number': page_num,
@@ -395,20 +445,27 @@ class FireScheduleParser:
         """Calculate confidence score for a parsed row."""
         score = 0.0
 
-        # Key fields presence
+        # Key fields presence - adjusted for Beca schedule structure
         if data.get('solution_id'):
-            score += 0.25
-        if data.get('system_classification'):
-            score += 0.25
-        if data.get('substrate'):
-            score += 0.15
+            score += 0.3  # PFP codes are strong indicators
+
+        if data.get('fire_stop_reference'):
+            score += 0.2  # Fire stop reference is critical
+
         if data.get('service_type'):
-            score += 0.25
+            score += 0.2  # Service type is important
+
+        if data.get('fire_stop_products'):
+            score += 0.2  # Product list is valuable
+            # Bonus if contains known brands
+            products = str(data.get('fire_stop_products', '')).lower()
+            if any(brand in products for brand in ['ryanfire', 'promat', 'protecta', 'hilti', 'boss', 'trafalgar']):
+                score += 0.1
 
         # Raw text quality
         raw_text = data.get('raw_text', '')
-        if len(raw_text) > 50:
-            score += 0.1
+        if len(raw_text) > 30:
+            score += 0.05
 
         return min(1.0, score)
 
