@@ -77,6 +77,15 @@ class ParserFactory:
             logger.error(f"Failed to import EnsembleCoordinator: {e}")
             return None
 
+    @staticmethod
+    def get_fire_schedule():
+        try:
+            from parsers.fire_schedule_parser import FireScheduleParser
+            return FireScheduleParser()
+        except ImportError as e:
+            logger.error(f"Failed to import FireScheduleParser: {e}")
+            return None
+
 def cleanup_memory():
     """Force garbage collection to free memory."""
     if ENABLE_MEMORY_OPTIMIZATION:
@@ -110,7 +119,8 @@ def index():
             'parse_pymupdf': '/parse/pymupdf',
             'parse_ocr': '/parse/ocr',
             'parse_textract': '/parse/textract',
-            'parse_docai': '/parse/docai'
+            'parse_docai': '/parse/docai',
+            'parse_fire_schedule': '/parse/fire_schedule'
         }
     })
 
@@ -364,6 +374,38 @@ def parse_auto():
         return jsonify(result)
     except Exception as e:
         logger.error(f"Auto parsing error: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/parse/fire_schedule', methods=['POST'])
+def parse_fire_schedule():
+    """Parse fire engineer schedule - specialized for fire protection schedules."""
+    if not verify_api_key():
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+
+        file = request.files['file']
+        pdf_bytes = file.read()
+
+        # Validate file size
+        valid, error_msg = validate_file_size(pdf_bytes)
+        if not valid:
+            return jsonify({'error': error_msg}), 413
+
+        logger.info(f"Parsing fire schedule: {file.filename} ({len(pdf_bytes)} bytes)")
+
+        parser = ParserFactory.get_fire_schedule()
+        if not parser:
+            return jsonify({'error': 'Fire schedule parser not available'}), 500
+
+        result = parser.parse(pdf_bytes, file.filename)
+
+        cleanup_memory()
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Fire schedule parsing error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

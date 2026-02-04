@@ -117,10 +117,18 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
       console.log('Parse result received:', result);
 
       if (!result.success || !result.rows || result.rows.length === 0) {
+        const parsingNotes = result.metadata?.parsing_notes || '';
         const errorMsg = result.error || 'No schedule rows could be extracted. The PDF may not contain a valid fire schedule.';
+
         console.error('Parse failed:', errorMsg);
-        setParseError(errorMsg);
-        alert(`Parse failed: ${errorMsg}`);
+        console.error('Parsing notes:', parsingNotes);
+
+        const fullError = parsingNotes
+          ? `${errorMsg}\n\nDetails: ${parsingNotes}`
+          : errorMsg;
+
+        setParseError(fullError);
+        alert(`Parse failed:\n\n${fullError}`);
         return;
       }
 
