@@ -146,7 +146,32 @@ CRITICAL FIELD PARSING RULES:
 
 Return a JSON object matching the schema with all rows and metadata.`;
 
-async function callOpenAI(pdfBase64: string): Promise<any> {
+async function extractTextFromPDF(pdfBase64: string): Promise<string> {
+  try {
+    // Import pdf-parse from npm
+    const pdfParse = (await import("npm:pdf-parse@1.1.1")).default;
+
+    // Convert base64 to Buffer
+    const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
+    const buffer = Buffer.from(pdfBytes);
+
+    // Parse the PDF
+    const data = await pdfParse(buffer);
+
+    if (!data.text || data.text.length < 100) {
+      throw new Error("PDF appears to be empty or contains only images. OCR may be required.");
+    }
+
+    console.log(`Extracted ${data.text.length} characters from ${data.numpages} pages`);
+
+    return data.text;
+  } catch (error) {
+    console.error("PDF extraction error:", error);
+    throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function callOpenAI(extractedText: string): Promise<any> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
   if (!OPENAI_API_KEY) {
@@ -168,19 +193,7 @@ async function callOpenAI(pdfBase64: string): Promise<any> {
         },
         {
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Please extract all fire schedule rows from this PDF. Look for sections titled 'Passive Fire Schedule', 'Fire Stopping Schedule', 'Appendix A', or similar. Extract every row with maximum detail."
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${pdfBase64}`,
-                detail: "high"
-              }
-            }
-          ]
+          content: `Please extract all fire schedule rows from this PDF text. Look for sections titled 'Passive Fire Schedule', 'Fire Stopping Schedule', 'Appendix A', or similar. Extract every row with maximum detail.\n\nPDF Content:\n${extractedText}`
         }
       ],
       response_format: { type: "json_object" },
@@ -224,7 +237,19 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Parsing fire schedule: ${fileName} for project ${projectId}`);
 
-    const result = await callOpenAI(pdfBase64);
+    // Step 1: Extract text from PDF
+    console.log("Extracting text from PDF...");
+    const extractedText = await extractTextFromPDF(pdfBase64);
+
+    if (!extractedText || extractedText.length < 100) {
+      throw new Error("Failed to extract meaningful text from PDF. The PDF may be empty or corrupted.");
+    }
+
+    console.log(`Extracted ${extractedText.length} characters from PDF`);
+
+    // Step 2: Parse with OpenAI
+    console.log("Sending to OpenAI for intelligent parsing...");
+    const result = await callOpenAI(extractedText);
 
     if (!result.rows || !Array.isArray(result.rows)) {
       throw new Error("Invalid response structure from OpenAI");

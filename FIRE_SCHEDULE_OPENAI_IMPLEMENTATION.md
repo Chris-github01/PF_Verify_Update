@@ -10,9 +10,9 @@ Successfully implemented **OpenAI GPT-4 Vision-powered Fire Engineer Schedule pa
 **File:** `supabase/functions/parse_fire_schedule/index.ts`
 
 **Capabilities:**
-- Uses **OpenAI GPT-4 Vision** (gpt-4o model) with vision capabilities
-- Processes PDF documents directly (base64 encoded)
-- Intelligent table detection and extraction
+- Uses **OpenAI GPT-4** (gpt-4o model) for intelligent text analysis
+- Extracts text from PDF using `pdf-parse` library
+- Intelligent table detection and extraction from extracted text
 - Structured data parsing with confidence scoring
 - Handles complex layouts and varied formats
 
@@ -110,16 +110,17 @@ Penalties:
 1. **User uploads PDF** in BOQ Builder → Fire Engineer Schedule tab
 2. **Frontend converts** PDF to base64 encoding
 3. **Edge function called** with PDF data
-4. **OpenAI GPT-4 Vision analyzes** the entire PDF:
+4. **Edge function extracts text** from PDF using pdf-parse library
+5. **OpenAI GPT-4 analyzes** the extracted text:
    - Locates fire schedule section
    - Identifies table structure
    - Extracts each row with context
    - Parses individual fields
    - Assigns confidence scores
-5. **Results returned** to frontend with structured JSON
-6. **User reviews** parsed rows in preview table
-7. **User confirms** import → Data saved to Supabase
-8. **Ready for BOQ comparison** (coming soon)
+6. **Results returned** to frontend with structured JSON
+7. **User reviews** parsed rows in preview table
+8. **User confirms** import → Data saved to Supabase
+9. **Ready for BOQ comparison** (coming soon)
 
 ### API Request Flow:
 
@@ -129,11 +130,14 @@ Client (React)
   ↓ { pdfBase64, fileName, projectId }
   ↓
 Edge Function (Deno)
-  ↓ POST https://api.openai.com/v1/chat/completions
-  ↓ { model: "gpt-4o", messages: [...], response_format: "json_object" }
+  ↓ Step 1: Extract text using pdf-parse
+  ↓ Extracts text from all pages
   ↓
-OpenAI GPT-4 Vision
-  ↓ Analyzes PDF visually
+  ↓ Step 2: POST https://api.openai.com/v1/chat/completions
+  ↓ { model: "gpt-4o", messages: [extracted text], response_format: "json_object" }
+  ↓
+OpenAI GPT-4
+  ↓ Analyzes extracted text
   ↓ Extracts structured data
   ↓ Returns JSON
   ↓
@@ -202,9 +206,9 @@ interface ParseResponse {
 - ❌ No context awareness
 - ❌ Poor handling of multi-column layouts
 
-### After (OpenAI Vision):
-- ✅ Visual table recognition
-- ✅ Context-aware field extraction
+### After (OpenAI GPT-4):
+- ✅ Advanced text extraction with pdf-parse
+- ✅ Context-aware field extraction via GPT-4
 - ✅ Intelligent size parsing with units
 - ✅ Confidence scoring per row
 - ✅ Robust handling of varied formats
@@ -394,10 +398,10 @@ Navigate to **BOQ Builder → Fire Engineer Schedule** tab in any Passive Fire p
 
 ## 🎉 Summary
 
-**Fire Schedule Import with OpenAI GPT-4 Vision is now live!**
+**Fire Schedule Import with OpenAI GPT-4 is now live!**
 
 **Key Capabilities:**
-- ✨ AI-powered visual table recognition
+- ✨ AI-powered intelligent text analysis
 - 📊 13+ structured fields per row
 - 🎯 Intelligent confidence scoring
 - 📈 85-95% parse accuracy
