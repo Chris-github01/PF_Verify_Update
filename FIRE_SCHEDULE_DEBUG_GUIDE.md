@@ -1,16 +1,29 @@
 # Fire Schedule Parser - Debug Guide
 
-## ✅ FIXED: FileTooLarge Error (pdfjs-dist)
+## ✅ FIXED: Token Limit Exceeded (1.5M tokens → 800k limit)
 
-**Issue:** The `pdfjs-dist` library (5+ MB) exceeded Supabase edge function limits and caused WORKER_LIMIT errors.
+**Issue #1:** The `pdfjs-dist` library (5+ MB) exceeded Supabase edge function limits and caused WORKER_LIMIT errors.
 
-**Solution:** Replaced with ultra-lightweight basic PDF text extraction that works without external dependencies. The function now:
+**Solution #1:** Replaced with ultra-lightweight basic PDF text extraction that works without external dependencies.
 
-1. **Tries Render service first** (best quality - requires API key)
-2. **Falls back to basic text extraction** (no dependencies, always works)
-3. **Sends extracted text to OpenAI GPT-4 LMM** (your primary intelligence layer)
+**Issue #2:** OpenAI API error: "Request too large for gpt-4o - Requested 1,532,405 tokens, Limit 800,000"
 
-The fallback extraction is now under 50KB and should deploy successfully without resource limits.
+**Solution #2:** Added intelligent content filtering that:
+1. **Finds schedule sections** - Searches for keywords like "Passive Fire Schedule", "Appendix A", etc.
+2. **Extracts relevant content** - Only sends the schedule section, not the entire PDF
+3. **Truncates safely** - Limits to 300k characters (~75k tokens) to stay well under the 800k TPM rate limit
+4. **Preserves context** - Includes surrounding text for better parsing accuracy
+
+## 🎯 How It Works Now
+
+**Three-tier extraction with intelligent filtering:**
+
+1. **Render Service** (best) - Professional table extraction
+2. **Basic Text Extraction** (fallback) - Lightweight, no dependencies
+3. **Intelligent Filtering** - Finds and extracts only the fire schedule section
+4. **OpenAI GPT-4o** (always) - Parses the filtered content with 75k token budget
+
+The function now intelligently extracts only the relevant fire schedule content, ensuring it stays well under OpenAI's token limits.
 
 ## 🐛 Enhanced Logging Added
 

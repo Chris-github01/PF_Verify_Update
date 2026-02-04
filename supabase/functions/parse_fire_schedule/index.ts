@@ -204,6 +204,78 @@ async function fallbackTextExtraction(pdfBase64: string): Promise<string> {
   }
 }
 
+function intelligentlyFilterScheduleContent(text: string): string {
+  console.log(`Intelligently filtering schedule content from ${text.length} chars...`);
+
+  // Look for fire schedule sections
+  const scheduleKeywords = [
+    'passive fire schedule',
+    'fire stopping schedule',
+    'fire stop schedule',
+    'appendix a',
+    'penetration schedule',
+    'solution id',
+    'frr rating',
+    'fire resistance'
+  ];
+
+  const lowerText = text.toLowerCase();
+
+  // Find the start of the schedule section
+  let scheduleStart = -1;
+  for (const keyword of scheduleKeywords) {
+    const index = lowerText.indexOf(keyword);
+    if (index !== -1 && (scheduleStart === -1 || index < scheduleStart)) {
+      scheduleStart = index;
+    }
+  }
+
+  if (scheduleStart === -1) {
+    console.log("No schedule keywords found - using full text with truncation");
+    scheduleStart = 0;
+  } else {
+    // Start a bit before the keyword for context
+    scheduleStart = Math.max(0, scheduleStart - 500);
+    console.log(`Found schedule section starting at char ${scheduleStart}`);
+  }
+
+  // Extract from schedule start
+  let relevantText = text.slice(scheduleStart);
+
+  // Look for the end (common ending phrases)
+  const endKeywords = [
+    'end of schedule',
+    'notes:',
+    'signed:',
+    'approved by:',
+    'revision history'
+  ];
+
+  let scheduleEnd = relevantText.length;
+  for (const keyword of endKeywords) {
+    const index = relevantText.toLowerCase().lastIndexOf(keyword);
+    if (index !== -1 && index < scheduleEnd) {
+      scheduleEnd = index + keyword.length + 200; // Include a bit after
+    }
+  }
+
+  relevantText = relevantText.slice(0, scheduleEnd);
+
+  // Token limit: gpt-4o has 128k context, but rate limit is 800k TPM
+  // Rough estimate: 1 token ≈ 4 characters
+  // Safe limit: 300k characters ≈ 75k tokens (leaves room for system prompt and response)
+  const MAX_CHARS = 300000;
+
+  if (relevantText.length > MAX_CHARS) {
+    console.log(`Truncating from ${relevantText.length} to ${MAX_CHARS} chars`);
+    relevantText = relevantText.slice(0, MAX_CHARS);
+    relevantText += "\n\n[... content truncated due to size limit ...]";
+  }
+
+  console.log(`✓ Filtered to ${relevantText.length} chars (~${Math.floor(relevantText.length / 4)} tokens)`);
+  return relevantText;
+}
+
 async function callOpenAIWithData(extractionData: any, extractionMethod: string): Promise<any> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
@@ -212,35 +284,37 @@ async function callOpenAIWithData(extractionData: any, extractionMethod: string)
   }
 
   // Build context based on extraction method
-  let context = `EXTRACTION METHOD: ${extractionMethod}\n\nPDF CONTENT:\n\n`;
+  let rawContent = '';
 
   if (typeof extractionData === 'string') {
     // Simple text extraction
-    context += `FULL TEXT:\n${extractionData}`;
+    rawContent = extractionData;
   } else {
     // Render extraction with tables
     if (extractionData.text) {
-      context += `FULL TEXT:\n${extractionData.text}\n\n`;
+      rawContent = extractionData.text;
     }
 
+    // Append table data if available
     if (extractionData.tables && Array.isArray(extractionData.tables)) {
-      context += `EXTRACTED TABLES (${extractionData.tables.length} found):\n`;
+      rawContent += `\n\nEXTRACTED TABLES (${extractionData.tables.length} found):\n`;
       extractionData.tables.forEach((table: any, idx: number) => {
-        context += `\nTable ${idx + 1} (Page ${table.page || 'unknown'}):\n`;
+        rawContent += `\nTable ${idx + 1} (Page ${table.page || 'unknown'}):\n`;
         if (table.rows && Array.isArray(table.rows)) {
           table.rows.forEach((row: string[], rowIdx: number) => {
-            context += `Row ${rowIdx + 1}: ${row.join(' | ')}\n`;
+            rawContent += `${row.join(' | ')}\n`;
           });
         }
       });
     }
-
-    if (extractionData.metadata) {
-      context += `\nMETADATA:\n${JSON.stringify(extractionData.metadata, null, 2)}\n`;
-    }
   }
 
-  console.log(`Sending ${context.length} characters to OpenAI GPT-4 LMM for intelligent parsing...`);
+  // Intelligently filter and truncate content
+  const filteredContent = intelligentlyFilterScheduleContent(rawContent);
+
+  const context = `EXTRACTION METHOD: ${extractionMethod}\n\n${filteredContent}`;
+
+  console.log(`Sending ${context.length} characters (~${Math.floor(context.length / 4)} tokens) to OpenAI...`);
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
