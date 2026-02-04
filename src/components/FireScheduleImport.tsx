@@ -240,7 +240,7 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
               Upload a PDF containing the Passive Fire Schedule (Appendix A, Fire Stopping Schedule, etc.).
               <span className="flex items-center justify-center gap-2 mt-2 text-purple-400">
                 <Sparkles size={16} />
-                AI-powered extraction using OpenAI GPT-4
+                Hybrid AI: Advanced PDF parsing + OpenAI LMM intelligence
               </span>
             </p>
 
@@ -291,7 +291,7 @@ export default function FireScheduleImport({ projectId, moduleKey, onImportCompl
               <div>
                 <div className="text-white font-medium">AI-Powered Schedule Extraction</div>
                 <div className="text-sm text-slate-400 mt-1">
-                  {metadata.parsing_notes || 'OpenAI GPT-4 analyzed your fire schedule and extracted structured data with high accuracy.'}
+                  {metadata.parsing_notes || 'Hybrid AI pipeline (Render PDF Parser + OpenAI LMM) analyzed your fire schedule and extracted structured data with high accuracy.'}
                 </div>
               </div>
             </div>

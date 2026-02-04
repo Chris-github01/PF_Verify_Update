@@ -44,52 +44,15 @@ interface ParseResponse {
   error?: string;
 }
 
-const FIRE_SCHEDULE_SCHEMA = {
-  type: "object",
-  properties: {
-    rows: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          solution_id: { type: "string", description: "Fire stop reference or solution ID (e.g., 'PFP-001', 'FS-123')" },
-          system_classification: { type: "string", description: "System type (e.g., 'Penetration Seal', 'Linear Joint Seal')" },
-          substrate: { type: "string", description: "Wall/floor type (e.g., 'Concrete', 'Plasterboard', 'Masonry')" },
-          orientation: { type: "string", description: "Horizontal or Vertical" },
-          frr_rating: { type: "string", description: "Fire resistance rating (e.g., '120 mins', '-/120/120', '2 hours')" },
-          service_type: { type: "string", description: "Type of penetration (e.g., 'Electrical', 'Plumbing', 'HVAC', 'Cable', 'Pipe', 'Duct')" },
-          service_size_text: { type: "string", description: "Size as written in schedule (e.g., 'Ø110', '0-50mm', '750x200')" },
-          service_size_min_mm: { type: "number", description: "Minimum service size in millimeters" },
-          service_size_max_mm: { type: "number", description: "Maximum service size in millimeters" },
-          insulation_type: { type: "string", description: "Insulation material if specified" },
-          insulation_thickness_mm: { type: "number", description: "Insulation thickness in millimeters" },
-          test_reference: { type: "string", description: "Test certification reference (e.g., 'WARRES', 'BRE', 'CERTIFIRE')" },
-          notes: { type: "string", description: "Any additional notes or comments" },
-          raw_text: { type: "string", description: "The complete raw text of this schedule row" },
-          parse_confidence: { type: "number", description: "Confidence score 0-1 for this row's extraction" },
-          page_number: { type: "number", description: "Page number where this row appears" },
-          row_index: { type: "number", description: "Row number within the schedule" }
-        },
-        required: ["raw_text", "parse_confidence", "page_number", "row_index"]
-      }
-    },
-    metadata: {
-      type: "object",
-      properties: {
-        schedule_section_found: { type: "boolean" },
-        start_page: { type: "number" },
-        end_page: { type: "number" },
-        parsing_notes: { type: "string" }
-      }
-    }
-  },
-  required: ["rows", "metadata"]
-};
-
 const SYSTEM_PROMPT = `You are an expert at extracting structured data from Fire Engineer schedules (also called Passive Fire Schedules, Fire Stopping Schedules, or Appendix A).
 
+You will receive:
+1. Extracted text from the PDF
+2. Extracted table data with rows and columns
+3. Page-by-page text content
+
 Your task is to:
-1. Identify the Passive Fire Schedule section in the PDF
+1. Identify the Passive Fire Schedule section
 2. Extract EVERY row from the schedule table
 3. Parse each field accurately with structured data
 4. Assign a confidence score (0-1) to each row based on completeness
@@ -144,39 +107,82 @@ CRITICAL FIELD PARSING RULES:
 **Raw Text:**
 - Capture the complete original text of the row for audit trail
 
-Return a JSON object matching the schema with all rows and metadata.`;
-
-async function extractTextFromPDF(pdfBase64: string): Promise<string> {
-  try {
-    // Import pdf-parse from npm
-    const pdfParse = (await import("npm:pdf-parse@1.1.1")).default;
-
-    // Convert base64 to Buffer
-    const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
-    const buffer = Buffer.from(pdfBytes);
-
-    // Parse the PDF
-    const data = await pdfParse(buffer);
-
-    if (!data.text || data.text.length < 100) {
-      throw new Error("PDF appears to be empty or contains only images. OCR may be required.");
-    }
-
-    console.log(`Extracted ${data.text.length} characters from ${data.numpages} pages`);
-
-    return data.text;
-  } catch (error) {
-    console.error("PDF extraction error:", error);
-    throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+Return a JSON object with this structure:
+{
+  "rows": [array of ScheduleRow objects],
+  "metadata": {
+    "schedule_section_found": boolean,
+    "start_page": number,
+    "end_page": number,
+    "parsing_notes": string
   }
+}`;
+
+const PDF_EXTRACTOR_URL = 'https://verify-pdf-extractor.onrender.com';
+
+async function callRenderParser(pdfBase64: string): Promise<any> {
+  const PDF_PARSER_API_KEY = Deno.env.get("RENDER_PDF_EXTRACTOR_API_KEY");
+
+  console.log("Calling Render PDF parser service...");
+
+  // Convert base64 to blob for form data
+  const pdfBytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
+  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+
+  const formData = new FormData();
+  formData.append('file', blob, 'fire_schedule.pdf');
+
+  const response = await fetch(`${PDF_EXTRACTOR_URL}/parse/pdfplumber`, {
+    method: 'POST',
+    headers: {
+      'X-API-Key': PDF_PARSER_API_KEY || 'dev-key-change-in-production',
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Render parser error:", errorText);
+    throw new Error(`Render PDF parser failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  console.log("Render parser response:", JSON.stringify(data).substring(0, 500));
+
+  return data;
 }
 
-async function callOpenAI(extractedText: string): Promise<any> {
+async function callOpenAIWithExtractedData(renderData: any, pdfBase64: string): Promise<any> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
   if (!OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY not configured");
   }
+
+  // Build comprehensive context from Render extraction
+  let context = "PDF EXTRACTION RESULTS:\n\n";
+
+  if (renderData.text) {
+    context += `FULL TEXT:\n${renderData.text}\n\n`;
+  }
+
+  if (renderData.tables && Array.isArray(renderData.tables)) {
+    context += `EXTRACTED TABLES (${renderData.tables.length} found):\n`;
+    renderData.tables.forEach((table: any, idx: number) => {
+      context += `\nTable ${idx + 1} (Page ${table.page || 'unknown'}):\n`;
+      if (table.rows && Array.isArray(table.rows)) {
+        table.rows.forEach((row: string[], rowIdx: number) => {
+          context += `Row ${rowIdx + 1}: ${row.join(' | ')}\n`;
+        });
+      }
+    });
+  }
+
+  if (renderData.metadata) {
+    context += `\nMETADATA:\n${JSON.stringify(renderData.metadata, null, 2)}\n`;
+  }
+
+  console.log(`Sending ${context.length} characters to OpenAI for intelligent parsing...`);
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -193,7 +199,7 @@ async function callOpenAI(extractedText: string): Promise<any> {
         },
         {
           role: "user",
-          content: `Please extract all fire schedule rows from this PDF text. Look for sections titled 'Passive Fire Schedule', 'Fire Stopping Schedule', 'Appendix A', or similar. Extract every row with maximum detail.\n\nPDF Content:\n${extractedText}`
+          content: `Please extract all fire schedule rows from the following extracted PDF data. Look for sections titled 'Passive Fire Schedule', 'Fire Stopping Schedule', 'Appendix A', or similar. Extract every row with maximum detail.\n\n${context}`
         }
       ],
       response_format: { type: "json_object" },
@@ -237,19 +243,19 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Parsing fire schedule: ${fileName} for project ${projectId}`);
 
-    // Step 1: Extract text from PDF
-    console.log("Extracting text from PDF...");
-    const extractedText = await extractTextFromPDF(pdfBase64);
+    // Step 1: Extract structured data using Render Python service
+    console.log("Step 1: Calling Render PDF parser (pdfplumber with table extraction)...");
+    const renderData = await callRenderParser(pdfBase64);
 
-    if (!extractedText || extractedText.length < 100) {
-      throw new Error("Failed to extract meaningful text from PDF. The PDF may be empty or corrupted.");
+    if (!renderData || (!renderData.text && !renderData.tables)) {
+      throw new Error("Render parser returned empty results. PDF may be image-based or corrupted.");
     }
 
-    console.log(`Extracted ${extractedText.length} characters from PDF`);
+    console.log(`Step 1 complete: Extracted ${renderData.text?.length || 0} chars, ${renderData.tables?.length || 0} tables`);
 
-    // Step 2: Parse with OpenAI
-    console.log("Sending to OpenAI for intelligent parsing...");
-    const result = await callOpenAI(extractedText);
+    // Step 2: Use OpenAI's LMM to intelligently parse the extracted data
+    console.log("Step 2: Sending to OpenAI LMM for intelligent fire schedule parsing...");
+    const result = await callOpenAIWithExtractedData(renderData, pdfBase64);
 
     if (!result.rows || !Array.isArray(result.rows)) {
       throw new Error("Invalid response structure from OpenAI");
@@ -267,11 +273,11 @@ Deno.serve(async (req: Request) => {
         total_rows: totalRows,
         average_confidence: avgConfidence,
         low_confidence_count: lowConfidenceCount,
-        parsing_notes: result.metadata?.parsing_notes || "Successfully parsed fire schedule"
+        parsing_notes: result.metadata?.parsing_notes || "Successfully parsed fire schedule using Render + OpenAI pipeline"
       }
     };
 
-    console.log(`Successfully parsed ${totalRows} rows with ${(avgConfidence * 100).toFixed(1)}% avg confidence`);
+    console.log(`Success: Parsed ${totalRows} rows with ${(avgConfidence * 100).toFixed(1)}% avg confidence`);
 
     return new Response(
       JSON.stringify(response),
