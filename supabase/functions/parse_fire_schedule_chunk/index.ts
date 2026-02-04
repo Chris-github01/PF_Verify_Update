@@ -2,38 +2,55 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const SYSTEM_PROMPT = `You are an expert at extracting passive fire schedule data from construction documents.
 
-Your task is to extract all rows from fire schedules/appendices in the provided PDF chunk. Each row represents a fire penetration or compartmentation detail.
+CRITICAL: You MUST find and extract ALL rows from any fire protection schedule/appendix tables in the document.
+These tables may appear anywhere in the document - scan ALL pages thoroughly.
 
-Extract the following fields for EVERY row you find:
-- solution_id: Unique identifier or reference number
-- system_classification: Type of fire stopping system (e.g., "Penetration", "Linear Gap", "Cavity Barrier")
-- substrate: Wall/floor type (e.g., "Concrete", "Blockwork", "Plasterboard")
-- orientation: "Vertical" or "Horizontal"
-- frr_rating: Fire resistance rating (e.g., "120 minutes", "2 hours")
-- service_type: Type of service passing through (e.g., "Cables", "Pipes", "Ductwork")
-- service_size_text: Free-text description of service size
-- service_size_min_mm: Minimum service size in millimeters (number only)
-- service_size_max_mm: Maximum service size in millimeters (number only)
-- insulation_type: Type of insulation used
-- insulation_thickness_mm: Insulation thickness in millimeters (number only)
-- test_reference: Certificate or test reference number
-- notes: Any additional notes or comments
-- raw_text: The complete raw text of this row
-- parse_confidence: Your confidence in the extraction (0.0 to 1.0)
-- page_number: Page number where this row was found
+Fire schedules typically have these characteristics:
+- Table format with multiple columns
+- Row-oriented data about fire protection systems
+- May include: System classifications, FRR ratings, service types, sizes, products, test references
+- Product names often include: Ryafire, Nullifire, Hilti, Sika, Passive, Intumescent, Mastic, Collar, Wrap
+- Test references like: EN 1366, BS 476, EI ratings, REI ratings
+- Solution/Passive Solution IDs (often alphanumeric codes like PS-01, PS-12, etc.)
 
-Be thorough and extract EVERY row, even if some fields are missing. Set fields to null if not present.
+Extract these fields for EVERY row you find:
+- solution_id: Passive Solution ID or reference (e.g., PS-01, PS-12) - check last column especially
+- system_classification: Fire protection system type (e.g., Fire Protection, Cavity Barrier, Linear Seal, Penetration)
+- substrate: Wall/floor substrate (e.g., Blockwork, Concrete, Plasterboard, Timber)
+- orientation: Usually "Wall", "Vertical", or "Horizontal"
+- frr_rating: Fire resistance rating (e.g., 120, 60 minutes, 2hr, EI 120)
+- service_type: Service being protected (e.g., Copper Pipe, Cable, HVAC, Ductwork, Multiple services)
+- service_size_text: Size description from the document
+- service_size_min_mm: Minimum size in mm (extract number only)
+- service_size_max_mm: Maximum size in mm (extract number only)
+- insulation_type: Insulation type if mentioned (e.g., Fibreglass, Thermaflex)
+- insulation_thickness_mm: Insulation thickness in mm (number only)
+- test_reference: Test certificate or standard (e.g., EN 1366, BS 476, EI 120/25, FRT 100/25)
+- notes: Any notes, options, or additional details from the row
+- raw_text: Complete text from this row
+- parse_confidence: Your confidence (0.0 to 1.0) - use 0.9+ if you see clear fire protection data
+- page_number: Page number (estimate if not clear)
 
-Return a JSON object with this exact structure:
+IMPORTANT RULES:
+1. Extract EVERY row from fire schedule tables, even with missing data
+2. If a field is unclear or missing, set it to null
+3. Look for tables across ALL pages in this chunk
+4. Product names in "Passive Fire Stopping System" or "Option 1/2/3" columns are valuable - include in notes
+5. Multiple options in one row are common - capture all in notes field
+6. If you see ANY fire protection products, test references, or FRR ratings, extract that row
+
+Return this exact JSON structure:
 {
   "rows": [array of row objects],
   "metadata": {
     "total_rows": number,
     "average_confidence": number,
     "low_confidence_count": number,
-    "parsing_notes": "any relevant notes about this chunk"
+    "parsing_notes": "Description of what you found"
   }
-}`;
+}
+
+If you don't find any schedule tables, still return the structure with empty rows array and explain in parsing_notes what the chunk contained.`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,20 +84,32 @@ async function extractPdfText(pdfBase64: string): Promise<string> {
         console.log("✓ Render parser succeeded");
 
         let extractedText = '';
-        if (result.text) {
-          extractedText = result.text;
-        }
 
-        if (result.tables && Array.isArray(result.tables)) {
-          extractedText += '\n\nTABLES:\n';
+        // PRIORITIZE TABLES - put them first and with clear markers
+        if (result.tables && Array.isArray(result.tables) && result.tables.length > 0) {
+          extractedText += '=== FIRE SCHEDULE TABLES FOUND ===\n\n';
           result.tables.forEach((table: any, idx: number) => {
-            extractedText += `\nTable ${idx + 1}:\n`;
+            extractedText += `\n--- TABLE ${idx + 1} START ---\n`;
             if (table.rows && Array.isArray(table.rows)) {
-              table.rows.forEach((row: string[]) => {
-                extractedText += row.join(' | ') + '\n';
+              table.rows.forEach((row: string[], rowIdx: number) => {
+                // Format as structured row data
+                extractedText += `ROW ${rowIdx}: ` + row.join(' | ') + '\n';
               });
             }
+            extractedText += `--- TABLE ${idx + 1} END ---\n\n`;
           });
+          console.log(`Found ${result.tables.length} tables with ${result.tables.reduce((sum: number, t: any) => sum + (t.rows?.length || 0), 0)} total rows`);
+        } else {
+          console.log("⚠ No tables found in PDF chunk");
+        }
+
+        // Add regular text after tables
+        if (result.text) {
+          extractedText += '\n\n=== DOCUMENT TEXT ===\n' + result.text;
+        }
+
+        if (!extractedText.includes('TABLE')) {
+          console.warn("⚠ WARNING: No table markers found - OpenAI may not find schedule data");
         }
 
         return extractedText;
