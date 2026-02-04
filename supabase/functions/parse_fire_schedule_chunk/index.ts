@@ -145,6 +145,12 @@ async function callOpenAIWithText(text: string): Promise<any> {
 
   console.log(`Sending ${text.length} characters to OpenAI GPT-4o for chunk parsing...`);
 
+  // Log sample of text to debug
+  const textSample = text.substring(0, 500);
+  console.log("Text sample being sent:", textSample);
+  console.log(`Text contains 'TABLE': ${text.includes('TABLE')}`);
+  console.log(`Text contains 'ROW': ${text.includes('ROW')}`);
+
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -175,7 +181,12 @@ async function callOpenAIWithText(text: string): Promise<any> {
   }
 
   const data = await response.json();
-  return JSON.parse(data.choices[0].message.content);
+  const parsed = JSON.parse(data.choices[0].message.content);
+
+  console.log("OpenAI returned:", JSON.stringify(parsed).substring(0, 500));
+  console.log(`OpenAI found ${parsed.rows?.length || 0} rows`);
+
+  return parsed;
 }
 
 Deno.serve(async (req: Request) => {
@@ -216,13 +227,39 @@ Deno.serve(async (req: Request) => {
     const extractedText = await extractPdfText(pdfBase64);
     console.log(`Extracted ${extractedText.length} characters from chunk`);
 
+    if (extractedText.length < 100) {
+      console.error("⚠ WARNING: Extracted text is suspiciously short!");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          rows: [],
+          metadata: {
+            total_rows: 0,
+            average_confidence: 0,
+            low_confidence_count: 0,
+            parsing_notes: "PDF extraction failed - text too short"
+          },
+          error: "Failed to extract meaningful text from PDF chunk"
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const result = await callOpenAIWithText(extractedText);
 
     console.log(`✓ Success: ${result.rows?.length || 0} rows from chunk ${chunkId}`);
 
+    if (!result.rows || result.rows.length === 0) {
+      console.warn("⚠ WARNING: OpenAI returned 0 rows for this chunk");
+      console.warn("Parsing notes:", result.metadata?.parsing_notes);
+    }
+
     return new Response(
       JSON.stringify({
-        success: true,
+        success: result.rows && result.rows.length > 0,
         rows: result.rows || [],
         metadata: {
           ...result.metadata,
