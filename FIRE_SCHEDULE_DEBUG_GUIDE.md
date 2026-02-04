@@ -11,8 +11,12 @@
 **Solution #2:** Added intelligent content filtering that:
 1. **Finds schedule sections** - Searches for keywords like "Passive Fire Schedule", "Appendix A", etc.
 2. **Extracts relevant content** - Only sends the schedule section, not the entire PDF
-3. **Truncates safely** - Limits to 300k characters (~75k tokens) to stay well under the 800k TPM rate limit
+3. **Truncates aggressively** - Hard limit of 80k characters (~20k tokens) to stay well under GPT-4o's 128k context limit
 4. **Preserves context** - Includes surrounding text for better parsing accuracy
+
+**Issue #3:** Still exceeding token limit - 286k tokens sent when limit is 128k
+
+**Solution #3:** Reduced from 300k chars to 80k chars (20k tokens) with conservative estimation to ensure we never exceed the 128k token context window.
 
 ## 🎯 How It Works Now
 
@@ -21,9 +25,10 @@
 1. **Render Service** (best) - Professional table extraction
 2. **Basic Text Extraction** (fallback) - Lightweight, no dependencies
 3. **Intelligent Filtering** - Finds and extracts only the fire schedule section
-4. **OpenAI GPT-4o** (always) - Parses the filtered content with 75k token budget
+4. **Aggressive Truncation** - Hard limit of 80k characters (~20k tokens)
+5. **OpenAI GPT-4o** (always) - Parses the filtered content safely under 128k context limit
 
-The function now intelligently extracts only the relevant fire schedule content, ensuring it stays well under OpenAI's token limits.
+The function now intelligently extracts only the relevant fire schedule content with aggressive truncation, ensuring it stays well under OpenAI's 128k token context limit (leaves 108k tokens buffer for system prompt and response).
 
 ## 🐛 Enhanced Logging Added
 

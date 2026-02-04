@@ -261,18 +261,23 @@ function intelligentlyFilterScheduleContent(text: string): string {
 
   relevantText = relevantText.slice(0, scheduleEnd);
 
-  // Token limit: gpt-4o has 128k context, but rate limit is 800k TPM
-  // Rough estimate: 1 token ≈ 4 characters
-  // Safe limit: 300k characters ≈ 75k tokens (leaves room for system prompt and response)
-  const MAX_CHARS = 300000;
+  // Token limit: gpt-4o has 128k context limit
+  // System prompt ~5k tokens + response 16k tokens = 21k tokens overhead
+  // Available: 128k - 21k = 107k tokens max for content
+  // However, we're seeing issues, so be VERY conservative
+  // Rough estimate: 1 token ≈ 4 characters (can be less for dense text)
+  // SAFE limit: 80k characters ≈ 20k tokens (leaves 87k tokens buffer)
+  const MAX_CHARS = 80000;
+
+  console.log(`Before truncation: ${relevantText.length} chars (~${Math.floor(relevantText.length / 3)} tokens)`);
 
   if (relevantText.length > MAX_CHARS) {
-    console.log(`Truncating from ${relevantText.length} to ${MAX_CHARS} chars`);
+    console.log(`⚠️ TRUNCATING from ${relevantText.length} to ${MAX_CHARS} chars`);
     relevantText = relevantText.slice(0, MAX_CHARS);
-    relevantText += "\n\n[... content truncated due to size limit ...]";
+    relevantText += "\n\n[... content truncated to fit token limit. Please ensure the fire schedule table is in the first pages of the PDF ...]";
   }
 
-  console.log(`✓ Filtered to ${relevantText.length} chars (~${Math.floor(relevantText.length / 4)} tokens)`);
+  console.log(`✓ Final filtered content: ${relevantText.length} chars (~${Math.floor(relevantText.length / 3)} tokens)`);
   return relevantText;
 }
 
