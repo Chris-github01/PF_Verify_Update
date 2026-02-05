@@ -16,6 +16,7 @@ import ScopeMatrix from './pages/ScopeMatrix';
 import Equalisation from './pages/Equalisation';
 import BOQBuilder from './pages/BOQBuilder';
 import ContractManager from './pages/ContractManager';
+import CommercialControlDashboard from './pages/CommercialControlDashboard';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import ProjectReportPage from './pages/ProjectReportPage';
 import InsightsDashboard from './pages/InsightsDashboard';
@@ -803,6 +804,9 @@ function AppContent() {
           }}
           onToast={(message, type) => setToast({ message, type })}
         />;
+
+      case 'commercial':
+        return <CommercialControlDashboard />;
 
       case 'reports':
         if (!projectId) {

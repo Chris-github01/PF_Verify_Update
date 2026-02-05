@@ -15,6 +15,7 @@ import {
   RefreshCw,
   CheckSquare,
   FileSpreadsheet,
+  DollarSign,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -32,6 +33,7 @@ export type SidebarTab =
   | 'equalisation'
   | 'boq-builder'
   | 'contract'
+  | 'commercial'
   | 'reports'
   | 'insights'
   | 'systemcheck'
@@ -67,6 +69,7 @@ const menuStructure = [
     section: 'CONTRACT & HANDOVER (POST-AWARD)',
     items: [
       { id: 'contract' as SidebarTab, label: 'Contract Manager', icon: Briefcase },
+      { id: 'commercial' as SidebarTab, label: 'Commercial Control', icon: DollarSign },
     ]
   }
 ];
