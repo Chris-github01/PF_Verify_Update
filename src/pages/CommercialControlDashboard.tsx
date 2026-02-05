@@ -53,27 +53,39 @@ export default function CommercialControlDashboard() {
   async function loadDashboard() {
     try {
       setLoading(true);
+      console.log('[Commercial Dashboard] Starting dashboard load...');
 
       // Get current project from user preferences
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      console.log('[Commercial Dashboard] Current user:', user?.id);
+      if (!user) {
+        console.error('[Commercial Dashboard] No user found!');
+        return;
+      }
 
-      const { data: prefs } = await supabase
+      const { data: prefs, error: prefsError } = await supabase
         .from('user_preferences')
-        .select('current_project_id')
+        .select('current_project_id, current_organisation_id')
         .eq('user_id', user.id)
         .single();
 
-      if (!prefs?.current_project_id) return;
+      console.log('[Commercial Dashboard] User preferences:', { prefs, prefsError });
+
+      if (!prefs?.current_project_id) {
+        console.error('[Commercial Dashboard] No current project set!');
+        return;
+      }
 
       setProjectId(prefs.current_project_id);
 
-      // Get project details
-      const { data: project } = await supabase
+      // Get project details including organisation_id
+      const { data: project, error: projectError } = await supabase
         .from('projects')
-        .select('name')
+        .select('name, organisation_id, trade')
         .eq('id', prefs.current_project_id)
         .single();
+
+      console.log('[Commercial Dashboard] Project details:', { project, projectError });
 
       if (project) {
         setProjectName(project.name);
@@ -135,6 +147,8 @@ export default function CommercialControlDashboard() {
   }
 
   async function loadTradeMetrics(projId: string) {
+    console.log('[Commercial Dashboard] Loading trade metrics for project:', projId);
+
     // FIXED: Query award_approvals instead of non-existent awarded_supplier_id column
     // Get all awarded suppliers for this project
     const { data: awards, error: awardsError } = await supabase
@@ -143,9 +157,16 @@ export default function CommercialControlDashboard() {
         id,
         final_approved_supplier,
         final_approved_quote_id,
-        project_id
+        project_id,
+        organisation_id
       `)
       .eq('project_id', projId);
+
+    console.log('[Commercial Dashboard] Awards query result:', {
+      awards,
+      awardsError,
+      count: awards?.length || 0
+    });
 
     if (awardsError) {
       console.error('[Commercial Dashboard] Error fetching awards:', awardsError);
@@ -154,9 +175,12 @@ export default function CommercialControlDashboard() {
     }
 
     if (!awards || awards.length === 0) {
+      console.log('[Commercial Dashboard] No awards found for project:', projId);
       setTradeMetrics([]);
       return;
     }
+
+    console.log('[Commercial Dashboard] Found', awards.length, 'awards');
 
     // Get project trade to link awards to BOQ
     const { data: project } = await supabase
@@ -174,10 +198,14 @@ export default function CommercialControlDashboard() {
 
     // Get quote details for each award to get supplier_id
     const quoteIds = awards.map(a => a.final_approved_quote_id).filter(Boolean);
-    const { data: quotes } = await supabase
+    console.log('[Commercial Dashboard] Quote IDs from awards:', quoteIds);
+
+    const { data: quotes, error: quotesError } = await supabase
       .from('quotes')
       .select('id, supplier_id, supplier_name')
       .in('id', quoteIds);
+
+    console.log('[Commercial Dashboard] Quotes fetched:', { quotes, quotesError, count: quotes?.length || 0 });
 
     // Create a map of quote_id to supplier info
     const quoteMap = new Map();
@@ -188,14 +216,23 @@ export default function CommercialControlDashboard() {
       });
     });
 
+    console.log('[Commercial Dashboard] Quote map created with', quoteMap.size, 'entries');
+
     // CRITICAL FIX: Get contract value from quote_items (not boq_lines)
     // boq_lines doesn't have pricing - pricing is in quote_items for awarded quotes
     const groupedMap = new Map<string, any>();
 
     // Process each award and get its quote value
     for (const award of awards) {
+      console.log('[Commercial Dashboard] Processing award:', award.id, 'with quote:', award.final_approved_quote_id);
+
       const supplierInfo = quoteMap.get(award.final_approved_quote_id);
-      if (!supplierInfo) continue;
+      if (!supplierInfo) {
+        console.warn('[Commercial Dashboard] ⚠️ No supplier info found for quote:', award.final_approved_quote_id);
+        continue;
+      }
+
+      console.log('[Commercial Dashboard] Found supplier info:', supplierInfo);
 
       // Check if commercial baseline exists for this award
       const { data: existingBaseline } = await supabase
@@ -250,8 +287,11 @@ export default function CommercialControlDashboard() {
       }
 
       const key = `${tradeKey}_${supplierInfo.supplierId}`;
+      console.log('[Commercial Dashboard] Contract value calculated:', totalContractValue);
+      console.log('[Commercial Dashboard] Creating/updating group with key:', key);
+
       if (!groupedMap.has(key)) {
-        groupedMap.set(key, {
+        const groupData = {
           tradeKey: tradeKey,
           tradeName: tradeKey?.replace(/_/g, ' ').toUpperCase(),
           supplierId: supplierInfo.supplierId,
@@ -260,9 +300,15 @@ export default function CommercialControlDashboard() {
           awardId: award.id,
           quoteId: award.final_approved_quote_id,
           lines: []
-        });
+        };
+        groupedMap.set(key, groupData);
+        console.log('[Commercial Dashboard] ✅ Added group:', groupData);
+      } else {
+        console.log('[Commercial Dashboard] Group already exists for key:', key);
       }
     }
+
+    console.log('[Commercial Dashboard] Grouped map final size:', groupedMap.size);
 
     // Fetch claims and VOs for each trade/supplier
     const trades: TradeMetrics[] = [];
@@ -304,6 +350,8 @@ export default function CommercialControlDashboard() {
       });
     }
 
+    console.log('[Commercial Dashboard] Final trade metrics:', trades);
+    console.log('[Commercial Dashboard] Setting', trades.length, 'trade metrics');
     setTradeMetrics(trades);
   }
 
