@@ -133,48 +133,91 @@ export default function CommercialControlDashboard() {
   }
 
   async function loadTradeMetrics(projId: string) {
-    // Get all awarded trades/suppliers
-    const { data: awarded } = await supabase
-      .from('boq_lines')
+    // FIXED: Query award_approvals instead of non-existent awarded_supplier_id column
+    // Get all awarded suppliers for this project
+    const { data: awards, error: awardsError } = await supabase
+      .from('award_approvals')
       .select(`
-        module_key,
-        awarded_supplier_id,
-        contract_qty,
-        contract_rate,
-        quantity,
-        unit_price,
-        suppliers (
-          name
-        )
+        id,
+        final_approved_supplier,
+        final_approved_quote_id,
+        project_id
       `)
-      .eq('project_id', projId)
-      .not('awarded_supplier_id', 'is', null);
+      .eq('project_id', projId);
 
-    if (!awarded || awarded.length === 0) {
+    if (awardsError) {
+      console.error('[Commercial Dashboard] Error fetching awards:', awardsError);
       setTradeMetrics([]);
       return;
     }
 
-    // Group by trade + supplier
+    if (!awards || awards.length === 0) {
+      setTradeMetrics([]);
+      return;
+    }
+
+    // Get project trade to link awards to BOQ
+    const { data: project } = await supabase
+      .from('projects')
+      .select('trade')
+      .eq('id', projId)
+      .single();
+
+    if (!project) {
+      setTradeMetrics([]);
+      return;
+    }
+
+    const tradeKey = project.trade;
+
+    // Get quote details for each award to get supplier_id
+    const quoteIds = awards.map(a => a.final_approved_quote_id).filter(Boolean);
+    const { data: quotes } = await supabase
+      .from('quotes')
+      .select('id, supplier_id, supplier_name')
+      .in('id', quoteIds);
+
+    // Create a map of quote_id to supplier info
+    const quoteMap = new Map();
+    (quotes || []).forEach((q: any) => {
+      quoteMap.set(q.id, {
+        supplierId: q.supplier_id || q.id, // Fallback to quote_id if supplier_id is null
+        supplierName: q.supplier_name
+      });
+    });
+
+    // Get BOQ lines for this project/trade
+    const { data: boqLines } = await supabase
+      .from('boq_lines')
+      .select('contract_qty, contract_rate, quantity, unit_price, module_key')
+      .eq('project_id', projId)
+      .eq('module_key', tradeKey);
+
+    // Calculate total contract value for this trade
+    const totalContractValue = (boqLines || []).reduce((sum, line) => {
+      const qty = line.contract_qty || line.quantity || 0;
+      const rate = line.contract_rate || line.unit_price || 0;
+      return sum + (qty * rate);
+    }, 0);
+
+    // Group awards by trade + supplier
     const groupedMap = new Map<string, any>();
 
-    awarded.forEach((line: any) => {
-      const key = `${line.module_key}_${line.awarded_supplier_id}`;
+    awards.forEach((award: any) => {
+      const supplierInfo = quoteMap.get(award.final_approved_quote_id);
+      if (!supplierInfo) return;
+
+      const key = `${tradeKey}_${supplierInfo.supplierId}`;
       if (!groupedMap.has(key)) {
         groupedMap.set(key, {
-          tradeKey: line.module_key,
-          tradeName: line.module_key?.replace(/_/g, ' ').toUpperCase(),
-          supplierId: line.awarded_supplier_id,
-          supplierName: line.suppliers?.name || 'Unknown',
-          totalValue: 0,
+          tradeKey: tradeKey,
+          tradeName: tradeKey?.replace(/_/g, ' ').toUpperCase(),
+          supplierId: supplierInfo.supplierId,
+          supplierName: supplierInfo.supplierName || award.final_approved_supplier,
+          totalValue: totalContractValue,
           lines: []
         });
       }
-      const group = groupedMap.get(key);
-      const qty = line.contract_qty || line.quantity || 0;
-      const rate = line.contract_rate || line.unit_price || 0;
-      group.totalValue += qty * rate;
-      group.lines.push(line);
     });
 
     // Fetch claims and VOs for each trade/supplier

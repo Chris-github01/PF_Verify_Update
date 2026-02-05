@@ -48,22 +48,34 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
 
   console.log('[Base Tracker] Starting export:', options);
 
-  // 1. Fetch awarded BOQ lines for this supplier/trade
+  // 1. Verify this supplier is actually awarded for this project/trade
+  const { data: award } = await supabase
+    .from('award_approvals')
+    .select('final_approved_supplier, final_approved_quote_id')
+    .eq('project_id', projectId)
+    .order('approved_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!award) {
+    throw new Error(`No award found for project ${projectId}`);
+  }
+
+  // 2. Fetch all BOQ lines for this project/trade (awarded supplier gets entire trade)
   const { data: awardedBOQ, error: boqError } = await supabase
     .from('boq_lines')
     .select('*')
     .eq('project_id', projectId)
     .eq('module_key', tradeKey)
-    .eq('awarded_supplier_id', supplierId)
     .order('boq_line_id');
 
   if (boqError || !awardedBOQ || awardedBOQ.length === 0) {
-    throw new Error(`No awarded BOQ found for supplier ${supplierName} in trade ${tradeKey}`);
+    throw new Error(`No BOQ found for trade ${tradeKey} in project`);
   }
 
-  console.log(`[Base Tracker] Found ${awardedBOQ.length} awarded BOQ lines`);
+  console.log(`[Base Tracker] Found ${awardedBOQ.length} BOQ lines for ${tradeKey}`);
 
-  // 2. Check for previous period claims (to populate Qty_Claimed_Previous)
+  // 3. Check for previous period claims (to populate Qty_Claimed_Previous)
   const previousPeriod = getPreviousPeriod(period);
   const { data: previousClaim } = await supabase
     .from('base_tracker_claims')
