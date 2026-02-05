@@ -12,6 +12,7 @@ import SummaryStatCard from '../components/SummaryStatCard';
 import { AlertTriangle, TrendingUp, CheckCircle, Clock, AlertCircle, Download } from 'lucide-react';
 import { downloadBaseTracker } from '../lib/export/baseTrackerExport';
 import { downloadVOTracker } from '../lib/export/voTrackerExport';
+import { generateCommercialBaseline } from '../lib/commercial/baselineGenerator';
 
 interface CommercialMetrics {
   originalContractValue: number;
@@ -90,11 +91,12 @@ export default function CommercialControlDashboard() {
   }
 
   async function loadCommercialMetrics(projId: string) {
-    // Fetch project-level metrics
-    const { data: boqLines } = await supabase
-      .from('boq_lines')
-      .select('contract_qty, contract_rate, quantity, unit_price')
-      .eq('project_id', projId);
+    // FIXED: Use commercial_baseline_items instead of boq_lines
+    const { data: baselineItems } = await supabase
+      .from('commercial_baseline_items')
+      .select('quantity, unit_rate, line_amount')
+      .eq('project_id', projId)
+      .eq('is_active', true);
 
     const { data: claims } = await supabase
       .from('base_tracker_claims')
@@ -107,11 +109,9 @@ export default function CommercialControlDashboard() {
       .select('amount, status')
       .eq('project_id', projId);
 
-    // Calculate metrics
-    const originalValue = (boqLines || []).reduce((sum, line) => {
-      const qty = line.contract_qty || line.quantity || 0;
-      const rate = line.contract_rate || line.unit_price || 0;
-      return sum + (qty * rate);
+    // Calculate metrics from commercial baseline
+    const originalValue = (baselineItems || []).reduce((sum, line) => {
+      return sum + (line.line_amount || 0);
     }, 0);
 
     const certified = (claims || []).reduce((sum, claim) => sum + (claim.certified_amount || 0), 0);
@@ -197,17 +197,57 @@ export default function CommercialControlDashboard() {
       const supplierInfo = quoteMap.get(award.final_approved_quote_id);
       if (!supplierInfo) continue;
 
-      // Get total contract value from quote_items
-      const { data: quoteItems } = await supabase
-        .from('quote_items')
-        .select('quantity, unit_price')
-        .eq('quote_id', award.final_approved_quote_id);
+      // Check if commercial baseline exists for this award
+      const { data: existingBaseline } = await supabase
+        .from('commercial_baseline_items')
+        .select('id')
+        .eq('award_approval_id', award.id)
+        .limit(1)
+        .single();
 
-      const totalContractValue = (quoteItems || []).reduce((sum, item) => {
-        const qty = item.quantity || 0;
-        const price = item.unit_price || 0;
-        return sum + (qty * price);
-      }, 0);
+      // Auto-generate baseline if it doesn't exist
+      if (!existingBaseline) {
+        console.log(`[Commercial Control] Auto-generating baseline for award ${award.id}`);
+        try {
+          await generateCommercialBaseline({
+            projectId: award.project_id,
+            awardApprovalId: award.id,
+            quoteId: award.final_approved_quote_id,
+            tradeKey: tradeKey || 'general',
+            includeAllowances: true,
+            includeRetention: true,
+            retentionPercentage: 5
+          });
+          console.log(`[Commercial Control] ✅ Baseline generated for award ${award.id}`);
+        } catch (error) {
+          console.error(`[Commercial Control] Failed to generate baseline for award ${award.id}:`, error);
+        }
+      }
+
+      // Get total contract value from commercial baseline (or quote_items as fallback)
+      const { data: baselineItems } = await supabase
+        .from('commercial_baseline_items')
+        .select('line_amount')
+        .eq('award_approval_id', award.id)
+        .eq('is_active', true);
+
+      let totalContractValue = 0;
+      if (baselineItems && baselineItems.length > 0) {
+        // Use baseline (includes allowances and retention)
+        totalContractValue = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
+      } else {
+        // Fallback to quote_items (base value only)
+        const { data: quoteItems } = await supabase
+          .from('quote_items')
+          .select('quantity, unit_price')
+          .eq('quote_id', award.final_approved_quote_id);
+
+        totalContractValue = (quoteItems || []).reduce((sum, item) => {
+          const qty = item.quantity || 0;
+          const price = item.unit_price || 0;
+          return sum + (qty * price);
+        }, 0);
+      }
 
       const key = `${tradeKey}_${supplierInfo.supplierId}`;
       if (!groupedMap.has(key)) {
