@@ -23,6 +23,7 @@ interface CommercialMetrics {
 }
 
 interface TradeMetrics {
+  awardApprovalId: string;
   tradeKey: string;
   tradeName: string;
   percentComplete: number;
@@ -33,6 +34,7 @@ interface TradeMetrics {
   voValuePending: number;
   supplierName: string;
   supplierId: string;
+  totalValue: number;
 }
 
 export default function CommercialControlDashboard() {
@@ -247,8 +249,10 @@ export default function CommercialControlDashboard() {
         .reduce((sum, v) => sum + (v.amount || 0), 0);
 
       trades.push({
+        awardApprovalId: group.awardId,
         tradeKey: group.tradeKey,
         tradeName: group.tradeName,
+        totalValue: group.totalValue,
         percentComplete: group.totalValue > 0 ? (totalClaimed / group.totalValue) * 100 : 0,
         amountRemaining: group.totalValue - totalClaimed,
         overClaimFlags: 0, // Would need line-level data
@@ -269,8 +273,7 @@ export default function CommercialControlDashboard() {
       await downloadBaseTracker({
         projectId,
         projectName,
-        tradeKey: trade.tradeKey,
-        supplierId: trade.supplierId,
+        awardApprovalId: trade.awardApprovalId,
         supplierName: trade.supplierName,
         period,
         version: 1

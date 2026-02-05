@@ -1,8 +1,11 @@
 /**
- * BASE TRACKER EXCEL EXPORT
+ * BASE TRACKER EXCEL EXPORT (INDEPENDENT VERSION)
  *
  * Generates mandatory monthly progress claim tracker Excel file per awarded supplier/trade.
  * This file locks the commercial baseline and is used for all progress claims.
+ *
+ * KEY CHANGE: Now uses commercial_baseline_items instead of boq_lines.
+ * Completely independent of BOQ Builder.
  *
  * CRITICAL: Column structure must match spec exactly. DO NOT CHANGE ORDER.
  */
@@ -13,67 +16,67 @@ import { supabase } from '../supabase';
 interface BaseTrackerExportOptions {
   projectId: string;
   projectName: string;
-  tradeKey: string;
-  supplierId: string;
+  awardApprovalId: string;
   supplierName: string;
   period: string; // Format: YYYY-MM
   version?: number;
 }
 
-interface AwardedBOQLine {
-  boq_line_id: string;
-  trade: string;
-  system_description: string;
-  location_zone: string;
-  spec_or_drawing_ref: string;
+interface BaselineItem {
+  line_number: string;
+  line_type: string;
+  description: string;
+  location_zone: string | null;
+  system_category: string | null;
+  scope_category: string | null;
   unit: string;
-  contract_qty: number;
-  contract_rate: number;
-  contract_amount: number;
-  allowance_type: string | null;
-  scope_assumptions: string | null;
-  scope_exclusions: string | null;
+  quantity: number;
+  unit_rate: number;
+  line_amount: number;
+  notes: string | null;
 }
 
 export async function exportBaseTracker(options: BaseTrackerExportOptions): Promise<Blob> {
   const {
     projectId,
     projectName,
-    tradeKey,
-    supplierId,
+    awardApprovalId,
     supplierName,
     period,
     version = 1
   } = options;
 
-  console.log('[Base Tracker] Starting export:', options);
+  console.log('[Base Tracker] Starting INDEPENDENT export:', options);
 
-  // 1. Verify this supplier is actually awarded for this project/trade
-  const { data: award } = await supabase
+  // 1. Get award details
+  const { data: award, error: awardError } = await supabase
     .from('award_approvals')
-    .select('final_approved_supplier, final_approved_quote_id')
-    .eq('project_id', projectId)
-    .order('approved_at', { ascending: false })
-    .limit(1)
+    .select('id, final_approved_supplier, final_approved_quote_id')
+    .eq('id', awardApprovalId)
     .single();
 
-  if (!award) {
-    throw new Error(`No award found for project ${projectId}`);
+  if (awardError || !award) {
+    throw new Error(`Award not found: ${awardApprovalId}`);
   }
 
-  // 2. Fetch all BOQ lines for this project/trade (awarded supplier gets entire trade)
-  const { data: awardedBOQ, error: boqError } = await supabase
-    .from('boq_lines')
+  // 2. Fetch commercial baseline items (NOT boq_lines!)
+  const { data: baselineItems, error: baselineError } = await supabase
+    .from('commercial_baseline_items')
     .select('*')
-    .eq('project_id', projectId)
-    .eq('module_key', tradeKey)
-    .order('boq_line_id');
+    .eq('award_approval_id', awardApprovalId)
+    .eq('is_active', true)
+    .order('line_number');
 
-  if (boqError || !awardedBOQ || awardedBOQ.length === 0) {
-    throw new Error(`No BOQ found for trade ${tradeKey} in project`);
+  if (baselineError) {
+    console.error('[Base Tracker] Error fetching baseline:', baselineError);
+    throw baselineError;
   }
 
-  console.log(`[Base Tracker] Found ${awardedBOQ.length} BOQ lines for ${tradeKey}`);
+  if (!baselineItems || baselineItems.length === 0) {
+    throw new Error(`No commercial baseline found for award ${awardApprovalId}. Generate baseline first.`);
+  }
+
+  console.log(`[Base Tracker] Found ${baselineItems.length} baseline items (independent of BOQ Builder)`);
 
   // 3. Check for previous period claims (to populate Qty_Claimed_Previous)
   const previousPeriod = getPreviousPeriod(period);
@@ -81,7 +84,7 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
     .from('base_tracker_claims')
     .select('line_items')
     .eq('project_id', projectId)
-    .eq('supplier_id', supplierId)
+    .eq('base_tracker_id', awardApprovalId)
     .eq('period', previousPeriod)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -90,7 +93,7 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
   const previousClaimedMap = new Map<string, number>();
   if (previousClaim?.line_items) {
     (previousClaim.line_items as any[]).forEach(item => {
-      previousClaimedMap.set(item.boq_line_id, item.qty_claimed_to_date || 0);
+      previousClaimedMap.set(item.line_number, item.qty_claimed_to_date || 0);
     });
   }
 
@@ -226,29 +229,29 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
   });
   worksheet.getRow(5).height = 40;
 
-  // 7. Add BOQ data rows
+  // 7. Add baseline data rows (from commercial_baseline_items)
   let currentRow = 6;
-  awardedBOQ.forEach((boqLine: any) => {
+  baselineItems.forEach((item: any) => {
     const row = worksheet.getRow(currentRow);
 
-    const contractQty = boqLine.contract_qty || boqLine.quantity || 0;
-    const contractRate = boqLine.contract_rate || boqLine.unit_price || 0;
-    const contractAmount = contractQty * contractRate;
-    const previousQty = previousClaimedMap.get(boqLine.boq_line_id) || 0;
+    const contractQty = item.quantity || 0;
+    const contractRate = item.unit_rate || 0;
+    const contractAmount = item.line_amount || 0;
+    const previousQty = previousClaimedMap.get(item.line_number) || 0;
 
     // SECTION A - Contract Baseline (LOCKED)
-    row.getCell(1).value = boqLine.boq_line_id;
-    row.getCell(2).value = tradeKey.toUpperCase();
-    row.getCell(3).value = boqLine.description || boqLine.system_description || '';
-    row.getCell(4).value = boqLine.location || '';
-    row.getCell(5).value = boqLine.spec_reference || '';
-    row.getCell(6).value = boqLine.unit || 'ea';
+    row.getCell(1).value = item.line_number;
+    row.getCell(2).value = item.line_type.toUpperCase();
+    row.getCell(3).value = item.description || '';
+    row.getCell(4).value = item.location_zone || '';
+    row.getCell(5).value = item.system_category || '';
+    row.getCell(6).value = item.unit || 'ea';
     row.getCell(7).value = contractQty;
     row.getCell(8).value = contractRate;
     row.getCell(9).value = contractAmount;
-    row.getCell(10).value = boqLine.allowance_type || '';
-    row.getCell(11).value = boqLine.scope_assumptions || '';
-    row.getCell(12).value = boqLine.scope_exclusions || '';
+    row.getCell(10).value = item.line_type || '';
+    row.getCell(11).value = item.scope_category || '';
+    row.getCell(12).value = item.notes || '';
 
     // SECTION B - Supplier Input (UNLOCKED)
     row.getCell(13).value = previousQty; // Qty_Claimed_Previous
@@ -428,7 +431,7 @@ export async function downloadBaseTracker(options: BaseTrackerExportOptions): Pr
   const link = document.createElement('a');
   link.href = url;
 
-  const filename = `BASE_TRACKER_${options.projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${options.tradeKey.toUpperCase()}_${options.supplierName.replace(/[^a-zA-Z0-9]/g, '_')}_${options.period}_v${options.version || 1}.xlsx`;
+  const filename = `BASE_TRACKER_${options.projectName.replace(/[^a-zA-Z0-9]/g, '_')}_${options.supplierName.replace(/[^a-zA-Z0-9]/g, '_')}_${options.period}_v${options.version || 1}.xlsx`;
   link.download = filename;
   link.click();
 
