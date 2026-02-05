@@ -186,26 +186,26 @@ export default function CommercialControlDashboard() {
       });
     });
 
-    // Get BOQ lines for this project/trade
-    const { data: boqLines } = await supabase
-      .from('boq_lines')
-      .select('contract_qty, contract_rate, quantity, unit_price, module_key')
-      .eq('project_id', projId)
-      .eq('module_key', tradeKey);
-
-    // Calculate total contract value for this trade
-    const totalContractValue = (boqLines || []).reduce((sum, line) => {
-      const qty = line.contract_qty || line.quantity || 0;
-      const rate = line.contract_rate || line.unit_price || 0;
-      return sum + (qty * rate);
-    }, 0);
-
-    // Group awards by trade + supplier
+    // CRITICAL FIX: Get contract value from quote_items (not boq_lines)
+    // boq_lines doesn't have pricing - pricing is in quote_items for awarded quotes
     const groupedMap = new Map<string, any>();
 
-    awards.forEach((award: any) => {
+    // Process each award and get its quote value
+    for (const award of awards) {
       const supplierInfo = quoteMap.get(award.final_approved_quote_id);
-      if (!supplierInfo) return;
+      if (!supplierInfo) continue;
+
+      // Get total contract value from quote_items
+      const { data: quoteItems } = await supabase
+        .from('quote_items')
+        .select('quantity, unit_price')
+        .eq('quote_id', award.final_approved_quote_id);
+
+      const totalContractValue = (quoteItems || []).reduce((sum, item) => {
+        const qty = item.quantity || 0;
+        const price = item.unit_price || 0;
+        return sum + (qty * price);
+      }, 0);
 
       const key = `${tradeKey}_${supplierInfo.supplierId}`;
       if (!groupedMap.has(key)) {
@@ -215,10 +215,12 @@ export default function CommercialControlDashboard() {
           supplierId: supplierInfo.supplierId,
           supplierName: supplierInfo.supplierName || award.final_approved_supplier,
           totalValue: totalContractValue,
+          awardId: award.id,
+          quoteId: award.final_approved_quote_id,
           lines: []
         });
       }
-    });
+    }
 
     // Fetch claims and VOs for each trade/supplier
     const trades: TradeMetrics[] = [];
