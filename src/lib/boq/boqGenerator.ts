@@ -170,8 +170,8 @@ export async function generateBaselineBOQ(
 
   return {
     lines_created: boqLines.length,
-    mappings_created,
-    gaps_detected,
+    mappings_created: mappingsCreated,
+    gaps_detected: gapsDetected,
     completion_percentage: 100
   };
 }
