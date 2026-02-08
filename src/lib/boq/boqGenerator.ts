@@ -31,11 +31,16 @@ export async function generateBaselineBOQ(
   projectId: string,
   moduleKey: ModuleKey
 ): Promise<BOQGenerationResult> {
+  console.log('=== BOQ Generation Started ===');
+  console.log('Project ID:', projectId);
+  console.log('Module Key:', moduleKey);
+
   // Step 1: Get all tenderers and their quotes for this project
   // First try with trade filter, then without if nothing found
   let quotes: any[] | null = null;
   let quotesError: any = null;
 
+  console.log('Step 1: Fetching quotes...');
   const result = await supabase
     .from('quotes')
     .select(`
@@ -52,6 +57,8 @@ export async function generateBaselineBOQ(
 
   quotes = result.data;
   quotesError = result.error;
+
+  console.log('Quotes with trade filter:', quotes?.length || 0);
 
   // If no quotes found with trade filter, try without it (for backward compatibility)
   if (!quotesError && (!quotes || quotes.length === 0)) {
@@ -71,9 +78,13 @@ export async function generateBaselineBOQ(
 
     quotes = fallbackResult.data;
     quotesError = fallbackResult.error;
+    console.log('Quotes without trade filter:', quotes?.length || 0);
   }
 
-  if (quotesError) throw quotesError;
+  if (quotesError) {
+    console.error('Error fetching quotes:', quotesError);
+    throw quotesError;
+  }
 
   const tenderers: Tenderer[] = quotes?.map(q => ({
     id: q.supplier_id,
@@ -81,22 +92,52 @@ export async function generateBaselineBOQ(
     quote_id: q.id
   })) || [];
 
+  console.log('Tenderers found:', tenderers.length);
+  console.log('Tenderers:', tenderers.map(t => ({ name: t.name, quote_id: t.quote_id })));
+
   if (tenderers.length === 0) {
     throw new Error('No quotes found for this project. Please import quotes first using the "Import Quotes" step.');
   }
 
   // Step 2: Get all quote items from all tenderers
+  console.log('Step 2: Fetching quote items...');
+  console.log('Quote IDs to fetch:', tenderers.map(t => t.quote_id));
+
   const { data: allItems, error: itemsError } = await supabase
     .from('quote_items')
     .select('*')
     .in('quote_id', tenderers.map(t => t.quote_id));
 
-  if (itemsError) throw itemsError;
+  if (itemsError) {
+    console.error('Error fetching quote items:', itemsError);
+    throw itemsError;
+  }
+
+  console.log('Total quote items found:', allItems?.length || 0);
+
+  if (!allItems || allItems.length === 0) {
+    console.error('WARNING: No quote items found for any quotes!');
+    console.log('This means the quotes were imported but have no line items.');
+    throw new Error('No quote items found. The quotes may not have been parsed correctly. Please reimport the quotes.');
+  }
+
+  // Log sample of items for debugging
+  if (allItems && allItems.length > 0) {
+    console.log('Sample quote item:', allItems[0]);
+  }
 
   // Step 3: Normalize and create baseline BOQ lines
+  console.log('Step 3: Normalizing items...');
   const normalizedLines = normalizeItems(allItems || [], moduleKey);
+  console.log('Normalized lines created:', normalizedLines.length);
+
+  if (normalizedLines.length === 0) {
+    console.error('WARNING: No normalized lines created from items!');
+    console.log('This could mean items lack required fields like system_name');
+  }
 
   // Step 4: Insert baseline BOQ lines
+  console.log('Step 4: Inserting BOQ lines...');
   const boqLines: BOQLine[] = [];
   let lineCounter = 1;
 
@@ -134,6 +175,7 @@ export async function generateBaselineBOQ(
 
     if (insertError) {
       console.error('Error inserting BOQ line:', insertError);
+      console.error('Failed line data:', line);
       continue;
     }
 
@@ -141,7 +183,10 @@ export async function generateBaselineBOQ(
     lineCounter++;
   }
 
+  console.log('Successfully inserted BOQ lines:', boqLines.length);
+
   // Step 5: Create tenderer mappings
+  console.log('Step 5: Creating tenderer mappings...');
   const mappingsCreated = await createTendererMappings(
     projectId,
     moduleKey,
@@ -149,8 +194,10 @@ export async function generateBaselineBOQ(
     tenderers,
     allItems || []
   );
+  console.log('Mappings created:', mappingsCreated);
 
   // Step 6: Detect and create scope gaps
+  console.log('Step 6: Detecting scope gaps...');
   const gapsDetected = await detectScopeGaps(
     projectId,
     moduleKey,
@@ -158,8 +205,10 @@ export async function generateBaselineBOQ(
     tenderers,
     allItems || []
   );
+  console.log('Gaps detected:', gapsDetected);
 
   // Step 7: Mark BOQ Builder as completed
+  console.log('Step 7: Marking BOQ Builder as completed...');
   await supabase
     .from('projects')
     .update({
@@ -167,6 +216,13 @@ export async function generateBaselineBOQ(
       boq_builder_completed_at: new Date().toISOString()
     })
     .eq('id', projectId);
+
+  console.log('=== BOQ Generation Complete ===');
+  console.log('Final stats:', {
+    lines_created: boqLines.length,
+    mappings_created: mappingsCreated,
+    gaps_detected: gapsDetected
+  });
 
   return {
     lines_created: boqLines.length,
@@ -177,6 +233,8 @@ export async function generateBaselineBOQ(
 }
 
 function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] {
+  console.log('normalizeItems: Processing', items.length, 'items');
+
   // Group items by system/location/attributes to create unique BOQ lines
   const groupedMap = new Map<string, any[]>();
 
@@ -187,6 +245,8 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
     }
     groupedMap.get(key)!.push(item);
   }
+
+  console.log('normalizeItems: Created', groupedMap.size, 'unique groups');
 
   // Create baseline lines from groups (use max quantity across all tenderers)
   const normalizedLines: Partial<BOQLine>[] = [];
@@ -214,6 +274,11 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
       baseline_scope_notes: null,
       baseline_measure_rule: null
     });
+  }
+
+  console.log('normalizeItems: Created', normalizedLines.length, 'normalized lines');
+  if (normalizedLines.length > 0) {
+    console.log('Sample normalized line:', normalizedLines[0]);
   }
 
   return normalizedLines;
@@ -257,7 +322,10 @@ async function createTendererMappings(
   tenderers: Tenderer[],
   allItems: any[]
 ): Promise<number> {
+  console.log('createTendererMappings: Processing', boqLines.length, 'lines x', tenderers.length, 'tenderers');
   let mappingsCount = 0;
+  let matchedCount = 0;
+  let missingCount = 0;
 
   for (const boqLine of boqLines) {
     for (const tenderer of tenderers) {
@@ -272,6 +340,7 @@ async function createTendererMappings(
       let tendererNotes = null;
 
       if (matchingItem) {
+        matchedCount++;
         // Determine included status
         if (matchingItem.quantity > 0 && matchingItem.amount > 0) {
           includedStatus = 'included';
@@ -283,6 +352,8 @@ async function createTendererMappings(
         tendererRate = matchingItem.rate;
         tendererAmount = matchingItem.amount;
         tendererNotes = matchingItem.notes;
+      } else {
+        missingCount++;
       }
 
       const { error } = await supabase
@@ -302,9 +373,14 @@ async function createTendererMappings(
 
       if (!error) {
         mappingsCount++;
+      } else {
+        console.error('Error creating mapping:', error);
       }
     }
   }
+
+  console.log('createTendererMappings: Created', mappingsCount, 'mappings');
+  console.log('createTendererMappings: Matched items:', matchedCount, 'Missing items:', missingCount);
 
   return mappingsCount;
 }
@@ -351,6 +427,7 @@ async function detectScopeGaps(
   tenderers: Tenderer[],
   allItems: any[]
 ): Promise<number> {
+  console.log('detectScopeGaps: Analyzing', boqLines.length, 'lines x', tenderers.length, 'tenderers');
   const gaps: Partial<ScopeGap>[] = [];
   let gapCounter = 1;
 
