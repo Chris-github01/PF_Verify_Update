@@ -234,32 +234,46 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
   };
 
   const handleRegenerateBOQ = async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      alert('No project ID found. Please refresh the page and try again.');
+      return;
+    }
 
     setRegenerating(true);
     setShowRegenerateConfirm(false);
 
     try {
+      console.log('Starting BOQ regeneration for project:', projectId, 'module:', moduleKey);
+
       // Step 1: Delete all existing BOQ data for this project and module
       // Note: Deleting boq_lines will cascade to boq_tenderer_map and scope_gaps due to ON DELETE CASCADE
+      console.log('Step 1: Deleting BOQ lines...');
       const { error: deleteBoqError } = await supabase
         .from('boq_lines')
         .delete()
         .eq('project_id', projectId)
         .eq('module_key', moduleKey);
 
-      if (deleteBoqError) throw deleteBoqError;
+      if (deleteBoqError) {
+        console.error('Error deleting BOQ lines:', deleteBoqError);
+        throw new Error(`Failed to delete BOQ lines: ${deleteBoqError.message}`);
+      }
 
       // Step 2: Delete project tags
+      console.log('Step 2: Deleting project tags...');
       const { error: deleteTagsError } = await supabase
         .from('project_tags')
         .delete()
         .eq('project_id', projectId)
         .eq('module_key', moduleKey);
 
-      if (deleteTagsError) throw deleteTagsError;
+      if (deleteTagsError) {
+        console.error('Error deleting tags:', deleteTagsError);
+        throw new Error(`Failed to delete tags: ${deleteTagsError.message}`);
+      }
 
       // Step 3: Reset project BOQ completion flags
+      console.log('Step 3: Resetting project flags...');
       const { error: updateProjectError } = await supabase
         .from('projects')
         .update({
@@ -268,9 +282,13 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         })
         .eq('id', projectId);
 
-      if (updateProjectError) throw updateProjectError;
+      if (updateProjectError) {
+        console.error('Error updating project:', updateProjectError);
+        throw new Error(`Failed to reset project flags: ${updateProjectError.message}`);
+      }
 
       // Step 4: Clear local state
+      console.log('Step 4: Clearing local state...');
       setBoqLines([]);
       setMappings([]);
       setGaps([]);
@@ -278,17 +296,22 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
       setGenerationResult(null);
 
       // Step 5: Regenerate BOQ from existing quotes
+      console.log('Step 5: Regenerating BOQ...');
       const result = await generateBaselineBOQ(projectId, moduleKey);
+      console.log('BOQ generation result:', result);
       setGenerationResult(result);
 
       // Step 6: Reload all data
+      console.log('Step 6: Reloading data...');
       await loadBOQData();
 
       // Success notification
+      console.log('Regeneration complete!');
       alert(`BOQ regenerated successfully!\n\n${result.lines_created} lines created\n${result.mappings_created} mappings created\n${result.gaps_detected} gaps detected`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error regenerating BOQ:', error);
-      alert('Failed to regenerate BOQ. Please try again or contact support.');
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      alert(`Failed to regenerate BOQ:\n\n${errorMessage}\n\nPlease check the browser console for more details.`);
     } finally {
       setRegenerating(false);
     }
