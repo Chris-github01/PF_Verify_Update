@@ -28,7 +28,9 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [showTagLibrary, setShowTagLibrary] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   const [generationResult, setGenerationResult] = useState<any>(null);
 
@@ -231,6 +233,67 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
     }
   };
 
+  const handleRegenerateBOQ = async () => {
+    if (!projectId) return;
+
+    setRegenerating(true);
+    setShowRegenerateConfirm(false);
+
+    try {
+      // Step 1: Delete all existing BOQ data for this project and module
+      // Note: Deleting boq_lines will cascade to boq_tenderer_map and scope_gaps due to ON DELETE CASCADE
+      const { error: deleteBoqError } = await supabase
+        .from('boq_lines')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('module_key', moduleKey);
+
+      if (deleteBoqError) throw deleteBoqError;
+
+      // Step 2: Delete project tags
+      const { error: deleteTagsError } = await supabase
+        .from('project_tags')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('module_key', moduleKey);
+
+      if (deleteTagsError) throw deleteTagsError;
+
+      // Step 3: Reset project BOQ completion flags
+      const { error: updateProjectError } = await supabase
+        .from('projects')
+        .update({
+          boq_builder_completed: false,
+          boq_builder_completed_at: null
+        })
+        .eq('id', projectId);
+
+      if (updateProjectError) throw updateProjectError;
+
+      // Step 4: Clear local state
+      setBoqLines([]);
+      setMappings([]);
+      setGaps([]);
+      setTags([]);
+      setGenerationResult(null);
+
+      // Step 5: Regenerate BOQ from existing quotes
+      const result = await generateBaselineBOQ(projectId, moduleKey);
+      setGenerationResult(result);
+
+      // Step 6: Reload all data
+      await loadBOQData();
+
+      // Success notification
+      alert(`BOQ regenerated successfully!\n\n${result.lines_created} lines created\n${result.mappings_created} mappings created\n${result.gaps_detected} gaps detected`);
+    } catch (error) {
+      console.error('Error regenerating BOQ:', error);
+      alert('Failed to regenerate BOQ. Please try again or contact support.');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   const openGapsCount = gaps.filter(g => g.status === 'open').length;
   const totalGaps = gaps.length;
 
@@ -275,6 +338,15 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
                 </button>
               ) : (
                 <>
+                  <button
+                    onClick={() => setShowRegenerateConfirm(true)}
+                    disabled={regenerating}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2"
+                    title="Delete current BOQ and regenerate from quotes"
+                  >
+                    <RefreshCw size={18} />
+                    Regenerate BOQ Builder
+                  </button>
                   <button
                     onClick={() => handleExportBOQ('baseline')}
                     disabled={exporting}
@@ -475,6 +547,83 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         moduleKey={moduleKey}
         onTagsAdded={loadBOQData}
       />
+
+      {/* Regenerate Confirmation Modal */}
+      {showRegenerateConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full border border-slate-700">
+            <div className="p-6 border-b border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-500/20 rounded-lg">
+                  <AlertTriangle className="text-red-400" size={24} />
+                </div>
+                <h2 className="text-xl font-bold text-white">Regenerate BOQ Builder</h2>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-slate-300">
+                This will <span className="font-semibold text-red-400">permanently delete</span> all current BOQ data and regenerate from scratch:
+              </p>
+
+              <div className="bg-slate-900/50 rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-red-400 rounded-full" />
+                  <span className="text-slate-300"><span className="font-semibold text-white">{boqLines.length}</span> BOQ baseline lines</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-red-400 rounded-full" />
+                  <span className="text-slate-300"><span className="font-semibold text-white">{mappings.length}</span> tenderer mappings</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-red-400 rounded-full" />
+                  <span className="text-slate-300"><span className="font-semibold text-white">{gaps.length}</span> scope gaps</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-red-400 rounded-full" />
+                  <span className="text-slate-300"><span className="font-semibold text-white">{tags.length}</span> project tags & clarifications</span>
+                </div>
+              </div>
+
+              <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
+                <p className="text-orange-300 text-sm">
+                  <span className="font-semibold">Note:</span> All manual edits, custom tags, and gap closure evidence will be lost. The BOQ will be regenerated from the original quote data.
+                </p>
+              </div>
+
+              <p className="text-slate-300 text-sm">
+                Are you sure you want to continue?
+              </p>
+            </div>
+
+            <div className="p-6 border-t border-slate-700 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowRegenerateConfirm(false)}
+                className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRegenerateBOQ}
+                disabled={regenerating}
+                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 transition-colors"
+              >
+                {regenerating ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={18} />
+                    Yes, Regenerate BOQ
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
