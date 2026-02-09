@@ -206,7 +206,7 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
               <img
                 src="/verifytrade_logo.png"
                 alt="VerifyTrade"
-                className="h-12 w-auto"
+                className="h-20 w-auto"
               />
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">Quote Audit Engine</span>

@@ -32,7 +32,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
               <img
                 src="/verifytrade_logo.png"
                 alt="VerifyTrade"
-                className="h-12 w-auto"
+                className="h-20 w-auto"
               />
             </div>
 
