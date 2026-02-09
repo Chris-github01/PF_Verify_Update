@@ -103,7 +103,7 @@ export default function Login() {
             <img
               src="/verifytrade_logo.png"
               alt="VerifyTrade"
-              className="h-40 w-auto"
+              className="h-80 w-auto"
             />
           </div>
           <h1 className="text-3xl font-bold text-slate-50 mb-2">
