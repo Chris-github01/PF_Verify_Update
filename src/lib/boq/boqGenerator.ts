@@ -235,24 +235,11 @@ export async function generateBaselineBOQ(
 function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] {
   console.log('normalizeItems: Processing', items.length, 'items');
 
-  // Log first 3 items to see their structure
-  if (items.length > 0) {
-    console.log('First 3 items:', items.slice(0, 3));
-    console.log('Sample item keys:', Object.keys(items[0]));
-  }
-
   // Group items by system/location/attributes to create unique BOQ lines
   const groupedMap = new Map<string, any[]>();
-  const keyExamples = new Set<string>();
 
   for (const item of items) {
     const key = createGroupingKey(item);
-
-    // Collect first 10 unique keys for debugging
-    if (keyExamples.size < 10) {
-      keyExamples.add(key);
-    }
-
     if (!groupedMap.has(key)) {
       groupedMap.set(key, []);
     }
@@ -260,7 +247,6 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
   }
 
   console.log('normalizeItems: Created', groupedMap.size, 'unique groups');
-  console.log('Sample grouping keys:', Array.from(keyExamples));
 
   // Create baseline lines from groups (use max quantity across all tenderers)
   const normalizedLines: Partial<BOQLine>[] = [];
@@ -269,30 +255,22 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
     const representative = groupItems[0];
     const maxQty = Math.max(...groupItems.map(i => i.quantity || 0));
 
-    // CORRECTED FIELD MAPPING based on actual quote_items schema
-    const systemName = representative.system_label
-      || representative.mapped_system
-      || representative.system_name
-      || representative.description
-      || representative.normalized_description
-      || 'Unnamed System';
-
     normalizedLines.push({
       trade: moduleKey,
-      system_group: extractSystemGroup(systemName),
-      system_name: systemName,
-      drawing_spec_ref: representative.drawing_ref || representative.drawing || representative.system_id || null,
-      location_zone: representative.location || representative.location_zone || null,
+      system_group: extractSystemGroup(representative.system_name),
+      system_name: representative.system_name || 'Unnamed System',
+      drawing_spec_ref: representative.drawing_ref || null,
+      location_zone: representative.location || null,
       element_asset: representative.element || null,
-      frr_rating: representative.frr || representative.frr_rating || representative.fire_rating || null,
-      substrate: representative.material || representative.substrate || null,
-      service_type: representative.mapped_service_type || representative.service || representative.service_type || null,
-      penetration_size_opening: representative.size || representative.size_opening || representative.opening_size || null,
+      frr_rating: representative.frr_rating || null,
+      substrate: representative.substrate || null,
+      service_type: representative.service_type || null,
+      penetration_size_opening: representative.size_opening || null,
       quantity: maxQty,
-      unit: representative.unit || representative.canonical_unit || representative.normalized_unit || representative.uom || 'Each',
-      system_variant_product: representative.product || representative.product_name || representative.mapped_penetration || null,
-      install_method_buildup: representative.install_method || representative.installation_method || null,
-      constraints_access: representative.access_notes || representative.notes || null,
+      unit: representative.unit || 'Each',
+      system_variant_product: representative.product || null,
+      install_method_buildup: representative.install_method || null,
+      constraints_access: representative.access_notes || null,
       baseline_scope_notes: null,
       baseline_measure_rule: null
     });
@@ -307,40 +285,16 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
 }
 
 function createGroupingKey(item: any): string {
-  // CORRECTED FIELD MAPPING based on actual quote_items schema
-  // quote_items fields: system_label, mapped_system, description, size, frr, service, mapped_service_type
-
+  // Create a unique key based on system, location, and key attributes
   const parts = [
-    // System/Description - use system_label first, then mapped_system, then description
-    item.system_label || item.mapped_system || item.system_name || item.description || '',
-    // Size/Opening - from size column
-    item.size || item.size_opening || item.opening_size || '',
-    // FRR - from frr column
-    item.frr || item.frr_rating || item.fire_rating || '',
-    // Service Type - from service or mapped_service_type columns
-    item.mapped_service_type || item.service || item.service_type || '',
-    // Material/Substrate - from material or subclass
-    item.material || item.substrate || item.subclass || ''
+    item.system_name || '',
+    item.location || '',
+    item.frr_rating || '',
+    item.substrate || '',
+    item.service_type || '',
+    item.size_opening || ''
   ];
-
-  const key = parts.join('|').toLowerCase().trim();
-
-  // If all parts are empty (key is just pipes), each item should be separate
-  // This prevents collapse when parsing hasn't populated detailed fields yet
-  if (key === '||||' || key === '' || key.replace(/\|/g, '').trim() === '') {
-    // Use description as fallback, or item ID to keep items separate
-    const description = item.description || item.raw_description || item.normalized_description || '';
-    if (description) {
-      return description.toLowerCase().trim();
-    }
-
-    // Last resort: use item ID to ensure uniqueness
-    const fallbackKey = item.id || item.item_number || `item_${Math.random()}`;
-    console.warn('Empty grouping key for item, using fallback:', fallbackKey);
-    return `unique_${fallbackKey}`;
-  }
-
-  return key;
+  return parts.join('|').toLowerCase();
 }
 
 function extractSystemGroup(systemName: string): string {
@@ -387,20 +341,17 @@ async function createTendererMappings(
 
       if (matchingItem) {
         matchedCount++;
-        // Determine included status using correct field names
-        const itemAmount = matchingItem.total_price || matchingItem.amount || 0;
-        const itemQty = matchingItem.quantity || 0;
-
-        if (itemQty > 0 && itemAmount > 0) {
+        // Determine included status
+        if (matchingItem.quantity > 0 && matchingItem.amount > 0) {
           includedStatus = 'included';
-        } else if (itemQty === 0 || itemAmount === 0) {
+        } else if (matchingItem.quantity === 0 || matchingItem.amount === 0) {
           includedStatus = 'unclear';
         }
 
         tendererQty = matchingItem.quantity;
-        tendererRate = matchingItem.unit_price || matchingItem.rate;
-        tendererAmount = matchingItem.total_price || matchingItem.amount;
-        tendererNotes = matchingItem.notes || matchingItem.raw_description;
+        tendererRate = matchingItem.rate;
+        tendererAmount = matchingItem.amount;
+        tendererNotes = matchingItem.notes;
       } else {
         missingCount++;
       }
@@ -435,20 +386,16 @@ async function createTendererMappings(
 }
 
 function findMatchingItem(boqLine: BOQLine, tendererItems: any[]): any | null {
-  // Try to find exact match first using corrected field mapping
+  // Try to find exact match first
   for (const item of tendererItems) {
     const itemKey = createGroupingKey(item);
-
-    // Create a pseudo-item from BOQ line with correct field names for comparison
     const boqKey = createGroupingKey({
-      system_label: boqLine.system_name,
-      description: boqLine.system_name,
+      system_name: boqLine.system_name,
       location: boqLine.location_zone,
-      frr: boqLine.frr_rating,
-      material: boqLine.substrate,
-      mapped_service_type: boqLine.service_type,
-      service: boqLine.service_type,
-      size: boqLine.penetration_size_opening
+      frr_rating: boqLine.frr_rating,
+      substrate: boqLine.substrate,
+      service_type: boqLine.service_type,
+      size_opening: boqLine.penetration_size_opening
     });
 
     if (itemKey === boqKey) {
@@ -456,10 +403,9 @@ function findMatchingItem(boqLine: BOQLine, tendererItems: any[]): any | null {
     }
   }
 
-  // Try fuzzy match on system name/description only
+  // Try fuzzy match on system name only
   for (const item of tendererItems) {
-    const itemDesc = item.system_label || item.mapped_system || item.description || '';
-    if (fuzzyMatch(itemDesc, boqLine.system_name)) {
+    if (fuzzyMatch(item.system_name, boqLine.system_name)) {
       return item;
     }
   }
