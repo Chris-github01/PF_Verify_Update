@@ -114,7 +114,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
       <div className={`flex ${collapsed ? 'justify-center' : 'flex-col'} px-5 pt-5 pb-4`}>
         <div className="flex items-center justify-center mb-2">
           <img
-            src="/verifytrade_logo_new.png"
+            src="/verifytrade_logo.png"
             alt="VerifyTrade"
             className={collapsed ? "h-16 w-auto" : "h-28 w-auto"}
           />

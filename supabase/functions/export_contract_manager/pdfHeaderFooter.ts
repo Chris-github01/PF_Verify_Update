@@ -30,7 +30,7 @@ export function generatePDFHeader(config: HeaderFooterConfig): string {
         />
         <div style="width: 1px; height: 32px; background: #e5e7eb; margin: 0 8px;"></div>
         <img
-          src="https://verifytrade.com/verifytrade_logo_new.png"
+          src="https://verifytrade.com/verifytrade_logo.png"
           alt="VerifyTrade"
           style="max-width: 120px; max-height: 36px; object-fit: contain;"
           onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
@@ -43,7 +43,7 @@ export function generatePDFHeader(config: HeaderFooterConfig): string {
     : `
       <div style="display: flex; align-items: center;">
         <img
-          src="https://verifytrade.com/verifytrade_logo_new.png"
+          src="https://verifytrade.com/verifytrade_logo.png"
           alt="VerifyTrade"
           style="max-width: 120px; max-height: 36px; object-fit: contain;"
           onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"

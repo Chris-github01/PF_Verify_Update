@@ -55,7 +55,7 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center mb-6">
             <img
-              src="/verifytrade_logo_new.png"
+              src="/verifytrade_logo.png"
               alt="VerifyTrade"
               className="h-80 w-auto"
             />
