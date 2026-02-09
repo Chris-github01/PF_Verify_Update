@@ -112,11 +112,11 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
     >
       {/* Brand Header */}
       <div className={`flex ${collapsed ? 'justify-center' : 'flex-col'} px-5 pt-5 pb-4`}>
-        <div className="flex items-center justify-center mb-2">
+        <div className={`flex items-center justify-center mb-2 overflow-hidden ${collapsed ? "h-12" : "h-24"}`}>
           <img
             src="/verifytrade_logo.png"
             alt="VerifyTrade"
-            className={collapsed ? "h-16 w-auto" : "h-28 w-auto"}
+            className={collapsed ? "h-20 w-auto object-cover object-center scale-125" : "h-36 w-auto object-cover object-center scale-125"}
           />
         </div>
         {!collapsed && (

@@ -203,11 +203,13 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img
-                src="/verifytrade_logo.png"
-                alt="VerifyTrade"
-                className="h-40 w-auto"
-              />
+              <div className="h-32 overflow-hidden flex items-center">
+                <img
+                  src="/verifytrade_logo.png"
+                  alt="VerifyTrade"
+                  className="h-48 w-auto object-cover object-center scale-125"
+                />
+              </div>
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">Quote Audit Engine</span>
               </div>

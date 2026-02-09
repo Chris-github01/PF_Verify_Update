@@ -53,11 +53,11 @@ export default function ModeSelector({ onSelectMode, isMasterAdmin, adminLoading
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex items-center justify-center p-6">
       <div className="max-w-5xl w-full">
         <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center mb-6">
+          <div className="inline-flex items-center justify-center mb-6 h-64 overflow-hidden">
             <img
               src="/verifytrade_logo.png"
               alt="VerifyTrade"
-              className="h-80 w-auto"
+              className="h-96 w-auto object-cover object-center scale-125"
             />
           </div>
           <h1 className="text-4xl font-bold text-slate-50 mb-3">Welcome Back</h1>

@@ -29,12 +29,14 @@ export function generatePDFHeader(config: HeaderFooterConfig): string {
           style="max-width: 80px; max-height: 36px; object-fit: contain;"
         />
         <div style="width: 1px; height: 32px; background: #e5e7eb; margin: 0 8px;"></div>
-        <img
-          src="https://verifytrade.com/verifytrade_logo.png"
-          alt="VerifyTrade"
-          style="max-width: 120px; max-height: 36px; object-fit: contain;"
-          onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-        />
+        <div style="height: 36px; overflow: hidden; display: flex; align-items: center;">
+          <img
+            src="https://verifytrade.com/verifytrade_logo.png"
+            alt="VerifyTrade"
+            style="height: 54px; width: auto; object-fit: cover; transform: scale(1.25);"
+            onerror="this.parentElement.style.display='none'; this.parentElement.nextElementSibling.style.display='block';"
+          />
+        </div>
         <div style="display: none; font-size: 16px; font-weight: 700; color: #111827; letter-spacing: -0.3px;">
           VerifyTrade
         </div>
@@ -42,12 +44,14 @@ export function generatePDFHeader(config: HeaderFooterConfig): string {
     `
     : `
       <div style="display: flex; align-items: center;">
-        <img
-          src="https://verifytrade.com/verifytrade_logo.png"
-          alt="VerifyTrade"
-          style="max-width: 120px; max-height: 36px; object-fit: contain;"
-          onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-        />
+        <div style="height: 36px; overflow: hidden; display: flex; align-items: center;">
+          <img
+            src="https://verifytrade.com/verifytrade_logo.png"
+            alt="VerifyTrade"
+            style="height: 54px; width: auto; object-fit: cover; transform: scale(1.25);"
+            onerror="this.parentElement.style.display='none'; this.parentElement.nextElementSibling.style.display='block';"
+          />
+        </div>
         <div style="display: none; font-size: 16px; font-weight: 700; color: #111827; letter-spacing: -0.3px;">
           VerifyTrade
         </div>

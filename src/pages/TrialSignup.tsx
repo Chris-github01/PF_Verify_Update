@@ -98,11 +98,11 @@ export default function TrialSignup({ onSuccess, onBackToHome, preselectedTier =
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-6">
+          <div className="inline-flex items-center justify-center mb-6 h-64 overflow-hidden">
             <img
               src="/verifytrade_logo.png"
               alt="VerifyTrade"
-              className="h-80 w-auto"
+              className="h-96 w-auto object-cover object-center scale-125"
             />
           </div>
           <h1 className="text-3xl font-bold text-slate-50 mb-2">

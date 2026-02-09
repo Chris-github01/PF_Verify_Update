@@ -29,20 +29,24 @@ export function generatePDFHeader(config: HeaderFooterConfig): string {
           style="max-width: 80px; max-height: 36px; object-fit: contain;"
         />
         <div style="width: 1px; height: 32px; background: #e5e7eb; margin: 0 8px;"></div>
-        <img
-          src="/verifytrade_logo.png"
-          alt="VerifyTrade"
-          style="max-width: 120px; max-height: 36px; object-fit: contain;"
-        />
+        <div style="height: 36px; overflow: hidden; display: flex; align-items: center;">
+          <img
+            src="/verifytrade_logo.png"
+            alt="VerifyTrade"
+            style="height: 54px; width: auto; object-fit: cover; transform: scale(1.25);"
+          />
+        </div>
       </div>
     `
     : `
       <div style="display: flex; align-items: center;">
-        <img
-          src="/verifytrade_logo.png"
-          alt="VerifyTrade"
-          style="max-width: 120px; max-height: 36px; object-fit: contain;"
-        />
+        <div style="height: 36px; overflow: hidden; display: flex; align-items: center;">
+          <img
+            src="/verifytrade_logo.png"
+            alt="VerifyTrade"
+            style="height: 54px; width: auto; object-fit: cover; transform: scale(1.25);"
+          />
+        </div>
       </div>
     `;
 
