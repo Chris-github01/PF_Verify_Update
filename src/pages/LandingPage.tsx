@@ -28,9 +28,12 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
       <nav className="fixed top-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <Shield className="h-8 w-8 text-white" strokeWidth={2} />
-              <span className="text-xl font-bold text-white tracking-tight">VerifyTrade</span>
+            <div className="flex items-center">
+              <img
+                src="/verifytrade_logo.png"
+                alt="VerifyTrade"
+                className="h-12 w-auto"
+              />
             </div>
 
             <div className="hidden md:flex items-center gap-8">

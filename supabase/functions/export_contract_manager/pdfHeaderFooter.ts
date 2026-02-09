@@ -22,34 +22,33 @@ const VERIFYTRADE_ORANGE = '#f97316';
 export function generatePDFHeader(config: HeaderFooterConfig): string {
   const logoSection = config.organisationLogoUrl
     ? `
-      <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
         <img
           src="${config.organisationLogoUrl}"
-          alt="Logo"
+          alt="Organisation Logo"
           style="max-width: 80px; max-height: 36px; object-fit: contain;"
         />
         <div style="width: 1px; height: 32px; background: #e5e7eb; margin: 0 8px;"></div>
-        <div style="font-size: 16px; font-weight: 700; color: #111827; letter-spacing: -0.3px;">
+        <img
+          src="https://verifytrade.com/verifytrade_logo.png"
+          alt="VerifyTrade"
+          style="max-width: 120px; max-height: 36px; object-fit: contain;"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+        />
+        <div style="display: none; font-size: 16px; font-weight: 700; color: #111827; letter-spacing: -0.3px;">
           VerifyTrade
         </div>
       </div>
     `
     : `
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="
-          width: 36px;
-          height: 36px;
-          background: linear-gradient(135deg, ${VERIFYTRADE_ORANGE} 0%, #ea580c 100%);
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
-            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
-          </svg>
-        </div>
-        <div style="font-size: 16px; font-weight: 700; color: #111827; letter-spacing: -0.3px;">
+      <div style="display: flex; align-items: center;">
+        <img
+          src="https://verifytrade.com/verifytrade_logo.png"
+          alt="VerifyTrade"
+          style="max-width: 120px; max-height: 36px; object-fit: contain;"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+        />
+        <div style="display: none; font-size: 16px; font-weight: 700; color: #111827; letter-spacing: -0.3px;">
           VerifyTrade
         </div>
       </div>
