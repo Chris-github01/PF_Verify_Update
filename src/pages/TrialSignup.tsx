@@ -100,7 +100,7 @@ export default function TrialSignup({ onSuccess, onBackToHome, preselectedTier =
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center mb-6">
             <img
-              src="/verifytrade_logo.png"
+              src="/verifytrade_logo_new.png"
               alt="VerifyTrade"
               className="h-80 w-auto"
             />

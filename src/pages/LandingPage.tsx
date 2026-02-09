@@ -30,7 +30,7 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
           <div className="flex justify-between items-center h-32">
             <div className="flex items-center">
               <img
-                src="/verifytrade_logo.png"
+                src="/verifytrade_logo_new.png"
                 alt="VerifyTrade"
                 className="h-28 w-auto"
               />

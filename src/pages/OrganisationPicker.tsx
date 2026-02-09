@@ -204,7 +204,7 @@ export default function OrganisationPicker({ onOrganisationSelected }: Organisat
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img
-                src="/verifytrade_logo.png"
+                src="/verifytrade_logo_new.png"
                 alt="VerifyTrade"
                 className="h-40 w-auto"
               />
