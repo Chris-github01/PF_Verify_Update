@@ -41,6 +41,80 @@ interface ParseResponse {
   warnings: string[];
 }
 
+/**
+ * Detect if quote needs to be chunked based on size and structure
+ */
+function shouldChunkQuote(text: string): boolean {
+  // Chunk if text is over 15,000 characters (conservative estimate for token limits)
+  if (text.length > 15000) return true;
+
+  // Count line items - if more than 100 items, chunk it
+  const itemLinePattern = /^\s*\d+\s+ea\s+\$[\d,]+/gim;
+  const itemCount = (text.match(itemLinePattern) || []).length;
+  if (itemCount > 100) return true;
+
+  return false;
+}
+
+/**
+ * Chunk quote by detecting section headers
+ */
+function chunkQuoteBySection(text: string): { section: string; content: string }[] {
+  const chunks: { section: string; content: string }[] = [];
+
+  // Common section header patterns in construction quotes
+  const sectionPatterns = [
+    /^([A-Z][A-Za-z\s]+)\s+\$[\d,]+\.?\d*/m,  // "Greenhouse $21,964.00"
+    /^([A-Z][A-Za-z\s]+)\s+continued/im,       // "Headhouse Continued"
+    /^([A-Z][A-Za-z\s]+)$/m,                   // "Lab", "Outbuilding", etc.
+  ];
+
+  const lines = text.split('\n');
+  let currentSection = 'Main';
+  let currentContent: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Check if this is a section header
+    let isSectionHeader = false;
+    for (const pattern of sectionPatterns) {
+      const match = line.match(pattern);
+      if (match && line.length < 100) { // Section headers are typically short
+        // Save previous section
+        if (currentContent.length > 10) { // Minimum lines for a valid section
+          chunks.push({
+            section: currentSection,
+            content: currentContent.join('\n')
+          });
+        }
+
+        // Start new section
+        currentSection = match[1].trim();
+        currentContent = [line];
+        isSectionHeader = true;
+        break;
+      }
+    }
+
+    if (!isSectionHeader) {
+      currentContent.push(line);
+    }
+  }
+
+  // Add last section
+  if (currentContent.length > 10) {
+    chunks.push({
+      section: currentSection,
+      content: currentContent.join('\n')
+    });
+  }
+
+  console.log(`[LLM Fallback] Split quote into ${chunks.length} sections:`, chunks.map(c => c.section));
+
+  return chunks;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -104,103 +178,146 @@ Deno.serve(async (req: Request) => {
     const textLength = text.length;
     console.log(`[LLM Fallback] Processing ${textLength} characters...`);
 
+    // Check if we need to chunk the quote
+    const needsChunking = shouldChunkQuote(text);
+    console.log(`[LLM Fallback] Quote needs chunking: ${needsChunking}`);
+
     // Create extraction prompt
     const systemPrompt = `You are an expert at extracting line items from construction quotes.
 
-DETECT QUOTE TYPE FIRST:
+Extract each line item with:
+- description: Full item description
+- qty: Quantity (number)
+- unit: Unit of measure (ea, m, LS, etc.)
+- rate: Unit price (number)
+- total: Total price (number, must equal qty × rate)
+- section: Section name if present
 
-TYPE A - ITEMIZED QUOTE (each line has its own price):
-Item | Qty | Rate | Total
-Switchboard | 1 | $5,000 | $5,000
-Cable tray | 100m | $50/m | $5,000
-→ Extract each line item with its individual total
-
-TYPE B - LUMP SUM QUOTE (only section totals shown):
-Civil work And Cable Tray
-  Pit type 66: 10.00
-  Conduit duct 50mm: 110.00
-  Cable tray 300mm: 30.00
-  Sub-Total ex GST: $109,312.10
-
-FOR TYPE A QUOTES:
-- Extract each line item with description, qty, unit, rate, and INDIVIDUAL total
-- Skip subtotals, GST, and grand totals
-
-FOR TYPE B QUOTES (LUMP SUM) - TWO-LEVEL EXTRACTION:
-STEP 1: Extract the section header as a lump sum line:
-- Format: "{Section Name} - Lump Sum"
-- Qty: 1, Unit: "LS", Rate: section subtotal, Total: section subtotal
-- Example: "Civil work And Cable Tray - Lump Sum" | Qty: 1 | Rate: 109312.10 | Total: 109312.10
-
-STEP 2: Extract ALL detail items under that section:
-- Extract each line item with description and quantity
-- Set rate: null, total: null (these will display as "Included" in UI)
-- Preserve the section name so items can be grouped
-- Example: "Pit type 66 665x665x620mm" | Qty: 10 | Unit: "EA" | Rate: null | Total: null | Section: "Civil work And Cable Tray"
-
-SKIP THESE ROWS:
-- "Apprentice Electrician", "Assistant Electrician", "Registered Electrician" (labor aggregates)
-- "Miscellaneous" (unless it has a specific description)
-- "Sub-Total", "GST", "Total inc GST"
-
-EXAMPLE OUTPUT FOR LUMP SUM SECTION:
-{
-  "items": [
-    {"description": "Civil work And Cable Tray - Lump Sum", "qty": 1, "unit": "LS", "rate": 109312.10, "total": 109312.10, "section": "Civil work And Cable Tray"},
-    {"description": "Pit type 66 665x665x620mm", "qty": 10, "unit": "EA", "rate": null, "total": null, "section": "Civil work And Cable Tray"},
-    {"description": "Conduit duct 50mm 6m GN", "qty": 110, "unit": "M", "rate": null, "total": null, "section": "Civil work And Cable Tray"},
-    {"description": "Cable tray 300mm UT3 3m GB", "qty": 30, "unit": "M", "rate": null, "total": null, "section": "Civil work And Cable Tray"}
-  ]
-}
+RULES:
+1. Skip subtotals, GST, grand totals, and summary lines
+2. Skip labor aggregates like "Apprentice Electrician"
+3. Extract ONLY line items with quantities and prices
+4. Ensure total = qty × rate
+5. Preserve section headers in the section field
 
 Return JSON format:
 {
-  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number|null, "total": number|null, "section": "string"}],
+  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string"}],
   "confidence": number,
-  "warnings": ["string"],
-  "quoteType": "itemized" or "lumpsum"
+  "warnings": ["string"]
 }`;
 
-    const userPrompt = `Extract all line items from this quote:\n\n${text}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
+    let allItems: LineItem[] = [];
+    let allWarnings: string[] = [];
+    let overallConfidence = 0;
 
-    console.log('[LLM Fallback] Calling OpenAI API...');
+    // Process quote in chunks if needed
+    if (needsChunking) {
+      const chunks = chunkQuoteBySection(text);
+      console.log(`[LLM Fallback] Processing ${chunks.length} chunks...`);
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-        max_completion_tokens: 16384,
-      }),
-    });
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        console.log(`[LLM Fallback] Processing chunk ${i + 1}/${chunks.length}: ${chunk.section} (${chunk.content.length} chars)`);
 
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error('[LLM Fallback] OpenAI API error:', errorText);
-      throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText}`);
+        const userPrompt = `Extract line items from this section:\n\nSection: ${chunk.section}\n\n${chunk.content}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
+
+        try {
+          const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openaiApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "gpt-4o",
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              response_format: { type: "json_object" },
+              temperature: 0.1,
+              max_completion_tokens: 8192,
+            }),
+          });
+
+          if (!openaiResponse.ok) {
+            const errorText = await openaiResponse.text();
+            console.error(`[LLM Fallback] Chunk ${i + 1} failed:`, errorText);
+            allWarnings.push(`Section "${chunk.section}" parse failed`);
+            continue;
+          }
+
+          const openaiResult = await openaiResponse.json();
+          const content = openaiResult.choices?.[0]?.message?.content;
+
+          if (content) {
+            const parsed: ParseResponse = JSON.parse(content);
+            const chunkItems = (parsed.items || []).map(item => ({
+              ...item,
+              section: item.section || chunk.section
+            }));
+
+            allItems.push(...chunkItems);
+            allWarnings.push(...(parsed.warnings || []));
+            overallConfidence += (parsed.confidence || 0.8);
+
+            console.log(`[LLM Fallback] Chunk ${i + 1} extracted ${chunkItems.length} items`);
+          }
+        } catch (error) {
+          console.error(`[LLM Fallback] Error processing chunk ${i + 1}:`, error);
+          allWarnings.push(`Section "${chunk.section}" parse error: ${error instanceof Error ? error.message : 'Unknown'}`);
+        }
+      }
+
+      overallConfidence = chunks.length > 0 ? overallConfidence / chunks.length : 0;
+    } else {
+      // Process entire quote in one call
+      const userPrompt = `Extract all line items from this quote:\n\n${text}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
+
+      console.log('[LLM Fallback] Calling OpenAI API...');
+
+      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+          max_completion_tokens: 16384,
+        }),
+      });
+
+      if (!openaiResponse.ok) {
+        const errorText = await openaiResponse.text();
+        console.error('[LLM Fallback] OpenAI API error:', errorText);
+        throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText}`);
+      }
+
+      const openaiResult = await openaiResponse.json();
+      const content = openaiResult.choices?.[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No content in OpenAI response');
+      }
+
+      console.log('[LLM Fallback] Got response from OpenAI, parsing...');
+      const parsed: ParseResponse = JSON.parse(content);
+
+      allItems = parsed.items || [];
+      allWarnings = parsed.warnings || [];
+      overallConfidence = parsed.confidence || 0.85;
     }
 
-    const openaiResult = await openaiResponse.json();
-    const content = openaiResult.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No content in OpenAI response');
-    }
-
-    console.log('[LLM Fallback] Got response from OpenAI, parsing...');
-    const parsed: ParseResponse = JSON.parse(content);
-
-    let items = parsed.items || [];
-    console.log(`[LLM Fallback] Extracted ${items.length} items`);
+    let items = allItems;
+    console.log(`[LLM Fallback] Extracted ${items.length} items total`);
 
     // CRITICAL FIX: Detect if parser assigned section subtotal to all items
     // If 10+ items share the exact same total, this is a parsing error
@@ -239,15 +356,16 @@ Return JSON format:
         success: true,
         lines: items,
         items: items,
-        confidence: parsed.confidence || 0.85,
-        warnings: parsed.warnings || [],
+        confidence: overallConfidence,
+        warnings: allWarnings,
         totals: {
           subtotal,
           grandTotal: subtotal
         },
         metadata: {
           supplier: supplierName,
-          itemCount: items.length
+          itemCount: items.length,
+          chunked: needsChunking
         }
       }),
       {
