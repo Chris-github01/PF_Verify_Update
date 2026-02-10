@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen, FileSpreadsheet, MoreVertical, Tag, Loader2, Edit } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen, FileSpreadsheet, MoreVertical, Tag, Loader2, Edit, Eye, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
@@ -5185,62 +5185,152 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
 
     setCreating(true);
     try {
-      // Check if SA-2017 template exists
-      const { data: template, error: templateError } = await supabase
-        .from('subcontract_templates')
-        .select('id')
-        .eq('template_code', 'SA-2017')
+      console.log('[SA-2017 Create] Starting agreement creation for project:', projectId);
+
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error('[SA-2017 Create] Error getting user:', userError);
+        throw new Error(`Authentication error: ${userError.message}`);
+      }
+      if (!user) {
+        throw new Error('No authenticated user found. Please log in and try again.');
+      }
+      console.log('[SA-2017 Create] Current user:', user.id);
+
+      // Get project's organisation_id
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('organisation_id, name')
+        .eq('id', projectId)
         .maybeSingle();
 
-      if (templateError) throw templateError;
+      if (projectError) {
+        console.error('[SA-2017 Create] Error fetching project:', projectError);
+        throw new Error(`Project fetch error: ${projectError.message}`);
+      }
+      if (!project) {
+        throw new Error('Project not found');
+      }
+      if (!project.organisation_id) {
+        throw new Error('Project has no organisation assigned');
+      }
+      console.log('[SA-2017 Create] Project organisation:', project.organisation_id);
 
-      if (!template) {
-        alert('SA-2017 template not found. Please contact support.');
+      // Check if agreement already exists (idempotent create)
+      const { data: existing, error: existingError } = await supabase
+        .from('subcontract_agreements')
+        .select('id, agreement_number, status')
+        .eq('project_id', projectId)
+        .eq('subcontractor_name', awardInfo.supplier_name)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingError) {
+        console.error('[SA-2017 Create] Error checking existing:', existingError);
+        // Continue anyway - this is just a check
+      }
+
+      if (existing) {
+        console.log('[SA-2017 Create] Found existing agreement:', existing.id);
+        setAgreementId(existing.id);
+        onAgreementUpdated();
+        alert(`Agreement ${existing.agreement_number} already exists. Opening it now.`);
         return;
       }
 
+      // Check if SA-2017 template exists
+      const { data: template, error: templateError } = await supabase
+        .from('contract_templates')
+        .select('id, template_code, template_name')
+        .eq('template_code', 'SA-2017')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (templateError) {
+        console.error('[SA-2017 Create] Template fetch error:', templateError);
+        throw new Error(`Template fetch error: ${templateError.message}`);
+      }
+
+      if (!template) {
+        console.error('[SA-2017 Create] Template not found in database');
+        throw new Error('SA-2017 template not found. Please ensure the template has been seeded in the database.');
+      }
+      console.log('[SA-2017 Create] Found template:', template.id);
+
       // Generate agreement number
-      const { count } = await supabase
+      const { count, error: countError } = await supabase
         .from('subcontract_agreements')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', projectId);
 
-      const agreementNumber = `SA-${String((count || 0) + 1).padStart(4, '0')}`;
+      if (countError) {
+        console.warn('[SA-2017 Create] Count error (non-fatal):', countError);
+      }
 
-      // Create new agreement
+      const agreementNumber = `SA-${String((count || 0) + 1).padStart(4, '0')}`;
+      console.log('[SA-2017 Create] Generated agreement number:', agreementNumber);
+
+      // Create new agreement with all required fields
+      const agreementData = {
+        template_id: template.id,
+        project_id: projectId,
+        organisation_id: project.organisation_id,
+        agreement_number: agreementNumber,
+        subcontractor_name: awardInfo.supplier_name,
+        status: 'draft',
+        is_locked: false,
+        created_by: user.id
+      };
+
+      console.log('[SA-2017 Create] Inserting agreement:', agreementData);
+
       const { data: newAgreement, error: createError } = await supabase
         .from('subcontract_agreements')
-        .insert({
-          template_id: template.id,
-          project_id: projectId,
-          agreement_number: agreementNumber,
-          subcontractor_name: awardInfo.supplier_name,
-          status: 'draft',
-          is_locked: false
-        })
+        .insert(agreementData)
         .select()
         .single();
 
-      if (createError) throw createError;
+      if (createError) {
+        console.error('[SA-2017 Create] Insert error:', {
+          code: createError.code,
+          message: createError.message,
+          details: createError.details,
+          hint: createError.hint
+        });
+        throw new Error(`Failed to create agreement: ${createError.message}${createError.hint ? ` (${createError.hint})` : ''}`);
+      }
 
+      console.log('[SA-2017 Create] Agreement created successfully:', newAgreement.id);
       setAgreementId(newAgreement.id);
       onAgreementUpdated();
 
-      // Log activity
-      await supabase.rpc('log_activity', {
-        p_project_id: projectId,
-        p_event_type: 'sa2017_created',
-        p_event_data: {
-          agreement_id: newAgreement.id,
-          agreement_number: agreementNumber,
-          subcontractor: awardInfo.supplier_name
-        }
-      });
+      // Log activity (non-blocking)
+      try {
+        await supabase.rpc('log_activity', {
+          p_project_id: projectId,
+          p_event_type: 'sa2017_created',
+          p_event_data: {
+            agreement_id: newAgreement.id,
+            agreement_number: agreementNumber,
+            subcontractor: awardInfo.supplier_name
+          }
+        });
+      } catch (logError) {
+        console.warn('[SA-2017 Create] Activity logging failed (non-fatal):', logError);
+      }
 
-      alert('SA-2017 agreement created successfully!');
-    } catch (error) {
-      console.error('Error creating agreement:', error);
-      alert('Failed to create agreement');
+      alert(`✓ SA-2017 agreement ${agreementNumber} created successfully!`);
+    } catch (error: any) {
+      console.error('[SA-2017 Create] Fatal error:', error);
+
+      // Show detailed error to user
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'An unknown error occurred';
+
+      alert(`Failed to create SA-2017 agreement:\n\n${errorMessage}\n\nPlease check the console for more details or contact support.`);
     } finally {
       setCreating(false);
     }
