@@ -3490,13 +3490,15 @@ interface OnboardingTabProps {
 }
 
 function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl }: OnboardingTabProps) {
-  const [currentStep, setCurrentStep] = useState<'loi' | 'compliance' | 'prelet'>('loi');
+  const [currentStep, setCurrentStep] = useState<'loi' | 'compliance' | 'prelet' | 'sa2017'>('loi');
   const [loi, setLoi] = useState<LetterOfIntent | null>(null);
   const [loadingLoi, setLoadingLoi] = useState(true);
   const [complianceDocs, setComplianceDocs] = useState<ComplianceDocument[]>([]);
   const [loadingCompliance, setLoadingCompliance] = useState(true);
   const [preletAppendix, setPreletAppendix] = useState<any>(null);
   const [loadingPrelet, setLoadingPrelet] = useState(true);
+  const [agreement, setAgreement] = useState<any>(null);
+  const [loadingAgreement, setLoadingAgreement] = useState(true);
 
   useEffect(() => {
     loadOnboardingData();
@@ -3533,19 +3535,34 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
       if (preletData) {
         setPreletAppendix(preletData);
       }
+
+      // Load SA-2017 agreement
+      const { data: agreementData } = await supabase
+        .from('subcontract_agreements')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (agreementData) {
+        setAgreement(agreementData);
+      }
     } catch (error) {
       console.error('Error loading onboarding data:', error);
     } finally {
       setLoadingLoi(false);
       setLoadingCompliance(false);
       setLoadingPrelet(false);
+      setLoadingAgreement(false);
     }
   };
 
   const steps = [
     { id: 'loi', label: 'Letter of Intent', icon: FileText, completed: loi !== null },
     { id: 'compliance', label: 'Compliance Documents', icon: Shield, completed: complianceDocs.length > 0 },
-    { id: 'prelet', label: 'Pre-let Minute Appendix', icon: FileCheck, completed: preletAppendix !== null }
+    { id: 'prelet', label: 'Pre-let Minute Appendix', icon: FileCheck, completed: preletAppendix !== null },
+    { id: 'sa2017', label: 'Sub-Contract Agreement', icon: Briefcase, completed: agreement !== null && agreement.status === 'completed' }
   ];
 
   return (
@@ -3594,7 +3611,7 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
                 </div>
               </button>
               {index < steps.length - 1 && (
-                <div className={`flex-1 h-0.5 mx-2 ${isCompleted ? 'bg-green-600' : 'bg-slate-700'}`} />
+                <div className={`flex-1 h-0.5 mx-2 ${isCompleted && steps[index + 1].completed ? 'bg-green-600' : 'bg-slate-700'}`} />
               )}
             </div>
           );
@@ -3626,6 +3643,14 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
             scopeSystems={scopeSystems}
             existingAppendix={preletAppendix}
             onAppendixUpdated={loadOnboardingData}
+          />
+        )}
+        {currentStep === 'sa2017' && (
+          <SA2017Step
+            projectId={projectId}
+            awardInfo={awardInfo}
+            existingAgreement={agreement}
+            onAgreementUpdated={loadOnboardingData}
           />
         )}
       </div>
@@ -5131,6 +5156,237 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
           This appendix will be attached to signed pre-letting minutes and read in conjunction with the main pre-letting minutes and subcontract agreement.
         </div>
       </div>
+    </div>
+  );
+}
+
+interface SA2017StepProps {
+  projectId: string;
+  awardInfo: AwardInfo | null;
+  existingAgreement: any;
+  onAgreementUpdated: () => void;
+}
+
+function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdated }: SA2017StepProps) {
+  const [creating, setCreating] = useState(false);
+  const [agreementId, setAgreementId] = useState<string | null>(existingAgreement?.id || null);
+
+  useEffect(() => {
+    if (existingAgreement?.id) {
+      setAgreementId(existingAgreement.id);
+    }
+  }, [existingAgreement]);
+
+  const handleCreateAgreement = async () => {
+    if (!awardInfo) {
+      alert('No award information available. Please complete the award process first.');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      // Check if SA-2017 template exists
+      const { data: template, error: templateError } = await supabase
+        .from('subcontract_templates')
+        .select('id')
+        .eq('template_code', 'SA-2017')
+        .maybeSingle();
+
+      if (templateError) throw templateError;
+
+      if (!template) {
+        alert('SA-2017 template not found. Please contact support.');
+        return;
+      }
+
+      // Generate agreement number
+      const { count } = await supabase
+        .from('subcontract_agreements')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId);
+
+      const agreementNumber = `SA-${String((count || 0) + 1).padStart(4, '0')}`;
+
+      // Create new agreement
+      const { data: newAgreement, error: createError } = await supabase
+        .from('subcontract_agreements')
+        .insert({
+          template_id: template.id,
+          project_id: projectId,
+          agreement_number: agreementNumber,
+          subcontractor_name: awardInfo.supplier_name,
+          status: 'draft',
+          is_locked: false
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      setAgreementId(newAgreement.id);
+      onAgreementUpdated();
+
+      // Log activity
+      await supabase.rpc('log_activity', {
+        p_project_id: projectId,
+        p_event_type: 'sa2017_created',
+        p_event_data: {
+          agreement_id: newAgreement.id,
+          agreement_number: agreementNumber,
+          subcontractor: awardInfo.supplier_name
+        }
+      });
+
+      alert('SA-2017 agreement created successfully!');
+    } catch (error) {
+      console.error('Error creating agreement:', error);
+      alert('Failed to create agreement');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleNavigateToAgreement = () => {
+    if (agreementId) {
+      window.open(`/subcontract-agreement/${agreementId}`, '_blank');
+    }
+  };
+
+  if (!awardInfo) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle size={48} className="mx-auto text-slate-600 mb-4" />
+        <h4 className="text-lg font-medium text-white mb-2">No Award Information</h4>
+        <p className="text-slate-400">
+          Please complete the award process before creating a subcontract agreement.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h4 className="text-xl font-bold text-white mb-2">Sub-Contract Agreement (SA-2017)</h4>
+          <p className="text-slate-400">
+            Standard Form of Agreement for use with AS 2124-1992 or AS 4000-1997
+          </p>
+        </div>
+      </div>
+
+      {!existingAgreement ? (
+        <div className="bg-slate-900/50 rounded-lg p-8 border border-slate-700 text-center">
+          <Briefcase size={48} className="mx-auto text-slate-600 mb-4" />
+          <h4 className="text-lg font-medium text-white mb-2">No Agreement Created</h4>
+          <p className="text-slate-400 mb-6">
+            Create an SA-2017 subcontract agreement for <strong className="text-white">{awardInfo.supplier_name}</strong>
+          </p>
+          <button
+            onClick={handleCreateAgreement}
+            disabled={creating}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all mx-auto disabled:opacity-50"
+          >
+            {creating ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus size={16} />
+                Create SA-2017 Agreement
+              </>
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-700">
+              <div>
+                <div className="text-sm text-slate-400">Agreement Number</div>
+                <div className="text-xl font-bold text-white">{existingAgreement.agreement_number}</div>
+              </div>
+              <div className={`px-3 py-1 rounded text-sm ${
+                existingAgreement.status === 'completed'
+                  ? 'bg-green-900/30 text-green-400 border border-green-700'
+                  : existingAgreement.status === 'in_review'
+                  ? 'bg-blue-900/30 text-blue-400 border border-blue-700'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+              }`}>
+                {existingAgreement.status === 'draft' && 'Draft'}
+                {existingAgreement.status === 'in_review' && 'In Review'}
+                {existingAgreement.status === 'completed' && 'Completed'}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+              <div>
+                <div className="text-slate-400">Subcontractor</div>
+                <div className="text-white font-medium">{existingAgreement.subcontractor_name}</div>
+              </div>
+              <div>
+                <div className="text-slate-400">Created</div>
+                <div className="text-white">{new Date(existingAgreement.created_at).toLocaleDateString()}</div>
+              </div>
+              {existingAgreement.completed_at && (
+                <div>
+                  <div className="text-slate-400">Completed</div>
+                  <div className="text-white">{new Date(existingAgreement.completed_at).toLocaleDateString()}</div>
+                </div>
+              )}
+            </div>
+
+            {existingAgreement.is_locked && (
+              <div className="bg-orange-900/20 border border-orange-700/50 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <Lock size={20} className="text-orange-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium text-orange-300 mb-1">Agreement Locked</div>
+                    <p className="text-sm text-orange-200/80">
+                      This agreement has been locked and cannot be edited. It can only be viewed and exported.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleNavigateToAgreement}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex-1"
+              >
+                <Eye size={16} />
+                Open Agreement
+              </button>
+              {existingAgreement.status === 'completed' && (
+                <button
+                  onClick={() => {
+                    // Future: Implement PDF export
+                    alert('PDF export coming soon');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all"
+                >
+                  <Download size={16} />
+                  Export PDF
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <FileText size={20} className="text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-200">
+                <strong className="text-blue-300">About SA-2017:</strong> This form is designed for use with main contracts
+                based on AS 2124-1992 or AS 4000-1997. It includes comprehensive terms for scope, payment, insurance,
+                variations, and dispute resolution. The agreement opens in a new window for detailed editing and PDF generation.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
