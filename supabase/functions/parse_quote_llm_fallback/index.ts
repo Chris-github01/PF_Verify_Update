@@ -402,17 +402,24 @@ Return JSON format:
     );
 
   } catch (error) {
-    console.error('[LLM Fallback] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    console.error('[LLM Fallback] ERROR CAUGHT:', errorMessage);
+    if (errorStack) {
+      console.error('[LLM Fallback] Stack trace:', errorStack);
+    }
+
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         lines: [],
         items: [],
         totals: {},
         metadata: {},
         confidence: 0,
-        warnings: ['Parse failed'],
+        warnings: [`Parse failed: ${errorMessage}`],
       }),
       {
         status: 500,

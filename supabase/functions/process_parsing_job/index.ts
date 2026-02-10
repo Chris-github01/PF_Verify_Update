@@ -314,7 +314,9 @@ Deno.serve(async (req: Request) => {
 
         if (!llmResponse.ok) {
           const errorText = await llmResponse.text();
-          throw new Error(`LLM parser failed: ${errorText}`);
+          console.error(`LLM parser HTTP error: ${llmResponse.status} ${llmResponse.statusText}`);
+          console.error(`LLM parser error body:`, errorText);
+          throw new Error(`LLM parser failed (${llmResponse.status}): ${errorText || llmResponse.statusText}`);
         }
 
         parsedData = await llmResponse.json();
