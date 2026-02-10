@@ -283,29 +283,39 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Update job status
-    const stillFailed = await supabase
+    // Update job status - check for ANY incomplete chunks
+    const { data: incompleteChunks } = await supabase
       .from("parsing_chunks")
-      .select("id")
+      .select("id, status")
       .eq("job_id", jobId)
-      .eq("status", "failed");
+      .in("status", ["failed", "pending", "processing"]);
 
-    const finalStatus = (stillFailed.data?.length || 0) === 0 ? "completed" : "completed";
-    const errorMessage = (stillFailed.data?.length || 0) > 0
-      ? `Partial completion: ${stillFailed.data?.length} chunks still failed after retry`
+    const incompleteCount = incompleteChunks?.length || 0;
+    const allChunksComplete = incompleteCount === 0;
+
+    const finalStatus = allChunksComplete ? "completed" : "processing";
+    const finalProgress = allChunksComplete ? 100 : 95;
+    const errorMessage = incompleteCount > 0
+      ? `Partial completion: ${incompleteCount} chunks still pending/processing/failed`
       : null;
+
+    const updateData: any = {
+      quote_id: quoteId,
+      status: finalStatus,
+      progress: finalProgress,
+      parsed_lines: dedupedItems,
+      updated_at: new Date().toISOString(),
+      error_message: errorMessage
+    };
+
+    // Only set completed_at if truly complete
+    if (allChunksComplete) {
+      updateData.completed_at = new Date().toISOString();
+    }
 
     await supabase
       .from("parsing_jobs")
-      .update({
-        quote_id: quoteId,
-        status: finalStatus,
-        progress: 100,
-        parsed_lines: dedupedItems,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        error_message: errorMessage
-      })
+      .update(updateData)
       .eq("id", jobId);
 
     return new Response(
