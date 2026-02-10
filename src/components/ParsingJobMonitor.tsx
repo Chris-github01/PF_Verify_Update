@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
@@ -28,6 +28,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
   const [jobs, setJobs] = useState<ParsingJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState<Set<string>>(new Set());
+  const autoRetriedJobs = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     loadJobs();
@@ -67,6 +68,40 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       );
       if (hasActiveJobs) {
         loadJobs();
+
+        // Auto-retry jobs stuck at 95%+ that haven't been updated in 30 seconds
+        jobs.forEach(job => {
+          const jobKey = `${job.id}_${job.updated_at}`;
+
+          if (
+            job.status === 'processing' &&
+            job.progress >= 95 &&
+            job.progress < 100 &&
+            !resuming.has(job.id) &&
+            !autoRetriedJobs.current.has(jobKey)
+          ) {
+            const updatedAt = new Date(job.updated_at);
+            const now = new Date();
+            const secondsSinceUpdate = (now.getTime() - updatedAt.getTime()) / 1000;
+
+            // If stuck for more than 30 seconds, auto-retry
+            if (secondsSinceUpdate > 30) {
+              console.log(`[Auto-Retry] Job ${job.supplier_name} stuck at ${job.progress}% for ${Math.round(secondsSinceUpdate)}s, auto-retrying...`);
+              autoRetriedJobs.current.add(jobKey);
+              handleResumeJob(job.id);
+            }
+          }
+
+          // Clear old retry records when job completes or updates
+          if (job.status === 'completed' || job.progress === 100) {
+            // Remove all retry records for this job
+            Array.from(autoRetriedJobs.current).forEach(key => {
+              if (key.startsWith(job.id)) {
+                autoRetriedJobs.current.delete(key);
+              }
+            });
+          }
+        });
       }
     }, 3000);
 

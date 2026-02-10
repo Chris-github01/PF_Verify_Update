@@ -242,14 +242,18 @@ Deno.serve(async (req: Request) => {
           total_amount: 0,
           items_count: dedupedItems.length,
           status: "pending",
-          user_id: job.user_id,
+          created_by: job.user_id || job.created_by,
           organisation_id: job.organisation_id,
+          trade: job.trade || 'passive_fire',
         })
         .select()
         .single();
 
-      if (!quoteError && newQuote) {
+      if (quoteError) {
+        console.error(`[Resume] Failed to create quote:`, quoteError);
+      } else if (newQuote) {
         quoteId = newQuote.id;
+        console.log(`[Resume] Created quote ${quoteId}`);
       }
     }
 
