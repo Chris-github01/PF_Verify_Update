@@ -235,7 +235,11 @@ Deno.serve(async (req: Request) => {
             });
 
             const bestResult = extractorData.best_result;
-            if (bestResult && bestResult.success && bestResult.items && bestResult.items.length > 0) {
+            const overallConfidence = extractorData.confidence_breakdown?.overall || 0;
+
+            // CRITICAL: Only use external parser if confidence >= 0.7
+            // This promotes high-quality structured data to "source of truth"
+            if (bestResult && bestResult.success && bestResult.items && bestResult.items.length > 0 && overallConfidence >= 0.7) {
               structuredItems = bestResult.items.map((item: any) => ({
                 description: item.description || item.item_description || '',
                 qty: parseFloat(item.quantity) || 0,
@@ -243,11 +247,15 @@ Deno.serve(async (req: Request) => {
                 rate: parseFloat(item.unit_price) || 0,
                 total: parseFloat(item.total_price || item.line_total) || 0,
                 section: item.section || item.category || '',
-                item_number: item.item_number || item.item_code || ''
+                item_number: item.item_number || item.item_code || '',
+                confidence: overallConfidence,
+                source: bestResult.parser_name,
+                raw_text: item.raw_text || '',
+                validation_flags: []
               }));
 
               useExternalExtractor = true;
-              console.log(`Using external extractor result from ${bestResult.parser_name}, ${structuredItems.length} items extracted`);
+              console.log(`✓ Using external extractor (confidence ${(overallConfidence * 100).toFixed(1)}%) from ${bestResult.parser_name}, ${structuredItems.length} items extracted`);
 
               await supabase
                 .from("parsing_jobs")
@@ -260,13 +268,16 @@ Deno.serve(async (req: Request) => {
                     parsers_attempted: extractorData.confidence_breakdown?.parsers_attempted || 0,
                     best_parser: bestResult.parser_name,
                     items_count: structuredItems.length,
-                    confidence: bestResult.confidence_score
+                    confidence: overallConfidence,
+                    skip_llm: true
                   },
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", jobId);
+            } else if (bestResult && bestResult.items && bestResult.items.length > 0) {
+              console.log(`⚠ External extractor low confidence (${(overallConfidence * 100).toFixed(1)}%), falling back to LLM parser`);
             } else {
-              console.log("External extractor returned no items, falling back to built-in parser");
+              console.log("External extractor returned no items, falling back to LLM parser");
             }
           } else {
             const errorText = await extractorResponse.text();
@@ -470,14 +481,14 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        // For smaller documents, parse directly
-        const llmUrl = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback`;
+        // For smaller documents, parse directly with v2 parser
+        const llmUrl = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback_v2`;
         const llmHeaders = {
           "Authorization": `Bearer ${supabaseServiceKey}`,
           "Content-Type": "application/json",
         };
 
-        console.log("Small document, parsing directly...");
+        console.log("Small document, parsing directly with v2 two-phase parser...");
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 55000);
@@ -489,6 +500,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               text: fullText,
               supplierName: typedJob.supplier_name,
+              phase: 'full',
             }),
             signal: controller.signal,
           });
@@ -609,7 +621,11 @@ Deno.serve(async (req: Request) => {
           unit: item.unit || '',
           unit_price: item.rate || 0,
           total_price: item.total || 0,
-          system_id: item.section || ''
+          system_id: item.section || '',
+          raw_text: item.raw_text || item.description || '',
+          confidence: item.confidence || 0.85,
+          source: item.source || (useExternalExtractor ? 'external_parser' : 'llm_v2'),
+          validation_flags: item.validation_flags || []
         }));
 
         const { error: itemsError } = await supabase

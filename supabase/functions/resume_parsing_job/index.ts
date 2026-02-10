@@ -106,7 +106,7 @@ Deno.serve(async (req: Request) => {
         .eq("id", jobId);
     }
 
-    const llmUrl = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback`;
+    const llmUrl = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback_v2`;
     const llmHeaders = {
       "Authorization": `Bearer ${supabaseServiceKey}`,
       "Content-Type": "application/json",
@@ -116,91 +116,110 @@ Deno.serve(async (req: Request) => {
     let retriedCount = 0;
     let successCount = 0;
 
-    // Retry failed chunks (skip if just finalizing)
+    // Retry failed chunks IN PARALLEL (skip if just finalizing)
     if (needsRetry) {
-      for (const chunk of failedChunks) {
-      console.log(`[Resume] Retrying chunk ${chunk.chunk_number}/${chunk.total_chunks}...`);
-      retriedCount++;
+      console.log(`[Resume] Processing ${failedChunks.length} chunks in parallel...`);
 
-      await supabase
-        .from("parsing_chunks")
-        .update({ status: 'processing' })
-        .eq("id", chunk.id);
+      // Process chunks in parallel with max concurrency of 5
+      const maxConcurrency = 5;
+      const chunkBatches: any[][] = [];
+      for (let i = 0; i < failedChunks.length; i += maxConcurrency) {
+        chunkBatches.push(failedChunks.slice(i, i + maxConcurrency));
+      }
 
-      const timeoutMs = 120000; // 2 minutes
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      for (const batch of chunkBatches) {
+        const batchPromises = batch.map(async (chunk) => {
+          retriedCount++;
 
-      try {
-        const llmRes = await fetch(llmUrl, {
-          method: "POST",
-          headers: llmHeaders,
-          body: JSON.stringify({
-            text: chunk.chunk_text,
-            supplierName: job.supplier_name,
-            documentType: "PDF Quote",
-            chunkInfo: `Chunk ${chunk.chunk_number}/${chunk.total_chunks} (Retry)`
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!llmRes.ok) {
-          const errorText = await llmRes.text();
-          console.error(`[Resume] Chunk ${chunk.chunk_number} failed:`, errorText);
           await supabase
             .from("parsing_chunks")
-            .update({
-              status: 'failed',
-              error_message: `Retry failed: ${errorText}`,
-              updated_at: new Date().toISOString()
-            })
+            .update({ status: 'processing' })
             .eq("id", chunk.id);
-          continue;
-        }
 
-        const parseResult = await llmRes.json();
-        const chunkItems = parseResult.lines || parseResult.items || [];
+          const timeoutMs = 120000; // 2 minutes
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-        // Renumber items globally
-        const globalLineOffset = completedChunks.reduce((sum, c) =>
-          sum + (c.parsed_items?.length || 0), 0
-        ) + newItems.length;
+          try {
+            const llmRes = await fetch(llmUrl, {
+              method: "POST",
+              headers: llmHeaders,
+              body: JSON.stringify({
+                text: chunk.chunk_text,
+                supplierName: job.supplier_name,
+                phase: 'full',
+              }),
+              signal: controller.signal,
+            });
 
-        const renumberedItems = chunkItems.map((item: any, idx: number) => ({
-          ...item,
-          lineNumber: globalLineOffset + idx + 1,
-          originalChunkNumber: chunk.chunk_number
-        }));
+            clearTimeout(timeoutId);
 
-        await supabase
-          .from("parsing_chunks")
-          .update({
-            status: 'completed',
-            parsed_items: renumberedItems,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", chunk.id);
+            if (!llmRes.ok) {
+              const errorText = await llmRes.text();
+              console.error(`[Resume] Chunk ${chunk.chunk_number} failed:`, errorText);
+              await supabase
+                .from("parsing_chunks")
+                .update({
+                  status: 'failed',
+                  error_message: `Retry failed: ${errorText}`,
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", chunk.id);
+              return { success: false, chunk, items: [] };
+            }
 
-        newItems.push(...renumberedItems);
-        successCount++;
+            const parseResult = await llmRes.json();
+            const chunkItems = parseResult.lines || parseResult.items || [];
 
-        console.log(`[Resume] Chunk ${chunk.chunk_number} succeeded: ${chunkItems.length} items`);
+            // Renumber items globally
+            const globalLineOffset = completedChunks.reduce((sum, c) =>
+              sum + (c.parsed_items?.length || 0), 0
+            ) + newItems.length;
 
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.error(`[Resume] Chunk ${chunk.chunk_number} exception:`, error);
-        await supabase
-          .from("parsing_chunks")
-          .update({
-            status: 'failed',
-            error_message: error.message,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", chunk.id);
+            const renumberedItems = chunkItems.map((item: any, idx: number) => ({
+              ...item,
+              lineNumber: globalLineOffset + idx + 1,
+              originalChunkNumber: chunk.chunk_number
+            }));
+
+            await supabase
+              .from("parsing_chunks")
+              .update({
+                status: 'completed',
+                parsed_items: renumberedItems,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", chunk.id);
+
+            console.log(`[Resume] Chunk ${chunk.chunk_number} succeeded: ${chunkItems.length} items`);
+            return { success: true, chunk, items: renumberedItems };
+
+          } catch (error) {
+            clearTimeout(timeoutId);
+            console.error(`[Resume] Chunk ${chunk.chunk_number} exception:`, error);
+            await supabase
+              .from("parsing_chunks")
+              .update({
+                status: 'failed',
+                error_message: error.message,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", chunk.id);
+            return { success: false, chunk, items: [] };
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+
+        batchResults.forEach(result => {
+          if (result.success) {
+            newItems.push(...result.items);
+            successCount++;
+          }
+        });
+
+        console.log(`[Resume] Batch complete: ${batchResults.filter(r => r.success).length}/${batchResults.length} succeeded`);
       }
-    } // end for loop
     } // end if (needsRetry)
 
     // Aggregate ALL items (previously completed + newly recovered)
