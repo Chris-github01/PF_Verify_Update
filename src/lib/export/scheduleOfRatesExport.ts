@@ -43,16 +43,22 @@ function categorizeServiceType(serviceType: string, category: string): string {
   return 'Other';
 }
 
-export async function exportScheduleOfRates(projectId: string, projectName: string): Promise<void> {
+export async function exportScheduleOfRates(projectId: string, projectName: string, trade?: string): Promise<void> {
   try {
-    console.log('[Schedule of Rates] Starting export for project:', projectId);
+    console.log('[Schedule of Rates] Starting export for project:', projectId, 'trade:', trade);
 
-    // Fetch all quotes for the project
-    const { data: quotes, error: quotesError } = await supabase
+    // Fetch quotes for the project filtered by trade
+    let query = supabase
       .from('quotes')
       .select('id, supplier_name')
-      .eq('project_id', projectId)
-      .order('supplier_name');
+      .eq('project_id', projectId);
+
+    // Filter by trade if provided
+    if (trade) {
+      query = query.eq('trade', trade);
+    }
+
+    const { data: quotes, error: quotesError } = await query.order('supplier_name');
 
     if (quotesError) {
       console.error('[Schedule of Rates] Error fetching quotes:', quotesError);

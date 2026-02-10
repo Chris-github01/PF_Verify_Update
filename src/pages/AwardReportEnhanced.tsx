@@ -40,6 +40,7 @@ interface Project {
   name: string;
   client: string | null;
   approved_quote_id: string | null;
+  trade: string;
 }
 
 interface ApprovalData {
@@ -122,7 +123,7 @@ export default function AwardReportEnhanced({
     try {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, client, approved_quote_id, organisation_id, scoring_weights')
+        .select('id, name, client, approved_quote_id, organisation_id, scoring_weights, trade')
         .eq('id', projectId)
         .maybeSingle();
 
@@ -943,7 +944,7 @@ export default function AwardReportEnhanced({
                           setShowExportDropdown(false);
                           if (!currentProject) return;
                           try {
-                            await exportScheduleOfRates(projectId, currentProject.name);
+                            await exportScheduleOfRates(projectId, currentProject.name, currentProject.trade);
                             onToast?.('Schedule of Rates exported successfully', 'success');
                           } catch (error) {
                             console.error('Export error:', error);
