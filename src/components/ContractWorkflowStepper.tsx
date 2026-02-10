@@ -23,8 +23,8 @@ export default function ContractWorkflowStepper({
   lockedSteps = []
 }: WorkflowStepperProps) {
   const getStepStatus = (stepId: string) => {
-    if (completedSteps.includes(stepId)) return 'completed';
     if (stepId === currentStep) return 'current';
+    if (completedSteps.includes(stepId)) return 'completed';
     if (lockedSteps.includes(stepId)) return 'locked';
     return 'pending';
   };
