@@ -11,6 +11,7 @@ interface ParsingJob {
   progress: number;
   error_message: string | null;
   result_data: { items?: any[] } | null;
+  parsed_lines?: any[]; // Parsed line items from chunks
   quote_id: string | null;
   created_at: string;
   updated_at: string;
@@ -238,7 +239,9 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       if (job.status === 'pending' || job.status === 'processing') {
         active.push(job);
       } else if (job.status === 'completed') {
-        const itemCount = job.result_data?.items?.length || 0;
+        // Check parsed_lines instead of result_data.items
+        const parsedLinesCount = Array.isArray(job.parsed_lines) ? job.parsed_lines.length : 0;
+        const itemCount = job.result_data?.items?.length || parsedLinesCount;
         const hasFailedChunks = job.error_message?.includes('chunks failed') || false;
 
         if (itemCount === 0) {
@@ -474,7 +477,8 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
               </h4>
               <div className="space-y-2">
                 {failed.map(job => {
-                  const itemCount = job.result_data?.items?.length || 0;
+                  const parsedLinesCount = Array.isArray(job.parsed_lines) ? job.parsed_lines.length : 0;
+                  const itemCount = job.result_data?.items?.length || parsedLinesCount;
                   const reason = itemCount === 0 && job.status === 'completed'
                     ? 'Parsed successfully but returned 0 line items'
                     : job.error_message || 'Could not extract tables';
