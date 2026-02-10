@@ -12,6 +12,7 @@ import { getWorkflowProgress, autoUpdateWorkflowProgress, getCompletedSteps, upd
 import type { DashboardMode } from '../App';
 import { RetentionThresholdEditor, type RetentionTier } from '../components/RetentionThresholdEditor';
 import { calculateRetention } from '../lib/retention/retentionCalculator';
+import SubcontractAgreementView from './SubcontractAgreement';
 
 interface ContractManagerProps {
   projectId: string;
@@ -148,6 +149,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   const [isApproved, setIsApproved] = useState(false);
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | undefined>(undefined);
   const [workflowProgress, setWorkflowProgress] = useState<WorkflowStepProgress[]>([]);
+  const [viewingAgreementId, setViewingAgreementId] = useState<string | null>(null);
   const { currentOrganisation } = useOrganisation();
   const { currentTrade } = useTrade();
 
@@ -986,6 +988,30 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
   }
 
   const hasAward = !!awardInfo;
+
+  // If viewing an agreement, render the SubcontractAgreement view instead
+  if (viewingAgreementId) {
+    return (
+      <div className="min-h-screen bg-slate-900">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Back button */}
+          <button
+            onClick={() => {
+              console.log('[SA-2017] Closing agreement view');
+              setViewingAgreementId(null);
+            }}
+            className="flex items-center gap-2 text-slate-300 hover:text-white mb-6 transition-colors"
+          >
+            <ArrowLeft size={20} />
+            Back to Contract Manager
+          </button>
+
+          {/* Render the agreement editor */}
+          <SubcontractAgreementView agreementId={viewingAgreementId} onClose={() => setViewingAgreementId(null)} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -5338,7 +5364,8 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
 
   const handleNavigateToAgreement = () => {
     if (agreementId) {
-      window.open(`/subcontract-agreement/${agreementId}`, '_blank');
+      console.log('[SA-2017] Opening agreement in-app:', agreementId);
+      setViewingAgreementId(agreementId);
     }
   };
 

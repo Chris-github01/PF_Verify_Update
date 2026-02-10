@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import { Save, CheckCircle, AlertCircle, FileText, Eye, Loader2, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
@@ -34,9 +33,12 @@ interface Template {
   master_pdf_url: string | null;
 }
 
-export default function SubcontractAgreement() {
-  const { agreementId } = useParams<{ agreementId: string }>();
-  const navigate = useNavigate();
+interface SubcontractAgreementProps {
+  agreementId: string;
+  onClose?: () => void;
+}
+
+export default function SubcontractAgreement({ agreementId, onClose }: SubcontractAgreementProps) {
   const { currentOrganisation } = useOrganisation();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
