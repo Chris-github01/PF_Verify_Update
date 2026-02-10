@@ -183,22 +183,37 @@ Deno.serve(async (req: Request) => {
     console.log(`[LLM Fallback] Quote needs chunking: ${needsChunking}`);
 
     // Create extraction prompt
-    const systemPrompt = `You are an expert at extracting line items from construction quotes.
+    const systemPrompt = `You are an expert at extracting line items from construction quotes with hierarchical structures.
 
-Extract each line item with:
-- description: Full item description
-- qty: Quantity (number)
-- unit: Unit of measure (ea, m, LS, etc.)
-- rate: Unit price (number)
-- total: Total price (number, must equal qty × rate)
+CRITICAL: Quotes often have a hierarchical structure:
+- Section summaries (e.g., "Greenhouse $21,964.00") - DO NOT EXTRACT
+- Subsection summaries (e.g., "Electrical Services Fire stopping $1,948.50") - DO NOT EXTRACT
+- Individual line items with quantity, unit, rate (e.g., "Protecta FR Acrylic... 19 ea $35.50 $674.50") - EXTRACT THESE
+
+You MUST ONLY extract individual line items that have ALL of:
+1. A detailed product/service description
+2. A quantity (number)
+3. A unit of measure (ea, m, LS, etc.)
+4. A unit rate (price per unit)
+5. A total price
+
+SKIP ANY LINE that is a summary/subtotal:
+- Lines showing only a description and total price (no qty/unit/rate)
+- Lines with section names like "Electrical Services Fire stopping $X"
+- Lines with "Total", "Subtotal", "P&G", "Margin", "Grand Total"
+- Lines that aggregate other items
+
+Extract each valid line item with:
+- description: Full item description (e.g., product name, specifications)
+- qty: Quantity (number only, e.g., 19)
+- unit: Unit of measure (ea, m, LS, per m, etc.)
+- rate: Unit price (number only, e.g., 35.50)
+- total: Total price (number only, must equal qty × rate)
 - section: Section name if present
 
-RULES:
-1. Skip subtotals, GST, grand totals, and summary lines
-2. Skip labor aggregates like "Apprentice Electrician"
-3. Extract ONLY line items with quantities and prices
-4. Ensure total = qty × rate
-5. Preserve section headers in the section field
+VALIDATION:
+- Every extracted item MUST have qty × rate = total (within rounding)
+- If you can't find qty, unit, and rate, it's probably a summary - SKIP IT
 
 Return JSON format:
 {
