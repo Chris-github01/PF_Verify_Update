@@ -12,6 +12,7 @@ import WorkflowNav from '../components/WorkflowNav';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { exportScheduleOfRates } from '../lib/export/scheduleOfRatesExport';
+import { useTrade } from '../lib/tradeContext';
 import EnhancedSupplierTable from '../components/award/EnhancedSupplierTable';
 import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdown';
 import CoverageBreakdownChart from '../components/award/CoverageBreakdownChart';
@@ -73,6 +74,7 @@ export default function AwardReportEnhanced({
   onNavigateBack,
   onNavigateNext,
 }: AwardReportEnhancedProps) {
+  const { currentTrade } = useTrade();
   const [comparisonData, setComparisonData] = useState<ComparisonRow[]>([]);
   const [awardSummary, setAwardSummary] = useState<AwardSummary | null>(null);
   const [enhancedSuppliers, setEnhancedSuppliers] = useState<EnhancedSupplierMetrics[]>([]);
@@ -944,7 +946,7 @@ export default function AwardReportEnhanced({
                           setShowExportDropdown(false);
                           if (!currentProject) return;
                           try {
-                            await exportScheduleOfRates(projectId, currentProject.name, currentProject.trade);
+                            await exportScheduleOfRates(projectId, currentProject.name, currentTrade);
                             onToast?.('Schedule of Rates exported successfully', 'success');
                           } catch (error) {
                             console.error('Export error:', error);
