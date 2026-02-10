@@ -412,7 +412,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                     )}
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5">
-                    {job.result_data?.items?.length || 0} items • File: {job.filename} • Imported {formatDateTime(job.updated_at)}
+                    {(Array.isArray(job.parsed_lines) ? job.parsed_lines.length : job.result_data?.items?.length) || 0} items • File: {job.filename} • Imported {formatDateTime(job.updated_at)}
                   </div>
                 </div>
               </div>
@@ -433,7 +433,8 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
               </h4>
               <div className="space-y-2">
                 {partial.map(job => {
-                  const itemCount = job.result_data?.items?.length || 0;
+                  const parsedLinesCount = Array.isArray(job.parsed_lines) ? job.parsed_lines.length : 0;
+                  const itemCount = job.result_data?.items?.length || parsedLinesCount;
                   const failedChunks = job.error_message?.match(/(\d+) chunks? failed/)?.[1] || '0';
 
                   return (
