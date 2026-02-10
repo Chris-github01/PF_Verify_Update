@@ -21,6 +21,93 @@ interface ParsingJob {
   user_id: string;
 }
 
+async function parseLargeQuoteInChunks(
+  text: string,
+  supplierName: string,
+  llmUrl: string,
+  llmHeaders: Record<string, string>
+): Promise<any> {
+  console.log("Chunking large quote for processing...");
+
+  const lines = text.split('\n');
+  const chunks: string[] = [];
+  let currentChunk: string[] = [];
+  let currentSize = 0;
+  const maxChunkSize = 2500;
+
+  for (const line of lines) {
+    currentChunk.push(line);
+    currentSize += line.length;
+
+    if (currentSize >= maxChunkSize) {
+      chunks.push(currentChunk.join('\n'));
+      currentChunk = [];
+      currentSize = 0;
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.join('\n'));
+  }
+
+  console.log(`Split into ${chunks.length} chunks`);
+
+  const allItems: any[] = [];
+  const allWarnings: string[] = [];
+  let totalConfidence = 0;
+
+  for (let i = 0; i < chunks.length; i++) {
+    console.log(`Processing chunk ${i + 1}/${chunks.length}...`);
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+      const response = await fetch(llmUrl, {
+        method: "POST",
+        headers: llmHeaders,
+        body: JSON.stringify({
+          text: chunks[i],
+          supplierName,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.items && Array.isArray(result.items)) {
+          allItems.push(...result.items);
+          totalConfidence += (result.confidence || 0.8);
+          if (result.warnings) {
+            allWarnings.push(...result.warnings);
+          }
+          console.log(`Chunk ${i + 1} extracted ${result.items.length} items`);
+        }
+      } else {
+        console.error(`Chunk ${i + 1} failed:`, response.status);
+        allWarnings.push(`Chunk ${i + 1} parse failed`);
+      }
+    } catch (error) {
+      console.error(`Error processing chunk ${i + 1}:`, error);
+      allWarnings.push(`Chunk ${i + 1} error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+  }
+
+  return {
+    items: allItems,
+    totals: {
+      grandTotal: allItems.reduce((sum, item) => sum + (item.total || 0), 0),
+    },
+    metadata: {
+      supplier: supplierName,
+    },
+    confidence: chunks.length > 0 ? totalConfidence / chunks.length : 0,
+    warnings: allWarnings,
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -303,24 +390,50 @@ Deno.serve(async (req: Request) => {
         };
 
         console.log("Sending to LLM fallback parser...");
-        const llmResponse = await fetch(llmUrl, {
-          method: "POST",
-          headers: llmHeaders,
-          body: JSON.stringify({
-            text: fullText,
-            supplierName: typedJob.supplier_name,
-          }),
-        });
 
-        if (!llmResponse.ok) {
-          const errorText = await llmResponse.text();
-          console.error(`LLM parser HTTP error: ${llmResponse.status} ${llmResponse.statusText}`);
-          console.error(`LLM parser error body:`, errorText);
-          throw new Error(`LLM parser failed (${llmResponse.status}): ${errorText || llmResponse.statusText}`);
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
+
+        try {
+          const llmResponse = await fetch(llmUrl, {
+            method: "POST",
+            headers: llmHeaders,
+            body: JSON.stringify({
+              text: fullText,
+              supplierName: typedJob.supplier_name,
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!llmResponse.ok) {
+            const errorText = await llmResponse.text();
+            console.error(`LLM parser HTTP error: ${llmResponse.status} ${llmResponse.statusText}`);
+            console.error(`LLM parser error body:`, errorText);
+
+            // If it's a timeout or gateway error, try with aggressive chunking
+            if (llmResponse.status === 504 || llmResponse.status === 524) {
+              console.log("LLM parser timed out, trying with smaller chunks...");
+              parsedData = await parseLargeQuoteInChunks(fullText, typedJob.supplier_name, llmUrl, llmHeaders);
+            } else {
+              throw new Error(`LLM parser failed (${llmResponse.status}): ${errorText || llmResponse.statusText}`);
+            }
+          } else {
+            parsedData = await llmResponse.json();
+            console.log(`LLM parser returned ${parsedData.items?.length || 0} items`);
+          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+
+          if (error instanceof Error && error.name === 'AbortError') {
+            console.log("LLM parser request timed out, trying with smaller chunks...");
+            parsedData = await parseLargeQuoteInChunks(fullText, typedJob.supplier_name, llmUrl, llmHeaders);
+          } else {
+            throw error;
+          }
         }
-
-        parsedData = await llmResponse.json();
-        console.log(`LLM parser returned ${parsedData.items?.length || 0} items`);
 
         await supabase
           .from("parsing_jobs")
