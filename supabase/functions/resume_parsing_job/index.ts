@@ -74,7 +74,11 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[Resume] Total chunks: ${chunks.length}, Failed: ${failedChunks.length}, Completed: ${completedChunks.length}`);
 
-    if (failedChunks.length === 0) {
+    // Check if we need to process anything
+    const needsFinalization = !job.quote_id && completedChunks.length > 0;
+    const needsRetry = failedChunks.length > 0;
+
+    if (!needsFinalization && !needsRetry) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -87,14 +91,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Update job status to processing
-    await supabase
-      .from("parsing_jobs")
-      .update({
-        status: "processing",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", jobId);
+    if (needsFinalization) {
+      console.log(`[Resume] All chunks complete but no quote created yet. Finalizing...`);
+    }
+
+    // Update job status to processing if we're retrying
+    if (needsRetry) {
+      await supabase
+        .from("parsing_jobs")
+        .update({
+          status: "processing",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+    }
 
     const llmUrl = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback`;
     const llmHeaders = {
@@ -106,8 +116,9 @@ Deno.serve(async (req: Request) => {
     let retriedCount = 0;
     let successCount = 0;
 
-    // Retry failed chunks
-    for (const chunk of failedChunks) {
+    // Retry failed chunks (skip if just finalizing)
+    if (needsRetry) {
+      for (const chunk of failedChunks) {
       console.log(`[Resume] Retrying chunk ${chunk.chunk_number}/${chunk.total_chunks}...`);
       retriedCount++;
 
@@ -189,7 +200,8 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", chunk.id);
       }
-    }
+    } // end for loop
+    } // end if (needsRetry)
 
     // Aggregate ALL items (previously completed + newly recovered)
     const allCompletedChunks = await supabase
@@ -327,8 +339,10 @@ Deno.serve(async (req: Request) => {
         successfulRetries: successCount,
         totalItems: dedupedItems.length,
         newItems: newItems.length,
-        stillFailed: stillFailed.data?.length || 0,
-        message: `Successfully recovered ${newItems.length} items from ${successCount}/${retriedCount} retried chunks`
+        stillFailed: incompleteCount,
+        message: allChunksComplete
+          ? `Successfully recovered ${newItems.length} items from ${successCount}/${retriedCount} retried chunks`
+          : `Partial completion: ${incompleteCount} chunks still incomplete`
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
