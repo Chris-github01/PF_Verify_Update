@@ -62,6 +62,18 @@ export default function ContractWorkflowStepper({
     }
   };
 
+  const getGridCols = () => {
+    switch (steps.length) {
+      case 1: return 'grid-cols-1';
+      case 2: return 'grid-cols-2';
+      case 3: return 'grid-cols-3';
+      case 4: return 'grid-cols-4';
+      case 5: return 'grid-cols-5';
+      case 6: return 'grid-cols-6';
+      default: return 'grid-cols-6';
+    }
+  };
+
   return (
     <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
@@ -72,7 +84,7 @@ export default function ContractWorkflowStepper({
       </div>
 
       <div className="relative">
-        <div className="grid grid-cols-6 gap-2">
+        <div className={`grid ${getGridCols()} gap-2`}>
           {steps.map((step, index) => {
             const status = getStepStatus(step.id);
             const styles = getStepStyles(status);
