@@ -3591,6 +3591,20 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
     { id: 'sa2017', label: 'Sub-Contract Agreement', icon: Briefcase, completed: agreement !== null && agreement.status === 'completed' }
   ];
 
+  const handleNextStep = () => {
+    const currentIndex = steps.findIndex(s => s.id === currentStep);
+    if (currentIndex < steps.length - 1) {
+      setCurrentStep(steps[currentIndex + 1].id as any);
+    }
+  };
+
+  const handlePreviousStep = () => {
+    const currentIndex = steps.findIndex(s => s.id === currentStep);
+    if (currentIndex > 0) {
+      setCurrentStep(steps[currentIndex - 1].id as any);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -3653,6 +3667,8 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
             organisationLogoUrl={organisationLogoUrl}
             existingLoi={loi}
             onLoiUpdated={loadOnboardingData}
+            onNext={handleNextStep}
+            onPrevious={handlePreviousStep}
           />
         )}
         {currentStep === 'compliance' && (
@@ -3660,6 +3676,8 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
             projectId={projectId}
             complianceDocs={complianceDocs}
             onDocsUpdated={loadOnboardingData}
+            onNext={handleNextStep}
+            onPrevious={handlePreviousStep}
           />
         )}
         {currentStep === 'prelet' && (
@@ -3669,6 +3687,8 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
             scopeSystems={scopeSystems}
             existingAppendix={preletAppendix}
             onAppendixUpdated={loadOnboardingData}
+            onNext={handleNextStep}
+            onPrevious={handlePreviousStep}
           />
         )}
         {currentStep === 'sa2017' && (
@@ -3677,6 +3697,8 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
             awardInfo={awardInfo}
             existingAgreement={agreement}
             onAgreementUpdated={loadOnboardingData}
+            onNext={handleNextStep}
+            onPrevious={handlePreviousStep}
           />
         )}
       </div>
@@ -3691,9 +3713,11 @@ interface LOIStepProps {
   organisationLogoUrl: string | null;
   existingLoi: LetterOfIntent | null;
   onLoiUpdated: () => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
 }
 
-function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, existingLoi, onLoiUpdated }: LOIStepProps) {
+function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, existingLoi, onLoiUpdated, onNext, onPrevious }: LOIStepProps) {
   const [showForm, setShowForm] = useState(false);
   const [confirmedNonBinding, setConfirmedNonBinding] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -4102,6 +4126,17 @@ function LOIStep({ projectId, awardInfo, scopeSystems, organisationLogoUrl, exis
           </div>
         </div>
       )}
+
+      {/* Step Navigation */}
+      <div className="flex justify-end items-center pt-6 border-t border-slate-700 mt-6">
+        <button
+          onClick={onNext}
+          className="flex items-center gap-2 px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-all"
+        >
+          Next Step
+          <ChevronRight size={20} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -4110,9 +4145,11 @@ interface ComplianceStepProps {
   projectId: string;
   complianceDocs: ComplianceDocument[];
   onDocsUpdated: () => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
 }
 
-function ComplianceStep({ projectId, complianceDocs, onDocsUpdated }: ComplianceStepProps) {
+function ComplianceStep({ projectId, complianceDocs, onDocsUpdated, onNext, onPrevious }: ComplianceStepProps) {
   const [uploading, setUploading] = useState(false);
 
   const requiredDocs = [
@@ -4229,6 +4266,24 @@ function ComplianceStep({ projectId, complianceDocs, onDocsUpdated }: Compliance
           );
         })}
       </div>
+
+      {/* Step Navigation */}
+      <div className="flex justify-between items-center pt-6 border-t border-slate-700 mt-6">
+        <button
+          onClick={onPrevious}
+          className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+        >
+          <ChevronLeft size={20} />
+          Previous Step
+        </button>
+        <button
+          onClick={onNext}
+          className="flex items-center gap-2 px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-all"
+        >
+          Next Step
+          <ChevronRight size={20} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -4239,9 +4294,11 @@ interface PreletAppendixStepProps {
   scopeSystems: ScopeSystem[];
   existingAppendix: any;
   onAppendixUpdated: () => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
 }
 
-function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppendix, onAppendixUpdated }: PreletAppendixStepProps) {
+function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppendix, onAppendixUpdated, onNext, onPrevious }: PreletAppendixStepProps) {
   const [editing, setEditing] = useState(!existingAppendix);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -5181,6 +5238,24 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
           <FileCheck size={16} className="inline mr-2" />
           This appendix will be attached to signed pre-letting minutes and read in conjunction with the main pre-letting minutes and subcontract agreement.
         </div>
+
+        {/* Step Navigation */}
+        <div className="flex justify-between items-center pt-6 border-t border-slate-700">
+          <button
+            onClick={onPrevious}
+            className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+          >
+            <ChevronLeft size={20} />
+            Previous Step
+          </button>
+          <button
+            onClick={onNext}
+            className="flex items-center gap-2 px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-all"
+          >
+            Next Step
+            <ChevronRight size={20} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -5191,9 +5266,11 @@ interface SA2017StepProps {
   awardInfo: AwardInfo | null;
   existingAgreement: any;
   onAgreementUpdated: () => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
 }
 
-function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdated }: SA2017StepProps) {
+function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdated, onNext, onPrevious }: SA2017StepProps) {
   const [creating, setCreating] = useState(false);
   const [agreementId, setAgreementId] = useState<string | null>(existingAgreement?.id || null);
 
@@ -5504,6 +5581,17 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
           </div>
         </div>
       )}
+
+      {/* Step Navigation */}
+      <div className="flex justify-start items-center pt-6 border-t border-slate-700 mt-6">
+        <button
+          onClick={onPrevious}
+          className="flex items-center gap-2 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all"
+        >
+          <ChevronLeft size={20} />
+          Previous Step
+        </button>
+      </div>
     </div>
   );
 }
