@@ -42,6 +42,29 @@ interface ParseResponse {
 }
 
 /**
+ * Fetch with timeout protection
+ */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 50000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
+/**
  * Detect if quote needs to be chunked based on size and structure
  */
 function shouldChunkQuote(text: string): boolean {
@@ -57,7 +80,7 @@ function shouldChunkQuote(text: string): boolean {
 }
 
 /**
- * Chunk quote by detecting section headers
+ * Chunk quote by detecting section headers or by fixed size
  */
 function chunkQuoteBySection(text: string): { section: string; content: string }[] {
   const chunks: { section: string; content: string }[] = [];
@@ -99,6 +122,16 @@ function chunkQuoteBySection(text: string): { section: string; content: string }
 
     if (!isSectionHeader) {
       currentContent.push(line);
+
+      // Force chunk if section gets too large (3000 chars)
+      const currentSize = currentContent.join('\n').length;
+      if (currentSize > 3000) {
+        chunks.push({
+          section: `${currentSection} (part ${chunks.filter(c => c.section.startsWith(currentSection)).length + 1})`,
+          content: currentContent.join('\n')
+        });
+        currentContent = [];
+      }
     }
   }
 
@@ -110,8 +143,49 @@ function chunkQuoteBySection(text: string): { section: string; content: string }
     });
   }
 
+  // If section detection failed (only 1 chunk), split by fixed size
+  if (chunks.length === 1 && chunks[0].content.length > 4000) {
+    console.log('[LLM Fallback] Section detection failed, using fixed-size chunking');
+    return chunkByFixedSize(text, 3000);
+  }
+
   console.log(`[LLM Fallback] Split quote into ${chunks.length} sections:`, chunks.map(c => c.section));
 
+  return chunks;
+}
+
+/**
+ * Fallback: chunk by fixed character size
+ */
+function chunkByFixedSize(text: string, maxSize: number): { section: string; content: string }[] {
+  const chunks: { section: string; content: string }[] = [];
+  const lines = text.split('\n');
+  let currentContent: string[] = [];
+  let chunkNum = 1;
+
+  for (const line of lines) {
+    currentContent.push(line);
+    const currentSize = currentContent.join('\n').length;
+
+    if (currentSize >= maxSize) {
+      chunks.push({
+        section: `Section ${chunkNum}`,
+        content: currentContent.join('\n')
+      });
+      currentContent = [];
+      chunkNum++;
+    }
+  }
+
+  // Add remaining content
+  if (currentContent.length > 0) {
+    chunks.push({
+      section: `Section ${chunkNum}`,
+      content: currentContent.join('\n')
+    });
+  }
+
+  console.log(`[LLM Fallback] Fixed-size chunking created ${chunks.length} chunks`);
   return chunks;
 }
 
@@ -238,7 +312,7 @@ Return JSON format:
         const userPrompt = `Extract line items from this section:\n\nSection: ${chunk.section}\n\n${chunk.content}\n\n${supplierName ? `Supplier: ${supplierName}` : ''}`;
 
         try {
-          const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+          const openaiResponse = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${openaiApiKey}`,
@@ -254,7 +328,7 @@ Return JSON format:
               temperature: 0.1,
               max_completion_tokens: 4096,
             }),
-          });
+          }, 45000);
 
           if (!openaiResponse.ok) {
             const errorText = await openaiResponse.text();
@@ -301,7 +375,7 @@ Return JSON format:
 
       console.log('[LLM Fallback] Calling OpenAI API...');
 
-      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      const openaiResponse = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${openaiApiKey}`,
@@ -317,7 +391,7 @@ Return JSON format:
           temperature: 0.1,
           max_completion_tokens: 16384,
         }),
-      });
+      }, 50000);
 
       if (!openaiResponse.ok) {
         const errorText = await openaiResponse.text();
