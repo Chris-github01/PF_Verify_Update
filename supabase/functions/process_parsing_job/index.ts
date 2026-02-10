@@ -373,7 +373,7 @@ Deno.serve(async (req: Request) => {
         const fullText = allPages.join("\n\n");
         parsedLines = fullText.split("\n").map((line) => line.trim()).filter(Boolean);
 
-        console.log(`Extracted ${parsedLines.length} lines from document`);
+        console.log(`Extracted ${parsedLines.length} lines from document, length: ${fullText.length} chars`);
 
         await supabase
           .from("parsing_jobs")
@@ -383,17 +383,104 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", jobId);
 
+        // For large documents, create chunks in database
+        if (fullText.length > 4000 || parsedLines.length > 50) {
+          console.log("Large document detected, creating chunks...");
+
+          const lines = fullText.split('\n');
+          const chunks: string[] = [];
+          let currentChunk: string[] = [];
+          let currentSize = 0;
+          const maxChunkSize = 2500;
+
+          for (const line of lines) {
+            currentChunk.push(line);
+            currentSize += line.length;
+
+            if (currentSize >= maxChunkSize) {
+              chunks.push(currentChunk.join('\n'));
+              currentChunk = [];
+              currentSize = 0;
+            }
+          }
+
+          if (currentChunk.length > 0) {
+            chunks.push(currentChunk.join('\n'));
+          }
+
+          console.log(`Created ${chunks.length} chunks, saving to database...`);
+
+          // Create chunk records in database
+          const chunkRecords = chunks.map((chunk, index) => ({
+            job_id: jobId,
+            chunk_number: index + 1,
+            total_chunks: chunks.length,
+            chunk_text: chunk,
+            status: 'pending' as const,
+          }));
+
+          const { error: chunksError } = await supabase
+            .from("parsing_chunks")
+            .insert(chunkRecords);
+
+          if (chunksError) {
+            console.error("Failed to create chunks:", chunksError);
+            throw new Error(`Failed to create chunks: ${chunksError.message}`);
+          }
+
+          // Update job to indicate chunks are ready
+          await supabase
+            .from("parsing_jobs")
+            .update({
+              progress: 70,
+              status: "processing",
+              metadata: { ...(job.metadata || {}), chunks_created: chunks.length },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", jobId);
+
+          console.log(`Chunks created, triggering resume to process them...`);
+
+          // Trigger resume to process the chunks
+          const resumeUrl = `${supabaseUrl}/functions/v1/resume_parsing_job`;
+          fetch(resumeUrl, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${supabaseServiceKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ jobId }),
+          }).catch(err => console.error("Failed to trigger resume:", err));
+
+          // Return early - chunks will be processed by resume function
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Chunks created, processing started",
+              jobId,
+              chunks: chunks.length
+            }),
+            {
+              status: 200,
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        }
+
+        // For smaller documents, parse directly
         const llmUrl = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback`;
         const llmHeaders = {
           "Authorization": `Bearer ${supabaseServiceKey}`,
           "Content-Type": "application/json",
         };
 
-        console.log("Sending to LLM fallback parser...");
+        console.log("Small document, parsing directly...");
 
-        // Add timeout to prevent hanging
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 55000);
 
         try {
           const llmResponse = await fetch(llmUrl, {
@@ -411,28 +498,16 @@ Deno.serve(async (req: Request) => {
           if (!llmResponse.ok) {
             const errorText = await llmResponse.text();
             console.error(`LLM parser HTTP error: ${llmResponse.status} ${llmResponse.statusText}`);
-            console.error(`LLM parser error body:`, errorText);
-
-            // If it's a timeout or gateway error, try with aggressive chunking
-            if (llmResponse.status === 504 || llmResponse.status === 524) {
-              console.log("LLM parser timed out, trying with smaller chunks...");
-              parsedData = await parseLargeQuoteInChunks(fullText, typedJob.supplier_name, llmUrl, llmHeaders);
-            } else {
-              throw new Error(`LLM parser failed (${llmResponse.status}): ${errorText || llmResponse.statusText}`);
-            }
-          } else {
-            parsedData = await llmResponse.json();
-            console.log(`LLM parser returned ${parsedData.items?.length || 0} items`);
+            throw new Error(`LLM parser failed (${llmResponse.status}): ${errorText || llmResponse.statusText}`);
           }
+
+          parsedData = await llmResponse.json();
+          console.log(`LLM parser returned ${parsedData.items?.length || 0} items`);
+
         } catch (error) {
           clearTimeout(timeoutId);
-
-          if (error instanceof Error && error.name === 'AbortError') {
-            console.log("LLM parser request timed out, trying with smaller chunks...");
-            parsedData = await parseLargeQuoteInChunks(fullText, typedJob.supplier_name, llmUrl, llmHeaders);
-          } else {
-            throw error;
-          }
+          console.error("Direct parsing failed:", error);
+          throw error;
         }
 
         await supabase
