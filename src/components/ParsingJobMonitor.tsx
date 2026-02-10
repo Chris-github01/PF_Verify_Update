@@ -29,6 +29,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState<Set<string>>(new Set());
   const autoRetriedJobs = useRef<Set<string>>(new Set());
+  const isAutoRetrying = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     loadJobs();
@@ -62,14 +63,15 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       )
       .subscribe();
 
-    const pollInterval = setInterval(() => {
+    const pollInterval = setInterval(async () => {
       const hasActiveJobs = jobs.some(
         job => job.status === 'pending' || job.status === 'processing'
       );
       if (hasActiveJobs) {
-        loadJobs();
+        // Force reload from database to get fresh data
+        await loadJobs();
 
-        // Auto-retry jobs stuck at 95%+ that haven't been updated in 30 seconds
+        // Auto-retry jobs stuck at 95%+ that haven't been updated in 20 seconds
         jobs.forEach(job => {
           const jobKey = `${job.id}_${job.updated_at}`;
 
@@ -84,11 +86,12 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
             const now = new Date();
             const secondsSinceUpdate = (now.getTime() - updatedAt.getTime()) / 1000;
 
-            // If stuck for more than 30 seconds, auto-retry
-            if (secondsSinceUpdate > 30) {
+            // If stuck for more than 20 seconds, auto-retry (reduced from 30)
+            if (secondsSinceUpdate > 20) {
               console.log(`[Auto-Retry] Job ${job.supplier_name} stuck at ${job.progress}% for ${Math.round(secondsSinceUpdate)}s, auto-retrying...`);
               autoRetriedJobs.current.add(jobKey);
-              handleResumeJob(job.id);
+              isAutoRetrying.current.add(job.id);
+              handleResumeJob(job.id, true);
             }
           }
 
@@ -103,7 +106,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
           }
         });
       }
-    }, 3000);
+    }, 2000);
 
     return () => {
       subscription.unsubscribe();
@@ -177,7 +180,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
     return minutesSinceUpdate > 5;
   };
 
-  const handleResumeJob = async (jobId: string) => {
+  const handleResumeJob = async (jobId: string, isAutoRetry: boolean = false) => {
     setResuming(prev => new Set(prev).add(jobId));
 
     try {
@@ -201,21 +204,27 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
 
       if (result.success && result.quoteId) {
         onJobCompleted?.(jobId, result.quoteId);
-        alert(result.message || `Successfully recovered ${result.recoveredItems} items`);
-      } else {
-        alert(result.message || 'Job was too incomplete to recover');
+        // Only log for auto-retries, show alert for manual retries
+        if (isAutoRetry) {
+          console.log(`[Auto-Retry Success] ${result.message || 'Job completed'}`);
+        }
       }
 
+      // Force reload to update UI
       await loadJobs();
     } catch (error) {
       console.error('Error resuming job:', error);
-      alert(`Failed to resume job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Only show alert for manual retries
+      if (!isAutoRetry) {
+        alert(`Failed to resume job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     } finally {
       setResuming(prev => {
         const next = new Set(prev);
         next.delete(jobId);
         return next;
       });
+      isAutoRetrying.current.delete(jobId);
     }
   };
 
