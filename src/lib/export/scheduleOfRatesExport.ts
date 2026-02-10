@@ -403,6 +403,6 @@ async function createSupplierSheet(
 
   // Freeze panes
   worksheet.views = [
-    { state: 'frozen', xSplit: 0, ySplit: 6 }
+    { state: 'frozen', xSplit: 0, ySplit: 5 }
   ];
 }
