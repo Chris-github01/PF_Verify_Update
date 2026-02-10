@@ -45,13 +45,13 @@ interface ParseResponse {
  * Detect if quote needs to be chunked based on size and structure
  */
 function shouldChunkQuote(text: string): boolean {
-  // Chunk if text is over 8,000 characters (conservative for safe JSON responses)
-  if (text.length > 8000) return true;
+  // Chunk if text is over 5,000 characters (more aggressive to avoid timeouts)
+  if (text.length > 5000) return true;
 
-  // Count line items - if more than 50 items, chunk it
+  // Count line items - if more than 30 items, chunk it
   const itemLinePattern = /^\s*\d+\s+ea\s+\$[\d,]+/gim;
   const itemCount = (text.match(itemLinePattern) || []).length;
-  if (itemCount > 50) return true;
+  if (itemCount > 30) return true;
 
   return false;
 }
