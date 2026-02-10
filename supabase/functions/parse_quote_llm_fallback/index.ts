@@ -45,13 +45,13 @@ interface ParseResponse {
  * Detect if quote needs to be chunked based on size and structure
  */
 function shouldChunkQuote(text: string): boolean {
-  // Chunk if text is over 15,000 characters (conservative estimate for token limits)
-  if (text.length > 15000) return true;
+  // Chunk if text is over 8,000 characters (conservative for safe JSON responses)
+  if (text.length > 8000) return true;
 
-  // Count line items - if more than 100 items, chunk it
+  // Count line items - if more than 50 items, chunk it
   const itemLinePattern = /^\s*\d+\s+ea\s+\$[\d,]+/gim;
   const itemCount = (text.match(itemLinePattern) || []).length;
-  if (itemCount > 100) return true;
+  if (itemCount > 50) return true;
 
   return false;
 }
@@ -237,7 +237,7 @@ Return JSON format:
               ],
               response_format: { type: "json_object" },
               temperature: 0.1,
-              max_completion_tokens: 8192,
+              max_completion_tokens: 4096,
             }),
           });
 
@@ -252,17 +252,26 @@ Return JSON format:
           const content = openaiResult.choices?.[0]?.message?.content;
 
           if (content) {
-            const parsed: ParseResponse = JSON.parse(content);
-            const chunkItems = (parsed.items || []).map(item => ({
-              ...item,
-              section: item.section || chunk.section
-            }));
+            try {
+              const parsed: ParseResponse = JSON.parse(content);
+              const chunkItems = (parsed.items || []).map(item => ({
+                ...item,
+                section: item.section || chunk.section
+              }));
 
-            allItems.push(...chunkItems);
-            allWarnings.push(...(parsed.warnings || []));
-            overallConfidence += (parsed.confidence || 0.8);
+              allItems.push(...chunkItems);
+              allWarnings.push(...(parsed.warnings || []));
+              overallConfidence += (parsed.confidence || 0.8);
 
-            console.log(`[LLM Fallback] Chunk ${i + 1} extracted ${chunkItems.length} items`);
+              console.log(`[LLM Fallback] Chunk ${i + 1} extracted ${chunkItems.length} items`);
+            } catch (parseError) {
+              console.error(`[LLM Fallback] JSON parse error for chunk ${i + 1}:`, parseError);
+              console.error(`[LLM Fallback] Content preview:`, content.substring(0, 500));
+              allWarnings.push(`Section "${chunk.section}" - Invalid JSON response from LLM`);
+            }
+          } else {
+            console.error(`[LLM Fallback] Chunk ${i + 1} - No content in response`);
+            allWarnings.push(`Section "${chunk.section}" - Empty response from LLM`);
           }
         } catch (error) {
           console.error(`[LLM Fallback] Error processing chunk ${i + 1}:`, error);
