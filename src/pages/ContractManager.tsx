@@ -5452,7 +5452,7 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
 
   const handleExportSA2017Pdf = async () => {
     if (!agreementId) {
-      onToast?.('Agreement ID not found', 'error');
+      alert('Agreement ID not found');
       return;
     }
 
@@ -5471,7 +5471,7 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          projectId: project.id,
+          projectId: projectId,
           agreementId: agreementId,
           mode: 'sa2017'
         }),
@@ -5514,10 +5514,10 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      onToast?.('PDF exported successfully', 'success');
+      alert('PDF exported successfully!');
     } catch (error) {
       console.error('[SA-2017] Export error:', error);
-      onToast?.(error instanceof Error ? error.message : 'Failed to export PDF', 'error');
+      alert(`Failed to export PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

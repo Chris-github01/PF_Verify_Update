@@ -22,7 +22,7 @@ Deno.serve(async (req: Request) => {
       throw new Error('No authorization header');
     }
 
-    const { projectId, mode = 'site' } = await req.json();
+    const { projectId, mode = 'site', agreementId } = await req.json();
 
     if (!projectId) {
       throw new Error('projectId is required');
@@ -181,7 +181,6 @@ Deno.serve(async (req: Request) => {
     if (mode === 'sa2017') {
       console.log('[SA-2017] Export started');
 
-      const { agreementId } = await req.json();
       if (!agreementId) {
         throw new Error('agreementId is required for SA-2017 export');
       }
