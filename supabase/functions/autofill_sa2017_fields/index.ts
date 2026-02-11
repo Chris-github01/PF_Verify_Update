@@ -38,30 +38,36 @@ serve(async (req: Request) => {
       .single();
 
     if (agreementError || !agreement) {
-      throw new Error(`Failed to fetch agreement: ${agreementError?.message}`);
+      console.error('[Autofill SA-2017] Agreement error:', agreementError);
+      throw new Error(`Failed to fetch agreement: ${agreementError?.message || 'Agreement not found'}`);
     }
+
+    console.log('[Autofill SA-2017] Agreement found:', agreement.agreement_number);
 
     // Fetch project details
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select(`
         name,
-        location,
+        description,
         organisation_id,
         project_manager_name,
         project_manager_email,
         project_manager_phone,
         organisations (
           name,
-          address
+          legal_name
         )
       `)
       .eq('id', project_id)
       .single();
 
     if (projectError || !project) {
-      throw new Error(`Failed to fetch project: ${projectError?.message}`);
+      console.error('[Autofill SA-2017] Project error:', projectError);
+      throw new Error(`Failed to fetch project: ${projectError?.message || 'Project not found'}`);
     }
+
+    console.log('[Autofill SA-2017] Project found:', project.name);
 
     // Fetch supplier details from suppliers table
     const { data: supplier, error: supplierError } = await supabase
@@ -71,7 +77,16 @@ serve(async (req: Request) => {
       .eq('name', agreement.subcontractor_name)
       .maybeSingle();
 
-    console.log('[Autofill SA-2017] Supplier data:', supplier);
+    if (supplierError) {
+      console.error('[Autofill SA-2017] Supplier fetch error:', supplierError);
+    }
+
+    if (!supplier) {
+      console.warn('[Autofill SA-2017] Supplier not found in database:', agreement.subcontractor_name);
+      console.warn('[Autofill SA-2017] Please add supplier to database for complete autofill');
+    } else {
+      console.log('[Autofill SA-2017] Supplier found:', supplier.contact_name);
+    }
 
     // Fetch field definitions
     const { data: fieldDefs, error: fieldDefsError } = await supabase
@@ -81,8 +96,11 @@ serve(async (req: Request) => {
       .in('section', ['Contract Identity', 'Parties']);
 
     if (fieldDefsError || !fieldDefs) {
-      throw new Error(`Failed to fetch field definitions: ${fieldDefsError?.message}`);
+      console.error('[Autofill SA-2017] Field definitions error:', fieldDefsError);
+      throw new Error(`Failed to fetch field definitions: ${fieldDefsError?.message || 'No fields found'}`);
     }
+
+    console.log('[Autofill SA-2017] Found', fieldDefs.length, 'field definitions');
 
     // Create field key to ID mapping
     const fieldMap = new Map<string, string>();
@@ -94,11 +112,11 @@ serve(async (req: Request) => {
       contract_date: new Date().toISOString().split('T')[0],
       contract_reference: agreement.agreement_number || '',
       project_name: project.name || '',
-      project_location: project.location || '',
+      project_location: project.description || '',
 
       // Parties - Head Contractor
-      head_contractor_name: (project.organisations as any)?.name || '',
-      head_contractor_address: (project.organisations as any)?.address || '',
+      head_contractor_name: (project.organisations as any)?.legal_name || (project.organisations as any)?.name || '',
+      head_contractor_address: '', // No address field in organisations table
       head_contractor_contact: project.project_manager_name || '',
       head_contractor_email: project.project_manager_email || '',
       head_contractor_phone: project.project_manager_phone || '',
@@ -148,19 +166,25 @@ serve(async (req: Request) => {
       }
     }
 
-    console.log('[Autofill SA-2017] Inserting', fieldValues.length, 'field values');
+    console.log('[Autofill SA-2017] Preparing to insert', fieldValues.length, 'field values');
 
     // Insert all field values
     if (fieldValues.length > 0) {
-      const { error: insertError } = await supabase
+      const { data: insertedData, error: insertError } = await supabase
         .from('subcontract_field_values')
         .upsert(fieldValues, {
           onConflict: 'agreement_id,field_definition_id'
         });
 
       if (insertError) {
+        console.error('[Autofill SA-2017] Insert error:', insertError);
+        console.error('[Autofill SA-2017] Error details:', JSON.stringify(insertError, null, 2));
         throw new Error(`Failed to insert field values: ${insertError.message}`);
       }
+
+      console.log('[Autofill SA-2017] Successfully inserted field values');
+    } else {
+      console.warn('[Autofill SA-2017] No field values to insert - check data availability');
     }
 
     console.log('[Autofill SA-2017] Autofill completed successfully');
