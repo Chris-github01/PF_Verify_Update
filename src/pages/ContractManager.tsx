@@ -5492,10 +5492,9 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          html,
+          htmlContent: html,
           filename: `SA-2017-${existingAgreement?.agreement_number || agreementId}.pdf`,
-          orientation: 'portrait',
-          margins: { top: 20, right: 20, bottom: 20, left: 20 }
+          reportType: 'sa2017_agreement'
         }),
       });
 
