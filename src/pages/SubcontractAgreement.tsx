@@ -34,6 +34,7 @@ interface SubcontractAgreementProps {
 export default function SubcontractAgreement({ agreementId, onClose }: SubcontractAgreementProps) {
   const { currentOrganisation } = useOrganisation();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const autofillAttempted = useRef(false);
 
   const [agreement, setAgreement] = useState<Agreement | null>(null);
   const [template, setTemplate] = useState<Template | null>(null);
@@ -44,6 +45,7 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   const [isCompleting, setIsCompleting] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isAutofilling, setIsAutofilling] = useState(false);
 
   const isLocked = agreement?.is_locked || false;
   const isCompleted = agreement?.status === 'completed';
@@ -135,6 +137,69 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
     }
 
     setValues(valuesMap);
+  };
+
+  // Auto-fill Contract Identity and Parties sections when agreement is first opened
+  useEffect(() => {
+    const attemptAutofill = async () => {
+      if (
+        !autofillAttempted.current &&
+        agreement &&
+        agreement.project_id &&
+        fields.length > 0 &&
+        !isLocked &&
+        Object.keys(values).length === 0
+      ) {
+        autofillAttempted.current = true;
+        await autoFillFromContractSummary();
+      }
+    };
+
+    attemptAutofill();
+  }, [agreement, fields, values, isLocked]);
+
+  const autoFillFromContractSummary = async () => {
+    if (!agreement?.project_id) return;
+
+    setIsAutofilling(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.error('No active session for autofill');
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/autofill_sa2017_fields`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            agreement_id: agreementId,
+            project_id: agreement.project_id,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log('[SA-2017 Autofill] Populated', result.fields_populated, 'fields');
+        // Reload field values to show the autofilled data
+        await loadFieldValues();
+        showToast(`Auto-filled ${result.fields_populated} fields from Contract Summary`, 'success');
+      } else {
+        console.error('[SA-2017 Autofill] Failed:', result.error);
+      }
+    } catch (error) {
+      console.error('[SA-2017 Autofill] Error:', error);
+      // Don't show error toast to user - autofill is a nice-to-have
+    } finally {
+      setIsAutofilling(false);
+    }
   };
 
   const handleFieldChange = (fieldKey: string, fieldValue: string, comment: string) => {
@@ -314,7 +379,10 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   if (!agreement || !template) {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-900">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
+          <p className="text-slate-400 text-sm">Loading agreement...</p>
+        </div>
       </div>
     );
   }
@@ -362,6 +430,12 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                     {agreement.status === 'in_review' && 'In Review'}
                     {agreement.status === 'completed' && 'Completed'}
                   </span>
+                  {isAutofilling && (
+                    <div className="flex items-center gap-2 text-blue-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm font-medium">Auto-filling fields...</span>
+                    </div>
+                  )}
                   {isLocked && (
                     <div className="flex items-center gap-2 text-orange-400">
                       <Lock className="w-4 h-4" />
