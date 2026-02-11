@@ -110,13 +110,27 @@ export function generateSA2017AgreementHTML(
 
   const getFieldValue = (key: string): string => {
     const value = fieldValues[key];
-    if (!value || !value.field_value) return '<span style="color: #94a3b8; font-style: italic;">Not specified</span>';
+    if (!value || !value.field_value) return '';
     return escapeHtml(value.field_value);
   };
 
   const getFieldValueRaw = (key: string): string => {
     const value = fieldValues[key];
     return value?.field_value || '';
+  };
+
+  const hasFieldValue = (key: string): boolean => {
+    const value = fieldValues[key];
+    return !!(value && value.field_value && value.field_value.trim() !== '');
+  };
+
+  const renderFieldDisplay = (label: string, key: string): string => {
+    if (!hasFieldValue(key)) return '';
+    return `
+    <div class="field-display">
+      <div class="field-label">${label}:</div>
+      <div class="field-value">${getFieldValue(key)}</div>
+    </div>`;
   };
 
   // Generate comprehensive SA-2017 document
@@ -469,68 +483,30 @@ export function generateSA2017AgreementHTML(
     <h2>Operative Provisions</h2>
 
     <h3>1. Contract Identity</h3>
-    <div class="field-display">
-      <div class="field-label">Contract Reference:</div>
-      <div class="field-value">${getFieldValue('contract_reference')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Contract Date:</div>
-      <div class="field-value">${getFieldValue('contract_date')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Project Name:</div>
-      <div class="field-value">${getFieldValue('project_name')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Project Location:</div>
-      <div class="field-value">${getFieldValue('project_location')}</div>
-    </div>
+    ${renderFieldDisplay('Contract Reference', 'contract_reference')}
+    ${renderFieldDisplay('Contract Date', 'contract_date')}
+    ${renderFieldDisplay('Project Name', 'project_name')}
+    ${renderFieldDisplay('Project Location', 'project_location')}
 
     <h3>2. Parties to the Agreement</h3>
 
+    ${hasFieldValue('head_contractor_name') || hasFieldValue('head_contractor_address') || hasFieldValue('head_contractor_contact') ? `
     <h4 style="font-size: 11pt; margin: 15px 0 10px 0;">Head Contractor Details:</h4>
-    <div class="field-display">
-      <div class="field-label">Name:</div>
-      <div class="field-value">${getFieldValue('head_contractor_name')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Address:</div>
-      <div class="field-value">${getFieldValue('head_contractor_address')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Contact Person:</div>
-      <div class="field-value">${getFieldValue('head_contractor_contact')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Email:</div>
-      <div class="field-value">${getFieldValue('head_contractor_email')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Phone:</div>
-      <div class="field-value">${getFieldValue('head_contractor_phone')}</div>
-    </div>
+    ${renderFieldDisplay('Name', 'head_contractor_name')}
+    ${renderFieldDisplay('Address', 'head_contractor_address')}
+    ${renderFieldDisplay('Contact Person', 'head_contractor_contact')}
+    ${renderFieldDisplay('Email', 'head_contractor_email')}
+    ${renderFieldDisplay('Phone', 'head_contractor_phone')}
+    ` : ''}
 
+    ${hasFieldValue('subcontractor_name') || hasFieldValue('subcontractor_address') || hasFieldValue('subcontractor_contact') ? `
     <h4 style="font-size: 11pt; margin: 20px 0 10px 0;">Subcontractor Details:</h4>
-    <div class="field-display">
-      <div class="field-label">Name:</div>
-      <div class="field-value">${getFieldValue('subcontractor_name')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Address:</div>
-      <div class="field-value">${getFieldValue('subcontractor_address')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Contact Person:</div>
-      <div class="field-value">${getFieldValue('subcontractor_contact')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Email:</div>
-      <div class="field-value">${getFieldValue('subcontractor_email')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Phone:</div>
-      <div class="field-value">${getFieldValue('subcontractor_phone')}</div>
-    </div>
+    ${renderFieldDisplay('Name', 'subcontractor_name')}
+    ${renderFieldDisplay('Address', 'subcontractor_address')}
+    ${renderFieldDisplay('Contact Person', 'subcontractor_contact')}
+    ${renderFieldDisplay('Email', 'subcontractor_email')}
+    ${renderFieldDisplay('Phone', 'subcontractor_phone')}
+    ` : ''}
 
     <div class="page-break"></div>
 
@@ -542,18 +518,9 @@ export function generateSA2017AgreementHTML(
         works reasonably incidental thereto in accordance with this Agreement.
       </span>
     </div>
-    <div class="field-display">
-      <div class="field-label">Description of Subcontract Works:</div>
-      <div class="field-value">${getFieldValue('subcontract_works_description')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Scope Documents:</div>
-      <div class="field-value">${getFieldValue('scope_documents')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Exclusions from Scope:</div>
-      <div class="field-value">${getFieldValue('exclusions')}</div>
-    </div>
+    ${renderFieldDisplay('Description of Subcontract Works', 'subcontract_works_description')}
+    ${renderFieldDisplay('Scope Documents', 'scope_documents')}
+    ${renderFieldDisplay('Exclusions from Scope', 'exclusions')}
 
     <h3>4. Contract Price</h3>
     <div class="clause">
@@ -562,41 +529,16 @@ export function generateSA2017AgreementHTML(
         The Contract Price for the Subcontract Works shall be:
       </span>
     </div>
-    <div class="field-display">
-      <div class="field-label">Contract Price (excluding GST):</div>
-      <div class="field-value">${getFieldValue('contract_price')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Price Basis:</div>
-      <div class="field-value">${getFieldValue('contract_price_basis')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">GST Inclusive:</div>
-      <div class="field-value">${getFieldValue('gst_inclusive')}</div>
-    </div>
+    ${renderFieldDisplay('Contract Price (excluding GST)', 'contract_price')}
+    ${renderFieldDisplay('Price Basis', 'contract_price_basis')}
+    ${renderFieldDisplay('GST Inclusive', 'gst_inclusive')}
 
     <h3>5. Time for Completion</h3>
-    <div class="field-display">
-      <div class="field-label">Commencement Date:</div>
-      <div class="field-value">${getFieldValue('commencement_date')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Completion Date:</div>
-      <div class="field-value">${getFieldValue('completion_date')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Programme Provided:</div>
-      <div class="field-value">${getFieldValue('programme_provided')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Liquidated Damages Applicable:</div>
-      <div class="field-value">${getFieldValue('liquidated_damages_applicable')}</div>
-    </div>
-    ${getFieldValueRaw('liquidated_damages_applicable') === 'Yes' ? `
-    <div class="field-display">
-      <div class="field-label">Liquidated Damages Rate (per day):</div>
-      <div class="field-value">${getFieldValue('liquidated_damages_rate')}</div>
-    </div>` : ''}
+    ${renderFieldDisplay('Commencement Date', 'commencement_date')}
+    ${renderFieldDisplay('Completion Date', 'completion_date')}
+    ${renderFieldDisplay('Programme Provided', 'programme_provided')}
+    ${renderFieldDisplay('Liquidated Damages Applicable', 'liquidated_damages_applicable')}
+    ${hasFieldValue('liquidated_damages_rate') && getFieldValueRaw('liquidated_damages_applicable') === 'Yes' ? renderFieldDisplay('Liquidated Damages Rate (per day)', 'liquidated_damages_rate') : ''}
 
     <h3>6. Payment Terms</h3>
     <div class="clause">
@@ -606,22 +548,10 @@ export function generateSA2017AgreementHTML(
         Act 2002 and the following provisions:
       </span>
     </div>
-    <div class="field-display">
-      <div class="field-label">Payment Claim Frequency:</div>
-      <div class="field-value">${getFieldValue('payment_claim_frequency')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Payment Claim Date:</div>
-      <div class="field-value">${getFieldValue('payment_claim_date')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Payment Terms (days):</div>
-      <div class="field-value">${getFieldValue('payment_terms_days')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Buyer-Created Tax Invoice:</div>
-      <div class="field-value">${getFieldValue('buyer_created_tax_invoice')}</div>
-    </div>
+    ${renderFieldDisplay('Payment Claim Frequency', 'payment_claim_frequency')}
+    ${renderFieldDisplay('Payment Claim Date', 'payment_claim_date')}
+    ${renderFieldDisplay('Payment Terms (days)', 'payment_terms_days')}
+    ${renderFieldDisplay('Buyer-Created Tax Invoice', 'buyer_created_tax_invoice')}
     ${getFieldValueRaw('buyer_created_tax_invoice') === 'Yes' ? `
     <div class="clause" style="margin-top: 15px; background: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b;">
       <strong>Note:</strong> The parties agree that the Head Contractor may issue tax invoices on behalf
@@ -630,16 +560,11 @@ export function generateSA2017AgreementHTML(
 
     <div class="page-break"></div>
 
+    ${hasFieldValue('retention_required') || hasFieldValue('retention_percentage') ? `
     <h3>7. Retention</h3>
-    <div class="field-display">
-      <div class="field-label">Retention Required:</div>
-      <div class="field-value">${getFieldValue('retention_required')}</div>
-    </div>
-    ${getFieldValueRaw('retention_required') === 'Yes' ? `
-    <div class="field-display">
-      <div class="field-label">Retention Percentage:</div>
-      <div class="field-value">${getFieldValue('retention_percentage')}</div>
-    </div>
+    ${renderFieldDisplay('Retention Required', 'retention_required')}
+    ${getFieldValueRaw('retention_required') === 'Yes' && hasFieldValue('retention_percentage') ? `
+    ${renderFieldDisplay('Retention Percentage', 'retention_percentage')}
     <div class="clause" style="margin-top: 15px;">
       <span class="clause-number">7.1</span>
       <span class="clause-text">
@@ -648,74 +573,39 @@ export function generateSA2017AgreementHTML(
         expiry of the Defects Liability Period, subject to the rectification of any defects.
       </span>
     </div>` : ''}
+    ` : ''}
 
+    ${hasFieldValue('defects_liability_period') || hasFieldValue('defects_notification_process') || hasFieldValue('warranty_requirements') || hasFieldValue('maintenance_manuals_required') ? `
     <h3>8. Defects Liability</h3>
-    <div class="field-display">
-      <div class="field-label">Defects Liability Period (months):</div>
-      <div class="field-value">${getFieldValue('defects_liability_period')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Defects Notification Process:</div>
-      <div class="field-value">${getFieldValue('defects_notification_process')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Warranty Requirements:</div>
-      <div class="field-value">${getFieldValue('warranty_requirements')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Maintenance Manuals Required:</div>
-      <div class="field-value">${getFieldValue('maintenance_manuals_required')}</div>
-    </div>
+    ${renderFieldDisplay('Defects Liability Period (months)', 'defects_liability_period')}
+    ${renderFieldDisplay('Defects Notification Process', 'defects_notification_process')}
+    ${renderFieldDisplay('Warranty Requirements', 'warranty_requirements')}
+    ${renderFieldDisplay('Maintenance Manuals Required', 'maintenance_manuals_required')}
+    ` : ''}
 
+    ${hasFieldValue('public_liability_required') || hasFieldValue('contract_works_insurance') || hasFieldValue('professional_indemnity_required') ? `
     <h3>9. Insurance</h3>
-    <div class="field-display">
-      <div class="field-label">Public Liability Insurance Required:</div>
-      <div class="field-value">${getFieldValue('public_liability_required')}</div>
-    </div>
-    ${getFieldValueRaw('public_liability_required') === 'Yes' ? `
-    <div class="field-display">
-      <div class="field-label">Public Liability Cover Amount:</div>
-      <div class="field-value">${getFieldValue('public_liability_amount')}</div>
-    </div>` : ''}
-    <div class="field-display">
-      <div class="field-label">Contract Works Insurance:</div>
-      <div class="field-value">${getFieldValue('contract_works_insurance')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Professional Indemnity Required:</div>
-      <div class="field-value">${getFieldValue('professional_indemnity_required')}</div>
-    </div>
-    ${getFieldValueRaw('professional_indemnity_required') === 'Yes' ? `
-    <div class="field-display">
-      <div class="field-label">Professional Indemnity Amount:</div>
-      <div class="field-value">${getFieldValue('professional_indemnity_amount')}</div>
-    </div>` : ''}
+    ${renderFieldDisplay('Public Liability Insurance Required', 'public_liability_required')}
+    ${hasFieldValue('public_liability_amount') && getFieldValueRaw('public_liability_required') === 'Yes' ? renderFieldDisplay('Public Liability Cover Amount', 'public_liability_amount') : ''}
+    ${renderFieldDisplay('Contract Works Insurance', 'contract_works_insurance')}
+    ${renderFieldDisplay('Professional Indemnity Required', 'professional_indemnity_required')}
+    ${hasFieldValue('professional_indemnity_amount') && getFieldValueRaw('professional_indemnity_required') === 'Yes' ? renderFieldDisplay('Professional Indemnity Amount', 'professional_indemnity_amount') : ''}
+    ` : ''}
 
+    ${hasFieldValue('performance_bond_required') || hasFieldValue('parent_company_guarantee') ? `
     <h3>10. Bonds and Guarantees</h3>
-    <div class="field-display">
-      <div class="field-label">Performance Bond Required:</div>
-      <div class="field-value">${getFieldValue('performance_bond_required')}</div>
-    </div>
+    ${renderFieldDisplay('Performance Bond Required', 'performance_bond_required')}
     ${getFieldValueRaw('performance_bond_required') === 'Yes' ? `
-    <div class="field-display">
-      <div class="field-label">Performance Bond Percentage:</div>
-      <div class="field-value">${getFieldValue('performance_bond_percentage')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Performance Bond Value:</div>
-      <div class="field-value">${getFieldValue('performance_bond_value')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Performance Bond Expiry Date:</div>
-      <div class="field-value">${getFieldValue('performance_bond_expiry')}</div>
-    </div>` : ''}
-    <div class="field-display">
-      <div class="field-label">Parent Company Guarantee Required:</div>
-      <div class="field-value">${getFieldValue('parent_company_guarantee')}</div>
-    </div>
+    ${renderFieldDisplay('Performance Bond Percentage', 'performance_bond_percentage')}
+    ${renderFieldDisplay('Performance Bond Value', 'performance_bond_value')}
+    ${renderFieldDisplay('Performance Bond Expiry Date', 'performance_bond_expiry')}
+    ` : ''}
+    ${renderFieldDisplay('Parent Company Guarantee Required', 'parent_company_guarantee')}
+    ` : ''}
 
     <div class="page-break"></div>
 
+    ${hasFieldValue('variation_approval_threshold') || hasFieldValue('variation_process') || hasFieldValue('daywork_rates_agreed') ? `
     <h3>11. Variations</h3>
     <div class="clause">
       <span class="clause-number">11.1</span>
@@ -724,57 +614,32 @@ export function generateSA2017AgreementHTML(
         not commence any varied work without written authorization from the Head Contractor.
       </span>
     </div>
-    <div class="field-display">
-      <div class="field-label">Variation Approval Threshold:</div>
-      <div class="field-value">${getFieldValue('variation_approval_threshold')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Variation Process:</div>
-      <div class="field-value">${getFieldValue('variation_process')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Daywork Rates Agreed:</div>
-      <div class="field-value">${getFieldValue('daywork_rates_agreed')}</div>
-    </div>
-    ${getFieldValueRaw('daywork_rates_agreed') === 'Yes' ? `
-    <div class="field-display">
-      <div class="field-label">Daywork Schedule Reference:</div>
-      <div class="field-value">${getFieldValue('daywork_schedule')}</div>
-    </div>` : ''}
+    ${renderFieldDisplay('Variation Approval Threshold', 'variation_approval_threshold')}
+    ${renderFieldDisplay('Variation Process', 'variation_process')}
+    ${renderFieldDisplay('Daywork Rates Agreed', 'daywork_rates_agreed')}
+    ${hasFieldValue('daywork_schedule') && getFieldValueRaw('daywork_rates_agreed') === 'Yes' ? renderFieldDisplay('Daywork Schedule Reference', 'daywork_schedule') : ''}
+    ` : ''}
 
+    ${hasFieldValue('dispute_resolution_process') || hasFieldValue('adjudication_agreement') ? `
     <h3>12. Dispute Resolution</h3>
-    <div class="field-display">
-      <div class="field-label">Dispute Resolution Process:</div>
-      <div class="field-value">${getFieldValue('dispute_resolution_process')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Adjudication Agreement (CCA 2002):</div>
-      <div class="field-value">${getFieldValue('adjudication_agreement')}</div>
-    </div>
+    ${renderFieldDisplay('Dispute Resolution Process', 'dispute_resolution_process')}
+    ${renderFieldDisplay('Adjudication Agreement (CCA 2002)', 'adjudication_agreement')}
     <div class="clause" style="margin-top: 15px; background: #eff6ff; padding: 15px; border-left: 4px solid #2563eb;">
       <strong>Construction Contracts Act 2002:</strong> The parties acknowledge that they have been
       advised of their rights under the Construction Contracts Act 2002, including the right to refer
       disputes to adjudication. Any party may refer a dispute to adjudication at any time.
     </div>
+    ` : ''}
 
+    ${hasFieldValue('health_safety_plan_required') || hasFieldValue('quality_assurance_required') || hasFieldValue('assignment_allowed') || hasFieldValue('governing_law') ? `
     <h3>13. General Provisions</h3>
-    <div class="field-display">
-      <div class="field-label">Health & Safety Plan Required:</div>
-      <div class="field-value">${getFieldValue('health_safety_plan_required')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Quality Assurance Required:</div>
-      <div class="field-value">${getFieldValue('quality_assurance_required')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Assignment of Subcontract Allowed:</div>
-      <div class="field-value">${getFieldValue('assignment_allowed')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Governing Law:</div>
-      <div class="field-value">${getFieldValue('governing_law')}</div>
-    </div>
+    ${renderFieldDisplay('Health & Safety Plan Required', 'health_safety_plan_required')}
+    ${renderFieldDisplay('Quality Assurance Required', 'quality_assurance_required')}
+    ${renderFieldDisplay('Assignment of Subcontract Allowed', 'assignment_allowed')}
+    ${renderFieldDisplay('Governing Law', 'governing_law')}
+    ` : ''}
 
+    ${hasFieldValue('drawings_list') || hasFieldValue('specifications_list') || hasFieldValue('other_documents') ? `
     <h3>14. Contract Documents</h3>
     <div class="clause">
       <span class="clause-number">14.1</span>
@@ -782,20 +647,12 @@ export function generateSA2017AgreementHTML(
         The following documents form part of this Agreement and shall be read together:
       </span>
     </div>
-    <div class="field-display">
-      <div class="field-label">Drawings List:</div>
-      <div class="field-value">${getFieldValue('drawings_list')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Specifications List:</div>
-      <div class="field-value">${getFieldValue('specifications_list')}</div>
-    </div>
-    <div class="field-display">
-      <div class="field-label">Other Contract Documents:</div>
-      <div class="field-value">${getFieldValue('other_documents')}</div>
-    </div>
+    ${renderFieldDisplay('Drawings List', 'drawings_list')}
+    ${renderFieldDisplay('Specifications List', 'specifications_list')}
+    ${renderFieldDisplay('Other Contract Documents', 'other_documents')}
+    ` : ''}
 
-    ${getFieldValueRaw('special_conditions_text') ? `
+    ${hasFieldValue('special_conditions_text') ? `
     <h3>15. Special Conditions</h3>
     <div class="field-display">
       <div class="field-value">${getFieldValue('special_conditions_text')}</div>
@@ -1743,36 +1600,42 @@ export function generateSA2017AgreementHTML(
     <div class="signature-section">
       <h3>Head Contractor</h3>
       <div class="signature-block">
+        ${hasFieldValue('head_contractor_signatory_name') ? `
         <div style="margin-bottom: 20px;">
           <strong>Name of Signatory:</strong> ${getFieldValue('head_contractor_signatory_name')}
-        </div>
+        </div>` : ''}
+        ${hasFieldValue('head_contractor_signatory_title') ? `
         <div style="margin-bottom: 20px;">
           <strong>Title/Position:</strong> ${getFieldValue('head_contractor_signatory_title')}
-        </div>
+        </div>` : ''}
         <div class="signature-line">
           Signature
         </div>
+        ${hasFieldValue('head_contractor_signature_date') ? `
         <div class="signature-details">
           <div>Date: ${getFieldValue('head_contractor_signature_date')}</div>
-        </div>
+        </div>` : ''}
       </div>
     </div>
 
     <div class="signature-section">
       <h3>Subcontractor</h3>
       <div class="signature-block">
+        ${hasFieldValue('subcontractor_signatory_name') ? `
         <div style="margin-bottom: 20px;">
           <strong>Name of Signatory:</strong> ${getFieldValue('subcontractor_signatory_name')}
-        </div>
+        </div>` : ''}
+        ${hasFieldValue('subcontractor_signatory_title') ? `
         <div style="margin-bottom: 20px;">
           <strong>Title/Position:</strong> ${getFieldValue('subcontractor_signatory_title')}
-        </div>
+        </div>` : ''}
         <div class="signature-line">
           Signature
         </div>
+        ${hasFieldValue('subcontractor_signature_date') ? `
         <div class="signature-details">
           <div>Date: ${getFieldValue('subcontractor_signature_date')}</div>
-        </div>
+        </div>` : ''}
       </div>
     </div>
 
