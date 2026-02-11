@@ -1083,6 +1083,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
                   awardInfo={awardInfo}
                   scopeSystems={scopeSystems}
                   organisationLogoUrl={currentOrganisation?.logo_url || null}
+                  setViewingAgreementId={setViewingAgreementId}
                 />
               )}
               {activeTab === 'handover' && isApproved && (
@@ -3513,9 +3514,10 @@ interface OnboardingTabProps {
   awardInfo: AwardInfo | null;
   scopeSystems: ScopeSystem[];
   organisationLogoUrl: string | null;
+  setViewingAgreementId: (id: string | null) => void;
 }
 
-function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl }: OnboardingTabProps) {
+function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl, setViewingAgreementId }: OnboardingTabProps) {
   const [currentStep, setCurrentStep] = useState<'loi' | 'compliance' | 'prelet' | 'sa2017'>('loi');
   const [loi, setLoi] = useState<LetterOfIntent | null>(null);
   const [loadingLoi, setLoadingLoi] = useState(true);
@@ -3699,6 +3701,7 @@ function OnboardingTab({ projectId, awardInfo, scopeSystems, organisationLogoUrl
             onAgreementUpdated={loadOnboardingData}
             onNext={handleNextStep}
             onPrevious={handlePreviousStep}
+            setViewingAgreementId={setViewingAgreementId}
           />
         )}
       </div>
@@ -5268,9 +5271,10 @@ interface SA2017StepProps {
   onAgreementUpdated: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  setViewingAgreementId: (id: string | null) => void;
 }
 
-function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdated, onNext, onPrevious }: SA2017StepProps) {
+function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdated, onNext, onPrevious, setViewingAgreementId }: SA2017StepProps) {
   const [creating, setCreating] = useState(false);
   const [agreementId, setAgreementId] = useState<string | null>(existingAgreement?.id || null);
 
