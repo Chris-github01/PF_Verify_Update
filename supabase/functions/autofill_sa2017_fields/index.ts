@@ -161,7 +161,6 @@ serve(async (req: Request) => {
           comment: null,
           updated_by: user.id,
           updated_at: timestamp,
-          created_at: timestamp,
         });
       }
     }
