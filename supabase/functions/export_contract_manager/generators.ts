@@ -220,29 +220,28 @@ export function generateSA2017AgreementHTML(
     h1 {
       font-size: 16pt;
       font-weight: bold;
-      margin: 30px 0 15px 0;
+      margin: 20px 0 12px 0;
       text-align: center;
       text-transform: uppercase;
-      page-break-before: always;
       page-break-after: avoid;
     }
 
     h2 {
       font-size: 14pt;
       font-weight: bold;
-      margin: 25px 0 12px 0;
+      margin: 15px 0 10px 0;
       page-break-after: avoid;
     }
 
     h3 {
       font-size: 12pt;
       font-weight: bold;
-      margin: 20px 0 10px 0;
+      margin: 12px 0 8px 0;
       page-break-after: avoid;
     }
 
     .clause {
-      margin-bottom: 15px;
+      margin-bottom: 10px;
       page-break-inside: avoid;
     }
 
@@ -294,8 +293,8 @@ export function generateSA2017AgreementHTML(
     .field-display {
       background: #f9f9f9;
       border-left: 4px solid #0066cc;
-      padding: 12px 15px;
-      margin: 10px 0;
+      padding: 10px 12px;
+      margin: 8px 0;
       page-break-inside: avoid;
     }
 
@@ -508,8 +507,6 @@ export function generateSA2017AgreementHTML(
     ${renderFieldDisplay('Phone', 'subcontractor_phone')}
     ` : ''}
 
-    <div class="page-break"></div>
-
     <h3>3. Subcontract Works</h3>
     <div class="clause">
       <span class="clause-number">3.1</span>
@@ -558,8 +555,6 @@ export function generateSA2017AgreementHTML(
       of the Subcontractor in accordance with section 24(7) of the Goods and Services Tax Act 1985.
     </div>` : ''}
 
-    <div class="page-break"></div>
-
     ${hasFieldValue('retention_required') || hasFieldValue('retention_percentage') ? `
     <h3>7. Retention</h3>
     ${renderFieldDisplay('Retention Required', 'retention_required')}
@@ -602,8 +597,6 @@ export function generateSA2017AgreementHTML(
     ` : ''}
     ${renderFieldDisplay('Parent Company Guarantee Required', 'parent_company_guarantee')}
     ` : ''}
-
-    <div class="page-break"></div>
 
     ${hasFieldValue('variation_approval_threshold') || hasFieldValue('variation_process') || hasFieldValue('daywork_rates_agreed') ? `
     <h3>11. Variations</h3>
@@ -658,10 +651,8 @@ export function generateSA2017AgreementHTML(
       <div class="field-value">${getFieldValue('special_conditions_text')}</div>
     </div>` : ''}
 
-    <div class="page-break"></div>
-
     <!-- GENERAL CONDITIONS -->
-    <h1 style="text-align: center; margin: 40px 0 30px 0;">GENERAL CONDITIONS</h1>
+    <h1 style="text-align: center; margin: 30px 0 20px 0;">GENERAL CONDITIONS</h1>
 
     <h2>1. INTERPRETATION AND DEFINITIONS</h2>
 
@@ -866,8 +857,6 @@ export function generateSA2017AgreementHTML(
       </span>
     </div>
 
-    <div class="page-break"></div>
-
     <h3 style="font-size: 11pt; margin-top: 20px;">5.5 Scaffolding</h3>
 
     <div class="clause">
@@ -989,8 +978,6 @@ export function generateSA2017AgreementHTML(
         The Subcontractor shall comply with any site-specific health and safety requirements notified by the Head Contractor and shall attend all required health and safety meetings.
       </span>
     </div>
-
-    <div class="page-break"></div>
 
     <h3 style="font-size: 11pt; margin-top: 20px;">5.10 Hours of Work</h3>
 
@@ -1115,8 +1102,6 @@ export function generateSA2017AgreementHTML(
       </span>
     </div>
 
-    <div class="page-break"></div>
-
     <h2>6. DESIGN AND PRODUCER STATEMENTS</h2>
 
     <div class="clause">
@@ -1206,8 +1191,6 @@ export function generateSA2017AgreementHTML(
         Contract works insurance shall be arranged by the Head Contractor unless otherwise specified in this Agreement. Where the Subcontractor is required to effect contract works insurance, it shall do so for the full replacement value of the Subcontract Works.
       </span>
     </div>
-
-    <div class="page-break"></div>
 
     <h2>9. VARIATIONS</h2>
 
@@ -1310,8 +1293,6 @@ export function generateSA2017AgreementHTML(
         If the Head Contractor requires early completion or acceleration of the Subcontract Works, this shall be treated as a variation and the Subcontractor shall be entitled to additional payment for any acceleration costs.
       </span>
     </div>
-
-    <div class="page-break"></div>
 
     <h2>11. DEFECTS</h2>
 
@@ -1453,8 +1434,6 @@ export function generateSA2017AgreementHTML(
       </span>
     </div>
 
-    <div class="page-break"></div>
-
     <h2>13. DISPUTES AND REMEDIES</h2>
 
     <div class="clause">
@@ -1587,8 +1566,6 @@ export function generateSA2017AgreementHTML(
         Either party may change its address for service by giving written notice to the other party.
       </span>
     </div>
-
-    <div class="page-break"></div>
 
     <!-- EXECUTION -->
     <h1>Execution</h1>
