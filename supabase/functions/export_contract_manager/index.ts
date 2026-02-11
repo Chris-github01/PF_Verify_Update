@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { generateJuniorPackHTML, generateSeniorReportHTML, generatePreletAppendixHTML } from './generators.ts';
+import { generateJuniorPackHTML, generateSeniorReportHTML, generatePreletAppendixHTML, generateSA2017AgreementHTML } from './generators.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -178,8 +178,87 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (mode === 'sa2017') {
+      console.log('[SA-2017] Export started');
+
+      const { agreementId } = await req.json();
+      if (!agreementId) {
+        throw new Error('agreementId is required for SA-2017 export');
+      }
+
+      // Fetch agreement
+      const { data: agreement, error: agreementError } = await supabase
+        .from('subcontract_agreements')
+        .select('*')
+        .eq('id', agreementId)
+        .maybeSingle();
+
+      if (agreementError || !agreement) {
+        throw new Error('Agreement not found');
+      }
+
+      // Fetch template
+      const { data: template, error: templateError } = await supabase
+        .from('contract_templates')
+        .select('*')
+        .eq('id', agreement.template_id)
+        .maybeSingle();
+
+      if (templateError || !template) {
+        throw new Error('Template not found');
+      }
+
+      // Fetch field definitions
+      const { data: fields, error: fieldsError } = await supabase
+        .from('subcontract_field_definitions')
+        .select('*')
+        .eq('template_id', agreement.template_id)
+        .order('section, field_order');
+
+      if (fieldsError) {
+        throw new Error('Failed to fetch field definitions');
+      }
+
+      // Fetch field values
+      const { data: values, error: valuesError } = await supabase
+        .from('subcontract_field_values')
+        .select('*')
+        .eq('agreement_id', agreementId);
+
+      if (valuesError) {
+        throw new Error('Failed to fetch field values');
+      }
+
+      // Create field values map
+      const fieldValuesMap: Record<string, any> = {};
+      values?.forEach(value => {
+        const field = fields?.find(f => f.id === value.field_definition_id);
+        if (field) {
+          fieldValuesMap[field.field_key] = value;
+        }
+      });
+
+      // Generate HTML
+      console.log('[SA-2017] Generating HTML...');
+      const htmlContent = generateSA2017AgreementHTML(
+        agreement,
+        template,
+        fields || [],
+        fieldValuesMap,
+        project,
+        organisationLogoUrl
+      );
+
+      console.log('[SA-2017] HTML generated successfully');
+
+      return new Response(
+        JSON.stringify({ html: htmlContent }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response(
-      JSON.stringify({ error: 'Only prelet_appendix mode is currently supported' }),
+      JSON.stringify({ error: 'Only prelet_appendix and sa2017 modes are currently supported' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

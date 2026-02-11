@@ -5450,6 +5450,77 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
     }
   };
 
+  const handleExportSA2017Pdf = async () => {
+    if (!agreementId) {
+      onToast?.('Agreement ID not found', 'error');
+      return;
+    }
+
+    try {
+      console.log('[SA-2017] Exporting PDF for agreement:', agreementId);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export_contract_manager`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId: project.id,
+          agreementId: agreementId,
+          mode: 'sa2017'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate PDF');
+      }
+
+      const { html } = await response.json();
+
+      // Generate PDF using Gotenberg
+      const pdfResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate_pdf_gotenberg`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          html,
+          filename: `SA-2017-${existingAgreement?.agreement_number || agreementId}.pdf`,
+          orientation: 'portrait',
+          margins: { top: 20, right: 20, bottom: 20, left: 20 }
+        }),
+      });
+
+      if (!pdfResponse.ok) {
+        const errorData = await pdfResponse.json();
+        throw new Error(errorData.error || 'Failed to generate PDF');
+      }
+
+      const pdfBlob = await pdfResponse.blob();
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `SA-2017-${existingAgreement?.agreement_number || agreementId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      onToast?.('PDF exported successfully', 'success');
+    } catch (error) {
+      console.error('[SA-2017] Export error:', error);
+      onToast?.(error instanceof Error ? error.message : 'Failed to export PDF', 'error');
+    }
+  };
+
   if (!awardInfo) {
     return (
       <div className="text-center py-12">
@@ -5560,10 +5631,7 @@ function SA2017Step({ projectId, awardInfo, existingAgreement, onAgreementUpdate
               </button>
               {existingAgreement.status === 'completed' && (
                 <button
-                  onClick={() => {
-                    // Future: Implement PDF export
-                    alert('PDF export coming soon');
-                  }}
+                  onClick={handleExportSA2017Pdf}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all"
                 >
                   <Download size={16} />
