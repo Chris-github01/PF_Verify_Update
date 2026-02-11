@@ -142,60 +142,79 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   // Auto-fill Contract Identity and Parties sections when agreement is first opened
   useEffect(() => {
     const attemptAutofill = async () => {
+      // Only autofill once per agreement load, when we have the data we need
       if (
         !autofillAttempted.current &&
         agreement &&
         agreement.project_id &&
         fields.length > 0 &&
-        !isLocked &&
-        Object.keys(values).length === 0
+        !isLocked
       ) {
         autofillAttempted.current = true;
+        console.log('[SA-2017] Triggering autofill for agreement', agreement.id);
         await autoFillFromContractSummary();
       }
     };
 
     attemptAutofill();
-  }, [agreement, fields, values, isLocked]);
+  }, [agreement, fields, isLocked]);
 
   const autoFillFromContractSummary = async () => {
-    if (!agreement?.project_id) return;
+    if (!agreement?.project_id) {
+      console.log('[SA-2017 Autofill] No project_id available');
+      return;
+    }
 
+    console.log('[SA-2017 Autofill] Starting autofill for project', agreement.project_id);
     setIsAutofilling(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        console.error('No active session for autofill');
+        console.error('[SA-2017 Autofill] No active session');
         return;
       }
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/autofill_sa2017_fields`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            agreement_id: agreementId,
-            project_id: agreement.project_id,
-          }),
-        }
-      );
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/autofill_sa2017_fields`;
+      console.log('[SA-2017 Autofill] Calling edge function:', url);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          agreement_id: agreementId,
+          project_id: agreement.project_id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[SA-2017 Autofill] HTTP error:', response.status, errorText);
+        showToast('Auto-fill encountered an error. Please fill fields manually.', 'error');
+        return;
+      }
 
       const result = await response.json();
+      console.log('[SA-2017 Autofill] Result:', result);
 
       if (result.success) {
-        console.log('[SA-2017 Autofill] Populated', result.fields_populated, 'fields');
+        console.log('[SA-2017 Autofill] Successfully populated', result.fields_populated, 'fields');
         // Reload field values to show the autofilled data
         await loadFieldValues();
-        showToast(`Auto-filled ${result.fields_populated} fields from Contract Summary`, 'success');
+        if (result.fields_populated > 0) {
+          showToast(`Auto-filled ${result.fields_populated} fields from Contract Summary`, 'success');
+        } else {
+          console.log('[SA-2017 Autofill] No fields were populated');
+        }
       } else {
         console.error('[SA-2017 Autofill] Failed:', result.error);
+        showToast('Could not auto-fill some fields. Please check manually.', 'error');
       }
     } catch (error) {
-      console.error('[SA-2017 Autofill] Error:', error);
+      console.error('[SA-2017 Autofill] Exception:', error);
       // Don't show error toast to user - autofill is a nice-to-have
     } finally {
       setIsAutofilling(false);

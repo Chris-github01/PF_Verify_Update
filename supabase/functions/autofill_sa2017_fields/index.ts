@@ -63,15 +63,15 @@ serve(async (req: Request) => {
       throw new Error(`Failed to fetch project: ${projectError?.message}`);
     }
 
-    // Fetch supplier details from letters_of_intent
-    const { data: loi, error: loiError } = await supabase
-      .from('letters_of_intent')
-      .select('supplier_contact, supplier_email, supplier_phone, supplier_address')
-      .eq('project_id', project_id)
-      .eq('supplier_name', agreement.subcontractor_name)
-      .order('created_at', { ascending: false })
-      .limit(1)
+    // Fetch supplier details from suppliers table
+    const { data: supplier, error: supplierError } = await supabase
+      .from('suppliers')
+      .select('contact_name, contact_email, contact_phone, address')
+      .eq('organisation_id', project.organisation_id)
+      .eq('name', agreement.subcontractor_name)
       .maybeSingle();
+
+    console.log('[Autofill SA-2017] Supplier data:', supplier);
 
     // Fetch field definitions
     const { data: fieldDefs, error: fieldDefsError } = await supabase
@@ -105,11 +105,16 @@ serve(async (req: Request) => {
 
       // Parties - Subcontractor
       subcontractor_name: agreement.subcontractor_name || '',
-      subcontractor_address: loi?.supplier_address || '',
-      subcontractor_contact: loi?.supplier_contact || '',
-      subcontractor_email: loi?.supplier_email || '',
-      subcontractor_phone: loi?.supplier_phone || '',
+      subcontractor_address: supplier?.address || '',
+      subcontractor_contact: supplier?.contact_name || '',
+      subcontractor_email: supplier?.contact_email || '',
+      subcontractor_phone: supplier?.contact_phone || '',
     };
+
+    console.log('[Autofill SA-2017] Prepared data for', Object.keys(autofillData).length, 'fields');
+    console.log('[Autofill SA-2017] Project:', project.name);
+    console.log('[Autofill SA-2017] Head Contractor:', (project.organisations as any)?.name);
+    console.log('[Autofill SA-2017] Subcontractor:', agreement.subcontractor_name);
 
     // Get authenticated user from request
     const authHeader = req.headers.get('Authorization');
