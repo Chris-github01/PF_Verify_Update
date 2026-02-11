@@ -803,6 +803,936 @@ export function generateSA2017AgreementHTML(
 
     <div class="page-break"></div>
 
+    <!-- GENERAL CONDITIONS -->
+    <h1 style="text-align: center; margin: 40px 0 30px 0;">GENERAL CONDITIONS</h1>
+
+    <h2>1. INTERPRETATION AND DEFINITIONS</h2>
+
+    <div class="clause">
+      <span class="clause-number">1.1</span>
+      <span class="clause-text">
+        In this Agreement, unless the context otherwise requires:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 15px;">
+      <p style="margin-bottom: 10px;"><strong>"Agreement"</strong> means this Subcontract Agreement including all schedules, appendices and documents incorporated by reference.</p>
+      <p style="margin-bottom: 10px;"><strong>"Construction Contracts Act"</strong> means the Construction Contracts Act 2002 and any amendments or regulations made thereunder.</p>
+      <p style="margin-bottom: 10px;"><strong>"Contract Price"</strong> means the price stated in this Agreement for the execution and completion of the Subcontract Works.</p>
+      <p style="margin-bottom: 10px;"><strong>"Defects Liability Period"</strong> means the period specified in this Agreement during which the Subcontractor is liable to make good defects.</p>
+      <p style="margin-bottom: 10px;"><strong>"Head Contract"</strong> means the contract between the Head Contractor and the Principal for the execution of works of which the Subcontract Works form part.</p>
+      <p style="margin-bottom: 10px;"><strong>"Head Contractor"</strong> means the party named as the Head Contractor in this Agreement and includes its successors and permitted assigns.</p>
+      <p style="margin-bottom: 10px;"><strong>"Practical Completion"</strong> means when the Subcontract Works have been completed except for minor defects and omissions that do not prevent the works from being used for their intended purpose.</p>
+      <p style="margin-bottom: 10px;"><strong>"Subcontract Works"</strong> means the works described in this Agreement and all work necessary for the proper execution and completion thereof.</p>
+      <p style="margin-bottom: 10px;"><strong>"Subcontractor"</strong> means the party named as the Subcontractor in this Agreement and includes its successors and permitted assigns.</p>
+      <p style="margin-bottom: 10px;"><strong>"Variation"</strong> means any change, addition, omission or substitution to the Subcontract Works ordered by the Head Contractor.</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">1.2</span>
+      <span class="clause-text">
+        Words importing the singular include the plural and vice versa. Headings are for convenience only and do not affect interpretation.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>2. THE CONTRACTS</h2>
+
+    <div class="clause">
+      <span class="clause-number">2.1</span>
+      <span class="clause-text">
+        The Subcontractor acknowledges that the Subcontract Works form part of works to be executed under the Head Contract.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">2.2</span>
+      <span class="clause-text">
+        The Subcontractor shall be deemed to have full knowledge of all the provisions of the Head Contract insofar as they relate to the Subcontract Works and shall observe and comply with such provisions.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">2.3</span>
+      <span class="clause-text">
+        Where provisions of the Head Contract are incorporated into this Agreement by reference, such provisions shall be read as if "Head Contractor" were substituted for "Principal" or "Employer", and "Subcontractor" were substituted for "Contractor".
+      </span>
+    </div>
+
+    <h2>3. SUBCONTRACTOR'S BONDS AND GUARANTEES</h2>
+
+    <div class="clause">
+      <span class="clause-number">3.1</span>
+      <span class="clause-text">
+        If specified in this Agreement, the Subcontractor shall provide a performance bond from an approved surety for the percentage of the Contract Price stated, in the form required by the Head Contractor.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">3.2</span>
+      <span class="clause-text">
+        The performance bond shall remain in force until the expiry of the Defects Liability Period and the rectification of all defects, or until such earlier time as the Head Contractor may agree in writing.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">3.3</span>
+      <span class="clause-text">
+        If specified in this Agreement, the Subcontractor shall provide a parent company guarantee or other security in the form and amount required by the Head Contractor.
+      </span>
+    </div>
+
+    <h2>4. SUB-LETTING OR ASSIGNING</h2>
+
+    <div class="clause">
+      <span class="clause-number">4.1</span>
+      <span class="clause-text">
+        The Subcontractor shall not assign, novate or transfer this Agreement or any rights or obligations under it without the prior written consent of the Head Contractor.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">4.2</span>
+      <span class="clause-text">
+        The Subcontractor shall not sub-let any portion of the Subcontract Works without the prior written consent of the Head Contractor, which consent shall not be unreasonably withheld.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">4.3</span>
+      <span class="clause-text">
+        Any consent to sub-letting shall not relieve the Subcontractor from any liability or obligation under this Agreement, and the Subcontractor shall be responsible for the acts and omissions of all sub-contractors as if they were the acts and omissions of the Subcontractor.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>5. GENERAL OBLIGATIONS</h2>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.1 Care of Works</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.1.1</span>
+      <span class="clause-text">
+        The Subcontractor shall take full responsibility for the care of the Subcontract Works from commencement until Practical Completion.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.1.2</span>
+      <span class="clause-text">
+        The Subcontractor shall protect the Subcontract Works and all materials, goods, and equipment intended for incorporation into the works from loss or damage from any cause.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.1.3</span>
+      <span class="clause-text">
+        If any loss or damage occurs to the Subcontract Works, the Subcontractor shall notify the Head Contractor immediately and shall make good such loss or damage at its own cost, unless caused by the Head Contractor's negligence.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.1.4</span>
+      <span class="clause-text">
+        The Subcontractor shall protect and preserve any existing work, finishes, fixtures, and fittings that may be affected by the Subcontract Works.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.1.5</span>
+      <span class="clause-text">
+        The Subcontractor shall be liable for any damage caused to the Head Contract Works or to property of the Principal, the Head Contractor, or others arising from the execution of the Subcontract Works.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.2 Compliance with Legislation</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.2.1</span>
+      <span class="clause-text">
+        The Subcontractor shall comply with all statutes, regulations, bylaws, and requirements of any statutory authority applicable to the Subcontract Works.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.2.2</span>
+      <span class="clause-text">
+        The Subcontractor shall obtain and pay for all permits, licenses, and consents required for the execution of the Subcontract Works, unless otherwise stated in this Agreement.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.2.3</span>
+      <span class="clause-text">
+        The Subcontractor shall comply with all applicable health and safety legislation, including the Health and Safety at Work Act 2015, and shall maintain all required documentation.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.3 Site Conditions and Inspection of Surfaces</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.3.1</span>
+      <span class="clause-text">
+        The Subcontractor shall be deemed to have inspected and examined the site and its surroundings and to have satisfied itself as to the nature of the ground and subsoil, the form and nature of the site, the extent and nature of work and materials necessary for completion of the Subcontract Works, and the means of access to the site.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.3.2</span>
+      <span class="clause-text">
+        The Subcontractor shall inspect all surfaces to which work is to be applied and shall report any defects or unsuitable conditions to the Head Contractor before commencing work on such surfaces.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.4 Services</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.4.1</span>
+      <span class="clause-text">
+        The Head Contractor shall provide access to water and electricity for the execution of the Subcontract Works. The Subcontractor shall pay for all water and electricity consumed unless otherwise agreed.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.4.2</span>
+      <span class="clause-text">
+        The Subcontractor shall provide all other services, facilities, and equipment necessary for the execution of the Subcontract Works.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.4.3</span>
+      <span class="clause-text">
+        The Subcontractor shall locate and protect all existing services on or adjacent to the site and shall immediately report any damage to such services to the Head Contractor.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.5 Scaffolding</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.5.1</span>
+      <span class="clause-text">
+        Unless otherwise stated, the Subcontractor shall provide all scaffolding, hoarding, and safety equipment necessary for the execution of the Subcontract Works.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.5.2</span>
+      <span class="clause-text">
+        All scaffolding shall comply with applicable regulations and shall be erected and maintained by competent persons.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.5.3</span>
+      <span class="clause-text">
+        The Subcontractor shall provide safe access and working platforms for all persons who may need to inspect the Subcontract Works.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.5.4</span>
+      <span class="clause-text">
+        Where scaffolding is provided by the Head Contractor, the Subcontractor shall be responsible for any modifications or additions required for the Subcontract Works.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.5.5</span>
+      <span class="clause-text">
+        The Subcontractor shall remove all scaffolding upon completion of the Subcontract Works or when no longer required.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.6 Hoisting</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.6.1</span>
+      <span class="clause-text">
+        Unless otherwise stated, the Subcontractor shall provide all plant and equipment necessary for hoisting and transporting materials, including cranes, hoists, and lifting equipment. Where hoisting facilities are provided by the Head Contractor, the Subcontractor shall coordinate use of such facilities.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.7 Use of Work or Facilities Provided by Others</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.7.1</span>
+      <span class="clause-text">
+        The Subcontractor shall coordinate its work with other contractors and shall not interfere with or damage work executed by others. The Subcontractor shall be liable for any damage caused to work of others by the Subcontractor's operations.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.8 Cleaning</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.8.1</span>
+      <span class="clause-text">
+        The Subcontractor shall keep the site clean and tidy and shall remove all rubbish, debris, and surplus materials resulting from the Subcontract Works on a regular basis.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.8.2</span>
+      <span class="clause-text">
+        The Subcontractor shall clean all work surfaces and shall protect finished work from damage or deterioration.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.8.3</span>
+      <span class="clause-text">
+        On completion of the Subcontract Works, the Subcontractor shall clean all areas affected by the works and shall remove all equipment, materials, and rubbish from the site.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.8.4</span>
+      <span class="clause-text">
+        If the Subcontractor fails to clean as required, the Head Contractor may carry out such cleaning and deduct the cost from monies due to the Subcontractor.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.9 Health and Safety</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.9.1</span>
+      <span class="clause-text">
+        The Subcontractor acknowledges that it is a Person Conducting a Business or Undertaking (PCBU) under the Health and Safety at Work Act 2015 and shall comply with all duties and obligations under that Act.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.9.2</span>
+      <span class="clause-text">
+        The Subcontractor shall prepare and implement a health and safety plan for the Subcontract Works and shall provide a copy to the Head Contractor prior to commencing work.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.9.3</span>
+      <span class="clause-text">
+        The Subcontractor shall ensure that all workers are competent, properly trained, and provided with appropriate personal protective equipment.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.9.4</span>
+      <span class="clause-text">
+        The Subcontractor shall immediately report all accidents, incidents, and near misses to the Head Contractor and shall maintain all required health and safety records.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.9.5</span>
+      <span class="clause-text">
+        The Subcontractor shall comply with any site-specific health and safety requirements notified by the Head Contractor and shall attend all required health and safety meetings.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.10 Hours of Work</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.10.1</span>
+      <span class="clause-text">
+        The Subcontractor shall execute the Subcontract Works during normal working hours unless otherwise agreed with the Head Contractor. Work outside normal hours or on weekends and public holidays shall require the Head Contractor's prior written consent.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.11 Quality Assurance</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.11.1</span>
+      <span class="clause-text">
+        If specified in this Agreement, the Subcontractor shall implement and maintain a quality assurance system for the Subcontract Works and shall provide evidence of compliance when requested by the Head Contractor.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.12 Use of Alternative Materials or Products</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.12.1</span>
+      <span class="clause-text">
+        The Subcontractor shall not substitute any materials or products specified in the contract documents without the prior written approval of the Head Contractor.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.12.2</span>
+      <span class="clause-text">
+        Any request for substitution shall be accompanied by full technical data demonstrating that the proposed substitute is equal to or better than the specified product.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.12.3</span>
+      <span class="clause-text">
+        The Head Contractor's approval of any substitution shall not relieve the Subcontractor from any obligations under this Agreement.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.13 Shop Drawings, As-Built Drawings, Operating Manuals</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.13.1</span>
+      <span class="clause-text">
+        The Subcontractor shall prepare and submit shop drawings, fabrication drawings, samples, and other information as required for approval by the Head Contractor prior to fabrication or installation.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.13.2</span>
+      <span class="clause-text">
+        On completion, the Subcontractor shall provide as-built drawings, operation and maintenance manuals, warranties, and all other documentation required by the contract documents or reasonably requested by the Head Contractor.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.14 Communication Requirements</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.14.1</span>
+      <span class="clause-text">
+        The Subcontractor shall provide a competent supervisor or foreman on site at all times when work is being executed.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.14.2</span>
+      <span class="clause-text">
+        The Subcontractor shall provide contact details for its nominated representative and shall ensure that this person is available to respond to communications from the Head Contractor.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.14.3</span>
+      <span class="clause-text">
+        All formal communications, instructions, and notices shall be in writing and delivered in accordance with the notice provisions of this Agreement.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.15 Attendance at Meetings</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.15.1</span>
+      <span class="clause-text">
+        The Subcontractor shall attend all site meetings, coordination meetings, and other meetings as required by the Head Contractor. The Subcontractor's representative shall have authority to make decisions and commitments on behalf of the Subcontractor.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.16 Programme Requirements</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.16.1</span>
+      <span class="clause-text">
+        If required by this Agreement, the Subcontractor shall prepare and submit a detailed programme showing the timing and sequence of the Subcontract Works. The Subcontractor shall update the programme as required and shall comply with any master programme issued by the Head Contractor.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.17 Quality Plan Requirements</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.17.1</span>
+      <span class="clause-text">
+        If specified in this Agreement, the Subcontractor shall prepare and submit a quality plan detailing inspection and testing procedures, hold points, and quality control measures to be implemented for the Subcontract Works.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">5.18 Advance Notification</h3>
+
+    <div class="clause">
+      <span class="clause-number">5.18.1</span>
+      <span class="clause-text">
+        The Subcontractor shall give the Head Contractor reasonable advance notice of any work that is to be inspected or tested before being covered up or made inaccessible.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">5.18.2</span>
+      <span class="clause-text">
+        If the Subcontractor fails to give proper notice and covers up work before inspection, the Subcontractor shall uncover such work for inspection at its own cost and shall reinstate it to the Head Contractor's satisfaction.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>6. DESIGN AND PRODUCER STATEMENTS</h2>
+
+    <div class="clause">
+      <span class="clause-number">6.1</span>
+      <span class="clause-text">
+        Where the Subcontract Works include design work, the Subcontractor shall exercise all reasonable skill, care, and diligence in the preparation of such design work.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">6.2</span>
+      <span class="clause-text">
+        The Subcontractor shall provide all producer statements, design certificates, and other documentation required by the Building Act 2004 or other applicable legislation.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">6.3</span>
+      <span class="clause-text">
+        Where professional indemnity insurance is required, the Subcontractor shall maintain such insurance for the period specified and shall provide evidence of insurance to the Head Contractor.
+      </span>
+    </div>
+
+    <h2>7. INDEMNITY</h2>
+
+    <div class="clause">
+      <span class="clause-number">7.1</span>
+      <span class="clause-text">
+        The Subcontractor shall indemnify and keep indemnified the Head Contractor from and against all actions, suits, claims, demands, losses, charges, costs, and expenses which the Head Contractor may suffer or incur arising from:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) Any breach of this Agreement by the Subcontractor;</p>
+      <p style="margin-bottom: 8px;">(b) Any negligent act or omission of the Subcontractor or its employees, agents, or sub-contractors;</p>
+      <p style="margin-bottom: 8px;">(c) Death or injury to any person or loss of or damage to any property caused by the Subcontractor;</p>
+      <p style="margin-bottom: 8px;">(d) Any infringement of intellectual property rights in the execution of the Subcontract Works.</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">7.2</span>
+      <span class="clause-text">
+        This indemnity shall survive termination or completion of this Agreement.
+      </span>
+    </div>
+
+    <h2>8. INSURANCE</h2>
+
+    <div class="clause">
+      <span class="clause-number">8.1</span>
+      <span class="clause-text">
+        The Subcontractor shall effect and maintain the following insurances:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) Public liability insurance for the amount specified in this Agreement;</p>
+      <p style="margin-bottom: 8px;">(b) Employer's liability insurance as required by the Accident Compensation Act 2001;</p>
+      <p style="margin-bottom: 8px;">(c) Professional indemnity insurance (if design services are included) for the amount and period specified;</p>
+      <p style="margin-bottom: 8px;">(d) Such other insurances as may be specified in this Agreement.</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">8.2</span>
+      <span class="clause-text">
+        All insurance policies shall be effected with insurers approved by the Head Contractor and shall note the Head Contractor's interest.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">8.3</span>
+      <span class="clause-text">
+        The Subcontractor shall provide certificates of currency for all required insurances prior to commencing work and shall provide renewal certificates when policies are renewed.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">8.4</span>
+      <span class="clause-text">
+        The Subcontractor shall not cancel or reduce any insurance required by this Agreement without the Head Contractor's prior written consent.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">8.5</span>
+      <span class="clause-text">
+        Contract works insurance shall be arranged by the Head Contractor unless otherwise specified in this Agreement. Where the Subcontractor is required to effect contract works insurance, it shall do so for the full replacement value of the Subcontract Works.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>9. VARIATIONS</h2>
+
+    <div class="clause">
+      <span class="clause-number">9.1</span>
+      <span class="clause-text">
+        The Head Contractor may by written instruction direct the Subcontractor to execute variations to the Subcontract Works, including additions, omissions, substitutions, or changes to the sequence or timing of work.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">9.2</span>
+      <span class="clause-text">
+        The Subcontractor shall not execute any varied work without a written instruction from the Head Contractor.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">9.3</span>
+      <span class="clause-text">
+        Where a variation is instructed, the Subcontractor shall provide a quotation for the variation within the timeframe specified by the Head Contractor, showing the proposed adjustment to the Contract Price and any effect on the programme.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">9.4</span>
+      <span class="clause-text">
+        If agreement cannot be reached on the value of a variation, the variation shall be valued as follows:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) Where applicable, using rates and prices in this Agreement;</p>
+      <p style="margin-bottom: 8px;">(b) Where no applicable rates exist, using fair and reasonable rates based on the actual cost of labour, materials, and plant plus the percentage for overheads and profit stated in this Agreement;</p>
+      <p style="margin-bottom: 8px;">(c) Where agreed, on a daywork basis using the rates specified in this Agreement.</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">9.5</span>
+      <span class="clause-text">
+        Omissions from the Subcontract Works shall be valued using the rates and prices in this Agreement, reduced by any savings in overheads and profit that the Subcontractor has made as a result of the omission.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">9.6</span>
+      <span class="clause-text">
+        The Subcontractor shall keep accurate records of all daywork and shall submit daywork sheets for approval by the Head Contractor on a daily basis.
+      </span>
+    </div>
+
+    <h2>10. TIME</h2>
+
+    <div class="clause">
+      <span class="clause-number">10.1</span>
+      <span class="clause-text">
+        The Subcontractor shall commence the Subcontract Works on the date specified in this Agreement and shall proceed with due diligence and expedition to complete the works by the Completion Date.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">10.2</span>
+      <span class="clause-text">
+        Time shall be of the essence in this Agreement. If the Subcontractor fails to complete by the Completion Date, the Head Contractor may impose liquidated damages at the rate specified in this Agreement.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">10.3</span>
+      <span class="clause-text">
+        The Subcontractor shall be entitled to an extension of time if completion is delayed by:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) Variations instructed by the Head Contractor;</p>
+      <p style="margin-bottom: 8px;">(b) Delays caused by the Head Contractor;</p>
+      <p style="margin-bottom: 8px;">(c) Exceptionally adverse weather;</p>
+      <p style="margin-bottom: 8px;">(d) Force majeure events;</p>
+      <p style="margin-bottom: 8px;">(e) Any other cause beyond the Subcontractor's reasonable control.</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">10.4</span>
+      <span class="clause-text">
+        The Subcontractor shall give written notice of any delay or potential delay within 5 working days of becoming aware of the delay, stating the cause and expected duration.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">10.5</span>
+      <span class="clause-text">
+        The Head Contractor shall assess any claim for extension of time and shall notify the Subcontractor of the decision in writing. Extensions of time shall be granted fairly and reasonably having regard to all relevant circumstances.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">10.6</span>
+      <span class="clause-text">
+        If the Head Contractor requires early completion or acceleration of the Subcontract Works, this shall be treated as a variation and the Subcontractor shall be entitled to additional payment for any acceleration costs.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>11. DEFECTS</h2>
+
+    <div class="clause">
+      <span class="clause-number">11.1</span>
+      <span class="clause-text">
+        The Subcontractor warrants that all work will be executed in a proper and workmanlike manner using materials and workmanship of the quality specified in the contract documents.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">11.2</span>
+      <span class="clause-text">
+        The Defects Liability Period shall commence on the date of Practical Completion and shall continue for the period specified in this Agreement.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">11.3</span>
+      <span class="clause-text">
+        If any defects appear during the Defects Liability Period, the Head Contractor shall notify the Subcontractor in writing and the Subcontractor shall rectify such defects within a reasonable time at its own cost.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">11.4</span>
+      <span class="clause-text">
+        If the Subcontractor fails to rectify defects within a reasonable time, the Head Contractor may carry out the necessary work and recover the cost from the Subcontractor.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">11.5</span>
+      <span class="clause-text">
+        The Subcontractor's liability for defects shall not be limited to the Defects Liability Period if the defect arises from breach of statutory duty or negligence.
+      </span>
+    </div>
+
+    <h2>12. PAYMENTS</h2>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">12.1 Payment Claims</h3>
+
+    <div class="clause">
+      <span class="clause-number">12.1.1</span>
+      <span class="clause-text">
+        The Subcontractor shall submit payment claims in accordance with the Construction Contracts Act 2002 at the intervals specified in this Agreement.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">12.1.2</span>
+      <span class="clause-text">
+        Each payment claim shall include:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) A detailed breakdown of work completed;</p>
+      <p style="margin-bottom: 8px;">(b) A schedule of any variations;</p>
+      <p style="margin-bottom: 8px;">(c) Supporting documentation as required;</p>
+      <p style="margin-bottom: 8px;">(d) A statement that it is made under the Construction Contracts Act 2002.</p>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">12.2 Payment Schedule</h3>
+
+    <div class="clause">
+      <span class="clause-number">12.2.1</span>
+      <span class="clause-text">
+        The Head Contractor shall respond to each payment claim by providing a payment schedule within the timeframe specified in the Construction Contracts Act 2002.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">12.2.2</span>
+      <span class="clause-text">
+        If the Head Contractor proposes to pay less than the claimed amount, the payment schedule shall set out the reasons for the difference and the basis of calculation.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">12.3 Retention Money</h3>
+
+    <div class="clause">
+      <span class="clause-number">12.3.1</span>
+      <span class="clause-text">
+        If specified in this Agreement, the Head Contractor may withhold retention money in accordance with the Construction Contracts Act 2002.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">12.3.2</span>
+      <span class="clause-text">
+        Retention money shall be held on trust by the Head Contractor in accordance with the Act. If the amount held exceeds $100,000, it shall be deposited in a separate trust account.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">12.3.3</span>
+      <span class="clause-text">
+        Half of the retention shall be released upon Practical Completion, and the balance upon expiry of the Defects Liability Period, subject to rectification of all defects.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">12.4 Final Account</h3>
+
+    <div class="clause">
+      <span class="clause-number">12.4.1</span>
+      <span class="clause-text">
+        Within 20 working days of completion of the Defects Liability Period, the Subcontractor shall submit a final account showing the total amount claimed under this Agreement.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">12.4.2</span>
+      <span class="clause-text">
+        The Head Contractor shall assess the final account and shall issue a final payment schedule within 20 working days of receipt.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">12.4.3</span>
+      <span class="clause-text">
+        Payment of the final account (less any retention or amounts properly deducted) shall constitute full and final settlement of all amounts due under this Agreement.
+      </span>
+    </div>
+
+    <h3 style="font-size: 11pt; margin-top: 20px;">12.5 GST</h3>
+
+    <div class="clause">
+      <span class="clause-number">12.5.1</span>
+      <span class="clause-text">
+        All amounts stated in this Agreement are exclusive of GST unless otherwise specified. GST shall be added to all amounts payable.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">12.5.2</span>
+      <span class="clause-text">
+        If the parties have agreed that the Head Contractor may issue buyer-created tax invoices, the Head Contractor shall issue such invoices in accordance with the GST Act.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>13. DISPUTES AND REMEDIES</h2>
+
+    <div class="clause">
+      <span class="clause-number">13.1</span>
+      <span class="clause-text">
+        This Agreement is subject to the Construction Contracts Act 2002. Any party may refer a dispute arising under or in connection with this Agreement to adjudication in accordance with that Act.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">13.2</span>
+      <span class="clause-text">
+        Before referring a dispute to adjudication, the parties shall first attempt to resolve the dispute by negotiation.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">13.3</span>
+      <span class="clause-text">
+        If a dispute cannot be resolved by negotiation within 10 working days, either party may refer the dispute to adjudication by serving notice on the other party.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">13.4</span>
+      <span class="clause-text">
+        The parties shall comply with any adjudicator's determination unless and until the determination is overturned by subsequent arbitration or court proceedings.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">13.5</span>
+      <span class="clause-text">
+        Nothing in this clause shall prevent either party from seeking urgent interlocutory relief from a court.
+      </span>
+    </div>
+
+    <h2>14. DEFAULT</h2>
+
+    <div class="clause">
+      <span class="clause-number">14.1</span>
+      <span class="clause-text">
+        The Subcontractor shall be in default if:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) The Subcontractor fails to proceed with due diligence and expedition;</p>
+      <p style="margin-bottom: 8px;">(b) The Subcontractor fails to comply with any lawful instruction of the Head Contractor;</p>
+      <p style="margin-bottom: 8px;">(c) The Subcontractor abandons the Subcontract Works;</p>
+      <p style="margin-bottom: 8px;">(d) The Subcontractor becomes insolvent or bankrupt;</p>
+      <p style="margin-bottom: 8px;">(e) The Subcontractor commits any other substantial breach of this Agreement.</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">14.2</span>
+      <span class="clause-text">
+        If the Subcontractor is in default, the Head Contractor may give written notice requiring the default to be remedied within 5 working days.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">14.3</span>
+      <span class="clause-text">
+        If the Subcontractor fails to remedy the default within the specified time, the Head Contractor may:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) Suspend payment to the Subcontractor;</p>
+      <p style="margin-bottom: 8px;">(b) Engage others to complete the Subcontract Works and recover the additional costs from the Subcontractor;</p>
+      <p style="margin-bottom: 8px;">(c) Terminate this Agreement;</p>
+      <p style="margin-bottom: 8px;">(d) Exercise any other rights available at law or under this Agreement.</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">14.4</span>
+      <span class="clause-text">
+        If this Agreement is terminated for default, the Head Contractor shall not be liable to pay any further amounts to the Subcontractor until the Subcontract Works have been completed and the final cost ascertained. The Subcontractor shall be liable for any additional costs incurred by the Head Contractor.
+      </span>
+    </div>
+
+    <h2>15. URGENT WORK</h2>
+
+    <div class="clause">
+      <span class="clause-number">15.1</span>
+      <span class="clause-text">
+        If urgent work is required to prevent loss or damage or to comply with health and safety requirements, and the Head Contractor cannot contact the Subcontractor, the Head Contractor may carry out such urgent work and recover the cost from the Subcontractor.
+      </span>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">15.2</span>
+      <span class="clause-text">
+        The Head Contractor shall notify the Subcontractor of any urgent work carried out as soon as reasonably practicable.
+      </span>
+    </div>
+
+    <h2>16. SERVICE OF NOTICES</h2>
+
+    <div class="clause">
+      <span class="clause-number">16.1</span>
+      <span class="clause-text">
+        Any notice required to be given under this Agreement shall be in writing and may be delivered:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) By hand to the party's address stated in this Agreement;</p>
+      <p style="margin-bottom: 8px;">(b) By pre-paid post to that address;</p>
+      <p style="margin-bottom: 8px;">(c) By email to the email address stated in this Agreement.</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">16.2</span>
+      <span class="clause-text">
+        A notice shall be deemed to have been received:
+      </span>
+    </div>
+
+    <div style="margin-left: 30px; margin-top: 10px;">
+      <p style="margin-bottom: 8px;">(a) If delivered by hand, on the date of delivery;</p>
+      <p style="margin-bottom: 8px;">(b) If posted, on the third working day after posting;</p>
+      <p style="margin-bottom: 8px;">(c) If sent by email, on the date sent (unless sent after 5pm or on a non-working day, in which case on the next working day).</p>
+    </div>
+
+    <div class="clause">
+      <span class="clause-number">16.3</span>
+      <span class="clause-text">
+        Either party may change its address for service by giving written notice to the other party.
+      </span>
+    </div>
+
+    <div class="page-break"></div>
+
     <!-- EXECUTION -->
     <h1>Execution</h1>
 
