@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import SubcontractFormField, { FieldDefinition, FieldValue } from './SubcontractFormField';
 
@@ -9,7 +9,6 @@ interface SubcontractFormSectionProps {
   allValues: Record<string, string>;
   onChange: (fieldKey: string, fieldValue: string, comment: string) => void;
   disabled?: boolean;
-  showValidation?: boolean;
   defaultExpanded?: boolean;
 }
 
@@ -20,22 +19,9 @@ export default function SubcontractFormSection({
   allValues,
   onChange,
   disabled = false,
-  showValidation = false,
   defaultExpanded = false
 }: SubcontractFormSectionProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-
-  const isFieldRequired = (field: FieldDefinition): boolean => {
-    if (field.is_required) return true;
-
-    if (!field.required_when_json || Object.keys(field.required_when_json).length === 0) {
-      return false;
-    }
-
-    return Object.entries(field.required_when_json).every(([key, requiredValue]) => {
-      return allValues[key] === requiredValue;
-    });
-  };
 
   const isFieldVisible = (field: FieldDefinition): boolean => {
     if (!field.required_when_json || Object.keys(field.required_when_json).length === 0) {
@@ -48,46 +34,43 @@ export default function SubcontractFormSection({
   };
 
   const visibleFields = fields.filter(isFieldVisible);
-  const requiredFields = visibleFields.filter(isFieldRequired);
-  const completedFields = requiredFields.filter(field => {
+  const filledFields = visibleFields.filter(field => {
     const value = values[field.field_key]?.field_value;
     return value && value.trim() !== '';
   });
 
-  const completionPercentage = requiredFields.length > 0
-    ? Math.round((completedFields.length / requiredFields.length) * 100)
+  const completionPercentage = visibleFields.length > 0
+    ? Math.round((filledFields.length / visibleFields.length) * 100)
     : 100;
 
   const isComplete = completionPercentage === 100;
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+    <div className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800/50 shadow-lg">
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-700/50 transition-colors"
       >
         <div className="flex items-center gap-3">
           {isExpanded ? (
-            <ChevronDown className="w-5 h-5 text-gray-400" />
+            <ChevronDown className="w-5 h-5 text-slate-400" />
           ) : (
-            <ChevronRight className="w-5 h-5 text-gray-400" />
+            <ChevronRight className="w-5 h-5 text-slate-400" />
           )}
-          <h3 className="text-lg font-semibold text-gray-900">{sectionName}</h3>
-          {isComplete ? (
-            <CheckCircle2 className="w-5 h-5 text-green-600" />
-          ) : showValidation && !isComplete ? (
-            <AlertCircle className="w-5 h-5 text-amber-500" />
-          ) : null}
+          <h3 className="text-lg font-semibold text-white">{sectionName}</h3>
+          {isComplete && (
+            <CheckCircle2 className="w-5 h-5 text-green-500" />
+          )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-600">
-            {completedFields.length} / {requiredFields.length} required fields
+          <span className="text-sm text-slate-300">
+            {filledFields.length} / {visibleFields.length} fields
           </span>
-          <div className="w-32 bg-gray-200 rounded-full h-2">
+          <div className="w-32 bg-slate-700 rounded-full h-2">
             <div
               className={`h-2 rounded-full transition-all ${
-                isComplete ? 'bg-green-600' : 'bg-blue-600'
+                isComplete ? 'bg-green-500' : 'bg-blue-500'
               }`}
               style={{ width: `${completionPercentage}%` }}
             />
@@ -96,7 +79,7 @@ export default function SubcontractFormSection({
       </button>
 
       {isExpanded && (
-        <div className="px-6 py-4 space-y-6 border-t border-gray-200 bg-gray-50">
+        <div className="px-6 py-4 space-y-6 border-t border-slate-700 bg-slate-900/50">
           {visibleFields.map((field) => (
             <SubcontractFormField
               key={field.id}
@@ -105,7 +88,6 @@ export default function SubcontractFormSection({
               allValues={allValues}
               onChange={onChange}
               disabled={disabled}
-              showValidation={showValidation}
             />
           ))}
         </div>

@@ -10,6 +10,7 @@ export interface FieldDefinition {
   required_when_json: Record<string, string>;
   options: string[];
   help_text: string;
+  section: string;
   default_value?: string;
   validation_regex?: string;
 }
@@ -25,7 +26,6 @@ interface SubcontractFormFieldProps {
   allValues: Record<string, string>;
   onChange: (fieldKey: string, fieldValue: string, comment: string) => void;
   disabled?: boolean;
-  showValidation?: boolean;
 }
 
 export default function SubcontractFormField({
@@ -33,33 +33,20 @@ export default function SubcontractFormField({
   value,
   allValues,
   onChange,
-  disabled = false,
-  showValidation = false
+  disabled = false
 }: SubcontractFormFieldProps) {
   const [showComment, setShowComment] = useState(!!value.comment);
   const [showHelp, setShowHelp] = useState(false);
 
-  const isConditionallyRequired = (): boolean => {
-    if (!definition.required_when_json || Object.keys(definition.required_when_json).length === 0) {
-      return false;
-    }
-
-    return Object.entries(definition.required_when_json).every(([key, requiredValue]) => {
-      return allValues[key] === requiredValue;
-    });
-  };
-
-  const isFieldRequired = definition.is_required || isConditionallyRequired();
   const isFieldVisible = !definition.required_when_json ||
     Object.keys(definition.required_when_json).length === 0 ||
-    isConditionallyRequired();
+    Object.entries(definition.required_when_json).every(([key, requiredValue]) => {
+      return allValues[key] === requiredValue;
+    });
 
   if (!isFieldVisible) {
     return null;
   }
-
-  const isEmpty = !value.field_value || value.field_value.trim() === '';
-  const hasValidationError = showValidation && isFieldRequired && isEmpty;
 
   const handleValueChange = (newValue: string) => {
     onChange(definition.field_key, newValue, value.comment);
@@ -71,8 +58,8 @@ export default function SubcontractFormField({
 
   const renderInput = () => {
     const baseClasses = `w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-      hasValidationError ? 'border-red-500' : 'border-gray-300'
-    } ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`;
+      disabled ? 'bg-slate-800 text-slate-400 border-slate-600 cursor-not-allowed' : 'bg-slate-700 text-slate-50 border-slate-600 placeholder:text-slate-400'
+    }`;
 
     switch (definition.field_type) {
       case 'text':
@@ -149,16 +136,15 @@ export default function SubcontractFormField({
   return (
     <div className="space-y-2">
       <div className="flex items-start justify-between gap-2">
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-slate-200">
           {definition.field_label}
-          {isFieldRequired && <span className="text-red-500 ml-1">*</span>}
         </label>
         <div className="flex gap-1">
           {definition.help_text && (
             <button
               type="button"
               onClick={() => setShowHelp(!showHelp)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-slate-400 hover:text-slate-300 transition-colors"
               title="Show help"
             >
               <HelpCircle className="w-4 h-4" />
@@ -169,8 +155,8 @@ export default function SubcontractFormField({
             onClick={() => setShowComment(!showComment)}
             className={`transition-colors ${
               value.comment
-                ? 'text-blue-600 hover:text-blue-700'
-                : 'text-gray-400 hover:text-gray-600'
+                ? 'text-blue-400 hover:text-blue-300'
+                : 'text-slate-400 hover:text-slate-300'
             }`}
             title={showComment ? 'Hide comment' : 'Add comment'}
             disabled={disabled}
@@ -181,22 +167,16 @@ export default function SubcontractFormField({
       </div>
 
       {showHelp && definition.help_text && (
-        <div className="text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <div className="text-sm text-blue-200 bg-blue-900/30 border border-blue-700 rounded-lg p-3">
           {definition.help_text}
         </div>
       )}
 
       {renderInput()}
 
-      {hasValidationError && (
-        <p className="text-sm text-red-600">
-          This field is required
-        </p>
-      )}
-
       {showComment && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <label className="block text-xs font-medium text-gray-700 mb-1">
+        <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-3">
+          <label className="block text-xs font-medium text-slate-200 mb-1">
             Comment / Note
           </label>
           <textarea
@@ -204,7 +184,7 @@ export default function SubcontractFormField({
             onChange={(e) => handleCommentChange(e.target.value)}
             disabled={disabled}
             rows={2}
-            className="w-full px-2 py-1 text-sm border border-yellow-300 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 bg-white"
+            className="w-full px-2 py-1 text-sm border border-yellow-700 rounded focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 bg-slate-800 text-slate-200 placeholder:text-slate-400"
             placeholder="Add a note or clarification about this field..."
           />
         </div>

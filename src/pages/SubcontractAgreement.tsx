@@ -1,17 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, CheckCircle, AlertCircle, FileText, Eye, Loader2, Lock } from 'lucide-react';
+import { Save, CheckCircle, AlertCircle, FileText, Eye, Loader2, Lock, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
-import PageHeader from '../components/PageHeader';
 import SubcontractFormSection from '../components/SubcontractFormSection';
 import SubcontractChecklist from '../components/SubcontractChecklist';
 import { FieldDefinition, FieldValue } from '../components/SubcontractFormField';
-import {
-  SubcontractValidationEngine,
-  ValidationError,
-  groupErrorsBySection,
-  formatValidationReport
-} from '../lib/subcontract/validationEngine';
 import Toast from '../components/Toast';
 
 interface Agreement {
@@ -47,7 +40,6 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   const [fields, setFields] = useState<FieldDefinition[]>([]);
   const [values, setValues] = useState<Record<string, FieldValue>>({});
   const [sections, setSections] = useState<string[]>([]);
-  const [showValidation, setShowValidation] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
@@ -171,6 +163,25 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
     return bySection;
   };
 
+  const countFilledFields = (): { total: number; filled: number } => {
+    const visibleFields = fields.filter(f => {
+      if (!f.required_when_json || Object.keys(f.required_when_json).length === 0) {
+        return true;
+      }
+      const allValues = getAllValuesMap();
+      return Object.entries(f.required_when_json).every(([key, requiredValue]) => {
+        return allValues[key] === requiredValue;
+      });
+    });
+
+    const filled = visibleFields.filter(f => {
+      const value = values[f.field_key]?.field_value;
+      return value && value.trim() !== '';
+    }).length;
+
+    return { total: visibleFields.length, filled };
+  };
+
   const handleSaveDraft = async () => {
     if (isLocked) return;
 
@@ -190,30 +201,11 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   const handleReviewAndSave = async () => {
     if (isLocked) return;
 
-    setShowValidation(true);
     setIsSaving(true);
-
     try {
-      const validationEngine = new SubcontractValidationEngine(fields, values);
-      const result = validationEngine.validate();
-
       await saveFieldValues();
-
-      if (!result.isValid) {
-        await updateAgreementStatus('in_review');
-        showToast(
-          `Saved for review. ${result.errors.length} validation issue${result.errors.length !== 1 ? 's' : ''} found.`,
-          'error'
-        );
-
-        const firstError = result.errors[0];
-        if (firstError) {
-          scrollToSection(firstError.section);
-        }
-      } else {
-        await updateAgreementStatus('in_review');
-        showToast('Saved for review. All validation checks passed.', 'success');
-      }
+      await updateAgreementStatus('in_review');
+      showToast('Saved for review successfully', 'success');
     } catch (error) {
       console.error('Error during review:', error);
       showToast('Failed to save for review', 'error');
@@ -225,24 +217,16 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   const handleComplete = async () => {
     if (isLocked) return;
 
-    const validationEngine = new SubcontractValidationEngine(fields, values);
-    const { canComplete, blockingErrors } = validationEngine.canComplete();
+    const { total, filled } = countFilledFields();
+    const percentage = total > 0 ? Math.round((filled / total) * 100) : 100;
 
-    if (!canComplete) {
-      setShowValidation(true);
-      showToast(
-        `Cannot complete: ${blockingErrors.length} required field${blockingErrors.length !== 1 ? 's' : ''} missing`,
-        'error'
-      );
+    let confirmMessage = 'Are you sure you want to complete this agreement? This will lock the agreement and prevent further edits.';
 
-      const firstError = blockingErrors[0];
-      if (firstError) {
-        scrollToSection(firstError.section);
-      }
-      return;
+    if (filled < total) {
+      confirmMessage = `You are completing this agreement with ${filled} of ${total} fields filled (${percentage}%). This will lock the agreement and prevent further edits. Proceed?`;
     }
 
-    if (!confirm('Are you sure you want to complete this agreement? This will lock the agreement and prevent further edits.')) {
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -329,36 +313,57 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
 
   if (!agreement || !template) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center h-screen bg-slate-900">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
   }
 
   const statusColors = {
-    draft: 'bg-gray-100 text-gray-800',
-    in_review: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800'
+    draft: 'bg-slate-800 text-slate-400 border border-slate-700',
+    in_review: 'bg-blue-900/30 text-blue-400 border border-blue-700',
+    completed: 'bg-green-900/30 text-green-400 border border-green-700'
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <PageHeader
-        title={`${template.template_name} - ${agreement.subcontractor_name}`}
-        subtitle={`Agreement ${agreement.agreement_number || agreement.id}`}
-      />
+    <div className="min-h-screen bg-slate-900">
+      {/* Header */}
+      <div className="bg-slate-800/50 border-b border-slate-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="flex items-center gap-2 text-slate-300 hover:text-white mb-4 transition-colors"
+            >
+              <ArrowLeft size={20} />
+              Back to Contract Manager
+            </button>
+          )}
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white mb-1">
+                {template.template_name} - {agreement.subcontractor_name}
+              </h1>
+              <p className="text-slate-400">Agreement {agreement.agreement_number || agreement.id}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex gap-6">
-          <div className="flex-1 space-y-6">
-            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+          <div className="flex-1 space-y-4">
+            {/* Status Bar */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[agreement.status]}`}>
-                    {agreement.status.replace('_', ' ').toUpperCase()}
+                  <span className={`px-3 py-1 rounded text-sm font-medium ${statusColors[agreement.status]}`}>
+                    {agreement.status === 'draft' && 'Draft'}
+                    {agreement.status === 'in_review' && 'In Review'}
+                    {agreement.status === 'completed' && 'Completed'}
                   </span>
                   {isLocked && (
-                    <div className="flex items-center gap-2 text-amber-600">
+                    <div className="flex items-center gap-2 text-orange-400">
                       <Lock className="w-4 h-4" />
                       <span className="text-sm font-medium">Locked</span>
                     </div>
@@ -368,7 +373,7 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                   {template.master_pdf_url && (
                     <button
                       onClick={() => setShowPdfViewer(!showPdfViewer)}
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+                      className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 border border-slate-600 transition-colors flex items-center gap-2"
                     >
                       <Eye className="w-4 h-4" />
                       {showPdfViewer ? 'Hide' : 'View'} Master PDF
@@ -377,7 +382,7 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                   <button
                     onClick={handleSaveDraft}
                     disabled={isLocked || isSaving}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 border border-slate-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Save Draft
@@ -402,20 +407,22 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
               </div>
             </div>
 
+            {/* PDF Viewer */}
             {showPdfViewer && template.master_pdf_url && (
-              <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-gray-600" />
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg p-4">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-white">
+                  <FileText className="w-5 h-5 text-slate-400" />
                   Master PDF Reference
                 </h3>
                 <iframe
                   src={template.master_pdf_url}
-                  className="w-full h-96 border border-gray-300 rounded"
+                  className="w-full h-96 border border-slate-600 rounded bg-white"
                   title="Master PDF"
                 />
               </div>
             )}
 
+            {/* Form Sections */}
             <div className="space-y-4">
               {sections.map(sectionName => {
                 const sectionFields = fields.filter(f => f.section === sectionName);
@@ -431,7 +438,6 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                       allValues={getAllValuesMap()}
                       onChange={handleFieldChange}
                       disabled={isLocked}
-                      showValidation={showValidation}
                       defaultExpanded={false}
                     />
                   </div>
@@ -440,6 +446,7 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
             </div>
           </div>
 
+          {/* Checklist Sidebar */}
           <div className="w-96 flex-shrink-0 sticky top-6 self-start">
             <SubcontractChecklist
               sections={sections}
@@ -447,7 +454,6 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
               values={values}
               allValues={getAllValuesMap()}
               onNavigateToSection={scrollToSection}
-              showValidation={showValidation}
             />
           </div>
         </div>
