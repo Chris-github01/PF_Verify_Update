@@ -32,7 +32,11 @@ export function generateSA2017AgreementHTML(
   project: any,
   organisationLogoUrl?: string
 ): string {
-  console.log('[SA-2017] Generating comprehensive agreement PDF');
+  console.log('[SA-2017] Generating comprehensive 51-page agreement PDF with exact visual replication');
+
+  // Construction images URLs - these should be hosted on your server or R2
+  const constructionImage1 = 'https://images.pexels.com/photos/159358/construction-site-build-construction-work-159358.jpeg?auto=compress&cs=tinysrgb&w=800';
+  const constructionImage2 = 'https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=800';
 
   // Define the proper section order matching SA-2017 standard
   const sectionOrder = [
@@ -133,7 +137,7 @@ export function generateSA2017AgreementHTML(
     </div>`;
   };
 
-  // Generate comprehensive SA-2017 document
+  // Generate comprehensive SA-2017 document matching exact PDF layout
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -144,7 +148,7 @@ export function generateSA2017AgreementHTML(
   <style>
     @page {
       size: A4;
-      margin: 25mm 20mm;
+      margin: 20mm 25mm 25mm 25mm;
     }
 
     * {
@@ -154,110 +158,226 @@ export function generateSA2017AgreementHTML(
     }
 
     body {
-      font-family: 'Times New Roman', Times, serif;
-      font-size: 11pt;
-      line-height: 1.5;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+      line-height: 1.4;
       color: #000;
       background: white;
     }
 
     .container {
-      max-width: 170mm;
+      max-width: 100%;
       margin: 0 auto;
     }
 
-    /* Cover Page */
+    /* Cover Page - Exact Match */
     .cover-page {
-      text-align: center;
       page-break-after: always;
-      padding-top: 80px;
+      position: relative;
     }
 
-    .cover-logo {
-      max-height: 80px;
-      margin-bottom: 40px;
+    .cover-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 30px;
+      gap: 15px;
     }
 
-    .cover-title {
-      font-size: 22pt;
+    .cover-image {
+      width: 48%;
+      height: 120px;
+      object-fit: cover;
+      border: 1px solid #ddd;
+    }
+
+    .cover-title-section {
+      text-align: center;
+      margin: 40px 0 30px 0;
+    }
+
+    .cover-main-title {
+      font-size: 28pt;
       font-weight: bold;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+      margin-bottom: 8px;
+      color: #000;
+      letter-spacing: 2px;
     }
 
     .cover-subtitle {
-      font-size: 14pt;
-      margin-bottom: 60px;
-      color: #333;
-    }
-
-    .cover-details {
-      margin-top: 60px;
-      text-align: left;
-      border: 2px solid #000;
-      padding: 30px;
-    }
-
-    .cover-detail-row {
-      display: flex;
-      margin-bottom: 20px;
-      border-bottom: 1px solid #ccc;
-      padding-bottom: 10px;
-    }
-
-    .cover-detail-label {
+      font-size: 18pt;
       font-weight: bold;
-      width: 150px;
-      flex-shrink: 0;
+      margin-bottom: 15px;
+      color: #000;
     }
 
-    .cover-detail-value {
+    .cover-act-reference {
+      font-size: 11pt;
+      color: #666;
+      margin-top: 10px;
+    }
+
+    .cover-form-section {
+      border: 2px solid #000;
+      padding: 25px;
+      margin: 40px 0;
+    }
+
+    .cover-form-row {
+      display: flex;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px dotted #999;
+      align-items: baseline;
+    }
+
+    .cover-form-row:last-child {
+      border-bottom: none;
+    }
+
+    .cover-form-label {
+      font-weight: bold;
+      width: 140px;
+      flex-shrink: 0;
+      font-size: 10pt;
+    }
+
+    .cover-form-value {
       flex: 1;
+      font-size: 10pt;
+      padding-left: 10px;
+    }
+
+    .cover-footer {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 8pt;
+      color: #666;
+    }
+
+    /* Foreword Section */
+    .foreword-page {
+      page-break-after: always;
+      padding: 20px 0;
+    }
+
+    .foreword-title {
+      font-size: 16pt;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+    }
+
+    .foreword-text {
+      font-size: 10pt;
+      line-height: 1.6;
+      text-align: justify;
+      margin-bottom: 12px;
+    }
+
+    /* Table of Contents */
+    .toc-page {
+      page-break-after: always;
+      padding: 20px 0;
+    }
+
+    .toc-title {
+      font-size: 16pt;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 25px;
+      text-transform: uppercase;
+    }
+
+    .toc-section {
+      margin-bottom: 15px;
+    }
+
+    .toc-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      border-bottom: 1px dotted #ccc;
+      font-size: 10pt;
+    }
+
+    .toc-item-title {
+      font-weight: normal;
+    }
+
+    .toc-item-page {
+      font-weight: bold;
+      min-width: 30px;
+      text-align: right;
+    }
+
+    .toc-subsection {
+      margin-left: 20px;
+      margin-top: 5px;
     }
 
     /* Document Structure */
     h1 {
-      font-size: 16pt;
+      font-size: 14pt;
       font-weight: bold;
-      margin: 20px 0 12px 0;
+      margin: 25px 0 15px 0;
       text-align: center;
       text-transform: uppercase;
       page-break-after: avoid;
     }
 
     h2 {
-      font-size: 14pt;
+      font-size: 12pt;
+      font-weight: bold;
+      margin: 20px 0 12px 0;
+      page-break-after: avoid;
+      text-transform: uppercase;
+    }
+
+    h3 {
+      font-size: 11pt;
       font-weight: bold;
       margin: 15px 0 10px 0;
       page-break-after: avoid;
     }
 
-    h3 {
-      font-size: 12pt;
+    h4 {
+      font-size: 10pt;
       font-weight: bold;
       margin: 12px 0 8px 0;
       page-break-after: avoid;
     }
 
     .clause {
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       page-break-inside: avoid;
+      font-size: 10pt;
+      line-height: 1.5;
     }
 
     .clause-number {
       font-weight: bold;
       display: inline-block;
-      min-width: 40px;
+      min-width: 50px;
+      vertical-align: top;
     }
 
     .clause-text {
       display: inline;
+      text-align: justify;
     }
 
     .sub-clause {
-      margin-left: 40px;
-      margin-top: 8px;
+      margin-left: 50px;
+      margin-top: 10px;
+    }
+
+    .clause-indent {
+      margin-left: 25px;
     }
 
     /* Recitals */
@@ -310,65 +430,290 @@ export function generateSA2017AgreementHTML(
       line-height: 1.6;
     }
 
-    /* Schedule/Table */
+    /* Appendix Sections */
+    .appendix-page {
+      page-break-before: always;
+      padding: 20px 0;
+    }
+
+    .appendix-title {
+      font-size: 14pt;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+    }
+
+    .appendix-subtitle {
+      font-size: 11pt;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .appendix-section {
+      margin-bottom: 20px;
+    }
+
+    .appendix-heading {
+      font-size: 11pt;
+      font-weight: bold;
+      margin: 15px 0 10px 0;
+      text-decoration: underline;
+    }
+
+    /* Schedule/Table - Exact PDF Match */
     .schedule-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 20px 0;
+      margin: 15px 0;
       page-break-inside: avoid;
+      font-size: 9pt;
     }
 
     .schedule-table th {
-      background: #333;
-      color: white;
-      padding: 10px;
+      background: #e8e8e8;
+      color: #000;
+      padding: 8px 10px;
       text-align: left;
       font-weight: bold;
-      border: 1px solid #333;
-    }
-
-    .schedule-table td {
-      padding: 10px;
-      border: 1px solid #999;
+      border: 1px solid #000;
       vertical-align: top;
     }
 
-    .schedule-table tr:nth-child(even) {
-      background: #f9f9f9;
+    .schedule-table td {
+      padding: 8px 10px;
+      border: 1px solid #000;
+      vertical-align: top;
+      background: white;
+    }
+
+    .schedule-table tr.shaded {
+      background: #f5f5f5;
+    }
+
+    .schedule-row-header {
+      font-weight: bold;
+      background: #f0f0f0;
+    }
+
+    /* Checkbox styles */
+    .checkbox-group {
+      margin: 10px 0;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      margin: 5px 0;
+      font-size: 10pt;
+    }
+
+    .checkbox {
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid #000;
+      display: inline-block;
+      margin-right: 8px;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .checkbox.checked::after {
+      content: '✓';
+      position: absolute;
+      top: -3px;
+      left: 2px;
+      font-size: 12pt;
+      font-weight: bold;
+    }
+
+    /* Form fields */
+    .form-field {
+      margin: 12px 0;
+      page-break-inside: avoid;
+    }
+
+    .form-field-label {
+      font-weight: bold;
+      margin-bottom: 5px;
+      font-size: 10pt;
+    }
+
+    .form-field-value {
+      border-bottom: 1px solid #000;
+      min-height: 20px;
+      padding: 2px 5px;
+      font-size: 10pt;
+    }
+
+    .form-field-inline {
+      display: inline-block;
+      border-bottom: 1px solid #000;
+      min-width: 150px;
+      padding: 0 5px;
+      margin: 0 5px;
+    }
+
+    /* Notes and Important Text */
+    .note-box {
+      background: #fffbeb;
+      border: 1px solid #fbbf24;
+      border-left: 4px solid #f59e0b;
+      padding: 12px;
+      margin: 15px 0;
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+
+    .important-box {
+      background: #eff6ff;
+      border: 1px solid #3b82f6;
+      border-left: 4px solid #2563eb;
+      padding: 12px;
+      margin: 15px 0;
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+
+    .warning-box {
+      background: #fef2f2;
+      border: 1px solid #f87171;
+      border-left: 4px solid #dc2626;
+      padding: 12px;
+      margin: 15px 0;
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+
+    /* Lists */
+    .bullet-list {
+      margin: 10px 0 10px 30px;
+    }
+
+    .bullet-list li {
+      margin: 5px 0;
+      font-size: 10pt;
+      line-height: 1.5;
+    }
+
+    .numbered-list {
+      margin: 10px 0 10px 30px;
+      counter-reset: item;
+      list-style: none;
+    }
+
+    .numbered-list li {
+      margin: 5px 0;
+      font-size: 10pt;
+      line-height: 1.5;
+      counter-increment: item;
+    }
+
+    .numbered-list li:before {
+      content: counter(item) ". ";
+      font-weight: bold;
+      margin-right: 5px;
     }
 
     /* Signature Block */
     .signature-section {
-      margin-top: 60px;
+      margin-top: 50px;
       page-break-inside: avoid;
+    }
+
+    .signature-party-title {
+      font-size: 11pt;
+      font-weight: bold;
+      margin-bottom: 20px;
+      text-decoration: underline;
     }
 
     .signature-block {
-      margin: 40px 0;
+      margin: 30px 0;
       page-break-inside: avoid;
     }
 
+    .signature-field {
+      margin: 15px 0;
+    }
+
     .signature-line {
-      border-top: 2px solid #000;
-      width: 250px;
-      margin-top: 60px;
+      border-bottom: 1.5px solid #000;
+      width: 300px;
+      margin-top: 40px;
       padding-top: 5px;
+      font-size: 9pt;
+      color: #666;
     }
 
     .signature-details {
-      margin-top: 10px;
-      font-size: 10pt;
+      margin-top: 8px;
+      font-size: 9pt;
     }
 
-    /* Footer */
+    /* Page Footers */
+    .page-footer {
+      position: fixed;
+      bottom: 15mm;
+      left: 25mm;
+      right: 25mm;
+      font-size: 7pt;
+      color: #666;
+      text-align: center;
+      border-top: 1px solid #ccc;
+      padding-top: 8px;
+    }
+
+    .copyright-footer {
+      font-size: 7pt;
+      color: #666;
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 10px;
+      border-top: 1px solid #ccc;
+    }
+
+    /* Document Footer */
     .document-footer {
       margin-top: 50px;
       padding-top: 20px;
       border-top: 1px solid #999;
-      font-size: 9pt;
+      font-size: 8pt;
       color: #666;
       text-align: center;
     }
+
+    /* Text Formatting */
+    .bold {
+      font-weight: bold;
+    }
+
+    .italic {
+      font-style: italic;
+    }
+
+    .underline {
+      text-decoration: underline;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .text-justify {
+      text-align: justify;
+    }
+
+    /* Spacing utilities */
+    .mb-1 { margin-bottom: 8px; }
+    .mb-2 { margin-bottom: 12px; }
+    .mb-3 { margin-bottom: 16px; }
+    .mb-4 { margin-bottom: 20px; }
+    .mt-1 { margin-top: 8px; }
+    .mt-2 { margin-top: 12px; }
+    .mt-3 { margin-top: 16px; }
+    .mt-4 { margin-top: 20px; }
 
     /* Print Optimization */
     @media print {
@@ -391,46 +736,307 @@ export function generateSA2017AgreementHTML(
 <body>
   <div class="container">
 
-    <!-- COVER PAGE -->
+    <!-- COVER PAGE (Page 1) -->
     <div class="cover-page">
-      ${organisationLogoUrl ? `<img src="${organisationLogoUrl}" alt="Organisation Logo" class="cover-logo">` : ''}
+      <!-- Construction Images Header -->
+      <div class="cover-header">
+        <img src="${constructionImage1}" alt="Construction Site 1" class="cover-image">
+        <img src="${constructionImage2}" alt="Construction Site 2" class="cover-image">
+      </div>
 
-      <div class="cover-title">Subcontract Agreement</div>
-      <div class="cover-subtitle">SA-2017<br/>Under the Construction Contracts Act 2002</div>
+      <!-- Title Section -->
+      <div class="cover-title-section">
+        <div class="cover-main-title">SUBCONTRACT AGREEMENT</div>
+        <div class="cover-subtitle">SA - 2017</div>
+        <div class="cover-act-reference">Under the Construction Contracts Act 2002</div>
+      </div>
 
-      <div class="cover-details">
-        <div class="cover-detail-row">
-          <div class="cover-detail-label">Agreement No:</div>
-          <div class="cover-detail-value">${agreement.agreement_number || 'SA-2017-XXX'}</div>
+      <!-- Form Details Box -->
+      <div class="cover-form-section">
+        <div class="cover-form-row">
+          <div class="cover-form-label">Project:</div>
+          <div class="cover-form-value">${getFieldValue('project_name') || '___________________________________'}</div>
         </div>
-        <div class="cover-detail-row">
-          <div class="cover-detail-label">Project:</div>
-          <div class="cover-detail-value">${getFieldValue('project_name')}</div>
+        <div class="cover-form-row">
+          <div class="cover-form-label">Trade:</div>
+          <div class="cover-form-value">${project?.trade || '___________________________________'}</div>
         </div>
-        <div class="cover-detail-row">
-          <div class="cover-detail-label">Location:</div>
-          <div class="cover-detail-value">${getFieldValue('project_location')}</div>
+        <div class="cover-form-row">
+          <div class="cover-form-label">Subcontractor:</div>
+          <div class="cover-form-value">${getFieldValue('subcontractor_name') || '___________________________________'}</div>
         </div>
-        <div class="cover-detail-row">
-          <div class="cover-detail-label">Head Contractor:</div>
-          <div class="cover-detail-value">${getFieldValue('head_contractor_name')}</div>
+        <div class="cover-form-row">
+          <div class="cover-form-label">Reference:</div>
+          <div class="cover-form-value">${agreement.agreement_number || '___________________________________'}</div>
         </div>
-        <div class="cover-detail-row">
-          <div class="cover-detail-label">Subcontractor:</div>
-          <div class="cover-detail-value">${getFieldValue('subcontractor_name')}</div>
-        </div>
-        <div class="cover-detail-row">
-          <div class="cover-detail-label">Trade:</div>
-          <div class="cover-detail-value">${project?.trade || 'N/A'}</div>
-        </div>
-        <div class="cover-detail-row">
-          <div class="cover-detail-label">Date:</div>
-          <div class="cover-detail-value">${getFieldValue('contract_date')}</div>
-        </div>
+      </div>
+
+      <!-- Copyright Footer -->
+      <div class="cover-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
       </div>
     </div>
 
-    <!-- AGREEMENT DOCUMENT -->
+    <!-- FOREWORD (Pages 2-3) -->
+    <div class="foreword-page">
+      <h1 class="foreword-title">Foreword</h1>
+
+      <p class="foreword-text">
+        This subcontract agreement (SA-2017) has been produced jointly by the Registered Master Builders Association
+        of New Zealand and the New Zealand Specialist Trade Contractors Federation to meet the needs of the
+        construction industry.
+      </p>
+
+      <p class="foreword-text">
+        The agreement is designed for use between a head contractor and a subcontractor for the execution of
+        specialist trade work forming part of a larger construction project. It is suitable for use on projects
+        of any size and complexity.
+      </p>
+
+      <p class="foreword-text">
+        <strong>Key Features:</strong>
+      </p>
+
+      <ul class="bullet-list">
+        <li>Complies with the Construction Contracts Act 2002</li>
+        <li>Provides a fair and balanced framework for both parties</li>
+        <li>Includes comprehensive general conditions covering all aspects of the subcontract relationship</li>
+        <li>Allows for customization through specific conditions and schedules</li>
+        <li>Promotes good practice in health and safety, quality management, and dispute resolution</li>
+      </ul>
+
+      <p class="foreword-text">
+        <strong>Using This Agreement:</strong>
+      </p>
+
+      <p class="foreword-text">
+        This agreement consists of several parts:
+      </p>
+
+      <ul class="bullet-list">
+        <li><strong>The Agreement Page</strong> - Sets out the essential terms including the parties, the works,
+        price, and time for completion</li>
+        <li><strong>Subcontract Specific Conditions</strong> - Details the specific requirements for this particular
+        subcontract including payment terms, retention, insurance, and other key matters</li>
+        <li><strong>General Conditions</strong> - Standard conditions that apply to all subcontracts using this form</li>
+        <li><strong>Appendices</strong> - Schedules providing additional detail on scope of works, pricing,
+        programmes, and other matters</li>
+      </ul>
+
+      <p class="foreword-text">
+        The agreement should be read as a whole. In the event of any inconsistency between documents, the order
+        of precedence is as follows:
+      </p>
+
+      <ol class="numbered-list">
+        <li>The Agreement page and Subcontract Specific Conditions</li>
+        <li>The Appendices and Schedules</li>
+        <li>The General Conditions</li>
+        <li>Any other documents expressly incorporated into the subcontract</li>
+      </ol>
+
+      <p class="foreword-text">
+        <strong>Legal Advice:</strong>
+      </p>
+
+      <p class="foreword-text">
+        While this agreement has been carefully prepared and reviewed by legal experts, it is a standard form
+        document that may not suit every situation. Parties are advised to seek independent legal advice before
+        entering into this agreement, particularly where:
+      </p>
+
+      <ul class="bullet-list">
+        <li>The subcontract value is substantial</li>
+        <li>The works involve significant technical complexity or risk</li>
+        <li>Design responsibilities are being transferred to the subcontractor</li>
+        <li>Special insurance or bonding arrangements are required</li>
+      </ul>
+
+      <p class="foreword-text">
+        <strong>The Construction Contracts Act 2002:</strong>
+      </p>
+
+      <p class="foreword-text">
+        This agreement is subject to the Construction Contracts Act 2002 (the Act). The Act provides important
+        protections for parties to construction contracts, including:
+      </p>
+
+      <ul class="bullet-list">
+        <li>The right to make and receive regular progress payments</li>
+        <li>The right to suspend work if payment is not made</li>
+        <li>The right to refer disputes to rapid adjudication</li>
+        <li>Protection of retention money held by the head contractor</li>
+      </ul>
+
+      <p class="foreword-text">
+        Both parties should familiarize themselves with their rights and obligations under the Act. Information
+        is available from the Ministry of Business, Innovation and Employment website at www.mbie.govt.nz.
+      </p>
+
+      <p class="foreword-text">
+        <strong>Industry Standards:</strong>
+      </p>
+
+      <p class="foreword-text">
+        This agreement incorporates and refers to various industry standards and codes of practice. Where such
+        standards are referenced, parties should ensure they understand the requirements and have the capability
+        to comply.
+      </p>
+
+      <p class="foreword-text">
+        The Registered Master Builders Association and the New Zealand Specialist Trade Contractors Federation
+        recommend the use of qualified, licensed, and experienced contractors for all construction work.
+      </p>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- TABLE OF CONTENTS (Pages 4-5) -->
+    <div class="toc-page">
+      <h1 class="toc-title">Contents</h1>
+
+      <div class="toc-section">
+        <div class="toc-item">
+          <div class="toc-item-title"><strong>Foreword</strong></div>
+          <div class="toc-item-page">2</div>
+        </div>
+        <div class="toc-item">
+          <div class="toc-item-title"><strong>Contents</strong></div>
+          <div class="toc-item-page">4</div>
+        </div>
+        <div class="toc-item">
+          <div class="toc-item-title"><strong>Subcontract Agreement</strong></div>
+          <div class="toc-item-page">6</div>
+        </div>
+        <div class="toc-item">
+          <div class="toc-item-title"><strong>Subcontract Specific Conditions</strong></div>
+          <div class="toc-item-page">7</div>
+        </div>
+      </div>
+
+      <div class="toc-section">
+        <div class="toc-item">
+          <div class="toc-item-title"><strong>Subcontract General Conditions</strong></div>
+          <div class="toc-item-page">16</div>
+        </div>
+        <div class="toc-subsection">
+          <div class="toc-item">
+            <div class="toc-item-title">1. Interpretation and Definitions</div>
+            <div class="toc-item-page">16</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">2. The Contracts</div>
+            <div class="toc-item-page">18</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">3. Subcontractor's Bonds and Guarantees</div>
+            <div class="toc-item-page">19</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">4. Sub-letting or Assigning</div>
+            <div class="toc-item-page">20</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">5. General Obligations</div>
+            <div class="toc-item-page">21</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">6. Design and Producer Statements</div>
+            <div class="toc-item-page">26</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">7. Indemnity</div>
+            <div class="toc-item-page">27</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">8. Insurance</div>
+            <div class="toc-item-page">28</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">9. Variations</div>
+            <div class="toc-item-page">30</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">10. Time</div>
+            <div class="toc-item-page">32</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">11. Defects</div>
+            <div class="toc-item-page">34</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">12. Payments</div>
+            <div class="toc-item-page">35</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">13. Disputes and Remedies</div>
+            <div class="toc-item-page">37</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">14. Default</div>
+            <div class="toc-item-page">38</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">15. Urgent Work</div>
+            <div class="toc-item-page">39</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">16. Service of Notices</div>
+            <div class="toc-item-page">40</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toc-section">
+        <div class="toc-item">
+          <div class="toc-item-title"><strong>Appendices</strong></div>
+          <div class="toc-item-page">41</div>
+        </div>
+        <div class="toc-subsection">
+          <div class="toc-item">
+            <div class="toc-item-title">Appendix A - Scope of Works</div>
+            <div class="toc-item-page">42</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">Appendix B1 - Pricing Schedule (Lump Sum)</div>
+            <div class="toc-item-page">44</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">Appendix B2 - Pricing Schedule (Rates)</div>
+            <div class="toc-item-page">45</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">Appendix C - Programme</div>
+            <div class="toc-item-page">46</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">Appendix D - Quality Plan</div>
+            <div class="toc-item-page">47</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">Appendix E1 - Health and Safety Plan</div>
+            <div class="toc-item-page">48</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">Appendix E2 - Site Safety Rules</div>
+            <div class="toc-item-page">49</div>
+          </div>
+          <div class="toc-item">
+            <div class="toc-item-title">Appendix E3 - Insurance Requirements</div>
+            <div class="toc-item-page">50</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- AGREEMENT PAGE (Page 6) -->
+    <div class="page-break"></div>
     <h1>Subcontract Agreement</h1>
 
     <div class="recitals">
@@ -487,169 +1093,655 @@ export function generateSA2017AgreementHTML(
     ${renderFieldDisplay('Project Name', 'project_name')}
     ${renderFieldDisplay('Project Location', 'project_location')}
 
-    <h3>2. Parties to the Agreement</h3>
+    <!-- SUBCONTRACT SPECIFIC CONDITIONS (Pages 7-15) -->
+    <div class="page-break"></div>
+    <h1>Subcontract Specific Conditions</h1>
 
-    ${hasFieldValue('head_contractor_name') || hasFieldValue('head_contractor_address') || hasFieldValue('head_contractor_contact') ? `
-    <h4 style="font-size: 11pt; margin: 15px 0 10px 0;">Head Contractor Details:</h4>
-    ${renderFieldDisplay('Name', 'head_contractor_name')}
-    ${renderFieldDisplay('Address', 'head_contractor_address')}
-    ${renderFieldDisplay('Contact Person', 'head_contractor_contact')}
-    ${renderFieldDisplay('Email', 'head_contractor_email')}
-    ${renderFieldDisplay('Phone', 'head_contractor_phone')}
-    ` : ''}
+    <p class="mb-3" style="font-size: 10pt; text-align: justify;">
+      The following Specific Conditions supplement and, where inconsistent, take precedence over the General
+      Conditions. Complete all applicable sections. Where a section is not applicable, write "N/A".
+    </p>
 
-    ${hasFieldValue('subcontractor_name') || hasFieldValue('subcontractor_address') || hasFieldValue('subcontractor_contact') ? `
-    <h4 style="font-size: 11pt; margin: 20px 0 10px 0;">Subcontractor Details:</h4>
-    ${renderFieldDisplay('Name', 'subcontractor_name')}
-    ${renderFieldDisplay('Address', 'subcontractor_address')}
-    ${renderFieldDisplay('Contact Person', 'subcontractor_contact')}
-    ${renderFieldDisplay('Email', 'subcontractor_email')}
-    ${renderFieldDisplay('Phone', 'subcontractor_phone')}
-    ` : ''}
+    <!-- Section 1: The Parties -->
+    <h2>1. THE PARTIES</h2>
 
-    <h3>3. Subcontract Works</h3>
-    <div class="clause">
-      <span class="clause-number">3.1</span>
-      <span class="clause-text">
-        The Subcontractor shall execute and complete the Subcontract Works described below and any
-        works reasonably incidental thereto in accordance with this Agreement.
-      </span>
-    </div>
-    ${renderFieldDisplay('Description of Subcontract Works', 'subcontract_works_description')}
-    ${renderFieldDisplay('Scope Documents', 'scope_documents')}
-    ${renderFieldDisplay('Exclusions from Scope', 'exclusions')}
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold; background: #f0f0f0;">HEAD CONTRACTOR</td>
+        <td style="width: 70%;"></td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Name:</td>
+        <td>${getFieldValue('head_contractor_name')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Address:</td>
+        <td>${getFieldValue('head_contractor_address')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Contact Person:</td>
+        <td>${getFieldValue('head_contractor_contact')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Phone:</td>
+        <td>${getFieldValue('head_contractor_phone')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Email:</td>
+        <td>${getFieldValue('head_contractor_email')}</td>
+      </tr>
+    </table>
 
-    <h3>4. Contract Price</h3>
-    <div class="clause">
-      <span class="clause-number">4.1</span>
-      <span class="clause-text">
-        The Contract Price for the Subcontract Works shall be:
-      </span>
-    </div>
-    ${renderFieldDisplay('Contract Price (excluding GST)', 'contract_price')}
-    ${renderFieldDisplay('Price Basis', 'contract_price_basis')}
-    ${renderFieldDisplay('GST Inclusive', 'gst_inclusive')}
+    <table class="schedule-table" style="margin-top: 20px;">
+      <tr>
+        <td style="width: 30%; font-weight: bold; background: #f0f0f0;">SUBCONTRACTOR</td>
+        <td style="width: 70%;"></td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Name:</td>
+        <td>${getFieldValue('subcontractor_name')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Address:</td>
+        <td>${getFieldValue('subcontractor_address')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Contact Person:</td>
+        <td>${getFieldValue('subcontractor_contact')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Phone:</td>
+        <td>${getFieldValue('subcontractor_phone')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Email:</td>
+        <td>${getFieldValue('subcontractor_email')}</td>
+      </tr>
+    </table>
 
-    <h3>5. Time for Completion</h3>
-    ${renderFieldDisplay('Commencement Date', 'commencement_date')}
-    ${renderFieldDisplay('Completion Date', 'completion_date')}
-    ${renderFieldDisplay('Programme Provided', 'programme_provided')}
-    ${renderFieldDisplay('Liquidated Damages Applicable', 'liquidated_damages_applicable')}
-    ${hasFieldValue('liquidated_damages_rate') && getFieldValueRaw('liquidated_damages_applicable') === 'Yes' ? renderFieldDisplay('Liquidated Damages Rate (per day)', 'liquidated_damages_rate') : ''}
+    <!-- Section 2: The Project -->
+    <h2 style="margin-top: 25px;">2. THE PROJECT</h2>
 
-    <h3>6. Payment Terms</h3>
-    <div class="clause">
-      <span class="clause-number">6.1</span>
-      <span class="clause-text">
-        The Subcontractor shall submit payment claims in accordance with the Construction Contracts
-        Act 2002 and the following provisions:
-      </span>
-    </div>
-    ${renderFieldDisplay('Payment Claim Frequency', 'payment_claim_frequency')}
-    ${renderFieldDisplay('Payment Claim Date', 'payment_claim_date')}
-    ${renderFieldDisplay('Payment Terms (days)', 'payment_terms_days')}
-    ${renderFieldDisplay('Buyer-Created Tax Invoice', 'buyer_created_tax_invoice')}
-    ${getFieldValueRaw('buyer_created_tax_invoice') === 'Yes' ? `
-    <div class="clause" style="margin-top: 15px; background: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b;">
-      <strong>Note:</strong> The parties agree that the Head Contractor may issue tax invoices on behalf
-      of the Subcontractor in accordance with section 24(7) of the Goods and Services Tax Act 1985.
-    </div>` : ''}
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Project Name:</td>
+        <td style="width: 70%;">${getFieldValue('project_name')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Project Location:</td>
+        <td>${getFieldValue('project_location')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Head Contract Reference:</td>
+        <td>${getFieldValue('head_contract_reference')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Principal/Client:</td>
+        <td>${getFieldValue('principal_name')}</td>
+      </tr>
+    </table>
 
-    ${hasFieldValue('retention_required') || hasFieldValue('retention_percentage') ? `
-    <h3>7. Retention</h3>
-    ${renderFieldDisplay('Retention Required', 'retention_required')}
-    ${getFieldValueRaw('retention_required') === 'Yes' && hasFieldValue('retention_percentage') ? `
-    ${renderFieldDisplay('Retention Percentage', 'retention_percentage')}
-    <div class="clause" style="margin-top: 15px;">
-      <span class="clause-number">7.1</span>
-      <span class="clause-text">
-        The Head Contractor may withhold retention monies in accordance with the percentage specified
-        above. Half of the retention shall be released upon Practical Completion, and the balance upon
-        expiry of the Defects Liability Period, subject to the rectification of any defects.
-      </span>
-    </div>` : ''}
-    ` : ''}
+    <!-- Section 3: The Subcontract Works -->
+    <h2 style="margin-top: 25px;">3. THE SUBCONTRACT WORKS</h2>
 
-    ${hasFieldValue('defects_liability_period') || hasFieldValue('defects_notification_process') || hasFieldValue('warranty_requirements') || hasFieldValue('maintenance_manuals_required') ? `
-    <h3>8. Defects Liability</h3>
-    ${renderFieldDisplay('Defects Liability Period (months)', 'defects_liability_period')}
-    ${renderFieldDisplay('Defects Notification Process', 'defects_notification_process')}
-    ${renderFieldDisplay('Warranty Requirements', 'warranty_requirements')}
-    ${renderFieldDisplay('Maintenance Manuals Required', 'maintenance_manuals_required')}
-    ` : ''}
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Trade Package:</td>
+        <td style="width: 70%;">${project?.trade || 'N/A'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; vertical-align: top;">Description of Works:</td>
+        <td>${getFieldValue('subcontract_works_description') || 'See Appendix A - Scope of Works'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; vertical-align: top;">Inclusions:</td>
+        <td>${getFieldValue('scope_inclusions') || 'As detailed in contract documents'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; vertical-align: top;">Exclusions:</td>
+        <td>${getFieldValue('exclusions') || 'As detailed in contract documents'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Drawings Reference:</td>
+        <td>${getFieldValue('drawings_list') || 'As per project drawing register'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Specifications Reference:</td>
+        <td>${getFieldValue('specifications_list') || 'As per project specifications'}</td>
+      </tr>
+    </table>
 
-    ${hasFieldValue('public_liability_required') || hasFieldValue('contract_works_insurance') || hasFieldValue('professional_indemnity_required') ? `
-    <h3>9. Insurance</h3>
-    ${renderFieldDisplay('Public Liability Insurance Required', 'public_liability_required')}
-    ${hasFieldValue('public_liability_amount') && getFieldValueRaw('public_liability_required') === 'Yes' ? renderFieldDisplay('Public Liability Cover Amount', 'public_liability_amount') : ''}
-    ${renderFieldDisplay('Contract Works Insurance', 'contract_works_insurance')}
-    ${renderFieldDisplay('Professional Indemnity Required', 'professional_indemnity_required')}
-    ${hasFieldValue('professional_indemnity_amount') && getFieldValueRaw('professional_indemnity_required') === 'Yes' ? renderFieldDisplay('Professional Indemnity Amount', 'professional_indemnity_amount') : ''}
-    ` : ''}
+    <!-- Section 4: Contract Price -->
+    <h2 style="margin-top: 25px;">4. CONTRACT PRICE</h2>
 
-    ${hasFieldValue('performance_bond_required') || hasFieldValue('parent_company_guarantee') ? `
-    <h3>10. Bonds and Guarantees</h3>
-    ${renderFieldDisplay('Performance Bond Required', 'performance_bond_required')}
-    ${getFieldValueRaw('performance_bond_required') === 'Yes' ? `
-    ${renderFieldDisplay('Performance Bond Percentage', 'performance_bond_percentage')}
-    ${renderFieldDisplay('Performance Bond Value', 'performance_bond_value')}
-    ${renderFieldDisplay('Performance Bond Expiry Date', 'performance_bond_expiry')}
-    ` : ''}
-    ${renderFieldDisplay('Parent Company Guarantee Required', 'parent_company_guarantee')}
-    ` : ''}
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Contract Price (excl GST):</td>
+        <td style="width: 70%;">${getFieldValue('contract_price')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Price Basis:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('contract_price_basis') === 'Lump Sum' ? 'checked' : ''}"></div>
+              <span>Lump Sum (See Appendix B1)</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('contract_price_basis') === 'Schedule of Rates' ? 'checked' : ''}"></div>
+              <span>Schedule of Rates (See Appendix B2)</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('contract_price_basis') === 'Cost Plus' ? 'checked' : ''}"></div>
+              <span>Cost Plus (Margin: ${getFieldValue('cost_plus_margin') || '____%'})</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">GST Inclusive:</td>
+        <td>${getFieldValue('gst_inclusive') || 'Yes - GST to be added to all amounts'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Price Includes:</td>
+        <td>All labour, materials, plant, equipment, and services necessary for complete execution of the works</td>
+      </tr>
+    </table>
 
-    ${hasFieldValue('variation_approval_threshold') || hasFieldValue('variation_process') || hasFieldValue('daywork_rates_agreed') ? `
-    <h3>11. Variations</h3>
-    <div class="clause">
-      <span class="clause-number">11.1</span>
-      <span class="clause-text">
-        The Head Contractor may direct variations to the Subcontract Works. The Subcontractor shall
-        not commence any varied work without written authorization from the Head Contractor.
-      </span>
-    </div>
-    ${renderFieldDisplay('Variation Approval Threshold', 'variation_approval_threshold')}
-    ${renderFieldDisplay('Variation Process', 'variation_process')}
-    ${renderFieldDisplay('Daywork Rates Agreed', 'daywork_rates_agreed')}
-    ${hasFieldValue('daywork_schedule') && getFieldValueRaw('daywork_rates_agreed') === 'Yes' ? renderFieldDisplay('Daywork Schedule Reference', 'daywork_schedule') : ''}
-    ` : ''}
+    <!-- Section 5: Time -->
+    <h2 style="margin-top: 25px;">5. TIME</h2>
 
-    ${hasFieldValue('dispute_resolution_process') || hasFieldValue('adjudication_agreement') ? `
-    <h3>12. Dispute Resolution</h3>
-    ${renderFieldDisplay('Dispute Resolution Process', 'dispute_resolution_process')}
-    ${renderFieldDisplay('Adjudication Agreement (CCA 2002)', 'adjudication_agreement')}
-    <div class="clause" style="margin-top: 15px; background: #eff6ff; padding: 15px; border-left: 4px solid #2563eb;">
-      <strong>Construction Contracts Act 2002:</strong> The parties acknowledge that they have been
-      advised of their rights under the Construction Contracts Act 2002, including the right to refer
-      disputes to adjudication. Any party may refer a dispute to adjudication at any time.
-    </div>
-    ` : ''}
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Commencement Date:</td>
+        <td style="width: 70%;">${getFieldValue('commencement_date')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Completion Date:</td>
+        <td>${getFieldValue('completion_date')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Contract Duration:</td>
+        <td>${getFieldValue('contract_duration') || 'As per programme'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Programme Required:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('programme_provided') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Yes - See Appendix C</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('programme_provided') === 'No' ? 'checked' : ''}"></div>
+              <span>No - Works to be coordinated with Head Contractor's master programme</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Liquidated Damages:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('liquidated_damages_applicable') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Applicable - Rate: ${getFieldValue('liquidated_damages_rate') || '$_______ per day'}</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('liquidated_damages_applicable') === 'No' ? 'checked' : ''}"></div>
+              <span>Not Applicable</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
 
-    ${hasFieldValue('health_safety_plan_required') || hasFieldValue('quality_assurance_required') || hasFieldValue('assignment_allowed') || hasFieldValue('governing_law') ? `
-    <h3>13. General Provisions</h3>
-    ${renderFieldDisplay('Health & Safety Plan Required', 'health_safety_plan_required')}
-    ${renderFieldDisplay('Quality Assurance Required', 'quality_assurance_required')}
-    ${renderFieldDisplay('Assignment of Subcontract Allowed', 'assignment_allowed')}
-    ${renderFieldDisplay('Governing Law', 'governing_law')}
-    ` : ''}
+    <!-- Section 6: Payment Terms -->
+    <h2 style="margin-top: 25px;">6. PAYMENT TERMS</h2>
 
-    ${hasFieldValue('drawings_list') || hasFieldValue('specifications_list') || hasFieldValue('other_documents') ? `
-    <h3>14. Contract Documents</h3>
-    <div class="clause">
-      <span class="clause-number">14.1</span>
-      <span class="clause-text">
-        The following documents form part of this Agreement and shall be read together:
-      </span>
-    </div>
-    ${renderFieldDisplay('Drawings List', 'drawings_list')}
-    ${renderFieldDisplay('Specifications List', 'specifications_list')}
-    ${renderFieldDisplay('Other Contract Documents', 'other_documents')}
-    ` : ''}
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Payment Claim Frequency:</td>
+        <td style="width: 70%;">
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('payment_claim_frequency') === 'Monthly' ? 'checked' : ''}"></div>
+              <span>Monthly</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('payment_claim_frequency') === 'Fortnightly' ? 'checked' : ''}"></div>
+              <span>Fortnightly</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('payment_claim_frequency') === 'On Completion' ? 'checked' : ''}"></div>
+              <span>On Completion</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('payment_claim_frequency') === 'Other' ? 'checked' : ''}"></div>
+              <span>Other: ${getFieldValue('payment_claim_frequency_other') || '_____________'}</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Payment Claim Date:</td>
+        <td>${getFieldValue('payment_claim_date') || 'By the 20th of each month'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Payment Terms:</td>
+        <td>${getFieldValue('payment_terms_days') || '20'} working days from receipt of valid payment claim</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Buyer-Created Tax Invoice:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('buyer_created_tax_invoice') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Yes - Head Contractor to issue tax invoices on behalf of Subcontractor</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('buyer_created_tax_invoice') === 'No' ? 'checked' : ''}"></div>
+              <span>No - Subcontractor to provide tax invoices</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Section 7: Retention -->
+    <h2 style="margin-top: 25px;">7. RETENTION</h2>
+
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Retention Applicable:</td>
+        <td style="width: 70%;">
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('retention_required') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Yes</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('retention_required') === 'No' ? 'checked' : ''}"></div>
+              <span>No</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      ${getFieldValueRaw('retention_required') === 'Yes' ? `
+      <tr>
+        <td style="font-weight: bold;">Retention Percentage:</td>
+        <td>${getFieldValue('retention_percentage') || '5'}%</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Maximum Retention:</td>
+        <td>${getFieldValue('max_retention_amount') || 'No maximum specified'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Release of First Half:</td>
+        <td>Upon Practical Completion</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Release of Second Half:</td>
+        <td>Upon expiry of Defects Liability Period and rectification of all defects</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Trust Account Required:</td>
+        <td>If retention exceeds $100,000</td>
+      </tr>
+      ` : ''}
+    </table>
+
+    <!-- Section 8: Defects Liability -->
+    <h2 style="margin-top: 25px;">8. DEFECTS LIABILITY</h2>
+
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Defects Liability Period:</td>
+        <td style="width: 70%;">${getFieldValue('defects_liability_period') || '12'} months from Practical Completion</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Notification Process:</td>
+        <td>${getFieldValue('defects_notification_process') || 'Written notice to Subcontractor within 5 working days of discovery'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Rectification Period:</td>
+        <td>${getFieldValue('defects_rectification_period') || 'Within reasonable time as specified by Head Contractor'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Warranties Required:</td>
+        <td>${getFieldValue('warranty_requirements') || 'Manufacturer warranties for all equipment and materials'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Maintenance Manuals:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('maintenance_manuals_required') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Required - To be provided on completion</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('maintenance_manuals_required') === 'No' ? 'checked' : ''}"></div>
+              <span>Not Required</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Section 9: Insurance -->
+    <h2 style="margin-top: 25px;">9. INSURANCE</h2>
+
+    <table class="schedule-table">
+      <tr>
+        <td colspan="2" style="font-weight: bold; background: #f0f0f0;">PUBLIC LIABILITY INSURANCE</td>
+      </tr>
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Required:</td>
+        <td style="width: 70%;">
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('public_liability_required') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Yes</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('public_liability_required') === 'No' ? 'checked' : ''}"></div>
+              <span>No</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      ${getFieldValueRaw('public_liability_required') === 'Yes' ? `
+      <tr>
+        <td style="font-weight: bold;">Minimum Cover:</td>
+        <td>${getFieldValue('public_liability_amount') || '$10,000,000'}</td>
+      </tr>
+      ` : ''}
+      <tr>
+        <td colspan="2" style="font-weight: bold; background: #f0f0f0; padding-top: 15px;">CONTRACT WORKS INSURANCE</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Responsibility:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('contract_works_insurance') === 'Head Contractor' ? 'checked' : ''}"></div>
+              <span>Head Contractor to arrange</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('contract_works_insurance') === 'Subcontractor' ? 'checked' : ''}"></div>
+              <span>Subcontractor to arrange</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="font-weight: bold; background: #f0f0f0; padding-top: 15px;">PROFESSIONAL INDEMNITY INSURANCE</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Required:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('professional_indemnity_required') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Yes (if design services included)</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('professional_indemnity_required') === 'No' ? 'checked' : ''}"></div>
+              <span>No / Not Applicable</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      ${getFieldValueRaw('professional_indemnity_required') === 'Yes' ? `
+      <tr>
+        <td style="font-weight: bold;">Minimum Cover:</td>
+        <td>${getFieldValue('professional_indemnity_amount') || '$2,000,000'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Period of Cover:</td>
+        <td>${getFieldValue('professional_indemnity_period') || '7 years from completion'}</td>
+      </tr>
+      ` : ''}
+      <tr>
+        <td colspan="2" style="padding-top: 10px;">
+          <div class="note-box">
+            <strong>Note:</strong> Certificates of currency must be provided prior to commencement and upon renewal.
+            All policies must note the Head Contractor's interest. See Appendix E3 for detailed insurance requirements.
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Section 10: Bonds and Guarantees -->
+    <h2 style="margin-top: 25px;">10. BONDS AND GUARANTEES</h2>
+
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Performance Bond:</td>
+        <td style="width: 70%;">
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('performance_bond_required') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Required</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('performance_bond_required') === 'No' ? 'checked' : ''}"></div>
+              <span>Not Required</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      ${getFieldValueRaw('performance_bond_required') === 'Yes' ? `
+      <tr>
+        <td style="font-weight: bold;">Bond Percentage:</td>
+        <td>${getFieldValue('performance_bond_percentage') || '10'}% of Contract Price</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Bond Value:</td>
+        <td>${getFieldValue('performance_bond_value')}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Expiry Date:</td>
+        <td>${getFieldValue('performance_bond_expiry') || 'End of Defects Liability Period'}</td>
+      </tr>
+      ` : ''}
+      <tr>
+        <td style="font-weight: bold;">Parent Company Guarantee:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('parent_company_guarantee') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Required</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('parent_company_guarantee') === 'No' ? 'checked' : ''}"></div>
+              <span>Not Required</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Section 11: Variations -->
+    <h2 style="margin-top: 25px;">11. VARIATIONS</h2>
+
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Approval Required:</td>
+        <td style="width: 70%;">Written authorization required for all variations</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Threshold for Quote:</td>
+        <td>${getFieldValue('variation_approval_threshold') || 'All variations over $1,000'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Valuation Method:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('variation_valuation_method')?.includes('Contract Rates') ? 'checked' : ''}"></div>
+              <span>Contract rates where applicable</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('variation_valuation_method')?.includes('Fair Rates') ? 'checked' : ''}"></div>
+              <span>Fair and reasonable rates</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('variation_valuation_method')?.includes('Daywork') ? 'checked' : ''}"></div>
+              <span>Daywork (if agreed)</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Daywork Rates:</td>
+        <td>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('daywork_rates_agreed') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Agreed - ${getFieldValue('daywork_schedule') || 'See schedule'}</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('daywork_rates_agreed') === 'No' ? 'checked' : ''}"></div>
+              <span>Not agreed - To be negotiated if required</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Overheads & Profit:</td>
+        <td>${getFieldValue('variation_overhead_profit') || '15% on direct costs'}</td>
+      </tr>
+    </table>
+
+    <!-- Section 12: Health and Safety -->
+    <h2 style="margin-top: 25px;">12. HEALTH AND SAFETY</h2>
+
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">H&S Plan Required:</td>
+        <td style="width: 70%;">
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('health_safety_plan_required') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Yes - See Appendix E1</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('health_safety_plan_required') === 'No' ? 'checked' : ''}"></div>
+              <span>No - To comply with site H&S plan</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Site Safety Rules:</td>
+        <td>See Appendix E2 - Must be acknowledged before site access</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">PCBU Responsibilities:</td>
+        <td>Subcontractor acknowledges duties under Health and Safety at Work Act 2015</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Site Induction:</td>
+        <td>Required for all personnel before commencing work</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Incident Reporting:</td>
+        <td>All incidents, accidents and near-misses must be reported to Head Contractor immediately</td>
+      </tr>
+    </table>
+
+    <!-- Section 13: Quality Assurance -->
+    <h2 style="margin-top: 25px;">13. QUALITY ASSURANCE</h2>
+
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 30%; font-weight: bold;">Quality Plan Required:</td>
+        <td style="width: 70%;">
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('quality_assurance_required') === 'Yes' ? 'checked' : ''}"></div>
+              <span>Yes - See Appendix D</span>
+            </div>
+            <div class="checkbox-item">
+              <div class="checkbox ${getFieldValueRaw('quality_assurance_required') === 'No' ? 'checked' : ''}"></div>
+              <span>No - Standard quality control applies</span>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Inspections:</td>
+        <td>${getFieldValue('inspection_requirements') || 'As per project quality requirements'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Testing:</td>
+        <td>${getFieldValue('testing_requirements') || 'As specified in contract documents'}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;">Producer Statements:</td>
+        <td>Required for all relevant building consent work</td>
+      </tr>
+    </table>
+
+    <!-- Section 14: Special Conditions -->
+    <h2 style="margin-top: 25px;">14. SPECIAL CONDITIONS</h2>
 
     ${hasFieldValue('special_conditions_text') ? `
-    <h3>15. Special Conditions</h3>
-    <div class="field-display">
-      <div class="field-value">${getFieldValue('special_conditions_text')}</div>
-    </div>` : ''}
+    <div style="border: 1px solid #ccc; padding: 15px; min-height: 100px; background: white;">
+      ${getFieldValue('special_conditions_text').split('\n').map((line: string) => `<p style="margin-bottom: 8px;">${escapeHtml(line)}</p>`).join('')}
+    </div>
+    ` : `
+    <div style="border: 1px solid #ccc; padding: 15px; min-height: 100px; background: white; color: #999; font-style: italic;">
+      No special conditions specified. If there are any additional terms or conditions specific to this
+      subcontract that are not covered in the General Conditions, they should be clearly stated here.
+    </div>
+    `}
+
+    <!-- Section 15: Contract Documents -->
+    <h2 style="margin-top: 25px;">15. CONTRACT DOCUMENTS</h2>
+
+    <p class="mb-2" style="font-size: 10pt;">
+      The following documents form part of this Subcontract and shall be read together. In the event of
+      any inconsistency, the order of precedence shall be as listed below:
+    </p>
+
+    <table class="schedule-table">
+      <tr>
+        <td style="width: 5%; text-align: center; font-weight: bold;">1.</td>
+        <td style="width: 95%;">This Subcontract Agreement and Subcontract Specific Conditions</td>
+      </tr>
+      <tr>
+        <td style="text-align: center; font-weight: bold;">2.</td>
+        <td>Appendices A to E (as applicable)</td>
+      </tr>
+      <tr>
+        <td style="text-align: center; font-weight: bold;">3.</td>
+        <td>Subcontract General Conditions</td>
+      </tr>
+      <tr>
+        <td style="text-align: center; font-weight: bold;">4.</td>
+        <td>Project Drawings: ${getFieldValue('drawings_list') || 'As per drawing register'}</td>
+      </tr>
+      <tr>
+        <td style="text-align: center; font-weight: bold;">5.</td>
+        <td>Project Specifications: ${getFieldValue('specifications_list') || 'As per specification index'}</td>
+      </tr>
+      <tr>
+        <td style="text-align: center; font-weight: bold;">6.</td>
+        <td>Other Documents: ${getFieldValue('other_documents') || 'N/A'}</td>
+      </tr>
+    </table>
+
+    <div class="important-box" style="margin-top: 20px;">
+      <strong>Construction Contracts Act 2002:</strong> This Agreement is subject to the Construction Contracts
+      Act 2002. Both parties acknowledge that they have been advised of their rights under the Act, including
+      the right to make progress payments and to refer disputes to adjudication.
+    </div>
+
+    <div class="copyright-footer">
+      ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+    </div>
 
     <!-- GENERAL CONDITIONS -->
     <h1 style="text-align: center; margin: 30px 0 20px 0;">GENERAL CONDITIONS</h1>
@@ -1567,7 +2659,456 @@ export function generateSA2017AgreementHTML(
       </span>
     </div>
 
-    <!-- EXECUTION -->
+    <!-- APPENDICES SECTION -->
+    <div class="page-break"></div>
+    <h1>APPENDICES</h1>
+
+    <p class="mb-3" style="font-size: 10pt; text-align: justify;">
+      The following appendices form part of this Subcontract Agreement. Complete all applicable appendices
+      and attach as required. If an appendix is not applicable, mark it as "N/A".
+    </p>
+
+    <!-- APPENDIX A - SCOPE OF WORKS -->
+    <div class="appendix-page">
+      <div class="appendix-title">APPENDIX A</div>
+      <div class="appendix-subtitle">Scope of Works</div>
+
+      <h3 class="appendix-heading">1. General Description</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 80px; background: white; margin-bottom: 15px;">
+        ${getFieldValue('subcontract_works_description') || 'Detailed description of the subcontract works to be inserted here.'}
+      </div>
+
+      <h3 class="appendix-heading">2. Work Included</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 80px; background: white; margin-bottom: 15px;">
+        ${getFieldValue('scope_inclusions') || `
+        <ul class="bullet-list">
+          <li>All labour, materials, plant and equipment necessary for complete execution of the works</li>
+          <li>All work necessary to integrate with adjacent trades</li>
+          <li>Cleaning and protection of work</li>
+          <li>Testing and commissioning as specified</li>
+          <li>As-built documentation and warranties</li>
+        </ul>
+        `}
+      </div>
+
+      <h3 class="appendix-heading">3. Work Excluded</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 60px; background: white; margin-bottom: 15px;">
+        ${getFieldValue('exclusions') || 'Exclusions to be clearly stated here to avoid disputes.'}
+      </div>
+
+      <h3 class="appendix-heading">4. Key Performance Requirements</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 60px; background: white;">
+        ${getFieldValue('performance_requirements') || 'Any specific performance standards, tolerances, or requirements.'}
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- APPENDIX B1 - PRICING SCHEDULE (LUMP SUM) -->
+    <div class="appendix-page">
+      <div class="appendix-title">APPENDIX B1</div>
+      <div class="appendix-subtitle">Pricing Schedule - Lump Sum</div>
+
+      <p class="mb-3" style="font-size: 9pt;">
+        This appendix applies where the Contract Price is a Lump Sum. Provide breakdown as required.
+      </p>
+
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th style="width: 50%;">Description</th>
+            <th style="width: 25%; text-align: right;">Amount (excl GST)</th>
+            <th style="width: 25%; text-align: right;">% of Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Supply of Materials</td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;">%</td>
+          </tr>
+          <tr>
+            <td>Labour</td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;">%</td>
+          </tr>
+          <tr>
+            <td>Plant and Equipment</td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;">%</td>
+          </tr>
+          <tr>
+            <td>Preliminaries</td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;">%</td>
+          </tr>
+          <tr>
+            <td>Margin (Overheads & Profit)</td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;">%</td>
+          </tr>
+          <tr style="font-weight: bold; background: #f0f0f0;">
+            <td>TOTAL CONTRACT PRICE (excl GST)</td>
+            <td style="text-align: right;">${getFieldValue('contract_price')}</td>
+            <td style="text-align: right;">100%</td>
+          </tr>
+          <tr>
+            <td>GST @ 15%</td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;"></td>
+          </tr>
+          <tr style="font-weight: bold;">
+            <td>TOTAL INCLUDING GST</td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note-box" style="margin-top: 20px;">
+        <strong>Note:</strong> This breakdown is for payment purposes only and does not limit the scope of works
+        or create separate contracts for individual items.
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- APPENDIX B2 - PRICING SCHEDULE (RATES) -->
+    <div class="appendix-page">
+      <div class="appendix-title">APPENDIX B2</div>
+      <div class="appendix-subtitle">Pricing Schedule - Schedule of Rates</div>
+
+      <p class="mb-3" style="font-size: 9pt;">
+        This appendix applies where the Contract Price is based on a Schedule of Rates or quantities.
+      </p>
+
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th style="width: 5%;">Item</th>
+            <th style="width: 35%;">Description</th>
+            <th style="width: 10%;">Unit</th>
+            <th style="width: 12%; text-align: right;">Quantity</th>
+            <th style="width: 15%; text-align: right;">Rate</th>
+            <th style="width: 18%; text-align: right;">Amount</th>
+            <th style="width: 5%;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="7" style="font-weight: bold; background: #f5f5f5;">SECTION 1: [TRADE SECTION]</td>
+          </tr>
+          <tr>
+            <td>1.1</td>
+            <td>[Item description]</td>
+            <td>m²</td>
+            <td style="text-align: right;"></td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;">$</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>1.2</td>
+            <td>[Item description]</td>
+            <td>m</td>
+            <td style="text-align: right;"></td>
+            <td style="text-align: right;">$</td>
+            <td style="text-align: right;">$</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td colspan="5" style="text-align: right; font-weight: bold;">Section Subtotal:</td>
+            <td style="text-align: right; font-weight: bold;">$</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td colspan="7" style="height: 20px;"></td>
+          </tr>
+          <tr>
+            <td colspan="5" style="text-align: right; font-weight: bold; background: #f0f0f0;">TOTAL (excl GST):</td>
+            <td style="text-align: right; font-weight: bold; background: #f0f0f0;">$</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note-box" style="margin-top: 20px;">
+        <strong>Note:</strong> Rates are fixed for the duration of the contract unless varied in accordance with
+        the contract conditions. Quantities are provisional and payment will be based on actual measured quantities.
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- APPENDIX C - PROGRAMME -->
+    <div class="appendix-page">
+      <div class="appendix-title">APPENDIX C</div>
+      <div class="appendix-subtitle">Programme</div>
+
+      <p class="mb-3" style="font-size: 9pt;">
+        Attach detailed programme showing key dates, milestones, and coordination with other trades.
+      </p>
+
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th style="width: 40%;">Activity</th>
+            <th style="width: 20%;">Start Date</th>
+            <th style="width: 20%;">Finish Date</th>
+            <th style="width: 20%;">Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Mobilisation</td>
+            <td>${getFieldValue('commencement_date')}</td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>[Key Activity 1]</td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>[Key Activity 2]</td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>Practical Completion</td>
+            <td></td>
+            <td>${getFieldValue('completion_date')}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="appendix-heading" style="margin-top: 20px;">Key Milestones</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 60px; background: white;">
+        List any critical milestones or hold points that must be achieved.
+      </div>
+
+      <h3 class="appendix-heading" style="margin-top: 15px;">Coordination Requirements</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 60px; background: white;">
+        Identify interfaces with other trades and coordination requirements.
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- APPENDIX D - QUALITY PLAN -->
+    <div class="appendix-page">
+      <div class="appendix-title">APPENDIX D</div>
+      <div class="appendix-subtitle">Quality Plan</div>
+
+      <h3 class="appendix-heading">1. Quality Objectives</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 50px; background: white; margin-bottom: 15px;">
+        State quality objectives and standards to be achieved.
+      </div>
+
+      <h3 class="appendix-heading">2. Inspection and Test Plan</h3>
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th style="width: 30%;">Activity</th>
+            <th style="width: 20%;">Inspection Point</th>
+            <th style="width: 20%;">Acceptance Criteria</th>
+            <th style="width: 15%;">Hold Point</th>
+            <th style="width: 15%;">Records Required</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>[Activity]</td>
+            <td>[When to inspect]</td>
+            <td>[Pass/fail criteria]</td>
+            <td>Yes / No</td>
+            <td>[Documentation]</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="appendix-heading" style="margin-top: 20px;">3. Non-Conformance Procedures</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 50px; background: white;">
+        Describe process for identifying, recording, and rectifying non-conformances.
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- APPENDIX E1 - HEALTH AND SAFETY PLAN -->
+    <div class="appendix-page">
+      <div class="appendix-title">APPENDIX E1</div>
+      <div class="appendix-subtitle">Health and Safety Plan</div>
+
+      <h3 class="appendix-heading">1. Hazard Identification</h3>
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th style="width: 30%;">Hazard</th>
+            <th style="width: 25%;">Risk Level</th>
+            <th style="width: 45%;">Control Measures</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Working at heights</td>
+            <td>High</td>
+            <td>Scaffolding, harnesses, edge protection as per regulations</td>
+          </tr>
+          <tr>
+            <td>Manual handling</td>
+            <td>Medium</td>
+            <td>Mechanical aids, training, proper techniques</td>
+          </tr>
+          <tr>
+            <td>[Trade-specific hazard]</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="appendix-heading" style="margin-top: 20px;">2. Safety Management</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; background: white; margin-bottom: 15px;">
+        <p style="margin-bottom: 8px;"><strong>Site Safety Officer:</strong> _______________________________</p>
+        <p style="margin-bottom: 8px;"><strong>Emergency Contact:</strong> _______________________________</p>
+        <p style="margin-bottom: 8px;"><strong>First Aid:</strong> Location and trained personnel</p>
+      </div>
+
+      <h3 class="appendix-heading">3. Training Requirements</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 50px; background: white;">
+        All personnel must hold current site safety passport and trade-specific certifications.
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- APPENDIX E2 - SITE SAFETY RULES -->
+    <div class="appendix-page">
+      <div class="appendix-title">APPENDIX E2</div>
+      <div class="appendix-subtitle">Site Safety Rules</div>
+
+      <p class="mb-3" style="font-size: 10pt; font-weight: bold;">
+        All personnel must read, understand, and comply with these rules. Breaches may result in removal from site.
+      </p>
+
+      <h3 class="appendix-heading">Mandatory Requirements</h3>
+      <ul class="bullet-list">
+        <li>Site induction must be completed before commencing work</li>
+        <li>PPE must be worn at all times: hard hat, high-vis vest, safety boots, safety glasses</li>
+        <li>No work under the influence of alcohol or drugs</li>
+        <li>Report all hazards, incidents, and near-misses immediately</li>
+        <li>Follow all signage and barriers</li>
+        <li>No unauthorized access to restricted areas</li>
+      </ul>
+
+      <h3 class="appendix-heading">Specific Safety Rules</h3>
+      <ul class="bullet-list">
+        <li>Working at height: Use appropriate fall protection equipment</li>
+        <li>Electrical work: Only by qualified electricians with appropriate permits</li>
+        <li>Hot works: Permit required, fire watch in place</li>
+        <li>Excavation: Locate services before digging</li>
+        <li>Lifting operations: Certified operators only, exclusion zones maintained</li>
+      </ul>
+
+      <h3 class="appendix-heading">Emergency Procedures</h3>
+      <ul class="bullet-list">
+        <li>Emergency assembly point: [Location to be specified]</li>
+        <li>Emergency contact: [Number to be specified]</li>
+        <li>First aid location: [Location to be specified]</li>
+        <li>Evacuation: Follow warden instructions, report to assembly point</li>
+      </ul>
+
+      <div class="warning-box" style="margin-top: 20px;">
+        <strong>Warning:</strong> Failure to comply with these safety rules may result in immediate removal
+        from site and potential termination of the subcontract.
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- APPENDIX E3 - INSURANCE REQUIREMENTS -->
+    <div class="appendix-page">
+      <div class="appendix-title">APPENDIX E3</div>
+      <div class="appendix-subtitle">Insurance Requirements</div>
+
+      <h3 class="appendix-heading">Summary of Required Insurance</h3>
+      <table class="schedule-table">
+        <thead>
+          <tr>
+            <th style="width: 30%;">Insurance Type</th>
+            <th style="width: 25%;">Minimum Cover</th>
+            <th style="width: 25%;">Period</th>
+            <th style="width: 20%;">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Public Liability</td>
+            <td>${getFieldValue('public_liability_amount') || '$10,000,000'}</td>
+            <td>Duration of works + 12 months</td>
+            <td>Note HC interest</td>
+          </tr>
+          <tr>
+            <td>Contract Works</td>
+            <td>Full replacement value</td>
+            <td>Duration of works</td>
+            <td>If applicable</td>
+          </tr>
+          <tr>
+            <td>Professional Indemnity</td>
+            <td>${getFieldValue('professional_indemnity_amount') || 'N/A'}</td>
+            <td>7 years from completion</td>
+            <td>If design included</td>
+          </tr>
+          <tr>
+            <td>Employer's Liability</td>
+            <td>As per ACC requirements</td>
+            <td>Duration of works</td>
+            <td>Statutory requirement</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="appendix-heading" style="margin-top: 20px;">Certificate Requirements</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; background: white; margin-bottom: 15px;">
+        <p style="margin-bottom: 8px;">✓ Certificates of currency must be provided before commencing work</p>
+        <p style="margin-bottom: 8px;">✓ Updated certificates required upon renewal</p>
+        <p style="margin-bottom: 8px;">✓ All policies must note Head Contractor's interest</p>
+        <p style="margin-bottom: 8px;">✓ Policies must be with insurers approved by Head Contractor</p>
+        <p style="margin-bottom: 8px;">✓ 30 days notice required for any policy cancellation or material change</p>
+      </div>
+
+      <h3 class="appendix-heading">Exclusions and Excesses</h3>
+      <div style="border: 1px solid #ccc; padding: 12px; min-height: 50px; background: white;">
+        Subcontractor responsible for all policy excesses. Any exclusions must be notified in writing.
+      </div>
+
+      <div class="copyright-footer">
+        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+      </div>
+    </div>
+
+    <!-- EXECUTION / SIGNATURE PAGE -->
+    <div class="page-break"></div>
     <h1>Execution</h1>
 
     <div class="clause" style="margin-bottom: 40px;">
@@ -1575,44 +3116,38 @@ export function generateSA2017AgreementHTML(
     </div>
 
     <div class="signature-section">
-      <h3>Head Contractor</h3>
+      <div class="signature-party-title">SIGNED by the Head Contractor:</div>
       <div class="signature-block">
-        ${hasFieldValue('head_contractor_signatory_name') ? `
-        <div style="margin-bottom: 20px;">
-          <strong>Name of Signatory:</strong> ${getFieldValue('head_contractor_signatory_name')}
-        </div>` : ''}
-        ${hasFieldValue('head_contractor_signatory_title') ? `
-        <div style="margin-bottom: 20px;">
-          <strong>Title/Position:</strong> ${getFieldValue('head_contractor_signatory_title')}
-        </div>` : ''}
-        <div class="signature-line">
-          Signature
+        <div class="signature-field">
+          <strong>Name:</strong> <span class="form-field-inline">${getFieldValue('head_contractor_signatory_name')}</span>
         </div>
-        ${hasFieldValue('head_contractor_signature_date') ? `
+        <div class="signature-field">
+          <strong>Position:</strong> <span class="form-field-inline">${getFieldValue('head_contractor_signatory_title')}</span>
+        </div>
+        <div class="signature-line">
+          Signature: _________________________________________
+        </div>
         <div class="signature-details">
-          <div>Date: ${getFieldValue('head_contractor_signature_date')}</div>
-        </div>` : ''}
+          Date: <span class="form-field-inline">${getFieldValue('head_contractor_signature_date')}</span>
+        </div>
       </div>
     </div>
 
     <div class="signature-section">
-      <h3>Subcontractor</h3>
+      <div class="signature-party-title">SIGNED by the Subcontractor:</div>
       <div class="signature-block">
-        ${hasFieldValue('subcontractor_signatory_name') ? `
-        <div style="margin-bottom: 20px;">
-          <strong>Name of Signatory:</strong> ${getFieldValue('subcontractor_signatory_name')}
-        </div>` : ''}
-        ${hasFieldValue('subcontractor_signatory_title') ? `
-        <div style="margin-bottom: 20px;">
-          <strong>Title/Position:</strong> ${getFieldValue('subcontractor_signatory_title')}
-        </div>` : ''}
-        <div class="signature-line">
-          Signature
+        <div class="signature-field">
+          <strong>Name:</strong> <span class="form-field-inline">${getFieldValue('subcontractor_signatory_name')}</span>
         </div>
-        ${hasFieldValue('subcontractor_signature_date') ? `
+        <div class="signature-field">
+          <strong>Position:</strong> <span class="form-field-inline">${getFieldValue('subcontractor_signatory_title')}</span>
+        </div>
+        <div class="signature-line">
+          Signature: _________________________________________
+        </div>
         <div class="signature-details">
-          <div>Date: ${getFieldValue('subcontractor_signature_date')}</div>
-        </div>` : ''}
+          Date: <span class="form-field-inline">${getFieldValue('subcontractor_signature_date')}</span>
+        </div>
       </div>
     </div>
 
