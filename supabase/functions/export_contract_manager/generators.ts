@@ -1,4 +1,5 @@
 import { generateFastPreletAppendix } from './preletAppendixGenerator.ts';
+import { SA_IMAGE_1_BASE64, SA_IMAGE_2_BASE64 } from './coverImages.ts';
 
 export function generateJuniorPackHTML(): string {
   throw new Error('Junior pack not implemented in this version');
@@ -34,10 +35,9 @@ export function generateSA2017AgreementHTML(
 ): string {
   console.log('[SA-2017] Generating comprehensive 51-page agreement PDF with exact visual replication');
 
-  // Use data URLs for the SA cover page images to embed them directly in the PDF
-  // This ensures they're always available regardless of network access
-  const topImage = 'https://pub-a87cf43ce0934ce5b20c101cc6d57b07.r2.dev/SA_Image_1.png';
-  const bottomImage = 'https://pub-a87cf43ce0934ce5b20c101cc6d57b07.r2.dev/SA_Image_2.png';
+  // Use embedded base64 images - no external dependencies
+  const topImage = SA_IMAGE_1_BASE64;
+  const bottomImage = SA_IMAGE_2_BASE64;
 
   // Define the proper section order matching SA-2017 standard
   const sectionOrder = [
