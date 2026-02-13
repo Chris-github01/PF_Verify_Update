@@ -34,9 +34,10 @@ export function generateSA2017AgreementHTML(
 ): string {
   console.log('[SA-2017] Generating comprehensive 51-page agreement PDF with exact visual replication');
 
-  // Construction images for cover page grid
-  const buildingImage = 'https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&cs=tinysrgb&w=400';
-  const constructionCrane = 'https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=400';
+  // Use data URLs for the SA cover page images to embed them directly in the PDF
+  // This ensures they're always available regardless of network access
+  const topImage = 'https://pub-a87cf43ce0934ce5b20c101cc6d57b07.r2.dev/SA_Image_1.png';
+  const bottomImage = 'https://pub-a87cf43ce0934ce5b20c101cc6d57b07.r2.dev/SA_Image_2.png';
 
   // Define the proper section order matching SA-2017 standard
   const sectionOrder = [
@@ -186,59 +187,17 @@ export function generateSA2017AgreementHTML(
       flex-direction: column;
     }
 
-    /* Image Grid - Top Right */
-    .cover-image-grid {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 50%;
-      height: 260px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      grid-template-rows: repeat(2, 130px);
-      gap: 0;
-      border-left: 1px solid #e0e0e0;
-    }
-
-    .grid-image-1 {
-      grid-column: 2 / 4;
-      grid-row: 1;
+    /* Full Width Top Image */
+    .cover-top-image {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
-      border-bottom: 1px solid #e0e0e0;
-    }
-
-    .grid-color-yellow {
-      grid-column: 1;
-      grid-row: 2;
-      background: #eab308;
-      width: 100%;
-      height: 100%;
-      border-right: 1px solid #e0e0e0;
-    }
-
-    .grid-image-2 {
-      grid-column: 2;
-      grid-row: 2;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      border-right: 1px solid #e0e0e0;
-    }
-
-    .grid-color-blue {
-      grid-column: 3;
-      grid-row: 2;
-      background: #2563eb;
-      width: 100%;
-      height: 100%;
+      height: auto;
+      display: block;
+      margin: 0;
+      padding: 0;
     }
 
     .cover-title-section {
-      margin-top: 300px;
-      margin-left: 80px;
-      margin-bottom: 60px;
+      margin: 30px 80px 50px 80px;
     }
 
     .cover-main-title {
@@ -259,7 +218,7 @@ export function generateSA2017AgreementHTML(
     }
 
     .cover-form-section {
-      margin: 0 80px 0 80px;
+      margin: 0 80px 100px 80px;
     }
 
     .cover-form-row {
@@ -285,51 +244,18 @@ export function generateSA2017AgreementHTML(
       min-height: 24px;
     }
 
-    /* Footer with Wave Design */
-    .cover-footer-wave {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 200px;
-    }
-
-    .wave-svg {
-      position: absolute;
-      bottom: 0;
-      left: 0;
+    /* Full Width Bottom Image */
+    .cover-bottom-image {
       width: 100%;
-      height: 200px;
-    }
-
-    .footer-logo-left {
-      position: absolute;
-      left: 60px;
-      bottom: 60px;
-      width: 70px;
-      height: 70px;
-      z-index: 2;
-    }
-
-    .footer-logo-right {
-      position: absolute;
-      right: 60px;
-      bottom: 50px;
-      width: 120px;
       height: auto;
-      z-index: 2;
+      display: block;
+      margin: 0;
+      padding: 0;
+      position: absolute;
+      bottom: 0;
+      left: 0;
     }
 
-    .footer-tagline {
-      position: absolute;
-      right: 60px;
-      bottom: 20px;
-      font-size: 16pt;
-      font-family: 'Brush Script MT', cursive, Georgia, serif;
-      font-style: italic;
-      color: #1f2937;
-      z-index: 2;
-    }
 
     /* Foreword Section */
     .foreword-page {
@@ -811,15 +737,10 @@ export function generateSA2017AgreementHTML(
 
     <!-- COVER PAGE (Page 1) -->
     <div class="cover-page">
-      <div class="cover-content">
-        <!-- Image Grid - Top Right -->
-        <div class="cover-image-grid">
-          <img src="${buildingImage}" alt="Building" class="grid-image-1">
-          <div class="grid-color-yellow"></div>
-          <img src="${constructionCrane}" alt="Construction" class="grid-image-2">
-          <div class="grid-color-blue"></div>
-        </div>
+      <!-- Full Width Top Image -->
+      <img src="${topImage}" alt="Cover Header" class="cover-top-image">
 
+      <div class="cover-content">
         <!-- Title Section -->
         <div class="cover-title-section">
           <div class="cover-main-title">Subcontract agreement</div>
@@ -847,35 +768,8 @@ export function generateSA2017AgreementHTML(
         </div>
       </div>
 
-      <!-- Wave Footer with Logos -->
-      <div class="cover-footer-wave">
-        <!-- Wave SVG Background -->
-        <svg class="wave-svg" viewBox="0 0 1200 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="waveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
-              <stop offset="100%" style="stop-color:#1e40af;stop-opacity:1" />
-            </linearGradient>
-          </defs>
-          <path d="M0,100 Q300,50 600,100 T1200,100 L1200,200 L0,200 Z" fill="url(#waveGradient)" />
-        </svg>
-
-        <!-- Crescent Logo (left side) -->
-        <svg class="footer-logo-left" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M50 5 C30 10 15 25 15 50 C15 75 30 90 50 95 C45 88 40 75 40 50 C40 25 45 12 50 5 Z" fill="#38bdf8"/>
-          <path d="M50 15 C35 20 25 32 25 50 C25 68 35 80 50 85 C46 80 43 68 43 50 C43 32 46 20 50 15 Z" fill="#0ea5e9"/>
-        </svg>
-
-        <!-- MB Logo (right side) -->
-        <svg class="footer-logo-right" viewBox="0 0 150 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <text x="5" y="40" font-family="Impact, Arial Black, sans-serif" font-size="38" font-weight="900" fill="#f59e0b" stroke="#1e40af" stroke-width="1">mb</text>
-          <text x="5" y="52" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#1e40af">Registered</text>
-          <text x="5" y="59" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#3b82f6">Master Builders</text>
-        </svg>
-
-        <!-- Tagline -->
-        <div class="footer-tagline">Building Excellence For Over 100 Years</div>
-      </div>
+      <!-- Full Width Bottom Image -->
+      <img src="${bottomImage}" alt="Cover Footer" class="cover-bottom-image">
     </div>
 
     <!-- FOREWORD (Pages 2-3) -->
