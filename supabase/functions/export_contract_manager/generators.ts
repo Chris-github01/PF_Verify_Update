@@ -253,7 +253,7 @@ export function generateSA2017AgreementHTML(
       min-height: 24px;
     }
 
-    /* Full Width Bottom Image */
+    /* Full Width Bottom Image - touches bottom edge */
     .cover-bottom-image {
       width: 100%;
       height: auto;
@@ -263,6 +263,7 @@ export function generateSA2017AgreementHTML(
       position: absolute;
       bottom: 0;
       left: 0;
+      right: 0;
     }
 
 
