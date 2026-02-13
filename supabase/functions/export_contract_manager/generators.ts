@@ -195,10 +195,9 @@ export function generateSA2017AgreementHTML(
     /* Full Width Top Image - touches all edges */
     .cover-top-image {
       width: 100%;
-      height: auto;
-      max-height: 150px;
-      object-fit: contain;
-      object-position: top center;
+      height: 200px;
+      object-fit: cover;
+      object-position: center center;
       display: block;
       margin: 0;
       padding: 0;
@@ -259,10 +258,9 @@ export function generateSA2017AgreementHTML(
     /* Full Width Bottom Image - touches bottom edge */
     .cover-bottom-image {
       width: 100%;
-      height: auto;
-      max-height: 150px;
-      object-fit: contain;
-      object-position: bottom center;
+      height: 200px;
+      object-fit: cover;
+      object-position: center center;
       display: block;
       margin: 0;
       padding: 0;
