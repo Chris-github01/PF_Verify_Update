@@ -34,9 +34,9 @@ export function generateSA2017AgreementHTML(
 ): string {
   console.log('[SA-2017] Generating comprehensive 51-page agreement PDF with exact visual replication');
 
-  // Construction images URLs - these should be hosted on your server or R2
-  const constructionImage1 = 'https://images.pexels.com/photos/159358/construction-site-build-construction-work-159358.jpeg?auto=compress&cs=tinysrgb&w=800';
-  const constructionImage2 = 'https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=800';
+  // Construction images for cover page grid
+  const buildingImage = 'https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&cs=tinysrgb&w=400';
+  const constructionCrane = 'https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=400';
 
   // Define the proper section order matching SA-2017 standard
   const sectionOrder = [
@@ -174,88 +174,161 @@ export function generateSA2017AgreementHTML(
     .cover-page {
       page-break-after: always;
       position: relative;
-    }
-
-    .cover-header {
+      min-height: 100vh;
+      padding: 0;
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 30px;
-      gap: 15px;
+      flex-direction: column;
     }
 
-    .cover-image {
-      width: 48%;
-      height: 120px;
+    .cover-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Image Grid - Top Right */
+    .cover-image-grid {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 50%;
+      height: 260px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 130px);
+      gap: 0;
+      border-left: 1px solid #e0e0e0;
+    }
+
+    .grid-image-1 {
+      grid-column: 2 / 4;
+      grid-row: 1;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
-      border: 1px solid #ddd;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .grid-color-yellow {
+      grid-column: 1;
+      grid-row: 2;
+      background: #eab308;
+      width: 100%;
+      height: 100%;
+      border-right: 1px solid #e0e0e0;
+    }
+
+    .grid-image-2 {
+      grid-column: 2;
+      grid-row: 2;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-right: 1px solid #e0e0e0;
+    }
+
+    .grid-color-blue {
+      grid-column: 3;
+      grid-row: 2;
+      background: #2563eb;
+      width: 100%;
+      height: 100%;
     }
 
     .cover-title-section {
-      text-align: center;
-      margin: 40px 0 30px 0;
+      margin-top: 300px;
+      margin-left: 80px;
+      margin-bottom: 60px;
     }
 
     .cover-main-title {
-      font-size: 28pt;
+      font-size: 36pt;
       font-weight: bold;
-      margin-bottom: 8px;
-      color: #000;
-      letter-spacing: 2px;
+      margin-bottom: 15px;
+      color: #1e40af;
+      letter-spacing: 0;
+      line-height: 1.2;
     }
 
     .cover-subtitle {
-      font-size: 18pt;
+      font-size: 28pt;
       font-weight: bold;
-      margin-bottom: 15px;
-      color: #000;
-    }
-
-    .cover-act-reference {
-      font-size: 11pt;
-      color: #666;
-      margin-top: 10px;
+      margin-bottom: 0;
+      color: #1e40af;
+      line-height: 1.2;
     }
 
     .cover-form-section {
-      border: 2px solid #000;
-      padding: 25px;
-      margin: 40px 0;
+      margin: 0 80px 0 80px;
     }
 
     .cover-form-row {
       display: flex;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 1px dotted #999;
+      margin-bottom: 25px;
       align-items: baseline;
-    }
-
-    .cover-form-row:last-child {
-      border-bottom: none;
     }
 
     .cover-form-label {
       font-weight: bold;
-      width: 140px;
+      width: 150px;
       flex-shrink: 0;
-      font-size: 10pt;
+      font-size: 12pt;
+      color: #1e40af;
     }
 
     .cover-form-value {
       flex: 1;
-      font-size: 10pt;
+      font-size: 12pt;
+      border-bottom: 1px solid #333;
+      padding-bottom: 4px;
       padding-left: 10px;
+      min-height: 24px;
     }
 
-    .cover-footer {
+    /* Footer with Wave Design */
+    .cover-footer-wave {
       position: absolute;
-      bottom: 20px;
+      bottom: 0;
       left: 0;
       right: 0;
-      text-align: center;
-      font-size: 8pt;
-      color: #666;
+      height: 200px;
+    }
+
+    .wave-svg {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 200px;
+    }
+
+    .footer-logo-left {
+      position: absolute;
+      left: 60px;
+      bottom: 60px;
+      width: 70px;
+      height: 70px;
+      z-index: 2;
+    }
+
+    .footer-logo-right {
+      position: absolute;
+      right: 60px;
+      bottom: 50px;
+      width: 120px;
+      height: auto;
+      z-index: 2;
+    }
+
+    .footer-tagline {
+      position: absolute;
+      right: 60px;
+      bottom: 20px;
+      font-size: 16pt;
+      font-family: 'Brush Script MT', cursive, Georgia, serif;
+      font-style: italic;
+      color: #1f2937;
+      z-index: 2;
     }
 
     /* Foreword Section */
@@ -738,42 +811,70 @@ export function generateSA2017AgreementHTML(
 
     <!-- COVER PAGE (Page 1) -->
     <div class="cover-page">
-      <!-- Construction Images Header -->
-      <div class="cover-header">
-        <img src="${constructionImage1}" alt="Construction Site 1" class="cover-image">
-        <img src="${constructionImage2}" alt="Construction Site 2" class="cover-image">
+      <div class="cover-content">
+        <!-- Image Grid - Top Right -->
+        <div class="cover-image-grid">
+          <img src="${buildingImage}" alt="Building" class="grid-image-1">
+          <div class="grid-color-yellow"></div>
+          <img src="${constructionCrane}" alt="Construction" class="grid-image-2">
+          <div class="grid-color-blue"></div>
+        </div>
+
+        <!-- Title Section -->
+        <div class="cover-title-section">
+          <div class="cover-main-title">Subcontract agreement</div>
+          <div class="cover-subtitle">SA - 2017</div>
+        </div>
+
+        <!-- Form Details -->
+        <div class="cover-form-section">
+          <div class="cover-form-row">
+            <div class="cover-form-label">Project:</div>
+            <div class="cover-form-value">${getFieldValue('project_name') || ''}</div>
+          </div>
+          <div class="cover-form-row">
+            <div class="cover-form-label">Trade:</div>
+            <div class="cover-form-value">${project?.trade || ''}</div>
+          </div>
+          <div class="cover-form-row">
+            <div class="cover-form-label">Subcontractor:</div>
+            <div class="cover-form-value">${getFieldValue('subcontractor_name') || ''}</div>
+          </div>
+          <div class="cover-form-row">
+            <div class="cover-form-label">Reference:</div>
+            <div class="cover-form-value">${agreement.agreement_number || ''}</div>
+          </div>
+        </div>
       </div>
 
-      <!-- Title Section -->
-      <div class="cover-title-section">
-        <div class="cover-main-title">SUBCONTRACT AGREEMENT</div>
-        <div class="cover-subtitle">SA - 2017</div>
-        <div class="cover-act-reference">Under the Construction Contracts Act 2002</div>
-      </div>
+      <!-- Wave Footer with Logos -->
+      <div class="cover-footer-wave">
+        <!-- Wave SVG Background -->
+        <svg class="wave-svg" viewBox="0 0 1200 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="waveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
+              <stop offset="100%" style="stop-color:#1e40af;stop-opacity:1" />
+            </linearGradient>
+          </defs>
+          <path d="M0,100 Q300,50 600,100 T1200,100 L1200,200 L0,200 Z" fill="url(#waveGradient)" />
+        </svg>
 
-      <!-- Form Details Box -->
-      <div class="cover-form-section">
-        <div class="cover-form-row">
-          <div class="cover-form-label">Project:</div>
-          <div class="cover-form-value">${getFieldValue('project_name') || '___________________________________'}</div>
-        </div>
-        <div class="cover-form-row">
-          <div class="cover-form-label">Trade:</div>
-          <div class="cover-form-value">${project?.trade || '___________________________________'}</div>
-        </div>
-        <div class="cover-form-row">
-          <div class="cover-form-label">Subcontractor:</div>
-          <div class="cover-form-value">${getFieldValue('subcontractor_name') || '___________________________________'}</div>
-        </div>
-        <div class="cover-form-row">
-          <div class="cover-form-label">Reference:</div>
-          <div class="cover-form-value">${agreement.agreement_number || '___________________________________'}</div>
-        </div>
-      </div>
+        <!-- Crescent Logo (left side) -->
+        <svg class="footer-logo-left" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M50 5 C30 10 15 25 15 50 C15 75 30 90 50 95 C45 88 40 75 40 50 C40 25 45 12 50 5 Z" fill="#38bdf8"/>
+          <path d="M50 15 C35 20 25 32 25 50 C25 68 35 80 50 85 C46 80 43 68 43 50 C43 32 46 20 50 15 Z" fill="#0ea5e9"/>
+        </svg>
 
-      <!-- Copyright Footer -->
-      <div class="cover-footer">
-        ©Registered Master Builders Association of New Zealand Inc/New Zealand Specialist Trade Contractors Federation Inc
+        <!-- MB Logo (right side) -->
+        <svg class="footer-logo-right" viewBox="0 0 150 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <text x="5" y="40" font-family="Impact, Arial Black, sans-serif" font-size="38" font-weight="900" fill="#f59e0b" stroke="#1e40af" stroke-width="1">mb</text>
+          <text x="5" y="52" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#1e40af">Registered</text>
+          <text x="5" y="59" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#3b82f6">Master Builders</text>
+        </svg>
+
+        <!-- Tagline -->
+        <div class="footer-tagline">Building Excellence For Over 100 Years</div>
       </div>
     </div>
 
