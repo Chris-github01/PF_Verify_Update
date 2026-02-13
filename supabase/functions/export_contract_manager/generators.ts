@@ -152,6 +152,10 @@ export function generateSA2017AgreementHTML(
       margin: 20mm 25mm 25mm 25mm;
     }
 
+    @page:first {
+      margin: 0;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -171,12 +175,13 @@ export function generateSA2017AgreementHTML(
       margin: 0 auto;
     }
 
-    /* Cover Page - Exact Match */
+    /* Cover Page - Exact Match with no margins */
     .cover-page {
       page-break-after: always;
       position: relative;
       min-height: 100vh;
       padding: 0;
+      margin: 0;
       display: flex;
       flex-direction: column;
     }
@@ -187,13 +192,17 @@ export function generateSA2017AgreementHTML(
       flex-direction: column;
     }
 
-    /* Full Width Top Image */
+    /* Full Width Top Image - touches all edges */
     .cover-top-image {
       width: 100%;
       height: auto;
       display: block;
       margin: 0;
       padding: 0;
+      position: relative;
+      left: 0;
+      right: 0;
+      top: 0;
     }
 
     .cover-title-section {
