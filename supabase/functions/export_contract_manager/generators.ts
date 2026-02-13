@@ -153,7 +153,7 @@ export function generateSA2017AgreementHTML(
     }
 
     @page:first {
-      margin: 0;
+      margin: 1mm;
     }
 
     * {
