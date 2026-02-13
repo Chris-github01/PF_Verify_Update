@@ -162,6 +162,11 @@ export function generateSA2017AgreementHTML(
       box-sizing: border-box;
     }
 
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: Arial, Helvetica, sans-serif;
       font-size: 10pt;
@@ -172,24 +177,29 @@ export function generateSA2017AgreementHTML(
 
     .container {
       max-width: 100%;
-      margin: 0 auto;
+      margin: 0;
+      padding: 0;
     }
 
     /* Cover Page - Exact Match with no margins */
     .cover-page {
       page-break-after: always;
       position: relative;
-      min-height: 100vh;
+      min-height: 297mm;
+      height: 297mm;
       padding: 0;
       margin: 0;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
     .cover-content {
       flex: 1;
       display: flex;
       flex-direction: column;
+      padding-top: 200px;
+      padding-bottom: 200px;
     }
 
     /* Full Width Top Image - touches all edges */
@@ -201,7 +211,7 @@ export function generateSA2017AgreementHTML(
       display: block;
       margin: 0;
       padding: 0;
-      position: relative;
+      position: absolute;
       left: 0;
       right: 0;
       top: 0;
