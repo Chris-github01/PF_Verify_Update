@@ -196,6 +196,9 @@ export function generateSA2017AgreementHTML(
     .cover-top-image {
       width: 100%;
       height: auto;
+      max-height: 150px;
+      object-fit: contain;
+      object-position: top center;
       display: block;
       margin: 0;
       padding: 0;
@@ -257,6 +260,9 @@ export function generateSA2017AgreementHTML(
     .cover-bottom-image {
       width: 100%;
       height: auto;
+      max-height: 150px;
+      object-fit: contain;
+      object-position: bottom center;
       display: block;
       margin: 0;
       padding: 0;
