@@ -202,12 +202,13 @@ export function generateSA2017AgreementHTML(
       padding-bottom: 99mm;
     }
 
-    /* Full Width Top Image - max 1/3 page height, no margins */
+    /* Full Width Top Image - max 1/3 page height, no margins, edge-to-edge */
     .cover-top-image {
       width: 100%;
+      height: 99mm;
       max-height: 99mm;
-      object-fit: contain;
-      object-position: center top;
+      object-fit: cover;
+      object-position: center center;
       display: block;
       margin: 0;
       padding: 0;
@@ -265,12 +266,13 @@ export function generateSA2017AgreementHTML(
       min-height: 24px;
     }
 
-    /* Full Width Bottom Image - max 1/3 page height, no margins */
+    /* Full Width Bottom Image - max 1/3 page height, no margins, edge-to-edge */
     .cover-bottom-image {
       width: 100%;
+      height: 99mm;
       max-height: 99mm;
-      object-fit: contain;
-      object-position: center bottom;
+      object-fit: cover;
+      object-position: center center;
       display: block;
       margin: 0;
       padding: 0;
