@@ -204,7 +204,7 @@ export function generateSA2017AgreementHTML(
 
     /* Full Width Top Image - touches all edges */
     .cover-top-image {
-      width: 100%;
+      width: calc(100% - 2mm);
       height: 200px;
       object-fit: cover;
       object-position: center center;
@@ -212,9 +212,9 @@ export function generateSA2017AgreementHTML(
       margin: 0;
       padding: 0;
       position: absolute;
-      left: 0;
-      right: 0;
-      top: 0;
+      left: 1mm;
+      right: 1mm;
+      top: 1mm;
     }
 
     .cover-title-section {
@@ -267,7 +267,7 @@ export function generateSA2017AgreementHTML(
 
     /* Full Width Bottom Image - touches bottom edge */
     .cover-bottom-image {
-      width: 100%;
+      width: calc(100% - 2mm);
       height: 200px;
       object-fit: cover;
       object-position: center center;
@@ -275,9 +275,9 @@ export function generateSA2017AgreementHTML(
       margin: 0;
       padding: 0;
       position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 1mm;
+      left: 1mm;
+      right: 1mm;
     }
 
 
