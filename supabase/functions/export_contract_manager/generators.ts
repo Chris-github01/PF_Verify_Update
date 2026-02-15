@@ -153,7 +153,7 @@ export function generateSA2017AgreementHTML(
     }
 
     @page:first {
-      margin: 1mm;
+      margin: 0;
     }
 
     * {
@@ -198,23 +198,23 @@ export function generateSA2017AgreementHTML(
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding-top: 200px;
-      padding-bottom: 200px;
+      padding-top: 99mm;
+      padding-bottom: 99mm;
     }
 
-    /* Full Width Top Image - touches all edges */
+    /* Full Width Top Image - max 1/3 page height, no margins */
     .cover-top-image {
-      width: calc(100% - 2mm);
-      height: 200px;
-      object-fit: cover;
-      object-position: center center;
+      width: 100%;
+      max-height: 99mm;
+      object-fit: contain;
+      object-position: center top;
       display: block;
       margin: 0;
       padding: 0;
       position: absolute;
-      left: 1mm;
-      right: 1mm;
-      top: 1mm;
+      left: 0;
+      right: 0;
+      top: 0;
     }
 
     .cover-title-section {
@@ -265,19 +265,19 @@ export function generateSA2017AgreementHTML(
       min-height: 24px;
     }
 
-    /* Full Width Bottom Image - touches bottom edge */
+    /* Full Width Bottom Image - max 1/3 page height, no margins */
     .cover-bottom-image {
-      width: calc(100% - 2mm);
-      height: 200px;
-      object-fit: cover;
-      object-position: center center;
+      width: 100%;
+      max-height: 99mm;
+      object-fit: contain;
+      object-position: center bottom;
       display: block;
       margin: 0;
       padding: 0;
       position: absolute;
-      bottom: 1mm;
-      left: 1mm;
-      right: 1mm;
+      bottom: 0;
+      left: 0;
+      right: 0;
     }
 
 
