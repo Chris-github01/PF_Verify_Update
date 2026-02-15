@@ -266,13 +266,13 @@ export function generateSA2017AgreementHTML(
       min-height: 24px;
     }
 
-    /* Full Width Bottom Image - max 1/3 page height, no margins, edge-to-edge */
+    /* Full Width Bottom Image - slightly compressed to fit fully on page */
     .cover-bottom-image {
       width: 100%;
-      height: 99mm;
-      max-height: 99mm;
-      object-fit: cover;
-      object-position: center center;
+      height: 90mm;
+      max-height: 90mm;
+      object-fit: contain;
+      object-position: center bottom;
       display: block;
       margin: 0;
       padding: 0;
