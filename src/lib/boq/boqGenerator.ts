@@ -4,18 +4,28 @@ import type { BOQLine, BOQTendererMap, ScopeGap, ModuleKey, BOQGenerationResult 
 interface QuoteItem {
   id: string;
   quote_id: string;
-  system_name: string;
+  description: string;
+  system_name?: string;
+  system_label?: string;
+  system_detected?: string;
+  mapped_system?: string;
   location?: string;
   frr_rating?: string;
+  frr?: string;
   substrate?: string;
   service_type?: string;
+  service?: string;
   size_opening?: string;
+  size?: string;
   quantity: number;
   unit: string;
+  unit_price?: number;
   rate?: number;
-  amount: number;
+  amount?: number;
+  total_price?: number;
   product?: string;
   install_method?: string;
+  line_number?: number;
 }
 
 interface Tenderer {
@@ -239,6 +249,12 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
   const groupedMap = new Map<string, any[]>();
 
   for (const item of items) {
+    // Skip items without a system name or description
+    if (!item.system_name && !item.description) {
+      console.warn('Skipping item without system_name or description:', item);
+      continue;
+    }
+
     const key = createGroupingKey(item);
     if (!groupedMap.has(key)) {
       groupedMap.set(key, []);
@@ -248,26 +264,47 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
 
   console.log('normalizeItems: Created', groupedMap.size, 'unique groups');
 
+  // Log sample keys to debug grouping
+  const sampleKeys = Array.from(groupedMap.keys()).slice(0, 5);
+  console.log('Sample grouping keys:', sampleKeys);
+
   // Create baseline lines from groups (use max quantity across all tenderers)
   const normalizedLines: Partial<BOQLine>[] = [];
 
   for (const [key, groupItems] of groupedMap.entries()) {
     const representative = groupItems[0];
+
+    // Get the best system name from the group (try multiple fields)
+    const systemName =
+      representative.system_name ||
+      representative.system_label ||
+      representative.mapped_system ||
+      representative.system_detected ||
+      representative.description ||
+      'Unnamed System';
+
+    // For items with the same system, use the max quantity
     const maxQty = Math.max(...groupItems.map(i => i.quantity || 0));
+
+    // Get amount/rate - try multiple field names
+    const amount = representative.amount || representative.total_price || 0;
+    const rate = representative.rate || representative.unit_price || 0;
+
+    console.log(`Creating BOQ line: ${systemName} x ${maxQty} ${representative.unit || 'each'} (from ${groupItems.length} items)`);
 
     normalizedLines.push({
       trade: moduleKey,
-      system_group: extractSystemGroup(representative.system_name),
-      system_name: representative.system_name || 'Unnamed System',
+      system_group: extractSystemGroup(systemName),
+      system_name: systemName,
       drawing_spec_ref: representative.drawing_ref || null,
       location_zone: representative.location || null,
       element_asset: representative.element || null,
-      frr_rating: representative.frr_rating || null,
+      frr_rating: representative.frr_rating || representative.frr || null,
       substrate: representative.substrate || null,
-      service_type: representative.service_type || null,
-      penetration_size_opening: representative.size_opening || null,
+      service_type: representative.service_type || representative.service || null,
+      penetration_size_opening: representative.size_opening || representative.size || null,
       quantity: maxQty,
-      unit: representative.unit || 'Each',
+      unit: representative.unit || 'each',
       system_variant_product: representative.product || null,
       install_method_buildup: representative.install_method || null,
       constraints_access: representative.access_notes || null,
@@ -278,7 +315,10 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
 
   console.log('normalizeItems: Created', normalizedLines.length, 'normalized lines');
   if (normalizedLines.length > 0) {
-    console.log('Sample normalized line:', normalizedLines[0]);
+    console.log('Sample normalized lines (first 3):');
+    normalizedLines.slice(0, 3).forEach((line, idx) => {
+      console.log(`  ${idx + 1}. ${line.system_name} - ${line.quantity} ${line.unit}`);
+    });
   }
 
   return normalizedLines;
@@ -286,15 +326,34 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
 
 function createGroupingKey(item: any): string {
   // Create a unique key based on system, location, and key attributes
+  // Use description as the primary identifier (it's the main field in quote_items)
+  const systemName = (
+    item.system_name ||
+    item.system_label ||
+    item.mapped_system ||
+    item.system_detected ||
+    item.description ||
+    ''
+  ).toLowerCase().trim();
+
+  const location = (item.location || '').toLowerCase().trim();
+  const frr = (item.frr_rating || item.frr || '').toLowerCase().trim();
+  const substrate = (item.substrate || '').toLowerCase().trim();
+  const serviceType = (item.service_type || item.service || '').toLowerCase().trim();
+  const sizeOpening = (item.size_opening || item.size || '').toLowerCase().trim();
+
+  // Create key - description/system name is mandatory, others are optional
+  // This ensures items with different descriptions get separate BOQ lines
   const parts = [
-    item.system_name || '',
-    item.location || '',
-    item.frr_rating || '',
-    item.substrate || '',
-    item.service_type || '',
-    item.size_opening || ''
+    systemName,
+    location,
+    frr,
+    substrate,
+    serviceType,
+    sizeOpening
   ];
-  return parts.join('|').toLowerCase();
+
+  return parts.join('|');
 }
 
 function extractSystemGroup(systemName: string): string {
@@ -341,16 +400,21 @@ async function createTendererMappings(
 
       if (matchingItem) {
         matchedCount++;
+
+        // Get amount and rate (try multiple field names)
+        const itemAmount = matchingItem.amount || matchingItem.total_price || 0;
+        const itemRate = matchingItem.rate || matchingItem.unit_price || 0;
+
         // Determine included status
-        if (matchingItem.quantity > 0 && matchingItem.amount > 0) {
+        if (matchingItem.quantity > 0 && itemAmount > 0) {
           includedStatus = 'included';
-        } else if (matchingItem.quantity === 0 || matchingItem.amount === 0) {
+        } else if (matchingItem.quantity === 0 || itemAmount === 0) {
           includedStatus = 'unclear';
         }
 
         tendererQty = matchingItem.quantity;
-        tendererRate = matchingItem.rate;
-        tendererAmount = matchingItem.amount;
+        tendererRate = itemRate;
+        tendererAmount = itemAmount;
         tendererNotes = matchingItem.notes;
       } else {
         missingCount++;
@@ -390,6 +454,7 @@ function findMatchingItem(boqLine: BOQLine, tendererItems: any[]): any | null {
   for (const item of tendererItems) {
     const itemKey = createGroupingKey(item);
     const boqKey = createGroupingKey({
+      description: boqLine.system_name,
       system_name: boqLine.system_name,
       location: boqLine.location_zone,
       frr_rating: boqLine.frr_rating,
@@ -403,9 +468,17 @@ function findMatchingItem(boqLine: BOQLine, tendererItems: any[]): any | null {
     }
   }
 
-  // Try fuzzy match on system name only
+  // Try fuzzy match on description/system name
   for (const item of tendererItems) {
-    if (fuzzyMatch(item.system_name, boqLine.system_name)) {
+    const itemDescription =
+      item.system_name ||
+      item.system_label ||
+      item.mapped_system ||
+      item.system_detected ||
+      item.description ||
+      '';
+
+    if (fuzzyMatch(itemDescription, boqLine.system_name)) {
       return item;
     }
   }
@@ -481,9 +554,12 @@ async function detectScopeGaps(
 
       // Gap 3: Unclear (missing attributes)
       const missingAttributes: string[] = [];
-      if (boqLine.frr_rating && !matchingItem.frr_rating) missingAttributes.push('FRR Rating');
+      const itemFrr = matchingItem.frr_rating || matchingItem.frr;
+      const itemServiceType = matchingItem.service_type || matchingItem.service;
+
+      if (boqLine.frr_rating && !itemFrr) missingAttributes.push('FRR Rating');
       if (boqLine.substrate && !matchingItem.substrate) missingAttributes.push('Substrate');
-      if (boqLine.service_type && !matchingItem.service_type) missingAttributes.push('Service Type');
+      if (boqLine.service_type && !itemServiceType) missingAttributes.push('Service Type');
 
       if (missingAttributes.length > 0) {
         gaps.push({
@@ -503,7 +579,10 @@ async function detectScopeGaps(
       }
 
       // Gap 4: Unpriced (has quantity but no rate/amount)
-      if (matchingItem.quantity > 0 && (!matchingItem.rate || !matchingItem.amount || matchingItem.amount === 0)) {
+      const itemRate = matchingItem.rate || matchingItem.unit_price;
+      const itemAmount = matchingItem.amount || matchingItem.total_price;
+
+      if (matchingItem.quantity > 0 && (!itemRate || !itemAmount || itemAmount === 0)) {
         gaps.push({
           project_id: projectId,
           module_key: moduleKey,
