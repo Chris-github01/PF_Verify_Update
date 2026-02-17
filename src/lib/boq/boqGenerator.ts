@@ -121,9 +121,10 @@ function calculateConsensusQuantity(quantities: number[], unit: string): Consens
     // Case C: High disagreement - use median + allowance
     // Determine risk level based on unit type
     let allowancePercent: number;
-    if (unit.toLowerCase() === 'ea' || unit.toLowerCase() === 'each') {
-      allowancePercent = 10; // Medium risk for EA items
-    } else if (unit.toLowerCase().includes('m3') || unit.toLowerCase().includes('m³')) {
+    const lowerUnit = unit.toLowerCase();
+    if (lowerUnit === 'ea' || lowerUnit === 'each' || lowerUnit === 'no.' || lowerUnit === 'no' || lowerUnit === 'nr') {
+      allowancePercent = 10; // Medium risk for EA/No. items
+    } else if (lowerUnit.includes('m3') || lowerUnit.includes('m³')) {
       allowancePercent = 15; // High risk for volume items
     } else {
       allowancePercent = 10; // Default medium risk
@@ -156,7 +157,7 @@ function calculateConsensusQuantity(quantities: number[], unit: string): Consens
 function roundQuantity(qty: number, unit: string): number {
   const lowerUnit = unit.toLowerCase();
 
-  if (lowerUnit === 'ea' || lowerUnit === 'each' || lowerUnit === 'nr') {
+  if (lowerUnit === 'ea' || lowerUnit === 'each' || lowerUnit === 'nr' || lowerUnit === 'no.' || lowerUnit === 'no') {
     // Round up to whole numbers for EA items
     return Math.ceil(qty);
   } else if (lowerUnit.includes('m') || lowerUnit.includes('²') || lowerUnit.includes('³')) {
@@ -166,6 +167,22 @@ function roundQuantity(qty: number, unit: string): number {
     // Default: 2 decimals
     return Math.round(qty * 100) / 100;
   }
+}
+
+/**
+ * Normalize unit names to standard QS format
+ * Converts "ea" or "each" to "No." for professional BOQ presentation
+ */
+function normalizeUnit(unit: string): string {
+  const lowerUnit = unit.toLowerCase().trim();
+
+  // Convert "ea" or "each" to "No."
+  if (lowerUnit === 'ea' || lowerUnit === 'each' || lowerUnit === 'nr') {
+    return 'No.';
+  }
+
+  // Keep other units as-is
+  return unit;
 }
 
 export async function generateBaselineBOQ(
@@ -590,6 +607,9 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
     // Use the mapped system for system_group categorization, but keep original description
     const systemForGrouping = representative.system_label || representative.mapped_system || representative.system_detected || itemDescription;
 
+    // Normalize unit: convert "ea" or "each" to "No."
+    const normalizedUnit = normalizeUnit(representative.unit || 'each');
+
     normalizedLines.push({
       trade: moduleKey,
       system_group: extractSystemGroup(systemForGrouping),
@@ -602,7 +622,7 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
       service_type: representative.service_type || representative.service || null,
       penetration_size_opening: representative.size_opening || representative.size || null,
       quantity: consensusResult.quantity,
-      unit: representative.unit || 'each',
+      unit: normalizedUnit,
       system_variant_product: representative.product || null,
       install_method_buildup: representative.install_method || null,
       constraints_access: representative.access_notes || null,
@@ -917,7 +937,8 @@ async function detectScopeGaps(
       }
 
       // Gap 2: Under-measured (quantity variance)
-      const tolerance = boqLine.unit.toLowerCase() === 'each'
+      const lowerUnit = boqLine.unit.toLowerCase();
+      const tolerance = (lowerUnit === 'each' || lowerUnit === 'ea' || lowerUnit === 'no.' || lowerUnit === 'no' || lowerUnit === 'nr')
         ? QUANTITY_TOLERANCE_EACH
         : QUANTITY_TOLERANCE_PERCENT;
 
