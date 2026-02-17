@@ -67,18 +67,28 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
 
     setLoading(true);
     try {
+      console.log('=== Loading BOQ Data ===');
+      console.log('Project ID:', projectId);
+      console.log('Module Key:', moduleKey);
+
       // Load BOQ lines
-      const { data: lines } = await supabase
+      const { data: lines, error: linesError } = await supabase
         .from('boq_lines')
         .select('*')
         .eq('project_id', projectId)
         .eq('module_key', moduleKey)
         .order('boq_line_id');
 
+      if (linesError) {
+        console.error('Error loading BOQ lines:', linesError);
+      } else {
+        console.log('✓ BOQ Lines loaded:', lines?.length || 0);
+      }
+
       setBoqLines(lines || []);
 
       // Load mappings
-      const { data: maps } = await supabase
+      const { data: maps, error: mapsError } = await supabase
         .from('boq_tenderer_map')
         .select(`
           *,
@@ -90,10 +100,19 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         .eq('project_id', projectId)
         .eq('module_key', moduleKey);
 
+      if (mapsError) {
+        console.error('Error loading mappings:', mapsError);
+      } else {
+        console.log('✓ Tenderer Mappings loaded:', maps?.length || 0);
+        if (maps && maps.length > 0) {
+          console.log('Sample mapping:', maps[0]);
+        }
+      }
+
       setMappings(maps || []);
 
       // Load gaps
-      const { data: gapsData } = await supabase
+      const { data: gapsData, error: gapsError } = await supabase
         .from('scope_gaps')
         .select(`
           *,
@@ -106,15 +125,27 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         .eq('module_key', moduleKey)
         .order('gap_id');
 
+      if (gapsError) {
+        console.error('Error loading gaps:', gapsError);
+      } else {
+        console.log('✓ Scope Gaps loaded:', gapsData?.length || 0);
+      }
+
       setGaps(gapsData || []);
 
       // Load tags
-      const { data: tagsData } = await supabase
+      const { data: tagsData, error: tagsError } = await supabase
         .from('project_tags')
         .select('*')
         .eq('project_id', projectId)
         .eq('module_key', moduleKey)
         .order('tag_id');
+
+      if (tagsError) {
+        console.error('Error loading tags:', tagsError);
+      } else {
+        console.log('✓ Project Tags loaded:', tagsData?.length || 0);
+      }
 
       setTags(tagsData || []);
 
@@ -155,7 +186,12 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         name: (q.suppliers as any)?.name || 'Unknown'
       })).filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i) || [];
 
+      console.log('✓ Tenderers loaded:', uniqueTenderers.length);
+      console.log('Tenderers:', uniqueTenderers.map(t => t.name).join(', '));
+
       setTenderers(uniqueTenderers);
+
+      console.log('=== BOQ Data Load Complete ===');
     } catch (error) {
       console.error('Error loading BOQ data:', error);
     } finally {
@@ -436,6 +472,9 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
               }`}
             >
               Tenderer Mapping
+              <span className="ml-2 px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded">
+                {mappings.length}
+              </span>
               {activeTab === 'mapping' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
               )}

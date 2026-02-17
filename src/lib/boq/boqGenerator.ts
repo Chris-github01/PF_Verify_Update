@@ -189,11 +189,35 @@ export async function generateBaselineBOQ(
       continue;
     }
 
+    if (!insertedLine) {
+      console.error('ERROR: No data returned from BOQ line insert (but no error either)');
+      console.error('Line data:', line);
+      continue;
+    }
+
+    if (!insertedLine.id) {
+      console.error('ERROR: Inserted BOQ line missing ID field:', insertedLine);
+      continue;
+    }
+
+    // Log first inserted line for debugging
+    if (boqLines.length === 0) {
+      console.log('Sample inserted BOQ line with ID:', {
+        id: insertedLine.id,
+        boq_line_id: insertedLine.boq_line_id,
+        system_name: insertedLine.system_name
+      });
+    }
+
     boqLines.push(insertedLine);
     lineCounter++;
   }
 
   console.log('Successfully inserted BOQ lines:', boqLines.length);
+
+  if (boqLines.length === 0) {
+    throw new Error('No BOQ lines were successfully inserted! Check the console for errors.');
+  }
 
   // Step 5: Create tenderer mappings
   console.log('Step 5: Creating tenderer mappings...');
@@ -392,13 +416,28 @@ async function createTendererMappings(
   tenderers: Tenderer[],
   allItems: any[]
 ): Promise<number> {
-  console.log('createTendererMappings: Processing', boqLines.length, 'lines x', tenderers.length, 'tenderers');
+  console.log('=== Creating Tenderer Mappings ===');
+  console.log('Processing', boqLines.length, 'lines x', tenderers.length, 'tenderers =', boqLines.length * tenderers.length, 'total mappings');
+
   let mappingsCount = 0;
   let matchedCount = 0;
   let missingCount = 0;
+  const errors: any[] = [];
 
   for (const boqLine of boqLines) {
+    // Validate boqLine has required fields
+    if (!boqLine.id) {
+      console.error('ERROR: BOQ line missing ID:', boqLine);
+      continue;
+    }
+
     for (const tenderer of tenderers) {
+      // Validate tenderer has required fields
+      if (!tenderer.id) {
+        console.error('ERROR: Tenderer missing ID:', tenderer);
+        continue;
+      }
+
       // Find matching items from this tenderer
       const tendererItems = allItems.filter(item => item.quote_id === tenderer.quote_id);
       const matchingItem = findMatchingItem(boqLine, tendererItems);
@@ -431,31 +470,51 @@ async function createTendererMappings(
         missingCount++;
       }
 
+      // Build mapping record
+      const mappingRecord = {
+        project_id: projectId,
+        module_key: moduleKey,
+        boq_line_id: boqLine.id,
+        tenderer_id: tenderer.id,
+        included_status: includedStatus,
+        tenderer_qty: tendererQty,
+        tenderer_rate: tendererRate,
+        tenderer_amount: tendererAmount,
+        tenderer_notes: tendererNotes,
+        clarification_tag_ids: []
+      };
+
+      // Log first mapping for debugging
+      if (mappingsCount === 0) {
+        console.log('Sample mapping record:', mappingRecord);
+      }
+
       const { error } = await supabase
         .from('boq_tenderer_map')
-        .insert({
-          project_id: projectId,
-          module_key: moduleKey,
-          boq_line_id: boqLine.id,
-          tenderer_id: tenderer.id,
-          included_status: includedStatus,
-          tenderer_qty: tendererQty,
-          tenderer_rate: tendererRate,
-          tenderer_amount: tendererAmount,
-          tenderer_notes: tendererNotes,
-          clarification_tag_ids: []
-        });
+        .insert(mappingRecord);
 
       if (!error) {
         mappingsCount++;
       } else {
-        console.error('Error creating mapping:', error);
+        errors.push({
+          boq_line: boqLine.system_name,
+          tenderer: tenderer.name,
+          error: error
+        });
+        console.error(`Error creating mapping for "${boqLine.system_name}" x "${tenderer.name}":`, error);
       }
     }
   }
 
-  console.log('createTendererMappings: Created', mappingsCount, 'mappings');
-  console.log('createTendererMappings: Matched items:', matchedCount, 'Missing items:', missingCount);
+  console.log('=== Mapping Creation Complete ===');
+  console.log('✓ Mappings created:', mappingsCount);
+  console.log('✓ Matched items:', matchedCount);
+  console.log('✗ Missing items:', missingCount);
+
+  if (errors.length > 0) {
+    console.error('⚠ Errors encountered:', errors.length);
+    console.error('First 3 errors:', errors.slice(0, 3));
+  }
 
   return mappingsCount;
 }
