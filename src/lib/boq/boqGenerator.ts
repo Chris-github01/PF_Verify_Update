@@ -418,11 +418,40 @@ async function createTendererMappings(
 ): Promise<number> {
   console.log('=== Creating Tenderer Mappings ===');
   console.log('Processing', boqLines.length, 'lines x', tenderers.length, 'tenderers =', boqLines.length * tenderers.length, 'total mappings');
+  console.log('Project ID:', projectId);
+  console.log('Module Key:', moduleKey);
+
+  // Verify suppliers exist in the database
+  for (const tenderer of tenderers) {
+    const { data: supplierCheck, error: supplierError } = await supabase
+      .from('suppliers')
+      .select('id, name')
+      .eq('id', tenderer.id)
+      .maybeSingle();
+
+    if (supplierError) {
+      console.error(`Error checking supplier ${tenderer.name}:`, supplierError);
+    } else if (!supplierCheck) {
+      console.error(`CRITICAL: Supplier ${tenderer.name} (${tenderer.id}) does not exist in suppliers table!`);
+    } else {
+      console.log(`✓ Supplier verified: ${supplierCheck.name}`);
+    }
+  }
 
   let mappingsCount = 0;
   let matchedCount = 0;
   let missingCount = 0;
   const errors: any[] = [];
+
+  // Verify BOQ lines have IDs
+  console.log('Verifying BOQ line IDs...');
+  const boqLinesWithoutId = boqLines.filter(line => !line.id);
+  if (boqLinesWithoutId.length > 0) {
+    console.error(`CRITICAL: ${boqLinesWithoutId.length} BOQ lines missing IDs!`);
+    console.error('First line without ID:', boqLinesWithoutId[0]);
+  } else {
+    console.log(`✓ All ${boqLines.length} BOQ lines have valid IDs`);
+  }
 
   for (const boqLine of boqLines) {
     // Validate boqLine has required fields
@@ -489,19 +518,32 @@ async function createTendererMappings(
         console.log('Sample mapping record:', mappingRecord);
       }
 
-      const { error } = await supabase
+      const { data: insertedMapping, error } = await supabase
         .from('boq_tenderer_map')
-        .insert(mappingRecord);
+        .insert(mappingRecord)
+        .select()
+        .single();
 
-      if (!error) {
+      if (!error && insertedMapping) {
         mappingsCount++;
-      } else {
+      } else if (error) {
         errors.push({
           boq_line: boqLine.system_name,
           tenderer: tenderer.name,
-          error: error
+          error: error,
+          errorDetails: {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          }
         });
-        console.error(`Error creating mapping for "${boqLine.system_name}" x "${tenderer.name}":`, error);
+        console.error(`❌ Error creating mapping for "${boqLine.system_name}" x "${tenderer.name}":`);
+        console.error('  Message:', error.message);
+        console.error('  Details:', error.details);
+        console.error('  Hint:', error.hint);
+        console.error('  Code:', error.code);
+        console.error('  Full error:', error);
       }
     }
   }
@@ -514,6 +556,43 @@ async function createTendererMappings(
   if (errors.length > 0) {
     console.error('⚠ Errors encountered:', errors.length);
     console.error('First 3 errors:', errors.slice(0, 3));
+
+    // Throw error if NO mappings were created at all
+    if (mappingsCount === 0) {
+      throw new Error(
+        `Failed to create any tenderer mappings! ` +
+        `Expected ${boqLines.length * tenderers.length} mappings but created 0. ` +
+        `Check console for detailed errors. ` +
+        `First error: ${errors[0]?.error?.message || JSON.stringify(errors[0])}`
+      );
+    }
+  }
+
+  // Verify mappings were actually created
+  if (mappingsCount === 0 && boqLines.length > 0 && tenderers.length > 0) {
+    console.error('CRITICAL ERROR: No mappings created despite having BOQ lines and tenderers!');
+    console.error('This usually indicates an RLS policy issue or database constraint violation.');
+
+    // Try to verify by querying the database
+    const { data: verifyMappings, error: verifyError } = await supabase
+      .from('boq_tenderer_map')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('module_key', moduleKey)
+      .limit(1);
+
+    if (verifyError) {
+      console.error('Cannot verify mappings - RLS SELECT policy may be failing:', verifyError);
+      throw new Error(
+        `Mapping creation failed and cannot verify. ` +
+        `This indicates an RLS policy issue. Error: ${verifyError.message}`
+      );
+    }
+
+    if (verifyMappings && verifyMappings.length > 0) {
+      console.error('Mappings exist in database but were not counted during creation!');
+      console.error('This is a logic error in the mapping creation loop.');
+    }
   }
 
   return mappingsCount;
