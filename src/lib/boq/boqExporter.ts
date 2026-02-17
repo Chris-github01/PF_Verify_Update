@@ -73,7 +73,7 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
         system_name,
         location_zone
       ),
-      suppliers!tenderer_id (
+      suppliers (
         name
       )
     `)
@@ -83,6 +83,7 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
 
   if (gapsError) {
     console.error('Error fetching scope gaps:', gapsError);
+    throw new Error(`Failed to fetch scope gaps: ${gapsError.message}`);
   }
   console.log('Scope gaps fetched:', gaps?.length || 0, 'gaps');
 
