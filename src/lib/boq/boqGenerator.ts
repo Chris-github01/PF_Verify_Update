@@ -111,18 +111,47 @@ export async function generateBaselineBOQ(
     throw quotesError;
   }
 
-  // Create suppliers for quotes that don't have one
+  // Get project's organisation_id once
+  const { data: project } = await supabase
+    .from('projects')
+    .select('organisation_id')
+    .eq('id', projectId)
+    .single();
+
+  // Step 1: Fix suppliers that have "Unknown Supplier" but quotes have real names
+  const quotesWithWrongSupplierNames = quotes?.filter(q =>
+    q.supplier_id &&
+    (q.suppliers as any)?.name === 'Unknown Supplier' &&
+    q.supplier_name &&
+    q.supplier_name.trim() !== '' &&
+    q.supplier_name !== 'Unknown Supplier'
+  ) || [];
+
+  if (quotesWithWrongSupplierNames.length > 0) {
+    console.log(`🔧 Found ${quotesWithWrongSupplierNames.length} suppliers with incorrect names. Updating...`);
+
+    for (const quote of quotesWithWrongSupplierNames) {
+      const correctName = quote.supplier_name.trim();
+      console.log(`  Updating supplier ${quote.supplier_id.substring(0, 8)}... from "Unknown Supplier" to "${correctName}"`);
+
+      // Update the supplier name
+      await supabase
+        .from('suppliers')
+        .update({ name: correctName })
+        .eq('id', quote.supplier_id);
+
+      // Update the quote object in our array
+      if (quote.suppliers) {
+        (quote.suppliers as any).name = correctName;
+      }
+    }
+  }
+
+  // Step 2: Create suppliers for quotes that don't have one
   const quotesNeedingSuppliers = quotes?.filter(q => !q.supplier_id) || [];
 
   if (quotesNeedingSuppliers.length > 0) {
     console.log(`⚠ Found ${quotesNeedingSuppliers.length} quotes without supplier_id. Creating supplier records...`);
-
-    // Get project's organisation_id once
-    const { data: project } = await supabase
-      .from('projects')
-      .select('organisation_id')
-      .eq('id', projectId)
-      .single();
 
     for (const quote of quotesNeedingSuppliers) {
       // Use supplier_name from quote, or default to "Unknown Supplier"

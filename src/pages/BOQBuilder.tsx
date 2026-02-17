@@ -155,6 +155,7 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         .select(`
           id,
           supplier_id,
+          supplier_name,
           suppliers (
             id,
             name
@@ -172,6 +173,7 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
           .select(`
             id,
             supplier_id,
+            supplier_name,
             suppliers (
               id,
               name
@@ -183,7 +185,7 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
 
       const uniqueTenderers = quotes?.map(q => ({
         id: q.supplier_id,
-        name: (q.suppliers as any)?.name || 'Unknown'
+        name: (q.suppliers as any)?.name || (q as any).supplier_name || 'Unknown'
       })).filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i) || [];
 
       console.log('✓ Tenderers loaded:', uniqueTenderers.length);
