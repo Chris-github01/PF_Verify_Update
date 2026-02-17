@@ -103,9 +103,11 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     .order('created_at');
 
   // Tab 1: README_CONTROLS
+  console.log('[exportBOQPack] Creating README tab...');
   createREADMETab(workbook, project, options, tenderers || []);
 
   // Tab 2: BASELINE_BOQ_LINES - Normalized baseline
+  console.log('[exportBOQPack] Creating baseline tab...');
   if (boqLines && boqLines.length > 0) {
     createBOQBaselineTab(workbook, boqLines || [], mappings || [], tenderers || [], options);
   } else {
@@ -114,19 +116,25 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
   }
 
   // Tab 3: TENDERER_MAPPING - How tenderer items map to baseline
+  console.log('[exportBOQPack] Creating tenderer mapping tab...');
   createTendererMappingTab(workbook, tenderers || [], allQuoteItems || [], boqLines || []);
 
   // Tab 4: SCOPE_GAPS_REGISTER
-  createScopeGapsTab(workbook, gaps || [], tenderers || []);
+  console.log('[exportBOQPack] Creating scope gaps tab with', gaps?.length, 'gaps...');
+  createScopeGapsTab(workbook, gaps || [], tenderers || [], boqLines || []);
 
   // Tab 5: TAGS_CLARIFICATIONS
+  console.log('[exportBOQPack] Creating tags tab...');
   createTagsTab(workbook, tags || [], boqLines || []);
 
   // Tab 6: FIRE_ENGINEER_SCHEDULE
+  console.log('[exportBOQPack] Creating fire schedule tab...');
   createFireScheduleTab(workbook, fireScheduleItems || []);
 
   // Generate buffer
+  console.log('[exportBOQPack] Generating Excel buffer...');
   const buffer = await workbook.xlsx.writeBuffer();
+  console.log('[exportBOQPack] Export complete!');
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
@@ -580,7 +588,7 @@ function fuzzyMatchSystem(str1: string, str2: string): boolean {
   return commonWords.length >= Math.min(words1.length, words2.length) * 0.5;
 }
 
-function createScopeGapsTab(workbook: ExcelJS.Workbook, gaps: ScopeGap[], tenderers: any[]): void {
+function createScopeGapsTab(workbook: ExcelJS.Workbook, gaps: ScopeGap[], tenderers: any[], boqLines?: BOQLine[]): void {
   const sheet = workbook.addWorksheet('SCOPE_GAPS_REGISTER');
 
   sheet.columns = [

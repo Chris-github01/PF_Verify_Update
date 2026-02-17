@@ -240,9 +240,9 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error exporting BOQ:', error);
-      alert('Failed to export BOQ');
+      alert(`Failed to export BOQ: ${error?.message || error}`);
     } finally {
       setExporting(false);
     }
