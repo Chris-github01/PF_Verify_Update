@@ -63,12 +63,20 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     .eq('project_id', options.project_id)
     .eq('module_key', options.module_key);
 
-  // Get scope gaps
+  // Get scope gaps with BOQ line details
   const { data: gaps } = await supabase
     .from('scope_gaps')
-    .select('*')
+    .select(`
+      *,
+      boq_lines!inner (
+        boq_line_id,
+        system_name,
+        location
+      )
+    `)
     .eq('project_id', options.project_id)
-    .eq('module_key', options.module_key);
+    .eq('module_key', options.module_key)
+    .order('gap_id');
 
   // Get tags
   const { data: tags } = await supabase
@@ -610,19 +618,22 @@ function createScopeGapsTab(workbook: ExcelJS.Workbook, gaps: ScopeGap[], tender
       date_resolved: ''
     });
   } else {
-    gaps.forEach((gap, index) => {
+    gaps.forEach((gap: any, index) => {
+      // Extract BOQ line details from the joined table
+      const boqLine = gap.boq_lines;
+
       sheet.addRow({
         gap_id: gap.gap_id || `GAP-${index + 1}`,
-        boq_line_id: gap.boq_line_id || '',
-        system: gap.system_name || '',
-        location: gap.location || '',
+        boq_line_id: boqLine?.boq_line_id || '',
+        system: boqLine?.system_name || '',
+        location: boqLine?.location || '',
         description: gap.description || '',
         affected_tenderers: gap.affected_tenderers || '',
         coverage: gap.coverage_count || '0/' + tenderers.length,
-        gap_type: gap.gap_type || 'Scope Gap',
+        gap_type: gap.gap_type || 'under_measured',
         severity: gap.severity || 'Medium',
         value_impact: gap.value_impact || '',
-        status: gap.status || 'Open',
+        status: gap.status || 'open',
         assigned_to: gap.assigned_to || '',
         resolution_notes: gap.resolution_notes || '',
         date_identified: gap.created_at ? new Date(gap.created_at).toLocaleDateString() : '',
