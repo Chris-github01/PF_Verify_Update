@@ -425,14 +425,26 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
       representative.system_detected ||
       'Unnamed System';
 
-    // For items with the same description, use the max quantity across all tenderers
-    const maxQty = Math.max(...groupItems.map(i => i.quantity || 0));
+    // Calculate baseline quantity per supplier, then take the max
+    // Group by quote_id first, sum quantities per supplier, then take max across suppliers
+    const quantitiesPerSupplier = new Map<string, number>();
+    for (const item of groupItems) {
+      const currentQty = quantitiesPerSupplier.get(item.quote_id) || 0;
+      quantitiesPerSupplier.set(item.quote_id, currentQty + (parseFloat(item.quantity) || 0));
+    }
+
+    // Take the maximum quantity across all suppliers (most comprehensive scope)
+    const maxQty = Math.max(...Array.from(quantitiesPerSupplier.values()));
 
     // Get amount/rate - try multiple field names
     const amount = representative.amount || representative.total_price || 0;
     const rate = representative.rate || representative.unit_price || 0;
 
-    console.log(`Creating BOQ line: ${itemDescription} x ${maxQty} ${representative.unit || 'each'} (from ${groupItems.length} items across ${new Set(groupItems.map(i => i.quote_id)).size} suppliers)`);
+    const suppliersCount = quantitiesPerSupplier.size;
+    const itemsPerSupplier = Array.from(quantitiesPerSupplier.entries())
+      .map(([qid, qty]) => `${qty}`).join(', ');
+
+    console.log(`Creating BOQ line: ${itemDescription} x ${maxQty} ${representative.unit || 'each'} (from ${groupItems.length} items across ${suppliersCount} suppliers: [${itemsPerSupplier}])`);
 
     // Use the mapped system for system_group categorization, but keep original description
     const systemForGrouping = representative.system_label || representative.mapped_system || representative.system_detected || itemDescription;
