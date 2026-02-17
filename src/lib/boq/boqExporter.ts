@@ -64,7 +64,7 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     .eq('module_key', options.module_key);
 
   // Get scope gaps (with optional BOQ line details if linked)
-  const { data: gaps } = await supabase
+  const { data: gaps, error: gapsError } = await supabase
     .from('scope_gaps')
     .select(`
       *,
@@ -73,13 +73,18 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
         system_name,
         location
       ),
-      suppliers!scope_gaps_tenderer_id_fkey (
+      suppliers!tenderer_id (
         name
       )
     `)
     .eq('project_id', options.project_id)
     .eq('module_key', options.module_key)
     .order('gap_id');
+
+  if (gapsError) {
+    console.error('Error fetching scope gaps:', gapsError);
+  }
+  console.log('Scope gaps fetched:', gaps?.length || 0, 'gaps');
 
   // Get tags
   const { data: tags } = await supabase
