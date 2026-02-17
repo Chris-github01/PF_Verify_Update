@@ -63,15 +63,18 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     .eq('project_id', options.project_id)
     .eq('module_key', options.module_key);
 
-  // Get scope gaps with BOQ line details
+  // Get scope gaps (with optional BOQ line details if linked)
   const { data: gaps } = await supabase
     .from('scope_gaps')
     .select(`
       *,
-      boq_lines!inner (
+      boq_lines (
         boq_line_id,
         system_name,
         location
+      ),
+      suppliers!scope_gaps_tenderer_id_fkey (
+        name
       )
     `)
     .eq('project_id', options.project_id)
@@ -619,16 +622,39 @@ function createScopeGapsTab(workbook: ExcelJS.Workbook, gaps: ScopeGap[], tender
     });
   } else {
     gaps.forEach((gap: any, index) => {
-      // Extract BOQ line details from the joined table
+      // Extract BOQ line details from the joined table (if available)
       const boqLine = gap.boq_lines;
+
+      // Get supplier name
+      const supplierName = gap.suppliers?.name || '';
+
+      // If no BOQ line linked, try to infer from description or expected_requirement
+      let inferredBoqLineId = '';
+      let inferredSystem = '';
+
+      if (!boqLine) {
+        // Try to extract baseline quantity from description
+        const baselineMatch = gap.description?.match(/baseline \(([0-9]+)\)/);
+        if (baselineMatch) {
+          const baselineQty = parseFloat(baselineMatch[1]);
+          // Find matching BOQ line by quantity (first match)
+          const matchingBoqLine = (boqLines || []).find(
+            (bl: any) => bl.quantity === baselineQty
+          );
+          if (matchingBoqLine) {
+            inferredBoqLineId = matchingBoqLine.boq_line_id;
+            inferredSystem = matchingBoqLine.system_name;
+          }
+        }
+      }
 
       sheet.addRow({
         gap_id: gap.gap_id || `GAP-${index + 1}`,
-        boq_line_id: boqLine?.boq_line_id || '',
-        system: boqLine?.system_name || '',
+        boq_line_id: boqLine?.boq_line_id || inferredBoqLineId,
+        system: boqLine?.system_name || inferredSystem,
         location: boqLine?.location || '',
         description: gap.description || '',
-        affected_tenderers: gap.affected_tenderers || '',
+        affected_tenderers: supplierName,
         coverage: gap.coverage_count || '0/' + tenderers.length,
         gap_type: gap.gap_type || 'under_measured',
         severity: gap.severity || 'Medium',
