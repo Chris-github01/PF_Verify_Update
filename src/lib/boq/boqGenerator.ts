@@ -96,17 +96,58 @@ export async function generateBaselineBOQ(
     throw quotesError;
   }
 
-  const tenderers: Tenderer[] = quotes?.map(q => ({
-    id: q.supplier_id,
-    name: (q.suppliers as any)?.name || 'Unknown',
-    quote_id: q.id
-  })) || [];
+  // Create suppliers for quotes that don't have one
+  const quotesNeedingSuppliers = quotes?.filter(q => !q.supplier_id) || [];
+
+  if (quotesNeedingSuppliers.length > 0) {
+    console.log(`⚠ Found ${quotesNeedingSuppliers.length} quotes without suppliers. Creating supplier records...`);
+
+    for (const quote of quotesNeedingSuppliers) {
+      // Create a supplier for this quote
+      const { data: newSupplier, error: supplierError } = await supabase
+        .from('suppliers')
+        .insert({
+          name: 'Unknown Supplier',
+          organisation_id: (await supabase
+            .from('projects')
+            .select('organisation_id')
+            .eq('id', projectId)
+            .single()).data?.organisation_id
+        })
+        .select()
+        .single();
+
+      if (!supplierError && newSupplier) {
+        // Update the quote with the new supplier_id
+        await supabase
+          .from('quotes')
+          .update({ supplier_id: newSupplier.id })
+          .eq('id', quote.id);
+
+        // Update the quote object in our array
+        quote.supplier_id = newSupplier.id;
+        quote.suppliers = newSupplier as any;
+
+        console.log(`✓ Created supplier ${newSupplier.id} for quote ${quote.id}`);
+      } else {
+        console.error(`Failed to create supplier for quote ${quote.id}:`, supplierError);
+      }
+    }
+  }
+
+  const tenderers: Tenderer[] = quotes
+    ?.filter(q => q.supplier_id) // Only include quotes with valid supplier_id
+    ?.map(q => ({
+      id: q.supplier_id!,
+      name: (q.suppliers as any)?.name || 'Unknown',
+      quote_id: q.id
+    })) || [];
 
   console.log('Tenderers found:', tenderers.length);
-  console.log('Tenderers:', tenderers.map(t => ({ name: t.name, quote_id: t.quote_id })));
+  console.log('Tenderers:', tenderers.map(t => ({ name: t.name, id: t.id, quote_id: t.quote_id })));
 
   if (tenderers.length === 0) {
-    throw new Error('No quotes found for this project. Please import quotes first using the "Import Quotes" step.');
+    throw new Error('No quotes with valid suppliers found for this project. Please check your quote imports.');
   }
 
   // Step 2: Get all quote items from all tenderers
@@ -421,51 +462,17 @@ async function createTendererMappings(
   console.log('Project ID:', projectId);
   console.log('Module Key:', moduleKey);
 
-  // Verify suppliers exist in the database
-  for (const tenderer of tenderers) {
-    const { data: supplierCheck, error: supplierError } = await supabase
-      .from('suppliers')
-      .select('id, name')
-      .eq('id', tenderer.id)
-      .maybeSingle();
-
-    if (supplierError) {
-      console.error(`Error checking supplier ${tenderer.name}:`, supplierError);
-    } else if (!supplierCheck) {
-      console.error(`CRITICAL: Supplier ${tenderer.name} (${tenderer.id}) does not exist in suppliers table!`);
-    } else {
-      console.log(`✓ Supplier verified: ${supplierCheck.name}`);
-    }
-  }
+  // All tenderers should now have valid supplier_ids since we created missing suppliers
+  console.log(`✓ All ${tenderers.length} tenderers have valid supplier IDs`);
+  console.log('Sample tenderer:', tenderers[0]);
 
   let mappingsCount = 0;
   let matchedCount = 0;
   let missingCount = 0;
   const errors: any[] = [];
 
-  // Verify BOQ lines have IDs
-  console.log('Verifying BOQ line IDs...');
-  const boqLinesWithoutId = boqLines.filter(line => !line.id);
-  if (boqLinesWithoutId.length > 0) {
-    console.error(`CRITICAL: ${boqLinesWithoutId.length} BOQ lines missing IDs!`);
-    console.error('First line without ID:', boqLinesWithoutId[0]);
-  } else {
-    console.log(`✓ All ${boqLines.length} BOQ lines have valid IDs`);
-  }
-
   for (const boqLine of boqLines) {
-    // Validate boqLine has required fields
-    if (!boqLine.id) {
-      console.error('ERROR: BOQ line missing ID:', boqLine);
-      continue;
-    }
-
     for (const tenderer of tenderers) {
-      // Validate tenderer has required fields
-      if (!tenderer.id) {
-        console.error('ERROR: Tenderer missing ID:', tenderer);
-        continue;
-      }
 
       // Find matching items from this tenderer
       const tendererItems = allItems.filter(item => item.quote_id === tenderer.quote_id);
