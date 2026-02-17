@@ -37,6 +37,137 @@ interface Tenderer {
 const QUANTITY_TOLERANCE_PERCENT = 5;
 const QUANTITY_TOLERANCE_EACH = 0;
 
+// Consensus Quantity Calculation Types
+interface ConsensusResult {
+  quantity: number;
+  method: 'Average' | 'Median' | 'Median + Allowance';
+  confidence: 'High' | 'Medium' | 'Low';
+  spread: number;
+  allowanceApplied: number;
+  rawQuantities: number[];
+  explanation: string;
+}
+
+/**
+ * Calculate consensus quantity using outlier-controlled methodology
+ *
+ * Logic:
+ * - Spread ≤ 15%: Use Average (strong market consensus)
+ * - Spread 15-35%: Use Median (removes outlier influence)
+ * - Spread > 35%: Use Median + Risk Allowance (high disagreement)
+ *
+ * This is commercially defensible and aligns with QS best practice
+ */
+function calculateConsensusQuantity(quantities: number[], unit: string): ConsensusResult {
+  // Step 1: Clean data - remove zeros and blanks
+  const validQtys = quantities.filter(q => q > 0);
+
+  if (validQtys.length === 0) {
+    return {
+      quantity: 0,
+      method: 'Average',
+      confidence: 'Low',
+      spread: 0,
+      allowanceApplied: 0,
+      rawQuantities: quantities,
+      explanation: 'No valid quantities provided'
+    };
+  }
+
+  if (validQtys.length === 1) {
+    return {
+      quantity: roundQuantity(validQtys[0], unit),
+      method: 'Average',
+      confidence: 'Medium',
+      spread: 0,
+      allowanceApplied: 0,
+      rawQuantities: quantities,
+      explanation: 'Single supplier quoted - used as baseline'
+    };
+  }
+
+  // Step 2: Calculate range check (outlier detection)
+  const qMin = Math.min(...validQtys);
+  const qMax = Math.max(...validQtys);
+  const spread = ((qMax - qMin) / qMax) * 100;
+
+  // Step 3: Calculate average and median
+  const average = validQtys.reduce((sum, q) => sum + q, 0) / validQtys.length;
+  const sorted = [...validQtys].sort((a, b) => a - b);
+  const median = sorted.length % 2 === 0
+    ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+    : sorted[Math.floor(sorted.length / 2)];
+
+  // Step 4: Determine method based on spread
+  let quantity: number;
+  let method: ConsensusResult['method'];
+  let confidence: ConsensusResult['confidence'];
+  let allowanceApplied = 0;
+  let explanation: string;
+
+  if (spread <= 15) {
+    // Case A: Tight group - use average
+    quantity = average;
+    method = 'Average';
+    confidence = 'High';
+    explanation = `Strong market consensus (spread ${spread.toFixed(1)}%)`;
+  } else if (spread <= 35) {
+    // Case B: Medium disagreement - use median
+    quantity = median;
+    method = 'Median';
+    confidence = 'Medium';
+    explanation = `Median used to remove outlier influence (spread ${spread.toFixed(1)}%)`;
+  } else {
+    // Case C: High disagreement - use median + allowance
+    // Determine risk level based on unit type
+    let allowancePercent: number;
+    if (unit.toLowerCase() === 'ea' || unit.toLowerCase() === 'each') {
+      allowancePercent = 10; // Medium risk for EA items
+    } else if (unit.toLowerCase().includes('m3') || unit.toLowerCase().includes('m³')) {
+      allowancePercent = 15; // High risk for volume items
+    } else {
+      allowancePercent = 10; // Default medium risk
+    }
+
+    allowanceApplied = allowancePercent;
+    quantity = median * (1 + allowancePercent / 100);
+    method = 'Median + Allowance';
+    confidence = 'Low';
+    explanation = `High variation (spread ${spread.toFixed(1)}%) - ${allowancePercent}% allowance applied for scope interpretation risk`;
+  }
+
+  // Step 5: Round appropriately
+  quantity = roundQuantity(quantity, unit);
+
+  return {
+    quantity,
+    method,
+    confidence,
+    spread,
+    allowanceApplied,
+    rawQuantities: quantities,
+    explanation
+  };
+}
+
+/**
+ * Round quantities appropriately based on unit type
+ */
+function roundQuantity(qty: number, unit: string): number {
+  const lowerUnit = unit.toLowerCase();
+
+  if (lowerUnit === 'ea' || lowerUnit === 'each' || lowerUnit === 'nr') {
+    // Round up to whole numbers for EA items
+    return Math.ceil(qty);
+  } else if (lowerUnit.includes('m') || lowerUnit.includes('²') || lowerUnit.includes('³')) {
+    // Round to 1 decimal for measurements
+    return Math.round(qty * 10) / 10;
+  } else {
+    // Default: 2 decimals
+    return Math.round(qty * 100) / 100;
+  }
+}
+
 export async function generateBaselineBOQ(
   projectId: string,
   moduleKey: ModuleKey
@@ -292,7 +423,12 @@ export async function generateBaselineBOQ(
         baseline_included: true,
         baseline_scope_notes: line.baseline_scope_notes,
         baseline_measure_rule: line.baseline_measure_rule,
-        baseline_allowance_type: 'none'
+        baseline_allowance_type: 'none',
+        quantity_method: line.quantity_method,
+        quantity_confidence: line.quantity_confidence,
+        quantity_spread_percent: line.quantity_spread_percent,
+        quantity_allowance_percent: line.quantity_allowance_percent,
+        supplier_quantities: line.supplier_quantities
       })
       .select()
       .single();
@@ -425,16 +561,19 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
       representative.system_detected ||
       'Unnamed System';
 
-    // Calculate baseline quantity per supplier, then take the max
-    // Group by quote_id first, sum quantities per supplier, then take max across suppliers
+    // Calculate baseline quantity using consensus methodology
+    // Step 1: Group by supplier and sum quantities per supplier
     const quantitiesPerSupplier = new Map<string, number>();
     for (const item of groupItems) {
       const currentQty = quantitiesPerSupplier.get(item.quote_id) || 0;
       quantitiesPerSupplier.set(item.quote_id, currentQty + (parseFloat(item.quantity) || 0));
     }
 
-    // Take the maximum quantity across all suppliers (most comprehensive scope)
-    const maxQty = Math.max(...Array.from(quantitiesPerSupplier.values()));
+    // Step 2: Get all quantities (excluding zeros unless explicitly marked as excluded)
+    const quantities = Array.from(quantitiesPerSupplier.values()).filter(q => q > 0);
+
+    // Step 3: Calculate consensus quantity with outlier protection
+    const consensusResult = calculateConsensusQuantity(quantities, representative.unit);
 
     // Get amount/rate - try multiple field names
     const amount = representative.amount || representative.total_price || 0;
@@ -442,9 +581,11 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
 
     const suppliersCount = quantitiesPerSupplier.size;
     const itemsPerSupplier = Array.from(quantitiesPerSupplier.entries())
-      .map(([qid, qty]) => `${qty}`).join(', ');
+      .map(([qid, qty]) => `${qty.toFixed(1)}`).join(', ');
 
-    console.log(`Creating BOQ line: ${itemDescription} x ${maxQty} ${representative.unit || 'each'} (from ${groupItems.length} items across ${suppliersCount} suppliers: [${itemsPerSupplier}])`);
+    console.log(`Creating BOQ line: ${itemDescription} x ${consensusResult.quantity} ${representative.unit || 'each'}`);
+    console.log(`  Method: ${consensusResult.method} | Confidence: ${consensusResult.confidence} | Spread: ${consensusResult.spread.toFixed(1)}%`);
+    console.log(`  Supplier quantities: [${itemsPerSupplier}] across ${suppliersCount} suppliers`);
 
     // Use the mapped system for system_group categorization, but keep original description
     const systemForGrouping = representative.system_label || representative.mapped_system || representative.system_detected || itemDescription;
@@ -460,13 +601,18 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
       substrate: representative.substrate || null,
       service_type: representative.service_type || representative.service || null,
       penetration_size_opening: representative.size_opening || representative.size || null,
-      quantity: maxQty,
+      quantity: consensusResult.quantity,
       unit: representative.unit || 'each',
       system_variant_product: representative.product || null,
       install_method_buildup: representative.install_method || null,
       constraints_access: representative.access_notes || null,
-      baseline_scope_notes: null,
-      baseline_measure_rule: null
+      baseline_scope_notes: consensusResult.explanation,
+      baseline_measure_rule: `${consensusResult.method} (Confidence: ${consensusResult.confidence})`,
+      quantity_method: consensusResult.method,
+      quantity_confidence: consensusResult.confidence,
+      quantity_spread_percent: consensusResult.spread,
+      quantity_allowance_percent: consensusResult.allowanceApplied,
+      supplier_quantities: consensusResult.rawQuantities
     });
   }
 

@@ -54,6 +54,13 @@ export interface BOQLine {
   baseline_allowance_type: BaselineAllowanceType | null;
   baseline_allowance_value: number | null;
 
+  // Consensus Quantity Metadata (for transparency and auditability)
+  quantity_method?: string | null; // 'Average', 'Median', 'Median + Allowance'
+  quantity_confidence?: 'High' | 'Medium' | 'Low' | null;
+  quantity_spread_percent?: number | null;
+  quantity_allowance_percent?: number | null;
+  supplier_quantities?: number[] | null;
+
   // Version Control
   version: number;
   created_at: string;
