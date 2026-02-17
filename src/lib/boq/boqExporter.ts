@@ -71,7 +71,7 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
       boq_lines (
         boq_line_id,
         system_name,
-        location
+        location_zone
       ),
       suppliers!tenderer_id (
         name
@@ -606,7 +606,10 @@ function createScopeGapsTab(workbook: ExcelJS.Workbook, gaps: ScopeGap[], tender
   headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
   headerRow.height = 40;
 
+  console.log('[createScopeGapsTab] Received gaps:', gaps?.length, 'gaps');
+
   if (gaps.length === 0) {
+    console.warn('[createScopeGapsTab] No gaps to display - showing placeholder');
     // Add placeholder row
     sheet.addRow({
       gap_id: '',
@@ -657,7 +660,7 @@ function createScopeGapsTab(workbook: ExcelJS.Workbook, gaps: ScopeGap[], tender
         gap_id: gap.gap_id || `GAP-${index + 1}`,
         boq_line_id: boqLine?.boq_line_id || inferredBoqLineId,
         system: boqLine?.system_name || inferredSystem,
-        location: boqLine?.location || '',
+        location: boqLine?.location_zone || '',
         description: gap.description || '',
         affected_tenderers: supplierName,
         coverage: gap.coverage_count || '0/' + tenderers.length,
