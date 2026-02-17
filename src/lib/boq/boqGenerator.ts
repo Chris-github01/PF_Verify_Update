@@ -274,28 +274,35 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
   for (const [key, groupItems] of groupedMap.entries()) {
     const representative = groupItems[0];
 
-    // Get the best system name from the group (try multiple fields)
-    const systemName =
+    // PRIORITY: Use original description to preserve detailed line items
+    // The mapped/detected system fields are useful for categorization but
+    // lose the specific product details that QS teams need
+    const itemDescription =
+      representative.description ||
+      representative.raw_description ||
+      representative.normalized_description ||
       representative.system_name ||
       representative.system_label ||
       representative.mapped_system ||
       representative.system_detected ||
-      representative.description ||
       'Unnamed System';
 
-    // For items with the same system, use the max quantity
+    // For items with the same description, use the max quantity across all tenderers
     const maxQty = Math.max(...groupItems.map(i => i.quantity || 0));
 
     // Get amount/rate - try multiple field names
     const amount = representative.amount || representative.total_price || 0;
     const rate = representative.rate || representative.unit_price || 0;
 
-    console.log(`Creating BOQ line: ${systemName} x ${maxQty} ${representative.unit || 'each'} (from ${groupItems.length} items)`);
+    console.log(`Creating BOQ line: ${itemDescription} x ${maxQty} ${representative.unit || 'each'} (from ${groupItems.length} items across ${new Set(groupItems.map(i => i.quote_id)).size} suppliers)`);
+
+    // Use the mapped system for system_group categorization, but keep original description
+    const systemForGrouping = representative.system_label || representative.mapped_system || representative.system_detected || itemDescription;
 
     normalizedLines.push({
       trade: moduleKey,
-      system_group: extractSystemGroup(systemName),
-      system_name: systemName,
+      system_group: extractSystemGroup(systemForGrouping),
+      system_name: itemDescription,
       drawing_spec_ref: representative.drawing_ref || null,
       location_zone: representative.location || null,
       element_asset: representative.element || null,
@@ -325,14 +332,17 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
 }
 
 function createGroupingKey(item: any): string {
-  // Create a unique key based on system, location, and key attributes
-  // Use description as the primary identifier (it's the main field in quote_items)
-  const systemName = (
+  // CRITICAL: Use the original description as the PRIMARY identifier
+  // This preserves the detailed line items from the original quotes
+  // Only fall back to mapped/detected systems if description is missing
+  const itemDescription = (
+    item.description ||
+    item.raw_description ||
+    item.normalized_description ||
     item.system_name ||
     item.system_label ||
     item.mapped_system ||
     item.system_detected ||
-    item.description ||
     ''
   ).toLowerCase().trim();
 
@@ -342,10 +352,11 @@ function createGroupingKey(item: any): string {
   const serviceType = (item.service_type || item.service || '').toLowerCase().trim();
   const sizeOpening = (item.size_opening || item.size || '').toLowerCase().trim();
 
-  // Create key - description/system name is mandatory, others are optional
-  // This ensures items with different descriptions get separate BOQ lines
+  // Create unique key based on the ACTUAL item description plus attributes
+  // This ensures "Ryanfire Mastic (Cable Bundle)" stays separate from
+  // "Ryanbatt 502 with Ryanfire Mastic" even if they map to the same system
   const parts = [
-    systemName,
+    itemDescription,
     location,
     frr,
     substrate,
@@ -450,12 +461,11 @@ async function createTendererMappings(
 }
 
 function findMatchingItem(boqLine: BOQLine, tendererItems: any[]): any | null {
-  // Try to find exact match first
+  // Try to find exact match first using the same grouping logic
   for (const item of tendererItems) {
     const itemKey = createGroupingKey(item);
     const boqKey = createGroupingKey({
-      description: boqLine.system_name,
-      system_name: boqLine.system_name,
+      description: boqLine.system_name, // BOQ line stores original description in system_name
       location: boqLine.location_zone,
       frr_rating: boqLine.frr_rating,
       substrate: boqLine.substrate,
@@ -468,14 +478,16 @@ function findMatchingItem(boqLine: BOQLine, tendererItems: any[]): any | null {
     }
   }
 
-  // Try fuzzy match on description/system name
+  // Try fuzzy match on description (prioritize original description over mapped fields)
   for (const item of tendererItems) {
     const itemDescription =
+      item.description ||
+      item.raw_description ||
+      item.normalized_description ||
       item.system_name ||
       item.system_label ||
       item.mapped_system ||
       item.system_detected ||
-      item.description ||
       '';
 
     if (fuzzyMatch(itemDescription, boqLine.system_name)) {
