@@ -56,6 +56,7 @@ export async function generateBaselineBOQ(
     .select(`
       id,
       supplier_id,
+      supplier_name,
       trade,
       suppliers (
         id,
@@ -78,6 +79,7 @@ export async function generateBaselineBOQ(
       .select(`
         id,
         supplier_id,
+        supplier_name,
         trade,
         suppliers (
           id,
@@ -91,6 +93,19 @@ export async function generateBaselineBOQ(
     console.log('Quotes without trade filter:', quotes?.length || 0);
   }
 
+  // Debug: Log quote data
+  if (quotes && quotes.length > 0) {
+    console.log('📊 Quote Data Summary:');
+    quotes.forEach((q, i) => {
+      console.log(`  Quote ${i + 1}:`, {
+        id: q.id.substring(0, 8) + '...',
+        supplier_id: q.supplier_id ? q.supplier_id.substring(0, 8) + '...' : 'NULL ⚠️',
+        supplier_name: q.supplier_name || 'NULL ⚠️',
+        supplier_relation: q.suppliers?.name || 'NULL ⚠️'
+      });
+    });
+  }
+
   if (quotesError) {
     console.error('Error fetching quotes:', quotesError);
     throw quotesError;
@@ -100,38 +115,64 @@ export async function generateBaselineBOQ(
   const quotesNeedingSuppliers = quotes?.filter(q => !q.supplier_id) || [];
 
   if (quotesNeedingSuppliers.length > 0) {
-    console.log(`⚠ Found ${quotesNeedingSuppliers.length} quotes without suppliers. Creating supplier records...`);
+    console.log(`⚠ Found ${quotesNeedingSuppliers.length} quotes without supplier_id. Creating supplier records...`);
+
+    // Get project's organisation_id once
+    const { data: project } = await supabase
+      .from('projects')
+      .select('organisation_id')
+      .eq('id', projectId)
+      .single();
 
     for (const quote of quotesNeedingSuppliers) {
-      // Create a supplier for this quote
-      const { data: newSupplier, error: supplierError } = await supabase
+      // Use supplier_name from quote, or default to "Unknown Supplier"
+      const supplierName = quote.supplier_name?.trim() || 'Unknown Supplier';
+
+      console.log(`  Creating supplier "${supplierName}" for quote ${quote.id.substring(0, 8)}...`);
+
+      // Check if supplier with this name already exists for this organisation
+      const { data: existingSupplier } = await supabase
         .from('suppliers')
-        .insert({
-          name: 'Unknown Supplier',
-          organisation_id: (await supabase
-            .from('projects')
-            .select('organisation_id')
-            .eq('id', projectId)
-            .single()).data?.organisation_id
-        })
-        .select()
-        .single();
+        .select('id, name')
+        .eq('name', supplierName)
+        .eq('organisation_id', project?.organisation_id)
+        .maybeSingle();
 
-      if (!supplierError && newSupplier) {
-        // Update the quote with the new supplier_id
-        await supabase
-          .from('quotes')
-          .update({ supplier_id: newSupplier.id })
-          .eq('id', quote.id);
+      let supplierId: string;
 
-        // Update the quote object in our array
-        quote.supplier_id = newSupplier.id;
-        quote.suppliers = newSupplier as any;
-
-        console.log(`✓ Created supplier ${newSupplier.id} for quote ${quote.id}`);
+      if (existingSupplier) {
+        // Use existing supplier
+        supplierId = existingSupplier.id;
+        console.log(`    ✓ Found existing supplier: "${existingSupplier.name}" (${supplierId.substring(0, 8)}...)`);
       } else {
-        console.error(`Failed to create supplier for quote ${quote.id}:`, supplierError);
+        // Create new supplier
+        const { data: newSupplier, error: supplierError } = await supabase
+          .from('suppliers')
+          .insert({
+            name: supplierName,
+            organisation_id: project?.organisation_id
+          })
+          .select()
+          .single();
+
+        if (!supplierError && newSupplier) {
+          supplierId = newSupplier.id;
+          console.log(`    ✓ Created new supplier: "${newSupplier.name}" (${supplierId.substring(0, 8)}...)`);
+        } else {
+          console.error(`    ✗ Failed to create supplier:`, supplierError);
+          continue;
+        }
       }
+
+      // Update the quote with the supplier_id
+      await supabase
+        .from('quotes')
+        .update({ supplier_id: supplierId })
+        .eq('id', quote.id);
+
+      // Update the quote object in our array
+      quote.supplier_id = supplierId;
+      quote.suppliers = { id: supplierId, name: supplierName } as any;
     }
   }
 
@@ -139,12 +180,15 @@ export async function generateBaselineBOQ(
     ?.filter(q => q.supplier_id) // Only include quotes with valid supplier_id
     ?.map(q => ({
       id: q.supplier_id!,
-      name: (q.suppliers as any)?.name || 'Unknown',
+      name: (q.suppliers as any)?.name || q.supplier_name || 'Unknown Supplier',
       quote_id: q.id
     })) || [];
 
-  console.log('Tenderers found:', tenderers.length);
-  console.log('Tenderers:', tenderers.map(t => ({ name: t.name, id: t.id, quote_id: t.quote_id })));
+  console.log('✓ Tenderers found:', tenderers.length);
+  console.log('Tenderers:');
+  tenderers.forEach((t, i) => {
+    console.log(`  ${i + 1}. ${t.name} (supplier_id: ${t.id.substring(0, 8)}..., quote_id: ${t.quote_id.substring(0, 8)}...)`);
+  });
 
   if (tenderers.length === 0) {
     throw new Error('No quotes with valid suppliers found for this project. Please check your quote imports.');
