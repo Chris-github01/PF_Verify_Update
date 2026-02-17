@@ -355,6 +355,8 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
     }
   };
 
+  // Count unique BOQ lines with gaps (not total gap records)
+  const uniqueBOQLinesWithGaps = new Set(gaps.map(g => g.boq_line_id)).size;
   const openGapsCount = gaps.filter(g => g.status === 'open').length;
   const totalGaps = gaps.length;
 
@@ -374,7 +376,7 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
               </div>
               <h1 className="text-2xl font-bold text-white">BOQ Builder (Normalised Scope)</h1>
               <p className="text-slate-400 text-sm mt-1">
-                {tenderers.length} tenderers • {boqLines.length} BOQ lines • {openGapsCount}/{totalGaps} gaps open
+                {tenderers.length} tenderers • {boqLines.length} BOQ lines • {uniqueBOQLinesWithGaps > 0 ? `${uniqueBOQLinesWithGaps} lines with gaps` : 'No gaps detected'}
               </p>
             </div>
 
@@ -491,7 +493,7 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
             >
               Scope Gaps Register
               <span className="ml-2 px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded">
-                {openGapsCount}
+                {uniqueBOQLinesWithGaps}
               </span>
               {activeTab === 'gaps' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
