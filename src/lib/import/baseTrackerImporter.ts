@@ -291,16 +291,6 @@ export async function processBaseTrackerImport(
         hasChanges = true;
       }
 
-      if (row.quantity !== undefined && row.quantity !== existingItem.quantity) {
-        updates.quantity = row.quantity;
-        hasChanges = true;
-      }
-
-      if (row.rate !== undefined && row.rate !== existingItem.unit_rate) {
-        updates.unit_rate = row.rate;
-        hasChanges = true;
-      }
-
       if (hasChanges) {
         updates.updated_at = new Date().toISOString();
 
