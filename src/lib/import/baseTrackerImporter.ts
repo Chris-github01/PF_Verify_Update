@@ -4,6 +4,7 @@ import type {
   BaseTrackerImportResult,
   BaseTrackerImportConfig,
   ColumnMapping,
+  DetectedColumns,
   ParsedExcelData,
   ImportError,
   ImportWarning,
@@ -125,15 +126,15 @@ function isEmptyRow(row: any[]): boolean {
   );
 }
 
-function detectColumns(headers: string[]): Partial<ColumnMapping> {
-  const detected: any = {};
+function detectColumns(headers: string[]): DetectedColumns {
+  const detected: DetectedColumns = {};
 
   for (const [key, patterns] of Object.entries(COMMON_COLUMN_PATTERNS)) {
     const index = headers.findIndex(header =>
       header && typeof header === 'string' && patterns.some(pattern => header.includes(pattern))
     );
     if (index !== -1) {
-      detected[key] = index;
+      detected[key as keyof DetectedColumns] = index;
     }
   }
 
@@ -143,7 +144,7 @@ function detectColumns(headers: string[]): Partial<ColumnMapping> {
 function parseRow(
   row: any[],
   headers: string[],
-  columnMap: Partial<ColumnMapping>
+  columnMap: DetectedColumns
 ): BaseTrackerImportRow {
   const parsed: BaseTrackerImportRow = {
     description: '',

@@ -70,10 +70,22 @@ export interface ColumnMapping {
   itemNumber: string[];
 }
 
+export interface DetectedColumns {
+  description?: number;
+  quantity?: number;
+  unit?: number;
+  rate?: number;
+  previousCertified?: number;
+  currentClaim?: number;
+  totalToDate?: number;
+  balance?: number;
+  itemNumber?: number;
+}
+
 export interface ParsedExcelData {
   headers: string[];
   rows: BaseTrackerImportRow[];
-  detectedColumns: Partial<ColumnMapping>;
+  detectedColumns: DetectedColumns;
   sheetName: string;
   totalRows: number;
 }
