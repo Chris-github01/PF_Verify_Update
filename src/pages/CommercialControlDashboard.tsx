@@ -156,14 +156,14 @@ export default function CommercialControlDashboard() {
       }, 0);
     }
 
-    // Get certified claims (actual money certified)
-    const { data: claims } = await supabase
-      .from('base_tracker_claims')
-      .select('certified_amount')
-      .eq('project_id', projId)
-      .eq('status', 'Certified');
+    // Get certified amounts from commercial baseline items
+    const { data: baselineItemsForCertified } = await supabase
+      .from('commercial_baseline_items')
+      .select('total_certified')
+      .eq('award_approval_id', award.id)
+      .eq('is_active', true);
 
-    const certified = (claims || []).reduce((sum, claim) => sum + (claim.certified_amount || 0), 0);
+    const certified = (baselineItemsForCertified || []).reduce((sum, item) => sum + (item.total_certified || 0), 0);
 
     // Get variations
     const { data: variations } = await supabase
@@ -377,13 +377,14 @@ export default function CommercialControlDashboard() {
     const trades: TradeMetrics[] = [];
 
     for (const [key, group] of groupedMap.entries()) {
-      const { data: claims } = await supabase
-        .from('base_tracker_claims')
-        .select('total_claimed_to_date')
-        .eq('project_id', projId)
-        .eq('supplier_id', group.supplierId);
+      // Get total certified from commercial baseline items
+      const { data: baselineItemsForClaimed } = await supabase
+        .from('commercial_baseline_items')
+        .select('total_certified')
+        .eq('award_approval_id', group.awardId)
+        .eq('is_active', true);
 
-      const totalClaimed = (claims || []).reduce((sum, c) => sum + (c.total_claimed_to_date || 0), 0);
+      const totalClaimed = (baselineItemsForClaimed || []).reduce((sum, item) => sum + (item.total_certified || 0), 0);
 
       const { data: vos } = await supabase
         .from('variation_register')
