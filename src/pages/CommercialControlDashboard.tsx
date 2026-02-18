@@ -131,28 +131,30 @@ export default function CommercialControlDashboard() {
     }
 
     // Calculate original contract value from the single awarded supplier
-    // CRITICAL: Use ONLY 'awarded_item' line types (exclude allowances and retention)
+    // CRITICAL: Use the total_amount stored on the quote (this is the correct value from import)
     const award = awards[0];
     let baseContractValue = 0;
 
-    const { data: baselineItems } = await supabase
-      .from('commercial_baseline_items')
-      .select('line_amount, line_type')
-      .eq('award_approval_id', award.id)
-      .eq('is_active', true)
-      .eq('line_type', 'awarded_item'); // Only include actual awarded items
+    // Get the total from the awarded quote (this contains the correct imported total)
+    const { data: awardedQuote } = await supabase
+      .from('quotes')
+      .select('total_amount')
+      .eq('id', award.final_approved_quote_id)
+      .single();
 
-    if (baselineItems && baselineItems.length > 0) {
-      baseContractValue = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
+    if (awardedQuote?.total_amount) {
+      baseContractValue = parseFloat(awardedQuote.total_amount.toString());
     } else {
-      // Fallback: get value from quote_items if no baseline exists
-      const { data: quoteItems } = await supabase
-        .from('quote_items')
-        .select('quantity, unit_price')
-        .eq('quote_id', award.final_approved_quote_id);
+      // Fallback: calculate from baseline items if quote not found
+      const { data: baselineItems } = await supabase
+        .from('commercial_baseline_items')
+        .select('quantity, unit_rate, line_type')
+        .eq('award_approval_id', award.id)
+        .eq('is_active', true)
+        .eq('line_type', 'awarded_item');
 
-      baseContractValue = (quoteItems || []).reduce((sum, item) => {
-        return sum + ((item.quantity || 0) * (item.unit_price || 0));
+      baseContractValue = (baselineItems || []).reduce((sum, item) => {
+        return sum + ((item.quantity || 0) * (item.unit_rate || 0));
       }, 0);
     }
 
@@ -323,29 +325,28 @@ export default function CommercialControlDashboard() {
         }
       }
 
-      // Get base contract value from commercial baseline (ONLY awarded items, no allowances/retention)
-      const { data: baselineItems } = await supabase
-        .from('commercial_baseline_items')
-        .select('line_amount, line_type')
-        .eq('award_approval_id', award.id)
-        .eq('is_active', true)
-        .eq('line_type', 'awarded_item'); // Only base contract items
+      // Get base contract value from the quote (this is the correct imported total)
+      const { data: awardQuote } = await supabase
+        .from('quotes')
+        .select('total_amount')
+        .eq('id', award.final_approved_quote_id)
+        .single();
 
       let totalContractValue = 0;
-      if (baselineItems && baselineItems.length > 0) {
-        // Use baseline awarded items only (excludes allowances and retention)
-        totalContractValue = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
+      if (awardQuote?.total_amount) {
+        // Use the total_amount from the quote (this contains the correct imported value)
+        totalContractValue = parseFloat(awardQuote.total_amount.toString());
       } else {
-        // Fallback to quote_items (base value only)
-        const { data: quoteItems } = await supabase
-          .from('quote_items')
-          .select('quantity, unit_price')
-          .eq('quote_id', award.final_approved_quote_id);
+        // Fallback: calculate from baseline items if quote not found
+        const { data: baselineItems } = await supabase
+          .from('commercial_baseline_items')
+          .select('quantity, unit_rate, line_type')
+          .eq('award_approval_id', award.id)
+          .eq('is_active', true)
+          .eq('line_type', 'awarded_item');
 
-        totalContractValue = (quoteItems || []).reduce((sum, item) => {
-          const qty = item.quantity || 0;
-          const price = item.unit_price || 0;
-          return sum + (qty * price);
+        totalContractValue = (baselineItems || []).reduce((sum, item) => {
+          return sum + ((item.quantity || 0) * (item.unit_rate || 0));
         }, 0);
       }
 
