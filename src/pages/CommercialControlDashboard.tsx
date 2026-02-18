@@ -487,42 +487,41 @@ export default function CommercialControlDashboard() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Project Overview</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <SummaryStatCard
-                title="Original Contract Value"
+                label="Original Contract Value"
                 value={`$${metrics.originalContractValue.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`}
-                icon={<TrendingUp className="w-6 h-6" />}
-                color="blue"
+                icon={TrendingUp}
+                tone="navy"
               />
               <SummaryStatCard
-                title="Certified to Date"
+                label="Certified to Date"
                 value={`$${metrics.certifiedToDate.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`}
-                icon={<CheckCircle className="w-6 h-6" />}
-                color="green"
-                subtitle={`${((metrics.certifiedToDate / metrics.originalContractValue) * 100).toFixed(1)}% of contract`}
+                icon={CheckCircle}
+                tone="success"
+                statusDot
               />
               <SummaryStatCard
-                title="Remaining Exposure"
+                label="Remaining Exposure"
                 value={`$${metrics.remainingExposure.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`}
-                icon={<Clock className="w-6 h-6" />}
-                color="orange"
+                icon={Clock}
+                tone="orange"
               />
               <SummaryStatCard
-                title="Variations Approved"
+                label="Variations Approved"
                 value={`$${metrics.variationsApproved.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`}
-                icon={<CheckCircle className="w-6 h-6" />}
-                color="green"
+                icon={CheckCircle}
+                tone="success"
               />
               <SummaryStatCard
-                title="Variations Pending"
+                label="Variations Pending"
                 value={`$${metrics.variationsPending.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`}
-                icon={<AlertCircle className="w-6 h-6" />}
-                color="yellow"
+                icon={AlertCircle}
+                tone="orange"
               />
               <SummaryStatCard
-                title="Net Forecast Final Cost"
+                label="Net Forecast Final Cost"
                 value={`$${metrics.netForecastFinalCost.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`}
-                icon={<TrendingUp className="w-6 h-6" />}
-                color="indigo"
-                subtitle={`+${((metrics.netForecastFinalCost - metrics.originalContractValue) / metrics.originalContractValue * 100).toFixed(1)}% vs original`}
+                icon={TrendingUp}
+                tone="navy"
               />
             </div>
           </div>
