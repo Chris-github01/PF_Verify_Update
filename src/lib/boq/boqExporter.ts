@@ -117,7 +117,7 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
 
   // Tab 3: TENDERER_MAPPING - How tenderer items map to baseline
   console.log('[exportBOQPack] Creating tenderer mapping tab...');
-  await createTendererMappingTab(workbook, tenderers || [], allQuoteItems || [], boqLines || []);
+  await createTendererMappingTab(workbook, tenderers || [], allQuoteItems || [], boqLines || [], mappings || []);
 
   // Tab 4: SCOPE_GAPS_REGISTER
   console.log('[exportBOQPack] Creating scope gaps tab with', gaps?.length, 'gaps...');
@@ -457,7 +457,8 @@ async function createTendererMappingTab(
   workbook: ExcelJS.Workbook,
   tenderers: any[],
   allQuoteItems: any[],
-  boqLines: BOQLine[]
+  boqLines: BOQLine[],
+  mappings: any[]
 ): Promise<void> {
   const sheet = workbook.addWorksheet('TENDERER_MAPPING');
 
@@ -488,6 +489,10 @@ async function createTendererMappingTab(
   headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
   headerRow.height = 40;
 
+  console.log('[createTendererMappingTab] BOQ Lines:', boqLines.length);
+  console.log('[createTendererMappingTab] Mappings:', mappings.length);
+  console.log('[createTendererMappingTab] Tenderers:', tenderers.length);
+
   if (boqLines.length === 0) {
     // Show placeholder if no BOQ generated yet
     sheet.addRow({
@@ -510,22 +515,43 @@ async function createTendererMappingTab(
       notes: '',
       tag_ids: ''
     });
+  } else if (mappings.length === 0) {
+    // Show message if no mappings exist
+    sheet.addRow({
+      tenderer: '',
+      boq_line_id: '',
+      system_name: 'No tenderer mappings found',
+      location: '',
+      baseline_qty: '',
+      tenderer_qty: '',
+      variance: '',
+      variance_percent: '',
+      unit: '',
+      tenderer_rate: '',
+      tenderer_amount: '',
+      status: '',
+      frr_rating: '',
+      substrate: '',
+      service_type: '',
+      product: 'Mappings are created when BOQ is generated',
+      notes: '',
+      tag_ids: ''
+    });
   } else {
-    // Get mappings from database
-    const { data: mappings } = await supabase
-      .from('boq_tenderer_map')
-      .select('*')
-      .in('boq_line_id', boqLines.map(l => l.id));
-
     let rowIndex = 0;
 
     // Group by tenderer for better organization
     tenderers.forEach(tenderer => {
-      const tendererMappings = mappings?.filter(m => m.tenderer_id === tenderer.id) || [];
+      const tendererMappings = mappings.filter(m => m.tenderer_id === tenderer.id);
+
+      console.log(`[createTendererMappingTab] ${tenderer.name}: ${tendererMappings.length} mappings`);
 
       tendererMappings.forEach(mapping => {
         const boqLine = boqLines.find(l => l.id === mapping.boq_line_id);
-        if (!boqLine) return;
+        if (!boqLine) {
+          console.warn(`[createTendererMappingTab] BOQ line not found for mapping:`, mapping.boq_line_id);
+          return;
+        }
 
         const baselineQty = parseFloat(boqLine.quantity?.toString() || '0');
         const tendererQty = parseFloat(mapping.tenderer_qty?.toString() || '0');
@@ -581,6 +607,8 @@ async function createTendererMappingTab(
         rowIndex++;
       });
     });
+
+    console.log(`[createTendererMappingTab] Added ${rowIndex} rows to export`);
   }
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
