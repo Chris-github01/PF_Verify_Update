@@ -214,9 +214,9 @@ export async function processBaseTrackerImport(
 
   const existingMap = new Map(
     (existingItems || [])
-      .filter(item => item.line_description)
+      .filter(item => item.description)
       .map(item => [
-        String(item.line_description).toLowerCase().trim(),
+        String(item.description).toLowerCase().trim(),
         item
       ])
   );
@@ -296,8 +296,8 @@ export async function processBaseTrackerImport(
         hasChanges = true;
       }
 
-      if (row.rate !== undefined && row.rate !== existingItem.unit_price) {
-        updates.unit_price = row.rate;
+      if (row.rate !== undefined && row.rate !== existingItem.unit_rate) {
+        updates.unit_rate = row.rate;
         hasChanges = true;
       }
 
