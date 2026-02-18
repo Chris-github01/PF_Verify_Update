@@ -125,17 +125,19 @@ export default function CommercialControlDashboard() {
     }
 
     // Calculate original contract value from the single awarded supplier
+    // CRITICAL: Use ONLY 'awarded_item' line types (exclude allowances and retention)
     const award = awards[0];
-    let totalOriginalValue = 0;
+    let baseContractValue = 0;
 
     const { data: baselineItems } = await supabase
       .from('commercial_baseline_items')
-      .select('line_amount')
+      .select('line_amount, line_type')
       .eq('award_approval_id', award.id)
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .eq('line_type', 'awarded_item'); // Only include actual awarded items
 
     if (baselineItems && baselineItems.length > 0) {
-      totalOriginalValue = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
+      baseContractValue = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
     } else {
       // Fallback: get value from quote_items if no baseline exists
       const { data: quoteItems } = await supabase
@@ -143,7 +145,7 @@ export default function CommercialControlDashboard() {
         .select('quantity, unit_price')
         .eq('quote_id', award.final_approved_quote_id);
 
-      totalOriginalValue = (quoteItems || []).reduce((sum, item) => {
+      baseContractValue = (quoteItems || []).reduce((sum, item) => {
         return sum + ((item.quantity || 0) * (item.unit_price || 0));
       }, 0);
     }
@@ -172,12 +174,12 @@ export default function CommercialControlDashboard() {
       .reduce((sum, v) => sum + (v.amount || 0), 0);
 
     setMetrics({
-      originalContractValue: totalOriginalValue,
+      originalContractValue: baseContractValue,
       certifiedToDate: certified,
-      remainingExposure: totalOriginalValue - certified,
+      remainingExposure: baseContractValue - certified,
       variationsApproved: approvedVOs,
       variationsPending: pendingVOs,
-      netForecastFinalCost: totalOriginalValue + approvedVOs + (pendingVOs * 0.7)
+      netForecastFinalCost: baseContractValue + approvedVOs + (pendingVOs * 0.7)
     });
   }
 
@@ -315,16 +317,17 @@ export default function CommercialControlDashboard() {
         }
       }
 
-      // Get total contract value from commercial baseline (or quote_items as fallback)
+      // Get base contract value from commercial baseline (ONLY awarded items, no allowances/retention)
       const { data: baselineItems } = await supabase
         .from('commercial_baseline_items')
-        .select('line_amount')
+        .select('line_amount, line_type')
         .eq('award_approval_id', award.id)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('line_type', 'awarded_item'); // Only base contract items
 
       let totalContractValue = 0;
       if (baselineItems && baselineItems.length > 0) {
-        // Use baseline (includes allowances and retention)
+        // Use baseline awarded items only (excludes allowances and retention)
         totalContractValue = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
       } else {
         // Fallback to quote_items (base value only)
