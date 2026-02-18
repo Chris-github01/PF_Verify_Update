@@ -104,30 +104,64 @@ export default function CommercialControlDashboard() {
   }
 
   async function loadCommercialMetrics(projId: string) {
-    // FIXED: Use commercial_baseline_items instead of boq_lines
-    const { data: baselineItems } = await supabase
-      .from('commercial_baseline_items')
-      .select('quantity, unit_rate, line_amount')
-      .eq('project_id', projId)
-      .eq('is_active', true);
+    // Get all active award approvals for this project
+    const { data: awards } = await supabase
+      .from('award_approvals')
+      .select('id, final_approved_quote_id')
+      .eq('project_id', projId);
 
+    if (!awards || awards.length === 0) {
+      setMetrics({
+        originalContractValue: 0,
+        certifiedToDate: 0,
+        remainingExposure: 0,
+        variationsApproved: 0,
+        variationsPending: 0,
+        netForecastFinalCost: 0
+      });
+      return;
+    }
+
+    // Calculate original contract value by summing each award's baseline
+    let totalOriginalValue = 0;
+    for (const award of awards) {
+      const { data: baselineItems } = await supabase
+        .from('commercial_baseline_items')
+        .select('line_amount')
+        .eq('award_approval_id', award.id)
+        .eq('is_active', true);
+
+      if (baselineItems && baselineItems.length > 0) {
+        const awardTotal = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
+        totalOriginalValue += awardTotal;
+      } else {
+        // Fallback: get value from quote_items if no baseline exists
+        const { data: quoteItems } = await supabase
+          .from('quote_items')
+          .select('quantity, unit_price')
+          .eq('quote_id', award.final_approved_quote_id);
+
+        const quoteTotal = (quoteItems || []).reduce((sum, item) => {
+          return sum + ((item.quantity || 0) * (item.unit_price || 0));
+        }, 0);
+        totalOriginalValue += quoteTotal;
+      }
+    }
+
+    // Get certified claims (actual money certified)
     const { data: claims } = await supabase
       .from('base_tracker_claims')
-      .select('total_claimed_to_date, certified_amount')
+      .select('certified_amount')
       .eq('project_id', projId)
       .eq('status', 'Certified');
 
+    const certified = (claims || []).reduce((sum, claim) => sum + (claim.certified_amount || 0), 0);
+
+    // Get variations
     const { data: variations } = await supabase
       .from('variation_register')
       .select('amount, status')
       .eq('project_id', projId);
-
-    // Calculate metrics from commercial baseline
-    const originalValue = (baselineItems || []).reduce((sum, line) => {
-      return sum + (line.line_amount || 0);
-    }, 0);
-
-    const certified = (claims || []).reduce((sum, claim) => sum + (claim.certified_amount || 0), 0);
 
     const approvedVOs = (variations || [])
       .filter(v => v.status === 'Approved')
@@ -138,12 +172,12 @@ export default function CommercialControlDashboard() {
       .reduce((sum, v) => sum + (v.amount || 0), 0);
 
     setMetrics({
-      originalContractValue: originalValue,
+      originalContractValue: totalOriginalValue,
       certifiedToDate: certified,
-      remainingExposure: originalValue - certified,
+      remainingExposure: totalOriginalValue - certified,
       variationsApproved: approvedVOs,
       variationsPending: pendingVOs,
-      netForecastFinalCost: originalValue + approvedVOs + (pendingVOs * 0.7) // Assume 70% of pending will be approved
+      netForecastFinalCost: totalOriginalValue + approvedVOs + (pendingVOs * 0.7)
     });
   }
 
