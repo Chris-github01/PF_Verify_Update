@@ -104,11 +104,13 @@ export default function CommercialControlDashboard() {
   }
 
   async function loadCommercialMetrics(projId: string) {
-    // Get all active award approvals for this project
+    // Get the most recent award approval for this project (only one awarded supplier)
     const { data: awards } = await supabase
       .from('award_approvals')
       .select('id, final_approved_quote_id')
-      .eq('project_id', projId);
+      .eq('project_id', projId)
+      .order('approved_at', { ascending: false })
+      .limit(1);
 
     if (!awards || awards.length === 0) {
       setMetrics({
@@ -122,30 +124,28 @@ export default function CommercialControlDashboard() {
       return;
     }
 
-    // Calculate original contract value by summing each award's baseline
+    // Calculate original contract value from the single awarded supplier
+    const award = awards[0];
     let totalOriginalValue = 0;
-    for (const award of awards) {
-      const { data: baselineItems } = await supabase
-        .from('commercial_baseline_items')
-        .select('line_amount')
-        .eq('award_approval_id', award.id)
-        .eq('is_active', true);
 
-      if (baselineItems && baselineItems.length > 0) {
-        const awardTotal = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
-        totalOriginalValue += awardTotal;
-      } else {
-        // Fallback: get value from quote_items if no baseline exists
-        const { data: quoteItems } = await supabase
-          .from('quote_items')
-          .select('quantity, unit_price')
-          .eq('quote_id', award.final_approved_quote_id);
+    const { data: baselineItems } = await supabase
+      .from('commercial_baseline_items')
+      .select('line_amount')
+      .eq('award_approval_id', award.id)
+      .eq('is_active', true);
 
-        const quoteTotal = (quoteItems || []).reduce((sum, item) => {
-          return sum + ((item.quantity || 0) * (item.unit_price || 0));
-        }, 0);
-        totalOriginalValue += quoteTotal;
-      }
+    if (baselineItems && baselineItems.length > 0) {
+      totalOriginalValue = baselineItems.reduce((sum, item) => sum + (item.line_amount || 0), 0);
+    } else {
+      // Fallback: get value from quote_items if no baseline exists
+      const { data: quoteItems } = await supabase
+        .from('quote_items')
+        .select('quantity, unit_price')
+        .eq('quote_id', award.final_approved_quote_id);
+
+      totalOriginalValue = (quoteItems || []).reduce((sum, item) => {
+        return sum + ((item.quantity || 0) * (item.unit_price || 0));
+      }, 0);
     }
 
     // Get certified claims (actual money certified)
@@ -196,7 +196,8 @@ export default function CommercialControlDashboard() {
 
     console.log('[Commercial Dashboard] User memberships:', { membership, memberError });
 
-    // Get all awarded suppliers for this project
+    // Get the most recent awarded supplier for this project's trade
+    // Note: Only show ONE supplier per trade (the most recently approved)
     const { data: awards, error: awardsError } = await supabase
       .from('award_approvals')
       .select(`
@@ -204,9 +205,12 @@ export default function CommercialControlDashboard() {
         final_approved_supplier,
         final_approved_quote_id,
         project_id,
-        organisation_id
+        organisation_id,
+        approved_at
       `)
-      .eq('project_id', projId);
+      .eq('project_id', projId)
+      .order('approved_at', { ascending: false })
+      .limit(1); // Only get the most recent approval
 
     console.log('[Commercial Dashboard] Awards query result:', {
       awards,
