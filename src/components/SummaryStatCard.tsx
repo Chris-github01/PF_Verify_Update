@@ -16,24 +16,38 @@ export default function SummaryStatCard({
   statusDot = false,
 }: SummaryStatCardProps) {
   const toneClasses = {
-    navy: 'bg-blue-50 text-blue-700',
-    success: 'bg-green-50 text-green-700',
-    orange: 'bg-orange-50 text-orange-700',
+    navy: {
+      border: 'border-blue-500/50',
+      bg: 'bg-blue-900/20',
+      icon: 'text-blue-400',
+    },
+    success: {
+      border: 'border-green-500/50',
+      bg: 'bg-green-900/20',
+      icon: 'text-green-400',
+    },
+    orange: {
+      border: 'border-orange-500/50',
+      bg: 'bg-orange-900/20',
+      icon: 'text-orange-400',
+    },
   };
 
+  const classes = toneClasses[tone];
+
   return (
-    <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+    <div className={`rounded-lg border ${classes.border} ${classes.bg} p-6 transition-all`}>
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600">{label}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-slate-400 mb-2">{label}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-bold text-white">{value}</p>
             {statusDot && (
               <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
             )}
           </div>
         </div>
-        <div className={`p-3 rounded-lg ${toneClasses[tone]}`}>
+        <div className={`p-3 rounded-lg bg-slate-800/50 ${classes.icon}`}>
           <Icon className="w-6 h-6" />
         </div>
       </div>
