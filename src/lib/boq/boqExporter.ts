@@ -51,7 +51,7 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     .order('boq_line_id');
 
   // Get tenderer mappings (may not exist if BOQ hasn't been generated yet)
-  const { data: mappings } = await supabase
+  const { data: mappings, error: mappingsError } = await supabase
     .from('boq_tenderer_map')
     .select(`
       *,
@@ -62,6 +62,13 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     `)
     .eq('project_id', options.project_id)
     .eq('module_key', options.module_key);
+
+  console.log('[exportBOQPack] Mappings query result:', {
+    count: mappings?.length || 0,
+    error: mappingsError,
+    projectId: options.project_id,
+    moduleKey: options.module_key
+  });
 
   // Get scope gaps (with optional BOQ line details if linked)
   const { data: gaps, error: gapsError } = await supabase
@@ -540,11 +547,19 @@ async function createTendererMappingTab(
   } else {
     let rowIndex = 0;
 
+    console.log('[createTendererMappingTab] Tenderers:', tenderers.map(t => ({ id: t.id, name: t.name })));
+    console.log('[createTendererMappingTab] Sample mappings:', mappings.slice(0, 2).map(m => ({
+      tenderer_id: m.tenderer_id,
+      boq_line_id: m.boq_line_id,
+      included_status: m.included_status
+    })));
+
     // Group by tenderer for better organization
     tenderers.forEach(tenderer => {
+      // The mapping uses tenderer_id which refers to supplier_id
       const tendererMappings = mappings.filter(m => m.tenderer_id === tenderer.id);
 
-      console.log(`[createTendererMappingTab] ${tenderer.name}: ${tendererMappings.length} mappings`);
+      console.log(`[createTendererMappingTab] ${tenderer.name} (${tenderer.id}): ${tendererMappings.length} mappings`);
 
       tendererMappings.forEach(mapping => {
         const boqLine = boqLines.find(l => l.id === mapping.boq_line_id);
