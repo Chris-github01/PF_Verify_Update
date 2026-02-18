@@ -66,24 +66,24 @@ export default function CommercialControlDashboard() {
 
       const { data: prefs, error: prefsError } = await supabase
         .from('user_preferences')
-        .select('current_project_id, current_organisation_id')
+        .select('last_project_id, last_organisation_id')
         .eq('user_id', user.id)
         .single();
 
       console.log('[Commercial Dashboard] User preferences:', { prefs, prefsError });
 
-      if (!prefs?.current_project_id) {
+      if (!prefs?.last_project_id) {
         console.error('[Commercial Dashboard] No current project set!');
         return;
       }
 
-      setProjectId(prefs.current_project_id);
+      setProjectId(prefs.last_project_id);
 
       // Get project details including organisation_id
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .select('name, organisation_id, trade')
-        .eq('id', prefs.current_project_id)
+        .eq('id', prefs.last_project_id)
         .single();
 
       console.log('[Commercial Dashboard] Project details:', { project, projectError });
@@ -93,8 +93,8 @@ export default function CommercialControlDashboard() {
       }
 
       // Load commercial metrics
-      await loadCommercialMetrics(prefs.current_project_id);
-      await loadTradeMetrics(prefs.current_project_id);
+      await loadCommercialMetrics(prefs.last_project_id);
+      await loadTradeMetrics(prefs.last_project_id);
 
     } catch (error) {
       console.error('[Commercial Dashboard] Error loading:', error);
