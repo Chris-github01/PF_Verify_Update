@@ -35,6 +35,8 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     quote_id: q.id
   })) || [];
 
+  console.log('[exportBOQPack] Tenderers from quotes:', tenderers.map(t => ({ id: t.id, name: t.name })));
+
   // Get ALL quote items from all tenderers
   const { data: allQuoteItems } = await supabase
     .from('quote_items')
