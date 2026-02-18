@@ -57,9 +57,10 @@ export async function parseExcelFile(file: File): Promise<ParsedExcelData> {
           throw new Error('Could not identify header row in Excel file');
         }
 
-        const headers = jsonData[headerRow].map((h: any) =>
-          String(h || '').trim().toLowerCase()
-        );
+        const headers = jsonData[headerRow].map((h: any) => {
+          if (h === null || h === undefined || h === '') return '';
+          return String(h).trim().toLowerCase();
+        });
 
         const detectedColumns = detectColumns(headers);
 
@@ -129,7 +130,7 @@ function detectColumns(headers: string[]): Partial<ColumnMapping> {
 
   for (const [key, patterns] of Object.entries(COMMON_COLUMN_PATTERNS)) {
     const index = headers.findIndex(header =>
-      patterns.some(pattern => header.includes(pattern))
+      header && typeof header === 'string' && patterns.some(pattern => header.includes(pattern))
     );
     if (index !== -1) {
       detected[key] = index;
