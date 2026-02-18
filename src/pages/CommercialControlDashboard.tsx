@@ -769,7 +769,7 @@ export default function CommercialControlDashboard() {
       </div>
 
       {/* Import Modal */}
-      {importConfig && (
+      {showImportModal && importConfig && (
         <BaseTrackerImportModal
           isOpen={showImportModal}
           onClose={() => {
