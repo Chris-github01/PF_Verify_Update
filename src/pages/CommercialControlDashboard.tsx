@@ -9,10 +9,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import DashboardHeader from '../components/DashboardHeader';
 import SummaryStatCard from '../components/SummaryStatCard';
-import { AlertTriangle, TrendingUp, CheckCircle, Clock, AlertCircle, Download } from 'lucide-react';
+import { AlertTriangle, TrendingUp, CheckCircle, Clock, AlertCircle, Download, Upload } from 'lucide-react';
 import { downloadBaseTracker } from '../lib/export/baseTrackerExport';
 import { downloadVOTracker } from '../lib/export/voTrackerExport';
 import { generateCommercialBaseline } from '../lib/commercial/baselineGenerator';
+import BaseTrackerImportModal from '../components/BaseTrackerImportModal';
 
 interface CommercialMetrics {
   originalContractValue: number;
@@ -46,6 +47,11 @@ export default function CommercialControlDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedTrade, setSelectedTrade] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importConfig, setImportConfig] = useState<{
+    awardApprovalId: string;
+    supplierId: string;
+  } | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -714,13 +720,28 @@ export default function CommercialControlDashboard() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                        <button
-                          onClick={() => handleExportBaseTracker(trade)}
-                          className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1"
-                        >
-                          <Download className="w-4 h-4" />
-                          Base Tracker
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setImportConfig({
+                                awardApprovalId: trade.awardApprovalId,
+                                supplierId: trade.supplierId
+                              });
+                              setShowImportModal(true);
+                            }}
+                            className="text-green-400 hover:text-green-300 font-medium flex items-center gap-1"
+                          >
+                            <Upload className="w-4 h-4" />
+                            Import
+                          </button>
+                          <button
+                            onClick={() => handleExportBaseTracker(trade)}
+                            className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1"
+                          >
+                            <Download className="w-4 h-4" />
+                            Export
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -746,6 +767,24 @@ export default function CommercialControlDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Import Modal */}
+      {importConfig && (
+        <BaseTrackerImportModal
+          isOpen={showImportModal}
+          onClose={() => {
+            setShowImportModal(false);
+            setImportConfig(null);
+          }}
+          projectId={projectId}
+          awardApprovalId={importConfig.awardApprovalId}
+          supplierId={importConfig.supplierId}
+          onImportComplete={(result) => {
+            console.log('Import completed:', result);
+            loadDashboard();
+          }}
+        />
+      )}
     </div>
   );
 }
