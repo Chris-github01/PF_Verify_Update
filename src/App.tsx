@@ -17,7 +17,6 @@ import Equalisation from './pages/Equalisation';
 import BOQBuilder from './pages/BOQBuilder';
 import ContractManager from './pages/ContractManager';
 import CommercialControlDashboard from './pages/CommercialControlDashboard';
-import ScoringWeights from './pages/ScoringWeights';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import ProjectReportPage from './pages/ProjectReportPage';
 import InsightsDashboard from './pages/InsightsDashboard';
@@ -808,9 +807,6 @@ function AppContent() {
 
       case 'commercial':
         return <CommercialControlDashboard />;
-
-      case 'scoring':
-        return <ScoringWeights projectId={projectId} projectName={projectName} />;
 
       case 'reports':
         if (!projectId) {
