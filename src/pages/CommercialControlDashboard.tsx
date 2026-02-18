@@ -621,21 +621,12 @@ export default function CommercialControlDashboard() {
             <h2 className="text-lg font-semibold text-white">Trade Performance</h2>
             <div className="flex gap-2">
               <button
-                onClick={handleGenerateBaselines}
-                disabled={generating}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={true}
+                className="px-4 py-2 bg-gray-700 text-gray-500 rounded-lg cursor-not-allowed flex items-center gap-2"
+                title="Baseline already generated. Do not regenerate to avoid data corruption."
               >
-                {generating ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Generate Baselines
-                  </>
-                )}
+                <CheckCircle className="w-4 h-4" />
+                Baseline Generated
               </button>
               <button
                 onClick={handleExportVOTracker}
