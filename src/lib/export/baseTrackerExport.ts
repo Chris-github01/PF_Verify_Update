@@ -78,6 +78,24 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
 
   console.log(`[Base Tracker] Found ${baselineItems.length} baseline items (independent of BOQ Builder)`);
 
+  // Get project details for trade
+  const { data: project } = await supabase
+    .from('projects')
+    .select('trade')
+    .eq('id', projectId)
+    .single();
+
+  const tradeKey = project?.trade || baselineItems[0]?.trade_key || 'general';
+
+  // Get supplier ID from quote
+  const { data: quote } = await supabase
+    .from('quotes')
+    .select('supplier_id')
+    .eq('id', award.final_approved_quote_id)
+    .single();
+
+  const supplierId = quote?.supplier_id || null;
+
   // 3. Check for previous period claims (to populate Qty_Claimed_Previous)
   const previousPeriod = getPreviousPeriod(period);
   const { data: previousClaim } = await supabase
@@ -368,41 +386,42 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
   footerCell.font = { size: 9, italic: true, color: { argb: 'FF6B7280' } };
   footerCell.alignment = { horizontal: 'center' };
 
-  // 12. Save export record to database
-  const { data: exportRecord, error: exportError } = await supabase
-    .from('base_tracker_exports')
-    .insert({
-      project_id: projectId,
-      trade_key: tradeKey,
-      supplier_id: supplierId,
-      period,
-      version,
-      generated_by_user_id: (await supabase.auth.getUser()).data.user?.id,
-      baseline_snapshot: JSON.stringify(awardedBOQ),
-      notes: `Generated base tracker for ${supplierName} - ${period}`
-    })
-    .select()
-    .single();
-
-  if (exportError) {
-    console.error('[Base Tracker] Error saving export record:', exportError);
-  }
-
-  // 13. Log to audit trail
-  if (exportRecord) {
-    await supabase.rpc('log_commercial_action', {
-      p_project_id: projectId,
-      p_action_type: 'tracker_generated',
-      p_entity_type: 'base_tracker',
-      p_entity_id: exportRecord.id,
-      p_details: {
-        supplier_name: supplierName,
-        trade: tradeKey,
+  // 12. Save export record to database (optional - table may not exist)
+  try {
+    const { data: exportRecord } = await supabase
+      .from('base_tracker_exports')
+      .insert({
+        project_id: projectId,
+        trade_key: tradeKey,
+        supplier_id: supplierId,
         period,
         version,
-        line_count: awardedBOQ.length
-      }
-    });
+        generated_by_user_id: (await supabase.auth.getUser()).data.user?.id,
+        baseline_snapshot: JSON.stringify(baselineItems),
+        notes: `Generated base tracker for ${supplierName} - ${period}`
+      })
+      .select()
+      .single();
+
+    // 13. Log to audit trail (optional)
+    if (exportRecord) {
+      await supabase.rpc('log_commercial_action', {
+        p_project_id: projectId,
+        p_action_type: 'tracker_generated',
+        p_entity_type: 'base_tracker',
+        p_entity_id: exportRecord.id,
+        p_details: {
+          supplier_name: supplierName,
+          trade: tradeKey,
+          period,
+          version,
+          line_count: baselineItems.length
+        }
+      });
+    }
+  } catch (auditError) {
+    // Don't fail export if audit logging fails
+    console.warn('[Base Tracker] Audit logging skipped:', auditError);
   }
 
   // 14. Generate file
