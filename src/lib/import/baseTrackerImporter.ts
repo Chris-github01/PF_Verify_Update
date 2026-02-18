@@ -213,10 +213,12 @@ export async function processBaseTrackerImport(
     .eq('is_active', true);
 
   const existingMap = new Map(
-    (existingItems || []).map(item => [
-      item.line_description.toLowerCase().trim(),
-      item
-    ])
+    (existingItems || [])
+      .filter(item => item.line_description)
+      .map(item => [
+        String(item.line_description).toLowerCase().trim(),
+        item
+      ])
   );
 
   let runningTotalBefore = 0;
@@ -259,7 +261,17 @@ export async function processBaseTrackerImport(
       continue;
     }
 
-    const matchKey = row.description.toLowerCase().trim();
+    if (!row.description) {
+      itemsSkipped++;
+      warnings.push({
+        row: rowNum,
+        message: 'Missing description',
+        suggestion: 'Row skipped due to missing description'
+      });
+      continue;
+    }
+
+    const matchKey = String(row.description).toLowerCase().trim();
     const existingItem = existingMap.get(matchKey);
 
     if (existingItem) {
