@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { FileSpreadsheet, Download, RefreshCw, AlertTriangle, CheckCircle, Tag as TagIcon, FileText, ChevronRight, Flame } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileSpreadsheet, Download, RefreshCw, AlertTriangle, CheckCircle, Tag as TagIcon, FileText, ChevronRight, ChevronDown, Flame } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generateBaselineBOQ } from '../lib/boq/boqGenerator';
 import { exportBOQPack, exportTagsClarifications } from '../lib/boq/boqExporter';
@@ -744,28 +744,122 @@ function BaselineBOQPanel({ lines, tenderers, mappings }: { lines: BOQLine[]; te
 }
 
 function TendererMappingPanel({ lines, tenderers, mappings }: { lines: BOQLine[]; tenderers: any[]; mappings: BOQTendererMap[] }) {
+  const [expandedTenderers, setExpandedTenderers] = React.useState<Set<string>>(new Set(tenderers.map(t => t.id)));
+
+  const toggleTenderer = (tendererId: string) => {
+    const newExpanded = new Set(expandedTenderers);
+    if (newExpanded.has(tendererId)) {
+      newExpanded.delete(tendererId);
+    } else {
+      newExpanded.add(tendererId);
+    }
+    setExpandedTenderers(newExpanded);
+  };
+
   return (
     <div className="space-y-4">
       {tenderers.map(tenderer => {
         const tendererMappings = mappings.filter(m => m.tenderer_id === tenderer.id);
         const included = tendererMappings.filter(m => m.included_status === 'included').length;
         const missing = tendererMappings.filter(m => m.included_status === 'missing').length;
+        const isExpanded = expandedTenderers.has(tenderer.id);
 
         return (
-          <div key={tenderer.id} className="bg-slate-800 rounded-lg shadow-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">{tenderer.name}</h3>
-              <div className="flex gap-4 text-sm">
-                <div className="text-green-400">
-                  <CheckCircle size={16} className="inline mr-1" />
-                  {included} included
+          <div key={tenderer.id} className="bg-slate-800 rounded-lg shadow-xl overflow-hidden">
+            <div
+              className="p-6 cursor-pointer hover:bg-slate-750 transition-colors"
+              onClick={() => toggleTenderer(tenderer.id)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {isExpanded ? <ChevronDown size={20} className="text-slate-400" /> : <ChevronRight size={20} className="text-slate-400" />}
+                  <h3 className="text-lg font-semibold text-white">{tenderer.name}</h3>
                 </div>
-                <div className="text-red-400">
-                  <AlertTriangle size={16} className="inline mr-1" />
-                  {missing} missing
+                <div className="flex gap-4 text-sm">
+                  <div className="text-green-400">
+                    <CheckCircle size={16} className="inline mr-1" />
+                    {included} included
+                  </div>
+                  <div className="text-red-400">
+                    <AlertTriangle size={16} className="inline mr-1" />
+                    {missing} missing
+                  </div>
                 </div>
               </div>
             </div>
+
+            {isExpanded && (
+              <div className="border-t border-slate-700">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-slate-900/50 border-b border-slate-700">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">BOQ Line</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">System Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Location</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider">Baseline Qty</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider">Tenderer Qty</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-300 uppercase tracking-wider">Variance</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-300 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tendererMappings.map((mapping, index) => {
+                        const boqLine = lines.find(l => l.id === mapping.boq_line_id);
+                        if (!boqLine) return null;
+
+                        const baselineQty = parseFloat(boqLine.quantity?.toString() || '0');
+                        const tendererQty = parseFloat(mapping.tenderer_qty?.toString() || '0');
+                        const variance = tendererQty - baselineQty;
+                        const variancePercent = baselineQty > 0 ? ((variance / baselineQty) * 100) : 0;
+
+                        return (
+                          <tr
+                            key={mapping.id}
+                            className={`border-b border-slate-700/50 ${index % 2 === 0 ? 'bg-slate-800/50' : 'bg-slate-800/30'}`}
+                          >
+                            <td className="px-4 py-3 text-sm text-white font-mono">{boqLine.boq_line_id}</td>
+                            <td className="px-4 py-3 text-sm text-slate-300 max-w-xs truncate" title={boqLine.system_name}>
+                              {boqLine.system_name}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-400">{boqLine.location_zone || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-white text-right font-medium">{baselineQty.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-sm text-white text-right font-medium">{tendererQty.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-sm text-right">
+                              {variance !== 0 ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <span className={variance > 0 ? 'text-green-400' : 'text-red-400'}>
+                                    {variance > 0 ? '+' : ''}{variance.toLocaleString()}
+                                  </span>
+                                  <span className={`text-xs ${variance > 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                                    ({variancePercent > 0 ? '+' : ''}{variancePercent.toFixed(1)}%)
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-500">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {mapping.included_status === 'included' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">
+                                  <CheckCircle size={14} />
+                                  Included
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">
+                                  <AlertTriangle size={14} />
+                                  Missing
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}
