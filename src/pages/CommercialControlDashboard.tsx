@@ -45,6 +45,7 @@ export default function CommercialControlDashboard() {
   const [tradeMetrics, setTradeMetrics] = useState<TradeMetrics[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTrade, setSelectedTrade] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -382,6 +383,69 @@ export default function CommercialControlDashboard() {
     }
   }
 
+  async function handleGenerateBaselines() {
+    setGenerating(true);
+    try {
+      console.log('[Commercial Control] Manual baseline generation triggered');
+
+      // Get all award approvals for this project
+      const { data: awards } = await supabase
+        .from('award_approvals')
+        .select('id, project_id, final_approved_quote_id')
+        .eq('project_id', projectId);
+
+      if (!awards || awards.length === 0) {
+        alert('No approved suppliers found. Please award a supplier first.');
+        return;
+      }
+
+      // Get project trade
+      const { data: project } = await supabase
+        .from('projects')
+        .select('trade')
+        .eq('id', projectId)
+        .single();
+
+      const tradeKey = project?.trade || 'general';
+
+      // Generate baseline for each award
+      let generated = 0;
+      for (const award of awards) {
+        console.log('[Commercial Control] Generating baseline for award:', award.id);
+
+        try {
+          const result = await generateCommercialBaseline({
+            projectId: award.project_id,
+            awardApprovalId: award.id,
+            quoteId: award.final_approved_quote_id,
+            tradeKey,
+            includeAllowances: true,
+            includeRetention: true,
+            retentionPercentage: 5
+          });
+
+          console.log(`[Commercial Control] ✅ Generated baseline with ${result.itemCount} items, total value: $${result.totalValue}`);
+          generated++;
+        } catch (error: any) {
+          if (error.message?.includes('already exists')) {
+            console.log(`[Commercial Control] Baseline already exists for award ${award.id}`);
+          } else {
+            console.error(`[Commercial Control] Error generating baseline for award ${award.id}:`, error);
+            throw error;
+          }
+        }
+      }
+
+      alert(`Successfully generated ${generated} baseline(s)`);
+      await loadDashboard(); // Reload dashboard
+    } catch (error: any) {
+      console.error('[Commercial Control] Error generating baselines:', error);
+      alert(`Failed to generate baselines: ${error.message || error}`);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
@@ -453,13 +517,32 @@ export default function CommercialControlDashboard() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Trade Performance</h2>
-            <button
-              onClick={handleExportVOTracker}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export VO Tracker
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleGenerateBaselines}
+                disabled={generating}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {generating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Generate Baselines
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleExportVOTracker}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export VO Tracker
+              </button>
+            </div>
           </div>
 
           {tradeMetrics.length === 0 ? (
