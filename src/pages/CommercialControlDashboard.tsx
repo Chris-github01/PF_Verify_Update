@@ -544,17 +544,17 @@ export default function CommercialControlDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-900 p-6 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading commercial dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-300">Loading commercial dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-900">
       <DashboardHeader
         title="Commercial Control Dashboard"
         subtitle="Live commercial visibility across all trades"
@@ -565,7 +565,7 @@ export default function CommercialControlDashboard() {
         {/* Project-Level Metrics */}
         {metrics && (
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Project Overview</h2>
+            <h2 className="text-lg font-semibold text-white mb-4">Project Overview</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <SummaryStatCard
                 label="Original Contract Value"
@@ -611,7 +611,7 @@ export default function CommercialControlDashboard() {
         {/* Trade-Level Metrics */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Trade Performance</h2>
+            <h2 className="text-lg font-semibold text-white">Trade Performance</h2>
             <div className="flex gap-2">
               <button
                 onClick={handleGenerateBaselines}
@@ -641,82 +641,82 @@ export default function CommercialControlDashboard() {
           </div>
 
           {tradeMetrics.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-              <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No awarded trades found. Award suppliers to see commercial metrics.</p>
+            <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center">
+              <AlertTriangle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+              <p className="text-gray-300">No awarded trades found. Award suppliers to see commercial metrics.</p>
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+            <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-700">
+                <thead className="bg-gray-900">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Trade / Supplier
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       % Complete
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Remaining
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       VOs
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       VO Pending
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-gray-800 divide-y divide-gray-700">
                   {tradeMetrics.map((trade) => (
-                    <tr key={`${trade.tradeKey}_${trade.supplierId}`} className="hover:bg-gray-50">
+                    <tr key={`${trade.tradeKey}_${trade.supplierId}`} className="hover:bg-gray-750">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{trade.tradeName}</div>
-                          <div className="text-sm text-gray-500">{trade.supplierName}</div>
+                          <div className="text-sm font-medium text-white">{trade.tradeName}</div>
+                          <div className="text-sm text-gray-400">{trade.supplierName}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="w-full bg-gray-200 rounded-full h-2.5 mr-3">
+                          <div className="w-full bg-gray-700 rounded-full h-2.5 mr-3">
                             <div
                               className={`h-2.5 rounded-full ${
                                 trade.percentComplete >= 80
-                                  ? 'bg-green-600'
+                                  ? 'bg-green-500'
                                   : trade.percentComplete >= 50
-                                  ? 'bg-yellow-600'
-                                  : 'bg-red-600'
+                                  ? 'bg-yellow-500'
+                                  : 'bg-red-500'
                               }`}
                               style={{ width: `${Math.min(trade.percentComplete, 100)}%` }}
                             ></div>
                           </div>
-                          <span className="text-sm font-medium text-gray-700">
+                          <span className="text-sm font-medium text-gray-300">
                             {trade.percentComplete.toFixed(1)}%
                           </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-white">
                           ${trade.amountRemaining.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900 text-blue-300">
                           {trade.voCount} VOs
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-white">
                           ${trade.voValuePending.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                         <button
                           onClick={() => handleExportBaseTracker(trade)}
-                          className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                          className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1"
                         >
                           <Download className="w-4 h-4" />
                           Base Tracker
@@ -731,12 +731,12 @@ export default function CommercialControlDashboard() {
         </div>
 
         {/* Governance Notice */}
-        <div className="bg-red-50 border-l-4 border-red-600 p-4 rounded">
+        <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded">
           <div className="flex">
-            <AlertTriangle className="w-5 h-5 text-red-600 mr-3 flex-shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-red-400 mr-3 flex-shrink-0" />
             <div>
-              <h3 className="text-sm font-medium text-red-800">System Governance Rules</h3>
-              <ul className="mt-2 text-sm text-red-700 list-disc list-inside space-y-1">
+              <h3 className="text-sm font-medium text-red-300">System Governance Rules</h3>
+              <ul className="mt-2 text-sm text-red-400 list-disc list-inside space-y-1">
                 <li>No Base Tracker = No progress claim assessment</li>
                 <li>No VO reference = No extra payment beyond baseline</li>
                 <li>All Base Tracker exports are logged & immutable</li>
