@@ -117,7 +117,7 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
 
   // Tab 3: TENDERER_MAPPING - How tenderer items map to baseline
   console.log('[exportBOQPack] Creating tenderer mapping tab...');
-  createTendererMappingTab(workbook, tenderers || [], allQuoteItems || [], boqLines || []);
+  await createTendererMappingTab(workbook, tenderers || [], allQuoteItems || [], boqLines || []);
 
   // Tab 4: SCOPE_GAPS_REGISTER
   console.log('[exportBOQPack] Creating scope gaps tab with', gaps?.length, 'gaps...');
@@ -453,32 +453,33 @@ function createBaselineFromQuotesTab(
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
 }
 
-function createTendererMappingTab(
+async function createTendererMappingTab(
   workbook: ExcelJS.Workbook,
   tenderers: any[],
   allQuoteItems: any[],
   boqLines: BOQLine[]
-): void {
+): Promise<void> {
   const sheet = workbook.addWorksheet('TENDERER_MAPPING');
 
   sheet.columns = [
     { header: 'Tenderer', key: 'tenderer', width: 25 },
-    { header: 'Quote Line #', key: 'line_number', width: 10 },
-    { header: 'System / Description', key: 'system_name', width: 40 },
-    { header: 'Location', key: 'location', width: 20 },
-    { header: 'FRR', key: 'frr_rating', width: 12 },
+    { header: 'BOQ Line ID', key: 'boq_line_id', width: 15 },
+    { header: 'System Name', key: 'system_name', width: 40 },
+    { header: 'Location / Zone', key: 'location', width: 20 },
+    { header: 'Baseline Qty', key: 'baseline_qty', width: 12 },
+    { header: 'Tenderer Qty', key: 'tenderer_qty', width: 12 },
+    { header: 'Variance', key: 'variance', width: 12 },
+    { header: 'Variance %', key: 'variance_percent', width: 12 },
+    { header: 'Unit', key: 'unit', width: 10 },
+    { header: 'Tenderer Rate', key: 'tenderer_rate', width: 15 },
+    { header: 'Tenderer Amount', key: 'tenderer_amount', width: 15 },
+    { header: 'Status', key: 'status', width: 15 },
+    { header: 'FRR Rating', key: 'frr_rating', width: 12 },
     { header: 'Substrate', key: 'substrate', width: 15 },
     { header: 'Service Type', key: 'service_type', width: 15 },
-    { header: 'Size', key: 'size_opening', width: 12 },
-    { header: 'Qty', key: 'quantity', width: 10 },
-    { header: 'Unit', key: 'unit', width: 10 },
-    { header: 'Rate', key: 'rate', width: 12 },
-    { header: 'Amount', key: 'amount', width: 15 },
-    { header: 'Product', key: 'product', width: 25 },
-    { header: 'Install Method', key: 'install_method', width: 25 },
-    { header: 'Notes', key: 'notes', width: 30 },
-    { header: 'Maps to BOQ Line', key: 'mapped_boq', width: 15 },
-    { header: 'Match Confidence', key: 'confidence', width: 15 }
+    { header: 'Product / System Variant', key: 'product', width: 30 },
+    { header: 'Tenderer Notes', key: 'notes', width: 35 },
+    { header: 'Tag IDs', key: 'tag_ids', width: 20 }
   ];
 
   const headerRow = sheet.getRow(1);
@@ -487,41 +488,100 @@ function createTendererMappingTab(
   headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
   headerRow.height = 40;
 
-  let rowIndex = 0;
-  tenderers.forEach(tenderer => {
-    const quoteItems = allQuoteItems.filter(item => item.quote_id === tenderer.quote_id);
-
-    quoteItems.forEach(item => {
-      const rowData = {
-        tenderer: tenderer.name,
-        line_number: item.line_number || '',
-        system_name: item.system_name || item.description || '',
-        location: item.location || '',
-        frr_rating: item.frr_rating || '',
-        substrate: item.substrate || '',
-        service_type: item.service_type || '',
-        size_opening: item.size_opening || '',
-        quantity: item.quantity || 0,
-        unit: item.unit || '',
-        rate: item.rate || 0,
-        amount: item.amount || 0,
-        product: item.product || '',
-        install_method: item.install_method || '',
-        notes: item.notes || '',
-        mapped_boq: boqLines.length > 0 ? findBestMatchingBOQLine(item, boqLines)?.boq_line_id || 'Not mapped' : 'N/A',
-        confidence: item.confidence_score ? `${Math.round(item.confidence_score * 100)}%` : 'N/A'
-      };
-
-      sheet.addRow(rowData);
-
-      if (rowIndex % 2 === 1) {
-        const row = sheet.getRow(rowIndex + 2);
-        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
-      }
-
-      rowIndex++;
+  if (boqLines.length === 0) {
+    // Show placeholder if no BOQ generated yet
+    sheet.addRow({
+      tenderer: '',
+      boq_line_id: '',
+      system_name: 'BOQ not generated yet',
+      location: '',
+      baseline_qty: '',
+      tenderer_qty: '',
+      variance: '',
+      variance_percent: '',
+      unit: '',
+      tenderer_rate: '',
+      tenderer_amount: '',
+      status: '',
+      frr_rating: '',
+      substrate: '',
+      service_type: '',
+      product: 'Generate baseline BOQ to see tenderer mapping',
+      notes: '',
+      tag_ids: ''
     });
-  });
+  } else {
+    // Get mappings from database
+    const { data: mappings } = await supabase
+      .from('boq_tenderer_map')
+      .select('*')
+      .in('boq_line_id', boqLines.map(l => l.id));
+
+    let rowIndex = 0;
+
+    // Group by tenderer for better organization
+    tenderers.forEach(tenderer => {
+      const tendererMappings = mappings?.filter(m => m.tenderer_id === tenderer.id) || [];
+
+      tendererMappings.forEach(mapping => {
+        const boqLine = boqLines.find(l => l.id === mapping.boq_line_id);
+        if (!boqLine) return;
+
+        const baselineQty = parseFloat(boqLine.quantity?.toString() || '0');
+        const tendererQty = parseFloat(mapping.tenderer_qty?.toString() || '0');
+        const variance = tendererQty - baselineQty;
+        const variancePercent = baselineQty > 0 ? ((variance / baselineQty) * 100) : 0;
+
+        const rowData = {
+          tenderer: tenderer.name,
+          boq_line_id: boqLine.boq_line_id || '',
+          system_name: boqLine.system_name || '',
+          location: boqLine.location_zone || '',
+          baseline_qty: baselineQty,
+          tenderer_qty: tendererQty,
+          variance: variance !== 0 ? variance : 0,
+          variance_percent: variance !== 0 ? variancePercent.toFixed(1) + '%' : '0%',
+          unit: boqLine.unit || '',
+          tenderer_rate: mapping.tenderer_rate || '',
+          tenderer_amount: mapping.tenderer_amount || '',
+          status: mapping.included_status || 'missing',
+          frr_rating: boqLine.frr_rating || '',
+          substrate: boqLine.substrate || '',
+          service_type: boqLine.service_type || '',
+          product: boqLine.system_variant_product || '',
+          notes: mapping.tenderer_notes || '',
+          tag_ids: (mapping.clarification_tag_ids || []).join(', ')
+        };
+
+        const row = sheet.addRow(rowData);
+
+        // Color code by status
+        if (mapping.included_status === 'included') {
+          row.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+          row.getCell('status').font = { color: { argb: 'FF065F46' } };
+        } else if (mapping.included_status === 'missing') {
+          row.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFECACA' } };
+          row.getCell('status').font = { color: { argb: 'FF991B1B' } };
+        }
+
+        // Color code variance
+        if (variance > 0) {
+          row.getCell('variance').font = { color: { argb: 'FF065F46' } };
+          row.getCell('variance_percent').font = { color: { argb: 'FF065F46' } };
+        } else if (variance < 0) {
+          row.getCell('variance').font = { color: { argb: 'FF991B1B' } };
+          row.getCell('variance_percent').font = { color: { argb: 'FF991B1B' } };
+        }
+
+        // Alternate row colors
+        if (rowIndex % 2 === 1) {
+          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
+        }
+
+        rowIndex++;
+      });
+    });
+  }
 
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
 }
