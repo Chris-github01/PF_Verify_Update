@@ -466,8 +466,31 @@ export default function CommercialControlDashboard() {
 
       // Generate baseline for each award
       let generated = 0;
+      let alreadyExists = 0;
+      let errors: string[] = [];
+
       for (const award of awards) {
         console.log('[Commercial Control] Generating baseline for award:', award.id);
+        console.log('[Commercial Control] Quote ID:', award.final_approved_quote_id);
+
+        // First check if quote has items
+        const { data: quoteItems, error: quoteCheckError } = await supabase
+          .from('quote_items')
+          .select('id')
+          .eq('quote_id', award.final_approved_quote_id);
+
+        console.log('[Commercial Control] Quote items check:', {
+          quoteId: award.final_approved_quote_id,
+          itemCount: quoteItems?.length || 0,
+          error: quoteCheckError
+        });
+
+        if (!quoteItems || quoteItems.length === 0) {
+          const msg = `No quote items found for quote ${award.final_approved_quote_id}`;
+          console.error('[Commercial Control]', msg);
+          errors.push(msg);
+          continue;
+        }
 
         try {
           const result = await generateCommercialBaseline({
@@ -485,14 +508,31 @@ export default function CommercialControlDashboard() {
         } catch (error: any) {
           if (error.message?.includes('already exists')) {
             console.log(`[Commercial Control] Baseline already exists for award ${award.id}`);
+            alreadyExists++;
           } else {
             console.error(`[Commercial Control] Error generating baseline for award ${award.id}:`, error);
-            throw error;
+            errors.push(error.message || String(error));
           }
         }
       }
 
-      alert(`Successfully generated ${generated} baseline(s)`);
+      // Show detailed message
+      let message = '';
+      if (generated > 0) {
+        message += `Successfully generated ${generated} baseline(s).\n`;
+      }
+      if (alreadyExists > 0) {
+        message += `${alreadyExists} baseline(s) already exist.\n`;
+      }
+      if (errors.length > 0) {
+        message += `Errors: ${errors.join(', ')}`;
+      }
+
+      if (message === '') {
+        message = 'No action taken. Check console for details.';
+      }
+
+      alert(message);
       await loadDashboard(); // Reload dashboard
     } catch (error: any) {
       console.error('[Commercial Control] Error generating baselines:', error);
