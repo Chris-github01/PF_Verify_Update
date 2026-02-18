@@ -16,6 +16,7 @@ import {
   CheckSquare,
   FileSpreadsheet,
   DollarSign,
+  Sliders,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -34,6 +35,7 @@ export type SidebarTab =
   | 'boq-builder'
   | 'contract'
   | 'commercial'
+  | 'scoring'
   | 'reports'
   | 'insights'
   | 'systemcheck'
@@ -61,6 +63,7 @@ const menuStructure = [
       { id: 'quoteintel' as SidebarTab, label: 'Quote Intelligence', icon: Sparkles },
       { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
       { id: 'equalisation' as SidebarTab, label: 'Equalisation Analysis', icon: BarChart3 },
+      { id: 'scoring' as SidebarTab, label: 'Scoring & Weights', icon: Sliders },
       { id: 'boq-builder' as SidebarTab, label: 'BOQ Builder', icon: FileSpreadsheet },
       { id: 'reports' as SidebarTab, label: 'Award Reports', icon: BarChart3 },
     ]
