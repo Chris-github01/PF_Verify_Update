@@ -150,7 +150,18 @@ export default function CommercialControlDashboard() {
   async function loadTradeMetrics(projId: string) {
     console.log('[Commercial Dashboard] Loading trade metrics for project:', projId);
 
-    // FIXED: Query award_approvals instead of non-existent awarded_supplier_id column
+    // Debug: Check current user
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('[Commercial Dashboard] Current user:', user?.email, user?.id);
+
+    // Debug: Check organisation membership
+    const { data: membership, error: memberError } = await supabase
+      .from('organisation_members')
+      .select('organisation_id, role, status')
+      .eq('user_id', user?.id || '');
+
+    console.log('[Commercial Dashboard] User memberships:', { membership, memberError });
+
     // Get all awarded suppliers for this project
     const { data: awards, error: awardsError } = await supabase
       .from('award_approvals')
@@ -166,17 +177,21 @@ export default function CommercialControlDashboard() {
     console.log('[Commercial Dashboard] Awards query result:', {
       awards,
       awardsError,
-      count: awards?.length || 0
+      count: awards?.length || 0,
+      errorDetails: awardsError?.message,
+      errorCode: awardsError?.code
     });
 
     if (awardsError) {
       console.error('[Commercial Dashboard] Error fetching awards:', awardsError);
+      console.error('[Commercial Dashboard] This is likely an RLS permissions issue');
       setTradeMetrics([]);
       return;
     }
 
     if (!awards || awards.length === 0) {
       console.log('[Commercial Dashboard] No awards found for project:', projId);
+      console.log('[Commercial Dashboard] This could mean: 1) No supplier awarded yet, or 2) RLS blocking access');
       setTradeMetrics([]);
       return;
     }
