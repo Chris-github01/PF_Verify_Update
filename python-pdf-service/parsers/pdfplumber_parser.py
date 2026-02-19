@@ -262,9 +262,32 @@ class PDFPlumberParser:
 
         return line_items
 
+    def _is_summary_ls(self, item: Dict, itemized_total: float) -> bool:
+        """Check if an LS item is actually a summary duplicate."""
+        desc = (item.get("description") or "").lower().strip()
+        if not desc:
+            return True
+
+        summary_words = ["subtotal", "sub-total", "total", "grand total", "summary", "p&g", "prelim", "gst", "margin"]
+        if any(w in desc for w in summary_words):
+            return True
+
+        # Check for section header format like "Electrical $xxx"
+        import re
+        if re.match(r"^[a-z][a-z\s/&-]{2,40}\s+\$[\d,]+(\.\d{2})?$", desc):
+            return True
+
+        # If LS total equals itemized total within 2%, likely duplicate roll-up
+        ls_total = float(item.get("total_price") or 0)
+        if itemized_total > 0 and ls_total > 0:
+            if abs(ls_total - itemized_total) / itemized_total <= 0.02:
+                return True
+
+        return False
+
     def _filter_lump_sum_items(self, items: List[Dict]) -> List[Dict]:
         """
-        Remove lump sum items if we have itemized items.
+        Smart LS filtering: Only remove LS items if they're summary duplicates.
         This handles quotes with BOTH a summary page AND a detailed schedule.
         """
         if not items:
@@ -275,24 +298,25 @@ class PDFPlumberParser:
         itemized_items = []
 
         for item in items:
-            unit = str(item.get('unit', '')).upper().strip()
+            unit = str(item.get('unit', '')).upper().strip().replace(".", "")
 
             # Lump sum indicators
-            if unit in ['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM']:
+            if unit in ['LS', 'LUMP SUM', 'SUM', 'LUMPSUM']:
                 lump_sum_items.append(item)
             else:
                 itemized_items.append(item)
 
         print(f"[PDFPlumber Filtering] {len(lump_sum_items)} LS items, {len(itemized_items)} itemized items")
 
-        # HARD RULE: If we have ANY itemized items, remove ALL lump sum items
-        if len(itemized_items) > 0:
-            print(f"[PDFPlumber Filtering] REMOVING ALL {len(lump_sum_items)} lump sum items - keeping {len(itemized_items)} itemized items")
-            return itemized_items
+        # Calculate itemized total for comparison
+        itemized_total = sum(float(i.get("total_price") or 0) for i in itemized_items)
 
-        # If we only have lump sum items, keep them (better than nothing)
-        print(f"[PDFPlumber Filtering] Only LS items found - keeping them")
-        return lump_sum_items
+        # Smart filtering: only remove LS items that look like summary duplicates
+        keep_ls = [ls for ls in lump_sum_items if not self._is_summary_ls(ls, itemized_total)]
+
+        print(f"[PDFPlumber Filtering] Keeping {len(keep_ls)} of {len(lump_sum_items)} LS items (removed {len(lump_sum_items) - len(keep_ls)} summary duplicates)")
+
+        return itemized_items + keep_ls
 
     def _find_column_index(self, header: List, keywords: List[str]) -> int:
         """Find column index by matching keywords."""

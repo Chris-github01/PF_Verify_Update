@@ -80,6 +80,42 @@ function shouldChunkQuote(text: string): boolean {
 }
 
 /**
+ * Chunk by lines with overlap to prevent losing items between chunks
+ */
+function chunkByLinesWithOverlap(text: string, maxChars = 3200, overlapLines = 10): { section: string; content: string }[] {
+  const lines = text.split('\n');
+  const chunks: { section: string; content: string }[] = [];
+  let current: string[] = [];
+  let chunkNum = 1;
+
+  for (let i = 0; i < lines.length; i++) {
+    current.push(lines[i]);
+    const joined = current.join('\n');
+
+    if (joined.length >= maxChars) {
+      chunks.push({
+        section: `Section ${chunkNum}`,
+        content: joined
+      });
+      chunkNum++;
+
+      // Keep overlap lines for next chunk
+      current = current.slice(Math.max(0, current.length - overlapLines));
+    }
+  }
+
+  if (current.length) {
+    chunks.push({
+      section: `Section ${chunkNum}`,
+      content: current.join('\n')
+    });
+  }
+
+  console.log(`[LLM Fallback] Created ${chunks.length} chunks with ${overlapLines}-line overlap`);
+  return chunks;
+}
+
+/**
  * Chunk quote by detecting section headers or by fixed size
  */
 function chunkQuoteBySection(text: string): { section: string; content: string }[] {
@@ -95,6 +131,7 @@ function chunkQuoteBySection(text: string): { section: string; content: string }
   const lines = text.split('\n');
   let currentSection = 'Main';
   let currentContent: string[] = [];
+  const overlapLines = 10; // Keep 10 lines overlap between sections
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -104,7 +141,7 @@ function chunkQuoteBySection(text: string): { section: string; content: string }
     for (const pattern of sectionPatterns) {
       const match = line.match(pattern);
       if (match && line.length < 100) { // Section headers are typically short
-        // Save previous section
+        // Save previous section with overlap
         if (currentContent.length > 10) { // Minimum lines for a valid section
           chunks.push({
             section: currentSection,
@@ -112,9 +149,10 @@ function chunkQuoteBySection(text: string): { section: string; content: string }
           });
         }
 
-        // Start new section
+        // Start new section, keeping overlap from previous
+        const overlap = currentContent.slice(Math.max(0, currentContent.length - overlapLines));
         currentSection = match[1].trim();
-        currentContent = [line];
+        currentContent = [...overlap, line];
         isSectionHeader = true;
         break;
       }
@@ -130,7 +168,8 @@ function chunkQuoteBySection(text: string): { section: string; content: string }
           section: `${currentSection} (part ${chunks.filter(c => c.section.startsWith(currentSection)).length + 1})`,
           content: currentContent.join('\n')
         });
-        currentContent = [];
+        // Keep overlap for next part
+        currentContent = currentContent.slice(Math.max(0, currentContent.length - overlapLines));
       }
     }
   }
@@ -143,13 +182,13 @@ function chunkQuoteBySection(text: string): { section: string; content: string }
     });
   }
 
-  // If section detection failed (only 1 chunk), split by fixed size
+  // If section detection failed (only 1 chunk), split by fixed size with overlap
   if (chunks.length === 1 && chunks[0].content.length > 4000) {
-    console.log('[LLM Fallback] Section detection failed, using fixed-size chunking');
-    return chunkByFixedSize(text, 3000);
+    console.log('[LLM Fallback] Section detection failed, using line-based chunking with overlap');
+    return chunkByLinesWithOverlap(text, 3200, 10);
   }
 
-  console.log(`[LLM Fallback] Split quote into ${chunks.length} sections:`, chunks.map(c => c.section));
+  console.log(`[LLM Fallback] Split quote into ${chunks.length} sections with overlap:`, chunks.map(c => c.section));
 
   return chunks;
 }
