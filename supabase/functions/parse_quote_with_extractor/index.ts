@@ -333,18 +333,28 @@ Deno.serve(async (req: Request) => {
 
     console.log(`AI parser extracted ${items.length} items, LLM grand total: ${llmGrandTotal}`);
 
-    // CRITICAL FIX: Keep ALL items - no filtering
-    // Just filter out obvious summary/header lines
+    // Log what we received from parser
+    console.log(`RAW ITEMS FROM PARSER (first 5):`, items.slice(0, 5).map((it: any) => ({
+      desc: it.description,
+      qty: it.qty,
+      unit: it.unit,
+      rate: it.rate,
+      total: it.total
+    })));
+
+    // CRITICAL: Keep EVERY single item with a total value
+    // NO FILTERING AT ALL
+    const itemsBeforeFilter = items.length;
+
     items = items.filter((item: any) => {
-      const desc = String(item.description || "").trim();
-      if (!desc) return false; // Drop empty descriptions
+      const total = Number(item.total ?? item.total_price ?? item.amount ?? 0);
+      const hasValue = total !== 0 && Number.isFinite(total);
+      const hasDesc = String(item.description || "").trim().length > 0;
 
-      // Only drop if it's CLEARLY a section header or summary (not an actual line item)
-      const isSectionHeader = /^(Electrical|Mechanical|Plumbing|Fire|HVAC|Heritage|New Building)\s*\$[\d,]+/i.test(desc);
-      const isObviousSummary = /^(TOTAL|SUBTOTAL|SUB-TOTAL|GRAND TOTAL|GST)$/i.test(desc);
-
-      return !isSectionHeader && !isObviousSummary;
+      return hasValue && hasDesc;
     });
+
+    console.log(`Kept ${items.length} of ${itemsBeforeFilter} items (removed ${itemsBeforeFilter - items.length} items with no value)`);
 
     // Mark optional items but keep them
     items = items.map((item: any) => ({
@@ -352,7 +362,7 @@ Deno.serve(async (req: Request) => {
       is_optional: isOptionalItem(item)
     }));
 
-    console.log(`After filtering headers: ${items.length} items total`);
+    console.log(`Final item count: ${items.length} items`);
 
     // Calculate totals - sum of ALL items should equal document total
     const lineItemsTotal = sumItems(items);
