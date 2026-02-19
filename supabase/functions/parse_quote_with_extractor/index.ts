@@ -272,17 +272,22 @@ Deno.serve(async (req: Request) => {
       extractorData = null;
     }
 
+    // Read file buffer ONCE at the start (can't read stream multiple times)
+    const fileBuffer = await file.arrayBuffer();
+    console.log(`File loaded: ${file.name}, size: ${fileBuffer.byteLength} bytes`);
+
     // If Python service failed, use OpenAI to extract text directly from PDF
     if (!extractorData) {
       console.log("PYTHON SERVICE UNAVAILABLE - Using OpenAI GPT-4 Vision to parse PDF directly");
 
-      const fileBuffer = await file.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
-
       const openaiKey = configMap.get("OPENAI_API_KEY");
       if (!openaiKey) {
-        throw new Error("OpenAI API key not configured");
+        console.error("OpenAI API key not found in system_config");
+        throw new Error("OpenAI API key not configured in system settings");
       }
+
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+      console.log(`Base64 encoding complete: ${base64.length} characters`);
 
       const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -326,7 +331,6 @@ Deno.serve(async (req: Request) => {
 
     const fileName = file.name;
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fileBuffer = await file.arrayBuffer();
     const timestamp = new Date().getTime();
     const storagePath = `${projectId}/${timestamp}-${sanitizedFileName}`;
 
