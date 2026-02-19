@@ -389,16 +389,17 @@ Deno.serve(async (req: Request) => {
     let items = parseResult.lines || parseResult.items || [];
     const llmGrandTotal = parseResult.totals?.grandTotal || parseResult.grandTotal || parseResult.quoteTotalAmount;
 
+    console.log(`========== AI PARSER RESULTS ==========`);
     console.log(`AI parser extracted ${items.length} items, LLM grand total: ${llmGrandTotal}`);
+    console.log(`Raw parse result keys:`, Object.keys(parseResult));
+    console.log(`Items array length:`, items.length);
 
-    // Log what we received from parser
-    console.log(`RAW ITEMS FROM PARSER (first 5):`, items.slice(0, 5).map((it: any) => ({
-      desc: it.description,
-      qty: it.qty,
-      unit: it.unit,
-      rate: it.rate,
-      total: it.total
-    })));
+    // Log ALL items to see if OpenAI is missing some
+    console.log(`\n========== ALL ${items.length} ITEMS FROM AI PARSER ==========`);
+    items.forEach((item: any, index: number) => {
+      console.log(`${index + 1}. ${item.description?.substring(0, 60)} | qty=${item.qty} | rate=${item.rate} | total=${item.total}`);
+    });
+    console.log(`========== END OF ITEMS LIST ==========\n`);
 
     // CRITICAL: Keep EVERY single item with a total value
     // NO FILTERING AT ALL
