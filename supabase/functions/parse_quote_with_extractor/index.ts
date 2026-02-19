@@ -439,7 +439,9 @@ Deno.serve(async (req: Request) => {
     }
 
     if (items.length > 0) {
-      const quoteItems = items.map((item: any) => {
+      console.log(`PREPARING TO INSERT ${items.length} ITEMS INTO DATABASE`);
+
+      const quoteItems = items.map((item: any, index: number) => {
         // For lump sum items, preserve null values for rate/total
         const unitPrice = item.unit_price ?? item.unitPrice ?? item.rate;
         const totalPrice = item.total ?? item.amount;
@@ -451,10 +453,9 @@ Deno.serve(async (req: Request) => {
         if ((quantity === 0 || finalUnitPrice === null || finalUnitPrice === undefined) && totalPrice) {
           quantity = 1;
           finalUnitPrice = parseFloat(totalPrice.toString());
-          console.log(`[DATA INTEGRITY FIX] Item "${item.description}" has total but missing qty/price, saving as qty=1, price=${totalPrice}`);
         }
 
-        return {
+        const dbItem = {
           quote_id: quote.id,
           description: item.description || item.desc || "",
           quantity: quantity,
@@ -467,15 +468,37 @@ Deno.serve(async (req: Request) => {
             section: item.section
           }
         };
+
+        // Log first and last few items
+        if (index < 3 || index >= items.length - 3) {
+          console.log(`Item ${index + 1}:`, {
+            desc: dbItem.description.substring(0, 50),
+            qty: dbItem.quantity,
+            unit: dbItem.unit,
+            unit_price: dbItem.unit_price,
+            total_price: dbItem.total_price
+          });
+        }
+
+        return dbItem;
       });
 
-      const { error: itemsError } = await supabase
+      console.log(`INSERTING ${quoteItems.length} ITEMS INTO quote_items TABLE`);
+
+      const { data: insertedItems, error: itemsError } = await supabase
         .from("quote_items")
-        .insert(quoteItems);
+        .insert(quoteItems)
+        .select('id');
 
       if (itemsError) {
         console.error("Quote items creation error:", itemsError);
         throw new Error("Failed to create quote items");
+      }
+
+      console.log(`SUCCESSFULLY INSERTED ${insertedItems?.length || 0} ITEMS (expected ${quoteItems.length})`);
+
+      if (insertedItems && insertedItems.length !== quoteItems.length) {
+        console.error(`CRITICAL: Item count mismatch! Prepared ${quoteItems.length} items but only ${insertedItems.length} were inserted`);
       }
     }
 
