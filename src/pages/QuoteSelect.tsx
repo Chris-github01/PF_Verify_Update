@@ -10,6 +10,7 @@ interface Quote {
   quote_reference: string;
   total_amount: number;
   items_count: number;
+  final_items_count?: number; // v3 parsing: source of truth
   status: string;
   is_selected: boolean;
   file_name?: string;
@@ -60,19 +61,12 @@ export default function QuoteSelect({
         }
       }) || [];
 
-      const quotesWithCounts = await Promise.all(
-        filteredQuotes.map(async (quote) => {
-          const { count } = await supabase
-            .from('quote_items')
-            .select('*', { count: 'exact', head: true })
-            .eq('quote_id', quote.id);
-
-          return {
-            ...quote,
-            items_count: count || 0,
-          };
-        })
-      );
+      // Use final_items_count from quotes table (single source of truth)
+      // Fallback to items_count for backwards compatibility with old quotes
+      const quotesWithCounts = filteredQuotes.map(quote => ({
+        ...quote,
+        items_count: quote.final_items_count ?? quote.items_count ?? 0,
+      }));
 
       setQuotes(quotesWithCounts);
       setMessage(null);

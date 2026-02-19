@@ -40,6 +40,7 @@ interface QuoteInfo {
   quote_reference?: string;
   total_amount?: number;
   items_count: number;
+  final_items_count?: number; // v3 parsing: source of truth
   mapped_items_count: number;
   parse_status?: 'completed' | 'failed' | 'partial' | 'pending' | 'processing';
   has_failed_chunks?: boolean;
@@ -133,7 +134,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
     try {
       const { data: allQuotes } = await supabase
         .from('quotes')
-        .select('id, supplier_name, quote_reference, total_amount, items_count, revision_number')
+        .select('id, supplier_name, quote_reference, total_amount, items_count, final_items_count, revision_number')
         .eq('project_id', projectId)
         .eq('trade', currentTrade)
         .eq('is_selected', true)
@@ -145,10 +146,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       if (quotesData.length > 0) {
         const quotesWithStatus = await Promise.all(
           quotesData.map(async (quote) => {
-            const { count: totalCount } = await supabase
-              .from('quote_items')
-              .select('*', { count: 'exact', head: true })
-              .eq('quote_id', quote.id);
+            // Use final_items_count as source of truth, fallback to items_count or COUNT
+            const totalCount = quote.final_items_count ?? quote.items_count;
 
             const { count: mappedCount } = await supabase
               .from('quote_items')
@@ -162,6 +161,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               quote_reference: quote.quote_reference,
               total_amount: quote.total_amount,
               items_count: totalCount || 0,
+              final_items_count: quote.final_items_count,
               mapped_items_count: mappedCount || 0,
               parse_status: 'completed' as const,
               has_failed_chunks: false,
@@ -181,7 +181,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       // Filter quotes based on dashboard mode and selected status
       const { data: allQuotes } = await supabase
         .from('quotes')
-        .select('id, supplier_name, quote_reference, total_amount, items_count, revision_number')
+        .select('id, supplier_name, quote_reference, total_amount, items_count, final_items_count, revision_number')
         .eq('project_id', projectId)
         .eq('trade', currentTrade)
         .eq('is_selected', true)
@@ -208,10 +208,8 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               .limit(1)
               .maybeSingle();
 
-            const { count: totalCount } = await supabase
-              .from('quote_items')
-              .select('*', { count: 'exact', head: true })
-              .eq('quote_id', quote.id);
+            // Use final_items_count as source of truth
+            const itemCount = quote.final_items_count ?? quote.items_count ?? 0;
 
             const { count: mappedCount } = await supabase
               .from('quote_items')
@@ -219,7 +217,6 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               .eq('quote_id', quote.id)
               .not('system_id', 'is', null);
 
-            const itemCount = totalCount || 0;
             const mappedItemsCount = mappedCount || 0;
             const hasFailedChunks = jobData?.error_message?.includes('chunks failed') || false;
 
@@ -242,6 +239,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               quote_reference: quote.quote_reference,
               total_amount: quote.total_amount,
               items_count: itemCount,
+              final_items_count: quote.final_items_count,
               mapped_items_count: mappedItemsCount,
               parse_status: parseStatus,
               has_failed_chunks: hasFailedChunks,

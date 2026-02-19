@@ -434,95 +434,23 @@ Deno.serve(async (req: Request) => {
     const rawItems = parseResult.lines || parseResult.items || [];
     console.log(`[DEBUG] LLM returned rawItems count = ${rawItems.length}`);
 
-    const llmGrandTotal = parseResult.totals?.grandTotal || parseResult.grandTotal || parseResult.quoteTotalAmount;
-    console.log(`[DEBUG] LLM grand total: ${llmGrandTotal}`);
+    // Import v3 parsing pipeline
+    const { processParsingPipeline } = await import("../_shared/parsingV3.ts");
 
-    // Helper functions for safe extraction
-    function getTotal(it: any) {
-      const v = it.total ?? it.total_price ?? it.amount ?? it.line_total ?? it.extended ?? null;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
-    }
+    // Run v3 parsing pipeline
+    const parsingResult = processParsingPipeline(rawItems, extractorData.text);
 
-    function getDesc(it: any) {
-      return String(it.description ?? it.desc ?? it.item ?? "").trim();
-    }
+    console.log(`[Parsing v3] Raw items: ${parsingResult.rawItemsCount}`);
+    console.log(`[Parsing v3] Final items: ${parsingResult.finalItemsCount}`);
+    console.log(`[Parsing v3] Items total: $${parsingResult.itemsTotal.toFixed(2)}`);
+    console.log(`[Parsing v3] Document total: ${parsingResult.documentTotal ? `$${parsingResult.documentTotal.toFixed(2)}` : 'N/A'}`);
+    console.log(`[Parsing v3] Final total amount: $${parsingResult.finalTotalAmount.toFixed(2)}`);
+    console.log(`[Parsing v3] Has adjustment: ${parsingResult.hasAdjustment}`);
 
-    let items = rawItems;
-    console.log(`[DEBUG] Starting with ${items.length} items`);
-
-    // SAFE junk filter - only remove truly empty rows
-    items = items.filter((it: any) => {
-      const desc = getDesc(it);
-      const total = getTotal(it);
-
-      // Keep if it has a real description OR a real total
-      if (desc.length > 0) return true;
-      if (total != null && total !== 0) return true;
-
-      return false;
-    });
-    console.log(`[DEBUG] After SAFE junk filter, items = ${items.length}`);
-
-    // Normalize items - convert total-only lines into qty=1, rate=total
-    items = items.map((it: any) => {
-      const desc = String(it.description ?? it.desc ?? "").trim();
-      const unit = String(it.unit ?? "").trim() || "ea";
-
-      let qty = Number(it.qty ?? it.quantity ?? 0);
-      let rate = Number(it.rate ?? it.unit_price ?? it.unitPrice ?? 0);
-      let total = Number(it.total ?? it.total_price ?? it.amount ?? 0);
-
-      // If total exists but qty/rate are missing: preserve money
-      if ((qty <= 0 || !Number.isFinite(qty)) && Number.isFinite(total) && total !== 0) {
-        qty = 1;
-      }
-      if ((!Number.isFinite(rate) || rate === 0) && Number.isFinite(total) && total !== 0 && qty > 0) {
-        rate = total / qty;
-      }
-
-      return {
-        ...it,
-        description: desc,
-        unit,
-        qty,
-        rate,
-        total,
-        is_optional: isOptionalItem(it)
-      };
-    });
-    console.log(`[DEBUG] After normalization, items = ${items.length}`);
-
-    // Log sample for verification (bounded to avoid stack overflow)
-    console.log(`\n[DEBUG] Sample of first 10 items:`);
-    items.slice(0, 10).forEach((it: any, idx: number) => {
-      console.log(`  ${idx + 1}. ${String(it.description || "").slice(0, 50)} | qty=${it.qty} rate=${it.rate} total=${it.total}`);
-    });
-
-    console.log(`[DEBUG] Final item count: ${items.length} items`);
-
-    // Calculate totals - sum of ALL items should equal document total
-    const lineItemsTotal = sumItems(items);
-    const documentGrandTotal = docTotals.grand_total_excl_gst;
-
-    console.log(`Line items sum: ${lineItemsTotal}`);
-    console.log(`Document grand total: ${documentGrandTotal}`);
-
-    // The quote total should be the sum of line items (no reconciliation adjustments)
-    const totalAmount = lineItemsTotal;
-    const quotedTotal = documentGrandTotal; // Store what the document says for reference
+    const items = parsingResult.finalItems;
+    const totalAmount = parsingResult.finalTotalAmount;
+    const quotedTotal = parsingResult.documentTotal;
     const contingencyAmount = 0;
-
-    // Calculate discrepancy for tracking
-    const discrepancy = documentGrandTotal ? Math.abs(documentGrandTotal - lineItemsTotal) : 0;
-
-    console.log("Quote totals:", {
-      lineItemsTotal,
-      quotedTotal,
-      contingencyAmount,
-      totalAmount,
-      discrepancy
-    });
 
     let revisionNumber = 1;
     if (dashboardMode === "revisions") {
@@ -539,6 +467,7 @@ Deno.serve(async (req: Request) => {
       console.log("Setting revision number:", { supplierName, revisionNumber, dashboardMode });
     }
 
+    // Step 1: Create quote with processing status and temporary counts
     const { data: quote, error: quoteError } = await supabase
       .from("quotes")
       .insert({
@@ -549,22 +478,29 @@ Deno.serve(async (req: Request) => {
         total_amount: totalAmount,
         quoted_total: quotedTotal,
         contingency_amount: contingencyAmount,
-        items_count: items.length,
+        items_count: items.length, // deprecated but keep for backwards compat
+        raw_items_count: parsingResult.rawItemsCount,
+        final_items_count: 0, // will update after insert
+        items_total: 0, // will update after insert
+        document_total: parsingResult.documentTotal,
+        remainder_amount: parsingResult.remainderAmount,
+        has_adjustment: parsingResult.hasAdjustment,
+        parsing_version: parsingResult.parsingVersion,
         user_id: userId,
         organisation_id: project.organisation_id,
-        status: "pending",
+        status: "processing",
         revision_number: revisionNumber,
         trade: trade,
-        document_total_excl_gst: documentGrandTotal,
-        items_total: lineItemsTotal,
-        reconciliation_applied: false,
-        has_adjustment_item: false,
+        document_total_excl_gst: parsingResult.documentTotal,
+        reconciliation_applied: parsingResult.hasAdjustment,
+        has_adjustment_item: parsingResult.hasAdjustment,
         optional_items_included: items.some((it: any) => it.is_optional),
         metadata: {
           extractor_used: "external_direct",
           num_pages: extractorData.num_pages,
           tables_count: extractorData.tables?.length || 0,
           parsed_at: new Date().toISOString(),
+          parsing_version: parsingResult.parsingVersion,
         },
       })
       .select()
@@ -574,6 +510,8 @@ Deno.serve(async (req: Request) => {
       console.error("Quote creation error:", quoteError);
       throw new Error("Failed to create quote");
     }
+
+    console.log(`[Atomic Write] Step 1: Quote created with ID ${quote.id}, status=processing`);
 
     if (items.length > 0) {
       console.log(`PREPARING TO INSERT ${items.length} ITEMS INTO DATABASE`);
@@ -632,11 +570,53 @@ Deno.serve(async (req: Request) => {
         throw new Error("Failed to create quote items");
       }
 
-      console.log(`SUCCESSFULLY INSERTED ${insertedItems?.length || 0} ITEMS (expected ${quoteItems.length})`);
+      console.log(`[Atomic Write] Step 2: Successfully inserted ${insertedItems?.length || 0} items (expected ${quoteItems.length})`);
 
       if (insertedItems && insertedItems.length !== quoteItems.length) {
         console.error(`CRITICAL: Item count mismatch! Prepared ${quoteItems.length} items but only ${insertedItems.length} were inserted`);
       }
+
+      // Step 3: Recount from database (source of truth)
+      const { count: savedCount } = await supabase
+        .from("quote_items")
+        .select("*", { count: "exact", head: true })
+        .eq("quote_id", quote.id);
+
+      const { data: totalData } = await supabase
+        .from("quote_items")
+        .select("total_price")
+        .eq("quote_id", quote.id);
+
+      const savedTotal = totalData?.reduce((sum, item) => sum + Number(item.total_price || 0), 0) || 0;
+
+      console.log(`[Atomic Write] Step 3: Recounted from DB - ${savedCount} items, $${savedTotal.toFixed(2)} total`);
+
+      // Step 4: Update quote with final counts (atomic source of truth)
+      const { error: updateError } = await supabase
+        .from("quotes")
+        .update({
+          final_items_count: savedCount || 0,
+          items_total: savedTotal,
+          items_count: savedCount || 0, // update deprecated field too
+          status: "complete",
+        })
+        .eq("id", quote.id);
+
+      if (updateError) {
+        console.error("Failed to update quote with final counts:", updateError);
+      } else {
+        console.log(`[Atomic Write] Step 4: Updated quote ${quote.id} with final counts - status=complete`);
+      }
+    } else {
+      // No items, just update status
+      await supabase
+        .from("quotes")
+        .update({
+          final_items_count: 0,
+          items_total: 0,
+          status: "complete",
+        })
+        .eq("id", quote.id);
     }
 
     return new Response(
@@ -644,13 +624,20 @@ Deno.serve(async (req: Request) => {
         success: true,
         quoteId: quote.id,
         itemsCount: items.length,
+        rawItemsCount: parsingResult.rawItemsCount,
+        finalItemsCount: parsingResult.finalItemsCount,
+        itemsTotal: parsingResult.itemsTotal,
+        documentTotal: parsingResult.documentTotal,
+        finalTotalAmount: parsingResult.finalTotalAmount,
+        hasAdjustment: parsingResult.hasAdjustment,
+        parsingVersion: parsingResult.parsingVersion,
         extractorData: {
           filename: extractorData.filename,
           num_pages: extractorData.num_pages,
           text_length: extractorData.text.length,
           tables_count: extractorData.tables?.length || 0,
         },
-        message: `Successfully parsed quote using external extractor. Found ${items.length} items.`,
+        message: `Successfully parsed quote using v3 pipeline. Raw: ${parsingResult.rawItemsCount} items, Final: ${parsingResult.finalItemsCount} items.`,
       }),
       {
         status: 200,
