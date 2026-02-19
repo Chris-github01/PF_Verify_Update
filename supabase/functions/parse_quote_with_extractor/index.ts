@@ -212,28 +212,49 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const userId = await getUserIdFromRequest(req);
+    console.log("=== STARTING PARSE_QUOTE_WITH_EXTRACTOR ===");
+    console.log("File:", file.name, "Size:", file.size);
+    console.log("Project ID:", projectId);
+    console.log("Supplier:", supplierName);
+    console.log("Trade:", trade);
 
-    const { data: project } = await supabase
+    const userId = await getUserIdFromRequest(req);
+    console.log("User ID:", userId);
+
+    const { data: project, error: projectError } = await supabase
       .from("projects")
       .select("organisation_id")
       .eq("id", projectId)
       .single();
 
+    if (projectError) {
+      console.error("Project lookup error:", projectError);
+      throw new Error(`Project lookup failed: ${projectError.message}`);
+    }
+
     if (!project) {
       throw new Error("Project not found");
     }
 
-    const { data: configs } = await supabaseAdmin
+    console.log("Project organisation_id:", project.organisation_id);
+
+    const { data: configs, error: configError } = await supabaseAdmin
       .from("system_config")
       .select("key, value")
-      .in("key", ["RENDER_PDF_EXTRACTOR_API_KEY", "RENDER_PDF_EXTRACTOR_URL"]);
+      .in("key", ["RENDER_PDF_EXTRACTOR_API_KEY", "RENDER_PDF_EXTRACTOR_URL", "OPENAI_API_KEY"]);
+
+    if (configError) {
+      console.error("Config lookup error:", configError);
+    }
+
+    console.log("Configs found:", configs?.map(c => c.key).join(", ") || "none");
 
     const configMap = new Map(configs?.map(c => [c.key, c.value]) || []);
     const apiKey = configMap.get("RENDER_PDF_EXTRACTOR_API_KEY");
     const baseUrl = configMap.get("RENDER_PDF_EXTRACTOR_URL") || "https://verify-pdf-extractor.onrender.com";
 
     if (!apiKey) {
+      console.error("PDF Extractor API key not found in system_config");
       throw new Error("PDF Extractor API key not configured in system settings");
     }
 
