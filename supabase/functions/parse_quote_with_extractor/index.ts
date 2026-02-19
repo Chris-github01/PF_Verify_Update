@@ -291,14 +291,24 @@ Deno.serve(async (req: Request) => {
         // For lump sum items, preserve null values for rate/total
         const unitPrice = item.unit_price ?? item.unitPrice ?? item.rate;
         const totalPrice = item.total ?? item.amount;
+        let quantity = parseFloat(item.qty || item.quantity || "0");
+        let finalUnitPrice = unitPrice;
+
+        // CRITICAL FIX: If item has total but missing qty/unit_price, convert to qty=1, price=total
+        // This preserves the value for downstream calculations (qty × unit_price = total)
+        if ((quantity === 0 || finalUnitPrice === null || finalUnitPrice === undefined) && totalPrice) {
+          quantity = 1;
+          finalUnitPrice = parseFloat(totalPrice.toString());
+          console.log(`[DATA INTEGRITY FIX] Item "${item.description}" has total but missing qty/price, saving as qty=1, price=${totalPrice}`);
+        }
 
         return {
           quote_id: quote.id,
           description: item.description || item.desc || "",
-          quantity: parseFloat(item.qty || item.quantity || "0"),
-          unit: item.unit || "",
-          unit_price: unitPrice !== null && unitPrice !== undefined ? parseFloat(unitPrice) : null,
-          total_price: totalPrice !== null && totalPrice !== undefined ? parseFloat(totalPrice) : null,
+          quantity: quantity,
+          unit: item.unit || "ea",
+          unit_price: finalUnitPrice !== null && finalUnitPrice !== undefined ? parseFloat(finalUnitPrice.toString()) : null,
+          total_price: totalPrice !== null && totalPrice !== undefined ? parseFloat(totalPrice.toString()) : null,
         };
       });
 
