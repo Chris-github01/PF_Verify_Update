@@ -412,7 +412,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                     )}
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5">
-                    {(Array.isArray(job.parsed_lines) ? job.parsed_lines.length : job.result_data?.items?.length) || 0} items • File: {job.filename} • Imported {formatDateTime(job.updated_at)}
+                    {(Array.isArray(job.parsed_lines) ? job.parsed_lines.length : job.result_data?.items?.length) || 0} items parsed • File: {job.filename} • Imported {formatDateTime(job.updated_at)}
                   </div>
                 </div>
               </div>

@@ -1,5 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import {
+  cleanText,
+  hasMoney,
+  hasDesc,
+  normalizeLine,
+  extractDocumentTotal,
+  dedupeKey,
+  addRemainderIfNeeded,
+} from "../_shared/itemNormalizer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -613,12 +622,35 @@ Deno.serve(async (req: Request) => {
             .eq("quote_id", quoteData.id);
         }
 
-        const quoteItems = parsedData.items.map((item: any) => ({
+        const rawItemsCount = parsedData.items.length;
+
+        // ✅ Keep items if they have description OR money
+        const keptItems = parsedData.items.filter((item: any) => hasDesc(item) || hasMoney(item));
+        console.log(`After safe filter: ${keptItems.length} items (removed ${parsedData.items.length - keptItems.length} empty rows)`);
+
+        // ✅ Normalize items to fill empty descriptions from raw_text
+        const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));
+        console.log(`After normalization: ${normalizedItems.length} items`);
+
+        // ✅ Extract document total from full text
+        let documentTotal: number | null = null;
+        if (allPages && allPages.length > 0) {
+          const fullText = allPages.join("\n\n");
+          documentTotal = extractDocumentTotal(fullText);
+          if (documentTotal) {
+            console.log(`Extracted document total: $${documentTotal.toLocaleString()}`);
+          }
+        }
+
+        // ✅ Add remainder adjustment if needed
+        const finalItems = addRemainderIfNeeded(normalizedItems, documentTotal);
+
+        const quoteItems = finalItems.map((item: any) => ({
           quote_id: quoteData.id,
           item_number: item.item_number || '',
-          description: item.description || '',
+          description: cleanText(item.description) || 'No description',
           quantity: item.qty || 0,
-          unit: item.unit || '',
+          unit: item.unit || 'ea',
           unit_price: item.rate || 0,
           total_price: item.total || 0,
           system_id: item.section || '',
@@ -640,16 +672,23 @@ Deno.serve(async (req: Request) => {
 
         console.log(`Created ${quoteItems.length} quote items`);
 
+        // ✅ Calculate totals - prefer document total
         const calculatedTotal = quoteItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
+        const finalTotalAmount = documentTotal ?? calculatedTotal;
 
+        // ✅ Update quote with both counts and document total
         await supabase
           .from("quotes")
           .update({
             items_count: quoteItems.length,
-            total_amount: calculatedTotal,
-            total_price: calculatedTotal
+            raw_items_count: rawItemsCount,
+            inserted_items_count: quoteItems.length,
+            total_amount: finalTotalAmount,
+            total_price: finalTotalAmount
           })
           .eq("id", quoteData.id);
+
+        console.log(`Raw parsed: ${rawItemsCount}, Inserted: ${quoteItems.length}, Document total: $${finalTotalAmount.toLocaleString()}`);
       }
 
       await supabase

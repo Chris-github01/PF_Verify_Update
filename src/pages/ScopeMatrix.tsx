@@ -146,9 +146,11 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       if (quotesData.length > 0) {
         const quotesWithStatus = await Promise.all(
           quotesData.map(async (quote) => {
-            // Use final_items_count as source of truth, fallback to items_count
-            // Note: Check for both null and 0, since incomplete v3 parsing sets it to 0
-            const totalCount = (quote.final_items_count && quote.final_items_count > 0)
+            // Use inserted_items_count as source of truth
+            // Fallback chain: inserted_items_count -> final_items_count -> items_count
+            const totalCount = (quote.inserted_items_count && quote.inserted_items_count > 0)
+              ? quote.inserted_items_count
+              : (quote.final_items_count && quote.final_items_count > 0)
               ? quote.final_items_count
               : quote.items_count;
 
@@ -211,9 +213,11 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
               .limit(1)
               .maybeSingle();
 
-            // Use final_items_count as source of truth
-            // Note: Check for both null and 0, since incomplete v3 parsing sets it to 0
-            const itemCount = (quote.final_items_count && quote.final_items_count > 0)
+            // Use inserted_items_count as source of truth
+            // Fallback chain: inserted_items_count -> final_items_count -> items_count
+            const itemCount = (quote.inserted_items_count && quote.inserted_items_count > 0)
+              ? quote.inserted_items_count
+              : (quote.final_items_count && quote.final_items_count > 0)
               ? quote.final_items_count
               : quote.items_count ?? 0;
 

@@ -1,5 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import {
+  cleanText,
+  hasMoney,
+  hasDesc,
+  normalizeLine,
+  extractDocumentTotal,
+  dedupeKey,
+  addRemainderIfNeeded,
+} from "../_shared/itemNormalizer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -238,16 +247,24 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[Resume] Total items after retry: ${allItems.length}`);
 
-    // Deduplicate
+    // ✅ Keep items if they have description OR money
+    const keptItems = allItems.filter(item => hasDesc(item) || hasMoney(item));
+    console.log(`[Resume] After safe filter: ${keptItems.length} items (removed ${allItems.length - keptItems.length} empty rows)`);
+
+    // ✅ Normalize items to fill empty descriptions from raw_text
+    const normalizedItems = keptItems.map((item, index) => normalizeLine(item, index));
+    console.log(`[Resume] After normalization: ${normalizedItems.length} items`);
+
+    // ✅ Deduplicate using improved key
     const seenKeys = new Set();
-    const dedupedItems = allItems.filter(item => {
-      const key = `${item.lineNumber}_${item.description}_${item.qty}_${item.total}`;
+    const dedupedItems = normalizedItems.filter(item => {
+      const key = dedupeKey(item);
       if (seenKeys.has(key)) return false;
       seenKeys.add(key);
       return true;
     });
 
-    console.log(`[Resume] After dedup: ${dedupedItems.length} items`);
+    console.log(`[Resume] After dedup: ${dedupedItems.length} items (removed ${normalizedItems.length - dedupedItems.length} duplicates)`);
 
     // Create or update quote
     let quoteId = job.quote_id;
@@ -276,45 +293,73 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ✅ Extract document total from chunk text
+    let documentTotal: number | null = null;
+    if (allCompletedChunks.data && allCompletedChunks.data.length > 0) {
+      // Try to extract from the last chunk (most likely to contain totals)
+      const lastChunk = await supabase
+        .from("parsing_chunks")
+        .select("chunk_text")
+        .eq("job_id", jobId)
+        .eq("status", "completed")
+        .order("chunk_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastChunk.data?.chunk_text) {
+        documentTotal = extractDocumentTotal(lastChunk.data.chunk_text);
+        if (documentTotal) {
+          console.log(`[Resume] Extracted document total: $${documentTotal.toLocaleString()}`);
+        }
+      }
+    }
+
+    // ✅ Add remainder adjustment if needed
+    const finalItems = addRemainderIfNeeded(dedupedItems, documentTotal);
+    const rawItemsCount = allItems.length;
+
     // Replace ALL items with complete deduplicated set
-    if (quoteId && dedupedItems.length > 0) {
+    if (quoteId && finalItems.length > 0) {
       // Delete old items (partial data)
       await supabase
         .from("quote_items")
         .delete()
         .eq("quote_id", quoteId);
 
-      // Insert ALL deduped items
-      const quoteItems = dedupedItems
-        .filter((line: any) => line.description && line.description.trim().length > 0)
-        .map((line: any) => ({
-          quote_id: quoteId,
-          description: line.description.trim(),
-          quantity: parseFloat(line.qty) || 0,
-          unit: line.unit || '',
-          unit_price: parseFloat(line.rate) || 0,
-          total_price: parseFloat(line.total) || 0,
-          scope_category: line.section || null,
-          is_excluded: false,
-        }));
+      // ✅ Insert ALL items (no filter on description)
+      const quoteItems = finalItems.map((line: any) => ({
+        quote_id: quoteId,
+        description: cleanText(line.description) || 'No description',
+        quantity: parseFloat(line.qty) || 0,
+        unit: line.unit || 'ea',
+        unit_price: parseFloat(line.rate) || 0,
+        total_price: parseFloat(line.total) || 0,
+        scope_category: line.section || null,
+        is_excluded: false,
+      }));
 
       if (quoteItems.length > 0) {
         await supabase.from("quote_items").insert(quoteItems);
 
-        // Update quote total
-        const totalAmount = dedupedItems.reduce((sum: number, line: any) =>
-          sum + (line.total || 0), 0
+        // ✅ Calculate totals - prefer document total
+        const itemsSum = finalItems.reduce((sum: number, line: any) =>
+          sum + (parseFloat(line.total) || 0), 0
         );
+        const finalTotalAmount = documentTotal ?? itemsSum;
 
+        // ✅ Update quote with both counts and document total
         await supabase
           .from("quotes")
           .update({
-            total_amount: totalAmount,
-            items_count: dedupedItems.length,
+            total_amount: finalTotalAmount,
+            items_count: quoteItems.length,
+            raw_items_count: rawItemsCount,
+            inserted_items_count: quoteItems.length,
           })
           .eq("id", quoteId);
 
         console.log(`[Resume] Replaced ${quoteItems.length} items in quote ${quoteId}`);
+        console.log(`[Resume] Raw parsed: ${rawItemsCount}, Inserted: ${quoteItems.length}, Document total: $${finalTotalAmount.toLocaleString()}`);
       }
     }
 

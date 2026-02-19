@@ -61,12 +61,14 @@ export default function QuoteSelect({
         }
       }) || [];
 
-      // Use final_items_count from quotes table (single source of truth)
-      // Fallback to items_count for backwards compatibility with old quotes
-      // Note: Check for both null and 0, since incomplete v3 parsing sets it to 0
+      // Use inserted_items_count as single source of truth
+      // This represents the actual count of items in quote_items table
+      // Fallback chain: inserted_items_count -> final_items_count -> items_count
       const quotesWithCounts = filteredQuotes.map(quote => ({
         ...quote,
-        items_count: (quote.final_items_count && quote.final_items_count > 0)
+        items_count: (quote.inserted_items_count && quote.inserted_items_count > 0)
+          ? quote.inserted_items_count
+          : (quote.final_items_count && quote.final_items_count > 0)
           ? quote.final_items_count
           : quote.items_count ?? 0,
       }));
