@@ -10,13 +10,15 @@ const corsHeaders = {
 
 /**
  * Extract document totals deterministically from raw text using regex
+ * VERSION: 2026-02-20-A (Document total reconciliation)
  */
 function extractDocumentTotals(text: string) {
-  const t = text.replace(/\u00A0/g, " "); // Replace non-breaking spaces
+  const t = text.replace(/\u00A0/g, " ").replace(/\s+/g, " "); // Normalize whitespace
 
   const parseMoney = (s: string) => {
     const cleaned = String(s).replace(/[^0-9.]/g, "");
-    return parseFloat(cleaned) || null;
+    const parsed = parseFloat(cleaned);
+    return (parsed > 0 && Number.isFinite(parsed)) ? parsed : null;
   };
 
   const grab = (re: RegExp) => {
@@ -24,20 +26,49 @@ function extractDocumentTotals(text: string) {
     return m ? parseMoney(m[1]) : null;
   };
 
-  // Prefer grand total excl GST if present
-  const grandExcl = grab(/Grand Total\s*\(excluding GST\)\s*[:\$]*\s*\$?([\d,]+\.\d{2})/i);
+  // Try multiple patterns for "Grand Total (excluding GST)"
+  let grandExcl = grab(/Grand\s+Total\s*\(excluding\s+GST\)\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+
+  if (!grandExcl) {
+    // Try with various spacing/punctuation variations
+    grandExcl = grab(/Grand\s+Total\s*\(excl\.?\s*GST\)\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+  }
+
+  if (!grandExcl) {
+    // Try "Grand Total excl GST" without parentheses
+    grandExcl = grab(/Grand\s+Total\s+excl\.?\s+GST\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+  }
+
+  if (!grandExcl) {
+    // Try "Grand Total ex GST"
+    grandExcl = grab(/Grand\s+Total\s+ex\.?\s+GST\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+  }
 
   // Some quotes show TOTAL and P&G as separate lines
-  const total = grab(/\bTOTAL\s*[:\$]*\s*\$?([\d,]+\.\d{2})/i);
-  const pg = grab(/\bP\s*&\s*G\b.*?[:\$]*\s*\$?([\d,]+\.\d{2})/i);
+  const total = grab(/(?:^|\n)\s*TOTAL\s*:?\s*\$?\s*([\d,]+\.?\d*)/im);
+  const pg = grab(/P\s*&\s*G\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
 
-  const optionalExtras = grab(/Optional Extras\s*[:\$]*\s*\$?([\d,]+\.\d{2})/i);
+  const optionalExtras = grab(/Optional\s+Extras\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
 
-  // If no grand total, compute it if total + pg exist
-  const computedGrand = (grandExcl == null && total != null && pg != null) ? (total + pg) : null;
+  // If no grand total found, try to compute it
+  let computedGrand = null;
+  if (grandExcl == null && total != null && pg != null) {
+    computedGrand = total + pg;
+  }
+
+  const finalGrandTotal = grandExcl ?? computedGrand;
+
+  console.log("Document total extraction debug:", {
+    grandExcl,
+    total,
+    pg,
+    computedGrand,
+    finalGrandTotal,
+    textSample: t.substring(0, 500)
+  });
 
   return {
-    grand_total_excl_gst: grandExcl ?? computedGrand,
+    grand_total_excl_gst: finalGrandTotal,
     total,
     p_and_g: pg,
     optional_extras_total: optionalExtras
