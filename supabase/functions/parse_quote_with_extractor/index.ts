@@ -617,10 +617,20 @@ Deno.serve(async (req: Request) => {
     );
 
   } catch (error) {
-    console.error("Error in parse_quote_with_extractor:", error);
+    console.error("=== ERROR IN parse_quote_with_extractor ===");
+    console.error("Error message:", error?.message);
+    console.error("Error name:", error?.name);
+    console.error("Error stack:", error?.stack);
+    console.error("Full error object:", error);
+
     return new Response(
       JSON.stringify({
-        error: error.message || "Internal server error",
+        error: error?.message || String(error) || "Internal server error",
+        errorDetails: {
+          name: error?.name,
+          message: error?.message,
+          stack: error?.stack?.split('\n').slice(0, 5).join('\n')
+        },
         fallback_required: true,
       }),
       {
