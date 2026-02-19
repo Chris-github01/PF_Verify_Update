@@ -240,26 +240,84 @@ Deno.serve(async (req: Request) => {
     console.log("Calling external PDF extractor for:", file.name);
     console.log("Using base URL:", baseUrl);
 
-    const extractorFormData = new FormData();
-    extractorFormData.append("file", file);
+    let extractorData: any = null;
 
-    const extractorResponse = await fetch(`${baseUrl}/parse/ensemble`, {
-      method: "POST",
-      headers: {
-        "X-API-Key": apiKey,
-      },
-      body: extractorFormData,
-    });
+    try {
+      const extractorFormData = new FormData();
+      extractorFormData.append("file", file);
 
-    if (!extractorResponse.ok) {
-      throw new Error(`Extractor API error: ${extractorResponse.status}`);
+      const extractorResponse = await fetch(`${baseUrl}/parse/ensemble`, {
+        method: "POST",
+        headers: {
+          "X-API-Key": apiKey,
+        },
+        body: extractorFormData,
+      });
+
+      if (!extractorResponse.ok) {
+        console.error(`Python service failed with status ${extractorResponse.status}, falling back to OpenAI`);
+        extractorData = null;
+      } else {
+        extractorData = await extractorResponse.json();
+        console.log("Extractor → Import Quotes:", extractorData);
+
+        if (!extractorData.text || extractorData.text.length === 0) {
+          console.error("Extractor returned no text, falling back to OpenAI");
+          extractorData = null;
+        }
+      }
+    } catch (pythonError) {
+      console.error("Python service error:", pythonError);
+      console.log("Falling back to OpenAI direct parsing");
+      extractorData = null;
     }
 
-    const extractorData = await extractorResponse.json();
-    console.log("Extractor → Import Quotes:", extractorData);
+    // If Python service failed, use OpenAI to extract text directly from PDF
+    if (!extractorData) {
+      console.log("PYTHON SERVICE UNAVAILABLE - Using OpenAI GPT-4 Vision to parse PDF directly");
 
-    if (!extractorData.text || extractorData.text.length === 0) {
-      throw new Error("Extractor returned no text");
+      const fileBuffer = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+
+      const openaiKey = configMap.get("OPENAI_API_KEY");
+      if (!openaiKey) {
+        throw new Error("OpenAI API key not configured");
+      }
+
+      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openaiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: "Extract ALL text from this PDF quote. Return complete text including all line items, quantities, rates, and totals." },
+              { type: "image_url", image_url: { url: `data:application/pdf;base64,${base64}` } }
+            ]
+          }],
+          max_tokens: 16000
+        })
+      });
+
+      if (!openaiResponse.ok) {
+        throw new Error(`OpenAI API error: ${openaiResponse.status}`);
+      }
+
+      const openaiResult = await openaiResponse.json();
+      const extractedText = openaiResult.choices[0].message.content;
+
+      extractorData = {
+        filename: file.name,
+        num_pages: 1,
+        text: extractedText,
+        tables: []
+      };
+
+      console.log("OpenAI direct extraction complete");
     }
 
     // Extract document totals deterministically from raw text
