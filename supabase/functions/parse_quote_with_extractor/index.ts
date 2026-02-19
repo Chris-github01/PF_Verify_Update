@@ -253,19 +253,38 @@ Deno.serve(async (req: Request) => {
     const apiKey = configMap.get("RENDER_PDF_EXTRACTOR_API_KEY");
     const baseUrl = configMap.get("RENDER_PDF_EXTRACTOR_URL") || "https://verify-pdf-extractor.onrender.com";
 
-    if (!apiKey) {
-      console.error("PDF Extractor API key not found in system_config");
-      throw new Error("PDF Extractor API key not configured in system settings");
+    if (!baseUrl || !apiKey) {
+      console.error("Missing extractor config", {
+        baseUrl,
+        apiKeyPresent: !!apiKey,
+        availableConfigs: configs?.map(c => c.key).join(", ")
+      });
+      throw new Error("Extractor config missing - check RENDER_PDF_EXTRACTOR_URL and RENDER_PDF_EXTRACTOR_API_KEY in system_config");
     }
 
     console.log("Calling external PDF extractor for:", file.name);
     console.log("Using base URL:", baseUrl);
+    console.log("File size:", file.size, "bytes");
+
+    // Read file buffer ONCE at the start (can't read stream multiple times)
+    const fileBuffer = await file.arrayBuffer();
+    console.log(`File loaded: ${file.name}, buffer size: ${fileBuffer.byteLength} bytes`);
 
     let extractorData: any = null;
 
     try {
+      // Create a new Blob from the buffer for the extractor call
+      const fileBlob = new Blob([fileBuffer], { type: file.type });
+      const fileForExtractor = new File([fileBlob], file.name, { type: file.type });
+
       const extractorFormData = new FormData();
-      extractorFormData.append("file", file);
+      extractorFormData.append("file", fileForExtractor);
+
+      console.log("Sending to extractor:", {
+        url: `${baseUrl}/parse/ensemble`,
+        fileName: file.name,
+        fileSize: fileBuffer.byteLength
+      });
 
       const extractorResponse = await fetch(`${baseUrl}/parse/ensemble`, {
         method: "POST",
@@ -275,12 +294,17 @@ Deno.serve(async (req: Request) => {
         body: extractorFormData,
       });
 
+      console.log("[DEBUG] Extractor response status:", extractorResponse.status);
+
       if (!extractorResponse.ok) {
-        console.error(`Python service failed with status ${extractorResponse.status}, falling back to OpenAI`);
+        const errorText = await extractorResponse.text();
+        console.error(`Python service failed with status ${extractorResponse.status}:`, errorText);
+        console.log("Falling back to OpenAI");
         extractorData = null;
       } else {
         extractorData = await extractorResponse.json();
-        console.log("Extractor → Import Quotes:", extractorData);
+        console.log("Extractor successful, text length:", extractorData.text?.length || 0);
+        console.log("Extractor tables count:", extractorData.tables?.length || 0);
 
         if (!extractorData.text || extractorData.text.length === 0) {
           console.error("Extractor returned no text, falling back to OpenAI");
@@ -292,10 +316,6 @@ Deno.serve(async (req: Request) => {
       console.log("Falling back to OpenAI direct parsing");
       extractorData = null;
     }
-
-    // Read file buffer ONCE at the start (can't read stream multiple times)
-    const fileBuffer = await file.arrayBuffer();
-    console.log(`File loaded: ${file.name}, size: ${fileBuffer.byteLength} bytes`);
 
     // If Python service failed, use OpenAI to extract text directly from PDF
     if (!extractorData) {

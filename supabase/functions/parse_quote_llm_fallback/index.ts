@@ -42,6 +42,38 @@ interface ParseResponse {
 }
 
 /**
+ * Extract document totals from raw text
+ */
+function extractDocumentTotals(text: string) {
+  const t = text.replace(/\u00A0/g, " ").replace(/\s+/g, " ");
+
+  const parseMoney = (s: string) => {
+    const cleaned = String(s).replace(/[^0-9.]/g, "");
+    const parsed = parseFloat(cleaned);
+    return (parsed > 0 && Number.isFinite(parsed)) ? parsed : null;
+  };
+
+  const grab = (re: RegExp) => {
+    const m = t.match(re);
+    return m ? parseMoney(m[1]) : null;
+  };
+
+  let grandExcl = grab(/Grand\s+Total\s*\(excluding\s+GST\)\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+  if (!grandExcl) grandExcl = grab(/Grand\s+Total\s*\(excl\.?\s*GST\)\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+  if (!grandExcl) grandExcl = grab(/Grand\s+Total\s+excl\.?\s+GST\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+  if (!grandExcl) grandExcl = grab(/Grand\s+Total\s+ex\.?\s+GST\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+
+  const gst = grab(/GST\s*\(10%\)\s*:?\s*\$?\s*([\d,]+\.?\d*)/i) || grab(/GST\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+  const grandIncl = grab(/Grand\s+Total\s*\(including\s+GST\)\s*:?\s*\$?\s*([\d,]+\.?\d*)/i) || grab(/Grand\s+Total\s+incl\.?\s+GST\s*:?\s*\$?\s*([\d,]+\.?\d*)/i);
+
+  return {
+    grand_total_excl_gst: grandExcl,
+    gst_amount: gst,
+    grand_total_incl_gst: grandIncl
+  };
+}
+
+/**
  * Fetch with timeout protection
  */
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 50000): Promise<Response> {
@@ -454,7 +486,11 @@ Return JSON format:
     }
 
     let items = allItems;
-    console.log(`[LLM Fallback] Extracted ${items.length} items total`);
+    console.log(`[DEBUG] LLM raw items count: ${items.length}`);
+
+    // Extract document totals from raw text
+    const docTotals = extractDocumentTotals(text);
+    console.log(`[DEBUG] docTotal extracted:`, docTotals);
 
     // CRITICAL FIX: Detect if parser assigned section subtotal to all items
     // If 10+ items share the exact same total, this is a parsing error
@@ -485,8 +521,20 @@ Return JSON format:
       });
     }
 
-    // Calculate totals
-    const subtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
+    // Calculate totals from items
+    const itemsSubtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
+
+    // Use document total if available, otherwise use items subtotal
+    const finalTotal = docTotals.grand_total_excl_gst ?? itemsSubtotal;
+    const quotedTotal = docTotals.grand_total_excl_gst;
+
+    console.log(`[LLM Fallback] Items subtotal: $${itemsSubtotal.toFixed(2)}`);
+    console.log(`[LLM Fallback] Document total: $${quotedTotal?.toFixed(2) || 'N/A'}`);
+    console.log(`[LLM Fallback] Final total: $${finalTotal.toFixed(2)}`);
+
+    if (quotedTotal && Math.abs(itemsSubtotal - quotedTotal) > 100) {
+      allWarnings.push(`Items total ($${itemsSubtotal.toFixed(2)}) differs from quoted total ($${quotedTotal.toFixed(2)}) - using quoted total`);
+    }
 
     return new Response(
       JSON.stringify({
@@ -496,8 +544,10 @@ Return JSON format:
         confidence: overallConfidence,
         warnings: allWarnings,
         totals: {
-          subtotal,
-          grandTotal: subtotal
+          subtotal: itemsSubtotal,
+          grandTotal: finalTotal,
+          quotedTotal: quotedTotal,
+          gst: docTotals.gst_amount
         },
         metadata: {
           supplier: supplierName,
