@@ -63,9 +63,12 @@ export default function QuoteSelect({
 
       // Use final_items_count from quotes table (single source of truth)
       // Fallback to items_count for backwards compatibility with old quotes
+      // Note: Check for both null and 0, since incomplete v3 parsing sets it to 0
       const quotesWithCounts = filteredQuotes.map(quote => ({
         ...quote,
-        items_count: quote.final_items_count ?? quote.items_count ?? 0,
+        items_count: (quote.final_items_count && quote.final_items_count > 0)
+          ? quote.final_items_count
+          : quote.items_count ?? 0,
       }));
 
       setQuotes(quotesWithCounts);
