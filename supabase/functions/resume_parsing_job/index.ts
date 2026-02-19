@@ -294,22 +294,26 @@ Deno.serve(async (req: Request) => {
     }
 
     // ✅ Extract document total from chunk text
+    // Try ALL chunks (not just last) since Grand Total could be anywhere
     let documentTotal: number | null = null;
     if (allCompletedChunks.data && allCompletedChunks.data.length > 0) {
-      // Try to extract from the last chunk (most likely to contain totals)
-      const lastChunk = await supabase
+      const allChunksText = await supabase
         .from("parsing_chunks")
-        .select("chunk_text")
+        .select("chunk_text, chunk_number")
         .eq("job_id", jobId)
         .eq("status", "completed")
-        .order("chunk_number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("chunk_number", { ascending: false });
 
-      if (lastChunk.data?.chunk_text) {
-        documentTotal = extractDocumentTotal(lastChunk.data.chunk_text);
-        if (documentTotal) {
-          console.log(`[Resume] Extracted document total: $${documentTotal.toLocaleString()}`);
+      if (allChunksText.data) {
+        // Try chunks in reverse order (summary usually at end)
+        for (const chunk of allChunksText.data) {
+          if (chunk.chunk_text) {
+            documentTotal = extractDocumentTotal(chunk.chunk_text);
+            if (documentTotal) {
+              console.log(`[Resume] Extracted document total from chunk ${chunk.chunk_number}: $${documentTotal.toLocaleString()}`);
+              break;
+            }
+          }
         }
       }
     }

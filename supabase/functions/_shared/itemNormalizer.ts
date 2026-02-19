@@ -113,21 +113,32 @@ export function parseMoney(raw: string): number {
  * Extract document total from full text
  */
 export function extractDocumentTotal(text: string): number | null {
-  const t = text.replace(/\u00A0/g, " ");
+  // Normalize all types of spaces (non-breaking spaces, tabs, multiple spaces)
+  const t = text
+    .replace(/\u00A0/g, " ")  // non-breaking space
+    .replace(/\s+/g, " ")      // normalize multiple spaces to single space
+    .trim();
 
   // Try various patterns for Grand Total
+  // Using \s+ to match one or more whitespace characters
   const patterns = [
-    /Grand Total\s*\(excluding GST\)\s*:\s*\$([\d,]+\.\d{2})/i,
-    /Grand Total\s*\(excl\.?\s*GST\)\s*:\s*\$([\d,]+\.\d{2})/i,
-    /Grand Total\s*:\s*\$([\d,]+\.\d{2})/i,
-    /\bTOTAL\s*\(excluding GST\)\s*:\s*\$([\d,]+\.\d{2})/i,
-    /\bTOTAL\s*:\s*\$([\d,]+\.\d{2})/i,
+    /Grand\s+Total\s*\(excluding\s+GST\)\s*:\s*\$\s*([\d,]+\.?\d*)/i,
+    /Grand\s+Total\s*\(excl\.?\s*GST\)\s*:\s*\$\s*([\d,]+\.?\d*)/i,
+    /Grand\s+Total\s*:\s*\$\s*([\d,]+\.?\d*)/i,
+    /\bTOTAL\s*\(excluding\s+GST\)\s*:\s*\$\s*([\d,]+\.?\d*)/i,
+    /\bTOTAL\s*:\s*\$\s*([\d,]+\.?\d*)/i,
+    // Also try without dollar sign (some formats)
+    /Grand\s+Total\s*\(excluding\s+GST\)\s*:\s*([\d,]+\.?\d*)/i,
   ];
 
   for (const pattern of patterns) {
     const match = t.match(pattern);
     if (match) {
-      return parseMoney(match[1]);
+      const amount = parseMoney(match[1]);
+      // Only return if amount is reasonable (not zero, not tiny)
+      if (amount > 100) {
+        return amount;
+      }
     }
   }
 
