@@ -333,101 +333,48 @@ Deno.serve(async (req: Request) => {
 
     console.log(`AI parser extracted ${items.length} items, LLM grand total: ${llmGrandTotal}`);
 
-    // Smart filtering: Only drop LS items if they're summary duplicates
-    const lumpSumItems = items.filter((item: any) => {
-      const unit = normUnit(item.unit);
-      return ['LS', 'LUMP SUM', 'LUMPSUM', 'SUM'].includes(unit);
+    // CRITICAL FIX: Keep ALL items - no filtering
+    // Just filter out obvious summary/header lines
+    items = items.filter((item: any) => {
+      const desc = String(item.description || "").trim();
+      if (!desc) return false; // Drop empty descriptions
+
+      // Only drop if it's CLEARLY a section header or summary (not an actual line item)
+      const isSectionHeader = /^(Electrical|Mechanical|Plumbing|Fire|HVAC|Heritage|New Building)\s*\$[\d,]+/i.test(desc);
+      const isObviousSummary = /^(TOTAL|SUBTOTAL|SUB-TOTAL|GRAND TOTAL|GST)$/i.test(desc);
+
+      return !isSectionHeader && !isObviousSummary;
     });
 
-    const itemizedItems = items.filter((item: any) => {
-      const unit = normUnit(item.unit);
-      return !['LS', 'LUMP SUM', 'LUMPSUM', 'SUM'].includes(unit);
-    });
-
-    console.log(`Item breakdown: ${lumpSumItems.length} LS items, ${itemizedItems.length} itemized items`);
-
-    // Smart LS filtering: only remove if they look like summary duplicates
-    const filteredLumpSums = lumpSumItems.filter((ls: any) => !shouldDropLumpSumItem(ls, itemizedItems));
-
-    console.log(`LS filtering: keeping ${filteredLumpSums.length} of ${lumpSumItems.length} LS items (removed ${lumpSumItems.length - filteredLumpSums.length} summary duplicates)`);
-
-    // Mark optional items instead of deleting them
-    items = [...itemizedItems, ...filteredLumpSums].map((item: any) => ({
+    // Mark optional items but keep them
+    items = items.map((item: any) => ({
       ...item,
       is_optional: isOptionalItem(item)
     }));
 
-    const baseItems = items.filter((it: any) => !it.is_optional);
-    const optionalItems = items.filter((it: any) => it.is_optional);
+    console.log(`After filtering headers: ${items.length} items total`);
 
-    console.log(`Optional items: ${optionalItems.length} optional, ${baseItems.length} base items`);
-
-    // Use document total as source of truth
+    // Calculate totals - sum of ALL items should equal document total
+    const lineItemsTotal = sumItems(items);
     const documentGrandTotal = docTotals.grand_total_excl_gst;
 
-    // Decide whether optional is included by checking which interpretation is closer to document total
-    let finalItems = [...baseItems];
-    const baseTotal = sumItems(baseItems);
-    const optionalTotal = sumItems(optionalItems);
+    console.log(`Line items sum: ${lineItemsTotal}`);
+    console.log(`Document grand total: ${documentGrandTotal}`);
 
-    if (documentGrandTotal != null) {
-      const diffBase = Math.abs(documentGrandTotal - baseTotal);
-      const diffWithOptional = Math.abs(documentGrandTotal - (baseTotal + optionalTotal));
+    // The quote total should be the sum of line items (no reconciliation adjustments)
+    const totalAmount = lineItemsTotal;
+    const quotedTotal = documentGrandTotal; // Store what the document says for reference
+    const contingencyAmount = 0;
 
-      console.log(`Reconciliation check: doc_total=${documentGrandTotal}, base_total=${baseTotal}, optional_total=${optionalTotal}`);
-      console.log(`Diff without optional: ${diffBase}, diff with optional: ${diffWithOptional}`);
-
-      // Choose the closer interpretation
-      if (diffWithOptional < diffBase && optionalItems.length > 0) {
-        console.log(`Including optional items (closer match to document total)`);
-        finalItems = [...baseItems, ...optionalItems];
-      }
-    } else if (llmGrandTotal != null) {
-      // Fallback to LLM grand total if no document total found
-      const diffBase = Math.abs(llmGrandTotal - baseTotal);
-      const diffWithOptional = Math.abs(llmGrandTotal - (baseTotal + optionalTotal));
-
-      if (diffWithOptional < diffBase && optionalItems.length > 0) {
-        console.log(`Including optional items based on LLM total`);
-        finalItems = [...baseItems, ...optionalItems];
-      }
-    }
-
-    // Reconciliation: add adjustment item if needed
-    const finalSum = sumItems(finalItems);
-    const targetTotal = documentGrandTotal ?? llmGrandTotal;
-
-    if (targetTotal != null) {
-      const remainder = targetTotal - finalSum;
-      const tolerance = Math.max(5.0, targetTotal * 0.001); // $5 or 0.1%
-
-      if (Math.abs(remainder) > tolerance) {
-        console.log(`RECONCILIATION: Adding adjustment item for remainder: ${remainder.toFixed(2)}`);
-        finalItems.push({
-          description: "Unparsed remainder (auto-adjustment)",
-          qty: 1,
-          unit: "ea",
-          rate: remainder,
-          total: remainder,
-          is_adjustment: true
-        });
-      }
-    }
-
-    items = finalItems;
-
-    console.log(`After reconciliation: ${items.length} items`);
-
-    const lineItemsTotal = sumItems(items);
-    const quotedTotal = documentGrandTotal ?? llmGrandTotal ?? null;
-    const contingencyAmount = 0; // Don't auto-calculate contingency - let users add it explicitly
-    const totalAmount = quotedTotal || lineItemsTotal;
+    // Calculate discrepancy for tracking
+    const discrepancy = documentGrandTotal ? Math.abs(documentGrandTotal - lineItemsTotal) : 0;
 
     console.log("Quote totals:", {
       lineItemsTotal,
       quotedTotal,
       contingencyAmount,
-      totalAmount
+      totalAmount,
+      discrepancy
     });
 
     let revisionNumber = 1;
@@ -463,8 +410,8 @@ Deno.serve(async (req: Request) => {
         trade: trade,
         document_total_excl_gst: documentGrandTotal,
         items_total: lineItemsTotal,
-        reconciliation_applied: Math.abs((quotedTotal || 0) - lineItemsTotal) > 5,
-        has_adjustment_item: items.some((it: any) => it.is_adjustment),
+        reconciliation_applied: false,
+        has_adjustment_item: false,
         optional_items_included: items.some((it: any) => it.is_optional),
         metadata: {
           extractor_used: "external_direct",
