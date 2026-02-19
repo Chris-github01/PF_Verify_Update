@@ -386,42 +386,75 @@ Deno.serve(async (req: Request) => {
     }
 
     const parseResult = await llmResponse.json();
-    let items = parseResult.lines || parseResult.items || [];
+    const rawItems = parseResult.lines || parseResult.items || [];
+    console.log(`[DEBUG] LLM returned rawItems count = ${rawItems.length}`);
+
     const llmGrandTotal = parseResult.totals?.grandTotal || parseResult.grandTotal || parseResult.quoteTotalAmount;
+    console.log(`[DEBUG] LLM grand total: ${llmGrandTotal}`);
 
-    console.log(`========== AI PARSER RESULTS ==========`);
-    console.log(`AI parser extracted ${items.length} items, LLM grand total: ${llmGrandTotal}`);
-    console.log(`Raw parse result keys:`, Object.keys(parseResult));
-    console.log(`Items array length:`, items.length);
+    // Helper functions for safe extraction
+    function getTotal(it: any) {
+      const v = it.total ?? it.total_price ?? it.amount ?? it.line_total ?? it.extended ?? null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
 
-    // Log ALL items to see if OpenAI is missing some
-    console.log(`\n========== ALL ${items.length} ITEMS FROM AI PARSER ==========`);
-    items.forEach((item: any, index: number) => {
-      console.log(`${index + 1}. ${item.description?.substring(0, 60)} | qty=${item.qty} | rate=${item.rate} | total=${item.total}`);
+    function getDesc(it: any) {
+      return String(it.description ?? it.desc ?? it.item ?? "").trim();
+    }
+
+    let items = rawItems;
+    console.log(`[DEBUG] Starting with ${items.length} items`);
+
+    // SAFE junk filter - only remove truly empty rows
+    items = items.filter((it: any) => {
+      const desc = getDesc(it);
+      const total = getTotal(it);
+
+      // Keep if it has a real description OR a real total
+      if (desc.length > 0) return true;
+      if (total != null && total !== 0) return true;
+
+      return false;
     });
-    console.log(`========== END OF ITEMS LIST ==========\n`);
+    console.log(`[DEBUG] After SAFE junk filter, items = ${items.length}`);
 
-    // CRITICAL: Keep EVERY single item with a total value
-    // NO FILTERING AT ALL
-    const itemsBeforeFilter = items.length;
+    // Normalize items - convert total-only lines into qty=1, rate=total
+    items = items.map((it: any) => {
+      const desc = String(it.description ?? it.desc ?? "").trim();
+      const unit = String(it.unit ?? "").trim() || "ea";
 
-    items = items.filter((item: any) => {
-      const total = Number(item.total ?? item.total_price ?? item.amount ?? 0);
-      const hasValue = total !== 0 && Number.isFinite(total);
-      const hasDesc = String(item.description || "").trim().length > 0;
+      let qty = Number(it.qty ?? it.quantity ?? 0);
+      let rate = Number(it.rate ?? it.unit_price ?? it.unitPrice ?? 0);
+      let total = Number(it.total ?? it.total_price ?? it.amount ?? 0);
 
-      return hasValue && hasDesc;
+      // If total exists but qty/rate are missing: preserve money
+      if ((qty <= 0 || !Number.isFinite(qty)) && Number.isFinite(total) && total !== 0) {
+        qty = 1;
+      }
+      if ((!Number.isFinite(rate) || rate === 0) && Number.isFinite(total) && total !== 0 && qty > 0) {
+        rate = total / qty;
+      }
+
+      return {
+        ...it,
+        description: desc,
+        unit,
+        qty,
+        rate,
+        total,
+        is_optional: isOptionalItem(it)
+      };
+    });
+    console.log(`[DEBUG] After normalization, items = ${items.length}`);
+
+    // Log sample for verification (bounded to avoid stack overflow)
+    console.log(`\n[DEBUG] Sample of first 10 items:`);
+    items.slice(0, 10).forEach((it: any, idx: number) => {
+      console.log(`  ${idx + 1}. ${String(it.description || "").slice(0, 50)} | qty=${it.qty} rate=${it.rate} total=${it.total}`);
     });
 
-    console.log(`Kept ${items.length} of ${itemsBeforeFilter} items (removed ${itemsBeforeFilter - items.length} items with no value)`);
-
-    // Mark optional items but keep them
-    items = items.map((item: any) => ({
-      ...item,
-      is_optional: isOptionalItem(item)
-    }));
-
-    console.log(`Final item count: ${items.length} items`);
+    console.log(`[DEBUG] Final item count: ${items.length} items`);
 
     // Calculate totals - sum of ALL items should equal document total
     const lineItemsTotal = sumItems(items);
