@@ -6,7 +6,10 @@
 export const PARSING_VERSION = "v3.2-2026-02-20";
 
 export function parseMoney(raw: string): number {
-  return Number(String(raw).replace(/[^0-9.]/g, ""));
+  // Remove currency symbols, spaces, and commas (thousands separator)
+  // Keep only digits and decimal point
+  const cleaned = String(raw).replace(/[$,\s]/g, "");
+  return Number(cleaned);
 }
 
 export function extractDocumentTotal(text: string): number | null {
