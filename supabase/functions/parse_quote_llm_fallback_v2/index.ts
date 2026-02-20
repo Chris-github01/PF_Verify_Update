@@ -121,24 +121,24 @@ function chunkByLineItems(text: string, maxLinesPerChunk: number = 30): { sectio
 async function detectCandidateRows(text: string, openaiApiKey: string): Promise<{ rows: string[]; confidence: number }> {
   const systemPrompt = `You are a line item detector for construction quotes.
 
-Your ONLY job is to identify which lines are actual line items (products or services with a price).
+Your ONLY job is to identify which lines are PRICED line items — items that have an actual quantity AND a line total.
 
-A line item is any row that has:
+A valid line item MUST have:
 - A product or service description
-- Any price information (unit rate, total, or both)
+- A quantity (number of units being purchased/installed)
+- A line total price (the amount charged for this row)
 
-IMPORTANT: Quantity and Unit fields are OPTIONAL. Include a line even if:
-- The unit column shows "0", "-", "N/A", or is completely blank
-- The quantity is missing or appears to be 0
-- The unit column contains an unusual value
+IMPORTANT: The Unit field may show "0", "-", "N/A", or be blank — this is fine, still include the row.
 
 DO NOT extract:
-- Section headers (lines that only name a category with no price breakdown)
-- Subtotals / Grand Totals / Summary lines
+- Section headers (e.g. "Electrical $2,490.50", "New Building", "Heritage Building")
+- Subtotals / Grand Totals / Summary lines / P&G lines
 - GST / tax lines
-- Lines with only text and no associated price
+- Rate schedule / price list rows — these are rows that show only a unit rate with NO quantity and NO line total (e.g. "Linear seals per m $22.00", "Cavity barriers per m $89.90")
+- Any section labelled "Excluded", "Exclusions", "Optional", or "General" that lists rates without quantities
+- Lines with only text and no price
 
-Return ONLY the raw text lines that are line items. Do not parse or interpret them.
+Return ONLY the raw text lines that are actual priced line items with a real quantity and line total.
 
 Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`;
 
@@ -183,7 +183,7 @@ async function normalizeRows(rows: string[], section: string, openaiApiKey: stri
 
 For each raw text line, extract:
 - description: Product/service name
-- qty: Quantity as a number (use 1 if this is a lump sum with no quantity)
+- qty: Quantity as a number (use 1 ONLY if this is a genuine lump sum item with a real line total — do NOT invent a qty for rate-schedule rows that have no line total)
 - unit: Unit of measure (ea, m, LS, etc.) - CRITICAL: If unit is "0", "-", "N/A", or blank, use "ea"
 - rate: Unit price as a number
 - total: Total price as a number (the line total, NOT a subtotal or section rollup)
