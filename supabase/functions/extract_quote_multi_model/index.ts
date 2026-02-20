@@ -114,6 +114,16 @@ CRITICAL: MULTI-COLUMN PRICING TABLES
 - Linear works sections show: Description, Depth/Width, Length (in meters), Rate per meter, Total
 - Verify: Sum of ALL line item Totals = subtotal from page 1 ($2,227,124.09 for this quote)
 
+CRITICAL: HANDLING EXTRA COLUMNS IN TABLES
+- Some tables have extra columns between Quantity and Unit Rate (like Unit, Type, or empty columns)
+- Example: "Description | Size | Substrate | Qty | Unit | Unit Rate | Total"
+- Example: "Trafalgar SuperSTOPPER Maxi | 350x125x250mm | Wall 2x13mm | 1276 | 0 | $365.00 | $465,740.00"
+- In this case: Qty=1276, the "0" is an extra column (possibly "Unit" column showing "0" as placeholder), Unit Rate=$365.00, Total=$465,740.00
+- ALWAYS use the LAST numeric value before the Total as the unit_rate
+- ALWAYS use the RIGHTMOST dollar amount as the line_total
+- DO NOT skip rows just because they have extra columns or unusual formatting
+- If you see a large quantity (like 1276) followed by 0 or another number, use the FIRST number as quantity
+
 FINANCIAL VALIDATION:
 - Extract the GRAND TOTAL from the summary page (page 1)
 - This should be the sum of all detailed line items
