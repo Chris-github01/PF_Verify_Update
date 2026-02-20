@@ -51,7 +51,12 @@ function getDesc(item: any): string {
 
 export function normalizeItem(item: any): any {
   const desc = getDesc(item);
-  const unit = String(item.unit ?? "ea").trim() || "ea";
+
+  // Handle unit field - default to "ea" if missing, empty, or "0"
+  let unit = String(item.unit ?? "ea").trim();
+  if (!unit || unit === "0" || unit === "N/A") {
+    unit = "ea";
+  }
 
   let qty = num(item.qty ?? item.quantity);
   let rate = num(item.rate ?? item.unit_price ?? item.unitPrice);

@@ -191,7 +191,11 @@ class PDFPlumberParser:
             qty_col = self._find_column_index(header, ['qty', 'quantity', 'quant', 'qnty'])
             unit_col = self._find_column_index(header, ['unit', 'uom', 'um', 'u/m'])
             rate_col = self._find_column_index(header, ['unit rate', 'rate', 'unit price', 'price', 'unit cost'])
-            total_col = self._find_column_index(header, ['total', 'amount', 'value', 'line total'])
+            total_col = self._find_column_index(header, ['total', 'amount', 'value', 'line total', 'total price'])
+
+            # Also look for "Size" and "Substrate" columns which appear in fire quotes
+            size_col = self._find_column_index(header, ['size'])
+            substrate_col = self._find_column_index(header, ['substrate', 'fire rating', 'substrate & fire rating'])
 
             # If we can't find key columns, try to infer from position
             if desc_col == -1 and len(header) >= 3:
@@ -206,7 +210,7 @@ class PDFPlumberParser:
                 total_col = len(header) - 1
                 print(f"[PDFPlumber] Table {table_idx+1}: No total column found, using last column {total_col}")
 
-            print(f"[PDFPlumber] Table {table_idx+1}: Columns - line_id:{line_id_col}, desc:{desc_col}, qty:{qty_col}, unit:{unit_col}, rate:{rate_col}, total:{total_col}")
+            print(f"[PDFPlumber] Table {table_idx+1}: Columns - line_id:{line_id_col}, desc:{desc_col}, size:{size_col}, substrate:{substrate_col}, qty:{qty_col}, unit:{unit_col}, rate:{rate_col}, total:{total_col}")
             print(f"[PDFPlumber] Table {table_idx+1}: Header sample: {header[:8] if len(header) > 8 else header}")
 
             items_from_this_table = 0
@@ -225,7 +229,28 @@ class PDFPlumberParser:
                     continue
 
                 try:
-                    desc = self._get_cell_value(row, desc_col)
+                    # Build comprehensive description from multiple columns if available
+                    desc_parts = []
+
+                    # Main description
+                    main_desc = self._get_cell_value(row, desc_col)
+                    if main_desc:
+                        desc_parts.append(main_desc)
+
+                    # Add size if available (common in fire quotes)
+                    if size_col >= 0:
+                        size = self._get_cell_value(row, size_col)
+                        if size and size not in ['', '-', 'N/A']:
+                            desc_parts.append(size)
+
+                    # Add substrate/fire rating if available (common in fire quotes)
+                    if substrate_col >= 0:
+                        substrate = self._get_cell_value(row, substrate_col)
+                        if substrate and substrate not in ['', '-', 'N/A']:
+                            desc_parts.append(substrate)
+
+                    # Combine all parts
+                    desc = ' '.join(desc_parts)
 
                     # Skip if no description
                     if not desc or len(desc.strip()) == 0:
@@ -238,13 +263,34 @@ class PDFPlumberParser:
                         skipped_rows += 1
                         continue
 
+                    # Extract raw values
+                    qty_raw = self._get_cell_value(row, qty_col)
+                    unit_raw = self._get_cell_value(row, unit_col)
+                    rate_raw = self._get_cell_value(row, rate_col)
+                    total_raw = self._get_cell_value(row, total_col)
+
+                    # Parse numeric values
+                    quantity = self._parse_number(qty_raw)
+                    unit_price = self._parse_number(rate_raw)
+                    total_price = self._parse_number(total_raw)
+
+                    # CRITICAL FIX: Handle unit column with "0" or unusual values
+                    # If unit appears to be "0", it's likely a placeholder, use "ea" as default
+                    unit = unit_raw
+                    if unit_raw == '0' or unit_raw == '' or unit_raw is None:
+                        # Check if we have a valid quantity - if so, default to "ea"
+                        if quantity > 0:
+                            unit = 'ea'
+                        else:
+                            unit = unit_raw  # Keep original even if empty
+
                     item = {
                         'line_number': row_idx + 1,
                         'description': desc,
-                        'quantity': self._parse_number(self._get_cell_value(row, qty_col)),
-                        'unit': self._get_cell_value(row, unit_col),
-                        'unit_price': self._parse_number(self._get_cell_value(row, rate_col)),
-                        'total_price': self._parse_number(self._get_cell_value(row, total_col)),
+                        'quantity': quantity,
+                        'unit': unit,
+                        'unit_price': unit_price,
+                        'total_price': total_price,
                     }
 
                     # Add if we have description AND at least one numeric value
@@ -252,7 +298,12 @@ class PDFPlumberParser:
                         line_items.append(item)
                         items_from_this_table += 1
 
+                        # Debug log for high-value items
+                        if total_price > 100000:
+                            print(f"[PDFPlumber] HIGH VALUE ITEM: {desc[:50]}... Qty:{quantity} Unit:{unit} Rate:{unit_price} Total:{total_price}")
+
                 except Exception as e:
+                    print(f"[PDFPlumber] Error parsing row {row_idx}: {e}")
                     skipped_rows += 1
                     continue
 
