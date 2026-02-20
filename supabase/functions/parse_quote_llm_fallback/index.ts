@@ -351,14 +351,21 @@ SKIP ANY LINE that is a summary/subtotal:
 Extract each valid line item with:
 - description: Full item description (e.g., product name, specifications)
 - qty: Quantity (number only, e.g., 19)
-- unit: Unit of measure (ea, m, LS, per m, etc.)
+- unit: Unit of measure (ea, m, LS, per m, etc.) - IF UNIT IS "0", "N/A", "-", OR EMPTY, USE "ea"
 - rate: Unit price (number only, e.g., 35.50)
 - total: Total price (number only, must equal qty × rate)
 - section: Section name if present
 
+CRITICAL: HANDLING UNIT FIELD
+- Some tables show "0", "N/A", "-", or blank in the Unit column
+- This does NOT mean skip the item - it means default to "ea" (each)
+- Example: "SuperSTOPPER | 1276 | 0 | $365.00 | $465,740.00" → qty=1276, unit="ea", rate=365.00
+- NEVER skip an item just because the unit column is "0" or missing
+
 VALIDATION:
 - Every extracted item MUST have qty × rate = total (within rounding)
 - If you can't find qty, unit, and rate, it's probably a summary - SKIP IT
+- BUT if unit is "0" or missing, use "ea" and continue extraction
 
 Return JSON format:
 {
