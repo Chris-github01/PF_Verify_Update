@@ -124,6 +124,13 @@ CRITICAL: HANDLING EXTRA COLUMNS IN TABLES
 - DO NOT skip rows just because they have extra columns or unusual formatting
 - If you see a large quantity (like 1276) followed by 0 or another number, use the FIRST number as quantity
 
+CRITICAL: UNIT FIELD HANDLING
+- If the Unit column shows "0", "N/A", "", or any invalid/missing value, ALWAYS default to "ea" (each)
+- NEVER skip an item because the unit is missing or invalid
+- Examples of invalid units that should become "ea": 0, N/A, null, empty, -, TBC
+- The unit field is NOT optional - if missing or invalid, use "ea" as the default
+- This is especially common for large items like SuperSTOPPER where the unit column may show 0 or be blank
+
 FINANCIAL VALIDATION:
 - Extract the GRAND TOTAL from the summary page (page 1)
 - This should be the sum of all detailed line items
@@ -202,6 +209,25 @@ async function callAnthropic(text: string): Promise<any> {
   }
 
   return JSON.parse(jsonMatch[0]);
+}
+
+function normalizeUnits(quote: any): any {
+  if (!quote.line_items) return quote;
+
+  quote.line_items = quote.line_items.map((item: any) => {
+    // Normalize invalid units to "ea"
+    if (!item.unit ||
+        item.unit === "0" ||
+        item.unit === "N/A" ||
+        item.unit === "-" ||
+        item.unit === "TBC" ||
+        item.unit.trim() === "") {
+      item.unit = "ea";
+    }
+    return item;
+  });
+
+  return quote;
 }
 
 function validate(quote: any): any {
@@ -381,7 +407,8 @@ Deno.serve(async (req: Request) => {
 
     const startTime = Date.now();
 
-    const primaryResult = await callOpenAI(text);
+    let primaryResult = await callOpenAI(text);
+    primaryResult = normalizeUnits(primaryResult);
     const primaryValidation = validate(primaryResult);
     primaryResult.validation = primaryValidation;
 
@@ -391,6 +418,7 @@ Deno.serve(async (req: Request) => {
     if (primaryValidation.confidence_score < 0.9 && ANTHROPIC_CONFIG.apiKey) {
       try {
         secondaryResult = await callAnthropic(text);
+        secondaryResult = normalizeUnits(secondaryResult);
         const secondaryValidation = validate(secondaryResult);
         secondaryResult.validation = secondaryValidation;
 
@@ -400,6 +428,7 @@ Deno.serve(async (req: Request) => {
           consensus = buildConsensus(primaryResult, secondaryResult);
         }
 
+        consensus = normalizeUnits(consensus);
         const consensusValidation = validate(consensus);
         consensus.validation = consensusValidation;
       } catch (error) {

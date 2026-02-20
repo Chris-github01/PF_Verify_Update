@@ -530,11 +530,18 @@ Deno.serve(async (req: Request) => {
           finalUnitPrice = parseFloat(totalPrice.toString());
         }
 
+        // Normalize unit: if "0", "N/A", "-", "TBC", or empty, default to "ea"
+        let normalizedUnit = item.unit || "ea";
+        const unitStr = String(normalizedUnit).trim();
+        if (unitStr === "0" || unitStr === "N/A" || unitStr === "-" || unitStr === "TBC" || unitStr === "") {
+          normalizedUnit = "ea";
+        }
+
         const dbItem = {
           quote_id: quote.id,
           description: item.description || item.desc || "",
           quantity: quantity,
-          unit: item.unit || "ea",
+          unit: normalizedUnit,
           unit_price: finalUnitPrice !== null && finalUnitPrice !== undefined ? parseFloat(finalUnitPrice.toString()) : null,
           total_price: totalPrice !== null && totalPrice !== undefined ? parseFloat(totalPrice.toString()) : null,
           metadata: {
