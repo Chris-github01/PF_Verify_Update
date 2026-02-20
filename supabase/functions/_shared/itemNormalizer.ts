@@ -64,7 +64,32 @@ export function extractDescFromRawText(raw: string): string {
 }
 
 /**
+ * V5 Line Item Validator
+ * Two valid item types:
+ * A) Itemised: description + qty + total (rate/unit optional)
+ * B) Lump sum: description + total (qty defaults to 1, rate/unit optional)
+ */
+export function isValidLineItem(line: any): boolean {
+  const desc = cleanText(line.description);
+  const total = Number(line.total ?? line.total_price ?? line.amount ?? 0);
+  const qty = Number(line.qty ?? line.quantity ?? 0);
+
+  // Must have description and total
+  if (!desc || desc.length === 0) return false;
+  if (!Number.isFinite(total) || total === 0) return false;
+
+  // Type A: Itemised (has qty)
+  if (Number.isFinite(qty) && qty > 0) return true;
+
+  // Type B: Lump sum (no qty, but has total)
+  if (total > 0) return true;
+
+  return false;
+}
+
+/**
  * Normalize a single line item, filling in missing fields intelligently
+ * V5 Update: Support two valid item types
  */
 export function normalizeLine(line: any, index: number): any {
   const desc = cleanText(line.description);
@@ -83,13 +108,15 @@ export function normalizeLine(line: any, index: number): any {
     finalDesc = fromRaw || `Unlabeled line item ${index + 1}`;
   }
 
-  // ✅ Preserve money even if qty/rate missing (LS style)
+  // ✅ V5: Preserve money even if qty/rate missing (LS/service style)
   let finalQty = Number.isFinite(qty) && qty > 0 ? qty : 0;
   let finalRate = Number.isFinite(rate) && rate > 0 ? rate : 0;
   let finalTotal = Number.isFinite(total) ? total : 0;
 
-  // Smart defaults for LS items
+  // V5 Type B (Lump sum): Default qty to 1 if we have total but no qty
   if (finalTotal !== 0 && finalQty === 0) finalQty = 1;
+
+  // Calculate missing values where possible
   if (finalTotal !== 0 && finalRate === 0 && finalQty > 0) finalRate = finalTotal / finalQty;
   if (finalTotal === 0 && finalQty > 0 && finalRate > 0) finalTotal = finalQty * finalRate;
 

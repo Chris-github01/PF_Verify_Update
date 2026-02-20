@@ -125,10 +125,15 @@ class PDFPlumberParser:
 
             extraction_time_ms = int((time.time() - start_time) * 1000)
 
+            # Full text for backward compatibility
+            full_text = '\n'.join([p['text'] for p in text_content if p['text']])
+
             return {
                 'parser_name': 'pdfplumber',
                 'success': True,
                 'items': line_items,
+                'text': full_text,  # For backward compatibility
+                'pages': text_content,  # New: per-page text for v5 chunking
                 'metadata': {
                     'supplier_name': supplier_info.get('supplier_name', ''),
                     'quote_number': supplier_info.get('quote_number', ''),

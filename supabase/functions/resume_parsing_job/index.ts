@@ -318,8 +318,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ✅ Add remainder adjustment if needed
-    const finalItems = addRemainderIfNeeded(dedupedItems, documentTotal);
+    // ✅ V5: Use deduped items AS-IS (no band-aid remainder adjustment)
+    const finalItems = dedupedItems;
     const rawItemsCount = allItems.length;
 
     // Replace ALL items with complete deduplicated set
@@ -345,25 +345,40 @@ Deno.serve(async (req: Request) => {
       if (quoteItems.length > 0) {
         await supabase.from("quote_items").insert(quoteItems);
 
-        // ✅ Calculate totals - prefer document total
+        // ✅ V5: Calculate validation metrics
         const itemsSum = finalItems.reduce((sum: number, line: any) =>
           sum + (parseFloat(line.total) || 0), 0
         );
-        const finalTotalAmount = documentTotal ?? itemsSum;
 
-        // ✅ Update quote with both counts and document total
+        // V5: total_amount = sum(items), NOT document_total
+        const tolerance = documentTotal ? Math.max(100, documentTotal * 0.02) : 100;
+        const missingAmount = documentTotal ? documentTotal - itemsSum : 0;
+        const needsReview = documentTotal !== null && Math.abs(missingAmount) > tolerance;
+
+        // ✅ Update quote with V5 validation fields
         await supabase
           .from("quotes")
           .update({
-            total_amount: finalTotalAmount,
+            total_amount: itemsSum, // V5: Use actual sum, not document total
+            total_price: itemsSum,
+            document_total: documentTotal, // Store for reference
+            missing_amount: needsReview ? missingAmount : 0,
+            needs_review: needsReview,
             items_count: quoteItems.length,
             raw_items_count: rawItemsCount,
             inserted_items_count: quoteItems.length,
           })
           .eq("id", quoteId);
 
-        console.log(`[Resume] Replaced ${quoteItems.length} items in quote ${quoteId}`);
-        console.log(`[Resume] Raw parsed: ${rawItemsCount}, Inserted: ${quoteItems.length}, Document total: $${finalTotalAmount.toLocaleString()}`);
+        console.log(`[Resume V5] Replaced ${quoteItems.length} items in quote ${quoteId}`);
+        console.log(`[Resume V5] Sum(items): $${itemsSum.toLocaleString()}`);
+        console.log(`[Resume V5] Document total: $${documentTotal?.toLocaleString() || 'not found'}`);
+
+        if (needsReview) {
+          console.warn(`[Resume V5] ⚠️ NEEDS REVIEW: Missing $${Math.abs(missingAmount).toLocaleString()} (${((Math.abs(missingAmount) / documentTotal!) * 100).toFixed(1)}% gap)`);
+        } else {
+          console.log(`[Resume V5] ✅ Totals match within tolerance`);
+        }
       }
     }
 
