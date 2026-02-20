@@ -13,6 +13,7 @@ interface LineItem {
   rate: number;
   total: number;
   section?: string;
+  frr?: string;
 }
 
 interface ParseRequest {
@@ -355,6 +356,7 @@ Extract each valid line item with:
 - rate: Unit price (number only, e.g., 35.50)
 - total: Total price (number only, must equal qty × rate)
 - section: Section name if present
+- frr: Fire Resistance Rating if mentioned in description (e.g., "90/90/-", "120/120/-", "-/120/120"). Leave empty if not found.
 
 CRITICAL: HANDLING UNIT FIELD
 - Some tables show "0", "N/A", "-", or blank in the Unit column
@@ -370,7 +372,7 @@ VALIDATION:
 
 Return JSON format:
 {
-  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string"}],
+  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string", "frr": "string"}],
   "confidence": number,
   "warnings": ["string"]
 }`;
