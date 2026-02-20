@@ -190,6 +190,32 @@ export function dedupeKey(line: any): string {
 }
 
 /**
+ * Extract FRR (Fire Resistance Rating) from a description string.
+ * Handles formats like (60)/60/-, (90)/90/-, 90/90/90, -/60/60, FRL 90/90/90 etc.
+ */
+export function extractFRRFromDescription(text: string): string | null {
+  if (!text) return null;
+
+  const patterns = [
+    /\((\d+)\)\s*\/\s*(\d+|-)\s*\/\s*(\d+|-)/g,
+    /(\d+)\s*\/\s*(\d+)\s*\/\s*(\d+|-)/g,
+    /-\s*\/\s*(\d+)\s*\/\s*(\d+)/g,
+    /FRL\s*[-:]?\s*(\d+)(?:\s*\/\s*(\d+)(?:\s*\/\s*(\d+))?)?/gi,
+    /(\d+)\s*min(?:ute)?s?\s*fire\s*resist/gi,
+  ];
+
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    const match = pattern.exec(text);
+    if (match) {
+      return match[0].trim();
+    }
+  }
+
+  return null;
+}
+
+/**
  * Add remainder adjustment item if document total doesn't match items sum
  */
 export function addRemainderIfNeeded(

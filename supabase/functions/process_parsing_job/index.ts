@@ -8,6 +8,7 @@ import {
   extractDocumentTotal,
   dedupeKey,
   addRemainderIfNeeded,
+  extractFRRFromDescription,
 } from "../_shared/itemNormalizer.ts";
 
 const corsHeaders = {
@@ -657,7 +658,8 @@ Deno.serve(async (req: Request) => {
           raw_text: item.raw_text || item.description || '',
           confidence: item.confidence || 0.85,
           source: item.source || (useExternalExtractor ? 'external_parser' : 'llm_v2'),
-          validation_flags: item.validation_flags || []
+          validation_flags: item.validation_flags || [],
+          frr: item.frr || extractFRRFromDescription(cleanText(item.description) || '') || null
         }));
 
         const { error: itemsError } = await supabase
