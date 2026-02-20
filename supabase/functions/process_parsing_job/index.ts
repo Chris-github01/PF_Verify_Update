@@ -408,57 +408,25 @@ Deno.serve(async (req: Request) => {
         if (fullText.length > 4000 || parsedLines.length > 50) {
           console.log("Large document detected, creating chunks...");
 
-          // Use per-page chunks when available (avoids splitting mid-table).
-          // Each PDF page is already stored as a separate entry in allPages.
-          // For Excel/text files allPages will have a single entry, so we
-          // fall back to a larger character-count split of 8000 chars.
-          let chunks: string[] = [];
+          const lines = fullText.split('\n');
+          const chunks: string[] = [];
+          let currentChunk: string[] = [];
+          let currentSize = 0;
+          const maxChunkSize = 2500;
 
-          if (allPages.length > 1) {
-            // PDF: one chunk per page — keeps table rows with their descriptions
-            // Merge very short pages (< 200 chars, e.g. cover pages) with the next page
-            const merged: string[] = [];
-            let carry = '';
-            for (const page of allPages) {
-              const combined = carry ? carry + '\n' + page : page;
-              if (combined.trim().length < 200) {
-                carry = combined;
-              } else {
-                merged.push(combined);
-                carry = '';
-              }
-            }
-            if (carry.trim().length > 0) {
-              if (merged.length > 0) {
-                merged[merged.length - 1] += '\n' + carry;
-              } else {
-                merged.push(carry);
-              }
-            }
-            chunks = merged;
-            console.log(`Using ${chunks.length} page-based chunks from ${allPages.length} PDF pages`);
-          } else {
-            // Single-page / Excel: split by character count with a larger limit
-            const lines = fullText.split('\n');
-            let currentChunk: string[] = [];
-            let currentSize = 0;
-            const maxChunkSize = 8000;
+          for (const line of lines) {
+            currentChunk.push(line);
+            currentSize += line.length;
 
-            for (const line of lines) {
-              currentChunk.push(line);
-              currentSize += line.length;
-
-              if (currentSize >= maxChunkSize) {
-                chunks.push(currentChunk.join('\n'));
-                currentChunk = [];
-                currentSize = 0;
-              }
-            }
-
-            if (currentChunk.length > 0) {
+            if (currentSize >= maxChunkSize) {
               chunks.push(currentChunk.join('\n'));
+              currentChunk = [];
+              currentSize = 0;
             }
-            console.log(`Using ${chunks.length} character-based chunks`);
+          }
+
+          if (currentChunk.length > 0) {
+            chunks.push(currentChunk.join('\n'));
           }
 
           console.log(`Created ${chunks.length} chunks, saving to database...`);

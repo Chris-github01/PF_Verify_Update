@@ -248,19 +248,7 @@ Deno.serve(async (req: Request) => {
     console.log(`[Resume] Total items after retry: ${allItems.length}`);
 
     // ✅ Keep items if they have description OR money
-    // Filter out LLM placeholder names like "Item 1", "Item 2" — these are
-    // produced when the LLM sees price rows without any description context
-    // (caused by mid-table chunk splits). They are not real items.
-    const PLACEHOLDER_DESC = /^item\s+\d+$/i;
-    const keptItems = allItems.filter(item => {
-      if (!hasDesc(item) && !hasMoney(item)) return false;
-      const desc = String(item.description ?? '').trim();
-      if (PLACEHOLDER_DESC.test(desc)) {
-        console.log(`[Resume] Dropping placeholder item: "${desc}"`);
-        return false;
-      }
-      return true;
-    });
+    const keptItems = allItems.filter(item => hasDesc(item) || hasMoney(item));
     console.log(`[Resume] After safe filter: ${keptItems.length} items (removed ${allItems.length - keptItems.length} empty rows)`);
 
     // ✅ Normalize items to fill empty descriptions from raw_text
