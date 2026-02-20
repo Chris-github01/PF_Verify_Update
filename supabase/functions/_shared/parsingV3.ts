@@ -188,6 +188,16 @@ export function processParsingPipeline(
   console.log(`[Parsing v3] Document total: ${documentTotal ? `$${documentTotal.toFixed(2)}` : "N/A"}`);
 
   const normalizedItems = rawItems.map(normalizeItem);
+
+  // Log what's being dropped
+  const droppedItems = normalizedItems.filter(item => isJunkRow(item));
+  if (droppedItems.length > 0) {
+    console.log(`[Parsing v3] Dropping ${droppedItems.length} junk rows:`);
+    droppedItems.forEach(item => {
+      console.log(`  - "${item.description}" (qty=${item.qty}, rate=${item.rate}, total=${item.total})`);
+    });
+  }
+
   const cleanedItems = normalizedItems.filter(item => !isJunkRow(item));
   console.log(`[Parsing v3] Cleaned to ${cleanedItems.length} items`);
 
