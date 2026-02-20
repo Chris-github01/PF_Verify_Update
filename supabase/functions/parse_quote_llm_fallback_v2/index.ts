@@ -121,21 +121,22 @@ function chunkByLineItems(text: string, maxLinesPerChunk: number = 30): { sectio
 async function detectCandidateRows(text: string, openaiApiKey: string): Promise<{ rows: string[]; confidence: number }> {
   const systemPrompt = `You are a line item detector for construction quotes.
 
-Your ONLY job is to identify which lines are actual line items.
+Your ONLY job is to identify which lines are actual line items (products or services with a price).
 
-A line item must have ALL of these:
-- Product/service description
-- Quantity (a number)
-- Unit of measure (ea, m, LS, etc.) - NOTE: Unit may be "0", "-", "N/A", or empty - THIS IS VALID
-- Price information
+A line item is any row that has:
+- A product or service description
+- Any price information (unit rate, total, or both)
 
-CRITICAL: Do NOT skip lines where the Unit column shows "0" or is blank. These are VALID line items.
+IMPORTANT: Quantity and Unit fields are OPTIONAL. Include a line even if:
+- The unit column shows "0", "-", "N/A", or is completely blank
+- The quantity is missing or appears to be 0
+- The unit column contains an unusual value
 
 DO NOT extract:
-- Section headers
-- Subtotals
-- Totals
-- Summary lines
+- Section headers (lines that only name a category with no price breakdown)
+- Subtotals / Grand Totals / Summary lines
+- GST / tax lines
+- Lines with only text and no associated price
 
 Return ONLY the raw text lines that are line items. Do not parse or interpret them.
 
@@ -374,8 +375,15 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const validItems = allItems.filter(item => item.confidence >= 0.6);
-    const flaggedItems = allItems.filter(item => item.confidence < 0.6 && item.confidence >= 0.4);
+    const validItems = allItems.filter(item => {
+      if (item.confidence >= 0.6) return true;
+      if (item.total > 0 && item.description && item.description.length >= 3) return true;
+      return false;
+    });
+    const flaggedItems = allItems.filter(item => {
+      const isValid = item.confidence >= 0.6 || (item.total > 0 && item.description && item.description.length >= 3);
+      return !isValid && item.confidence >= 0.4;
+    });
 
     console.log(`[LLM v2] Extracted ${validItems.length} valid items, ${flaggedItems.length} flagged for review`);
 

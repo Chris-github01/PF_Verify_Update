@@ -274,15 +274,10 @@ class PDFPlumberParser:
                     unit_price = self._parse_number(rate_raw)
                     total_price = self._parse_number(total_raw)
 
-                    # CRITICAL FIX: Handle unit column with "0" or unusual values
-                    # If unit appears to be "0", it's likely a placeholder, use "ea" as default
+                    # Normalize unit: "0", blank, None, "-", "N/A" all default to "ea"
                     unit = unit_raw
-                    if unit_raw == '0' or unit_raw == '' or unit_raw is None:
-                        # Check if we have a valid quantity - if so, default to "ea"
-                        if quantity > 0:
-                            unit = 'ea'
-                        else:
-                            unit = unit_raw  # Keep original even if empty
+                    if not unit_raw or str(unit_raw).strip() in ('0', '', '-', 'N/A', 'TBC'):
+                        unit = 'ea'
 
                     item = {
                         'line_number': row_idx + 1,
