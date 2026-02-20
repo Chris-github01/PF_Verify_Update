@@ -365,10 +365,21 @@ CRITICAL: HANDLING UNIT FIELD
 - NEVER EVER skip an item just because the unit column is "0", blank, or "N/A"
 - If you see qty and rate but unit is "0" or missing, SET unit="ea" and EXTRACT THE ITEM
 
+CRITICAL: HANDLING MULTI-LINE ITEMS
+- Some items have description on one line, and numbers on the next line
+- Example:
+  "Trafalgar SuperSTOPPER Maxi (Multi-Service)   350x125x250mm   New Gib Wall
+   1276   0   $365.00   $465,740.00"
+- This is ONE ITEM: description="Trafalgar SuperSTOPPER...", qty=1276, unit="ea", rate=365.00, total=465740.00
+- ALWAYS look at the PREVIOUS line if you see a line that starts with numbers
+- Join multi-line items together - they are a SINGLE item
+- The "0" is the unit column (default to "ea")
+
 VALIDATION:
 - Every extracted item MUST have qty × rate = total (within rounding)
 - If you can't find qty AND rate, it's probably a summary - SKIP IT
 - Items with qty and rate but missing/zero unit are VALID - use unit="ea"
+- If numbers don't match description, look at surrounding lines - it may be split across lines
 
 Return JSON format:
 {
