@@ -360,12 +360,13 @@ CRITICAL: HANDLING UNIT FIELD
 - Some tables show "0", "N/A", "-", or blank in the Unit column
 - This does NOT mean skip the item - it means default to "ea" (each)
 - Example: "SuperSTOPPER | 1276 | 0 | $365.00 | $465,740.00" → qty=1276, unit="ea", rate=365.00
-- NEVER skip an item just because the unit column is "0" or missing
+- NEVER EVER skip an item just because the unit column is "0", blank, or "N/A"
+- If you see qty and rate but unit is "0" or missing, SET unit="ea" and EXTRACT THE ITEM
 
 VALIDATION:
 - Every extracted item MUST have qty × rate = total (within rounding)
-- If you can't find qty, unit, and rate, it's probably a summary - SKIP IT
-- BUT if unit is "0" or missing, use "ea" and continue extraction
+- If you can't find qty AND rate, it's probably a summary - SKIP IT
+- Items with qty and rate but missing/zero unit are VALID - use unit="ea"
 
 Return JSON format:
 {
