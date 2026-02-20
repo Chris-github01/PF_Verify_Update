@@ -625,9 +625,16 @@ Deno.serve(async (req: Request) => {
 
         const rawItemsCount = parsedData.items.length;
 
-        // ✅ Keep items if they have description OR money
-        const keptItems = parsedData.items.filter((item: any) => hasDesc(item) || hasMoney(item));
-        console.log(`After safe filter: ${keptItems.length} items (removed ${parsedData.items.length - keptItems.length} empty rows)`);
+        // Keep items that have a description AND a non-zero total (or can calculate one from qty*rate)
+        const keptItems = parsedData.items.filter((item: any) => {
+          if (!hasDesc(item)) return false;
+          const total = Number(item.total ?? item.total_price ?? item.amount ?? 0);
+          if (total !== 0) return true;
+          const qty = Number(item.qty ?? item.quantity ?? 0);
+          const rate = Number(item.rate ?? item.unit_price ?? 0);
+          return qty > 0 && rate > 0;
+        });
+        console.log(`After safe filter: ${keptItems.length} items (removed ${parsedData.items.length - keptItems.length} empty/zero rows)`);
 
         // ✅ Normalize items to fill empty descriptions from raw_text
         const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));

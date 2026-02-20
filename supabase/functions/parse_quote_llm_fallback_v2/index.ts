@@ -179,25 +179,27 @@ Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`;
 async function normalizeRows(rows: string[], section: string, openaiApiKey: string): Promise<LineItem[]> {
   if (rows.length === 0) return [];
 
-  const systemPrompt = `You are a line item normalizer.
+  const systemPrompt = `You are a line item normalizer for construction quotes.
 
 For each raw text line, extract:
 - description: Product/service name
-- qty: Quantity as a number
+- qty: Quantity as a number (use 1 if this is a lump sum with no quantity)
 - unit: Unit of measure (ea, m, LS, etc.) - CRITICAL: If unit is "0", "-", "N/A", or blank, use "ea"
 - rate: Unit price as a number
-- total: Total price as a number (if present)
+- total: Total price as a number (the line total, NOT a subtotal or section rollup)
 
 CRITICAL RULES:
-1. Some tables show "0" or blank in the Unit column. This does NOT mean skip the item.
+1. Some tables show "0" or blank in the Unit column. This does NOT mean skip the item - use "ea".
 2. NUMBER FORMAT: Commas are THOUSAND separators, NOT decimal separators
    - "$465,740.00" = 465740.00 (NOT 465.74)
    - "$26,791.50" = 26791.50 (NOT 26.79)
-   - "$12,804.00" = 12804.00 (NOT 12.80)
+3. SKIP lines that are section-level subtotals or category rollup headers. These look like:
+   - A single word or short category name followed by a dollar amount (e.g. "Electrical $2,490.50", "Mechanical $2,461")
+   - "Subtotal", "Grand Total", "Total", "P&G", "GST", "Margin", "Summary"
+   - Any line where the dollar value equals or closely matches the sum of other items in that section
+4. SKIP lines where there is no actual line total (total = 0 and rate = 0). These are rate card placeholders.
 
 Example: "SuperSTOPPER | 1276 | 0 | $365.00 | $465,740.00" → qty=1276, unit="ea", rate=365.00, total=465740.00
-
-If total is missing, set it to 0 (we'll calculate it later).
 
 Return JSON: {"items": [{"description": "...", "qty": 10, "unit": "ea", "rate": 5.50, "total": 55.00, "confidence": 0.9}]}`;
 
