@@ -187,8 +187,14 @@ For each raw text line, extract:
 - rate: Unit price as a number
 - total: Total price as a number (if present)
 
-CRITICAL RULE: Some tables show "0" or blank in the Unit column. This does NOT mean skip the item.
-Example: "SuperSTOPPER | 1276 | 0 | $365.00 | $465,740.00" → qty=1276, unit="ea", rate=365.00
+CRITICAL RULES:
+1. Some tables show "0" or blank in the Unit column. This does NOT mean skip the item.
+2. NUMBER FORMAT: Commas are THOUSAND separators, NOT decimal separators
+   - "$465,740.00" = 465740.00 (NOT 465.74)
+   - "$26,791.50" = 26791.50 (NOT 26.79)
+   - "$12,804.00" = 12804.00 (NOT 12.80)
+
+Example: "SuperSTOPPER | 1276 | 0 | $365.00 | $465,740.00" → qty=1276, unit="ea", rate=365.00, total=465740.00
 
 If total is missing, set it to 0 (we'll calculate it later).
 
