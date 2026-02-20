@@ -617,7 +617,7 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
       drawing_spec_ref: representative.drawing_ref || null,
       location_zone: representative.location || null,
       element_asset: representative.element || null,
-      frr_rating: representative.frr_rating || representative.frr || null,
+      frr_rating: representative.frr_rating || representative.frr || 'Smoke',
       substrate: representative.substrate || null,
       service_type: representative.service_type || representative.service || null,
       penetration_size_opening: representative.size_opening || representative.size || null,
