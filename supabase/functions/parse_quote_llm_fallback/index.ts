@@ -336,27 +336,23 @@ CRITICAL: Quotes often have a hierarchical structure:
 - Subsection summaries (e.g., "Electrical Services Fire stopping $1,948.50") - DO NOT EXTRACT
 - Individual line items with quantity, unit, rate (e.g., "Protecta FR Acrylic... 19 ea $35.50 $674.50") - EXTRACT THESE
 
-You MUST ONLY extract individual line items that have ALL of:
-1. A detailed product/service description
-2. A quantity (number)
-3. A unit of measure (ea, m, LS, etc.)
-4. A unit rate (price per unit)
-5. A total price
+You MUST extract individual line items. An item is valid if it has:
+1. A description (product/service name)
+2. A quantity AND a unit rate AND a total
 
-SKIP ANY LINE that is a summary/subtotal:
-- Lines showing only a description and total price (no qty/unit/rate)
-- Lines with section names like "Electrical Services Fire stopping $X"
-- Lines with "Total", "Subtotal", "P&G", "Margin", "Grand Total"
-- Lines that aggregate other items
+SKIP ONLY these:
+- Lines with ONLY a description and total (no qty or rate at all)
+- Lines with "Sub-Total", "Grand Total", "Subtotal", "P&G", "Margin"
+- Section header lines that aggregate other items
 
 Extract each valid line item with:
-- description: Full item description (e.g., product name, specifications)
-- qty: Quantity (number only, e.g., 19)
-- unit: Unit of measure (ea, m, LS, per m, etc.) - IF UNIT IS "0", "N/A", "-", OR EMPTY, USE "ea"
-- rate: Unit price (number only, e.g., 35.50)
-- total: Total price (number only, must equal qty × rate)
+- description: Full item description including product name and specifications
+- qty: Quantity (number only, e.g., 19 or 1276)
+- unit: Unit of measure. IF THE UNIT COLUMN SHOWS "0", "N/A", "-", OR IS EMPTY, YOU MUST USE "ea". NEVER output unit=0.
+- rate: Unit price (number only, e.g., 35.50 or 365.00)
+- total: Total price (number only)
 - section: Section name if present
-- frr: Fire Resistance Rating if mentioned in description (e.g., "90/90/-", "120/120/-", "-/120/120"). Leave empty if not found.
+- frr: Fire Resistance Rating if mentioned (e.g., "90/90/-"). Leave empty if not found.
 
 CRITICAL: HANDLING UNIT FIELD
 - Some tables show "0", "N/A", "-", or blank in the Unit column
