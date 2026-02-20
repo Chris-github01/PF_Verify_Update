@@ -126,8 +126,10 @@ Your ONLY job is to identify which lines are actual line items.
 A line item must have ALL of these:
 - Product/service description
 - Quantity (a number)
-- Unit of measure (ea, m, LS, etc.)
+- Unit of measure (ea, m, LS, etc.) - NOTE: Unit may be "0", "-", "N/A", or empty - THIS IS VALID
 - Price information
+
+CRITICAL: Do NOT skip lines where the Unit column shows "0" or is blank. These are VALID line items.
 
 DO NOT extract:
 - Section headers
@@ -181,9 +183,12 @@ async function normalizeRows(rows: string[], section: string, openaiApiKey: stri
 For each raw text line, extract:
 - description: Product/service name
 - qty: Quantity as a number
-- unit: Unit of measure (ea, m, LS, etc.)
+- unit: Unit of measure (ea, m, LS, etc.) - CRITICAL: If unit is "0", "-", "N/A", or blank, use "ea"
 - rate: Unit price as a number
 - total: Total price as a number (if present)
+
+CRITICAL RULE: Some tables show "0" or blank in the Unit column. This does NOT mean skip the item.
+Example: "SuperSTOPPER | 1276 | 0 | $365.00 | $465,740.00" → qty=1276, unit="ea", rate=365.00
 
 If total is missing, set it to 0 (we'll calculate it later).
 
