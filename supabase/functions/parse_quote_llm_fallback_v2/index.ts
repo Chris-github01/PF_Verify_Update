@@ -125,20 +125,22 @@ Your ONLY job is to identify which lines are PRICED line items — items that ha
 
 A valid line item MUST have:
 - A product or service description
-- A quantity (number of units being purchased/installed)
-- A line total price (the amount charged for this row)
+- A quantity (a number > 0 representing units being purchased/installed — this appears BEFORE the unit rate)
+- A line total price (the final dollar amount for this row, appearing at the END of the row)
 
-IMPORTANT: The Unit field may show "0", "-", "N/A", or be blank — this is fine, still include the row.
+CRITICAL: In some quotes the "Unit" column contains "0" (zero) or is blank. This does NOT mean the quantity is zero.
+The columns are always: Description | Size | Substrate | Qty | Unit | Unit Rate | Total Price
+Example: "Trafalgar SuperSTOPPER 350x125x250mm New Gib Wall 2x13mm 1276 0 $365.00 $465,740.00"
+→ This IS a valid line item: qty=1276, unit="0" (means "each"), rate=$365, total=$465,740 — INCLUDE IT.
 
 DO NOT extract:
-- Section headers (e.g. "Electrical $2,490.50", "New Building", "Heritage Building")
+- Section header lines that are just a category name with a subtotal (e.g. "Electrical $2,490.50", "New Building", "Heritage Building") — these have NO qty column
 - Subtotals / Grand Totals / Summary lines / P&G lines
 - GST / tax lines
-- Rate schedule / price list rows — these are rows that show only a unit rate with NO quantity and NO line total (e.g. "Linear seals per m $22.00", "Cavity barriers per m $89.90")
+- Rate schedule / price list rows — these have a description and unit rate but NO quantity column and NO line total (e.g. "Linear seals per m $22.00", "Cavity barriers per m $89.90", "Intumescent Flushbox ea $20.50")
 - Any section labelled "Excluded", "Exclusions", "Optional", or "General" that lists rates without quantities
-- Lines with only text and no price
 
-Return ONLY the raw text lines that are actual priced line items with a real quantity and line total.
+INCLUDE all rows that have: a description + a numeric quantity + a line total.
 
 Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`;
 
