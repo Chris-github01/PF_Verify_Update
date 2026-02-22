@@ -405,6 +405,8 @@ export interface Database {
           created_by_user_id: string | null
           last_accessed_at: string
           approved_quote_id: string | null
+          scoring_weights: { price: number; compliance: number; coverage: number; risk: number } | null
+          trade: string | null
         }
         Insert: {
           id?: string
@@ -421,6 +423,8 @@ export interface Database {
           created_by_user_id?: string | null
           last_accessed_at?: string
           approved_quote_id?: string | null
+          scoring_weights?: { price: number; compliance: number; coverage: number; risk: number } | null
+          trade?: string | null
         }
         Update: {
           id?: string
@@ -437,6 +441,8 @@ export interface Database {
           created_by_user_id?: string | null
           last_accessed_at?: string
           approved_quote_id?: string | null
+          scoring_weights?: { price: number; compliance: number; coverage: number; risk: number } | null
+          trade?: string | null
         }
       }
       project_settings: {
