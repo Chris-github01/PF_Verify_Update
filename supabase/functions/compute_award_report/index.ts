@@ -402,11 +402,12 @@ Deno.serve(async (req: Request) => {
     ];
 
     const awardSummary = {
-      suppliers,
+      suppliers: suppliersWithWeightedScores,
       totalSystems: comparisonData.length,
       equalisationMode: "MODEL",
       recommendations,
       generatedAt: new Date().toISOString(),
+      scoringWeights,
     };
 
     const resultJson = {

@@ -614,10 +614,18 @@ export default function AwardReport({
       }
 
       const suppliersWithScores = awardSummary.suppliers.map(s => {
-        const priceScore = 100 - ((s.adjustedTotal / Math.max(...awardSummary.suppliers.map(sup => sup.adjustedTotal))) * 100);
-        const riskScore = 100 - s.riskScore;
-        const coverageScore = s.coveragePercent;
-        const weightedScore = (priceScore * 0.4 + riskScore * 0.3 + coverageScore * 0.3);
+        const weightedScore = s.weightedTotal ?? (() => {
+          const weights = awardSummary.scoringWeights || { price: 45, compliance: 20, coverage: 25, risk: 10 };
+          const maxTotal = Math.max(...awardSummary.suppliers.map(sup => sup.adjustedTotal));
+          const minTotal = Math.min(...awardSummary.suppliers.map(sup => sup.adjustedTotal));
+          const priceRange = maxTotal - minTotal;
+          const priceScore = priceRange > 0 ? ((maxTotal - s.adjustedTotal) / priceRange) * 10 : 10;
+          const coverageScore = (s.coveragePercent / 100) * 10;
+          const maxRisk = Math.max(...awardSummary.suppliers.map(sup => sup.riskScore));
+          const riskScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 10 : 10;
+          const complianceScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 5 : 10;
+          return ((priceScore * (weights.price / 100)) + (complianceScore * (weights.compliance / 100)) + (coverageScore * (weights.coverage / 100)) + (riskScore * (weights.risk / 100))) * 10;
+        })();
         return { ...s, weightedScore };
       });
 

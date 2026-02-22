@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Edit2, Check, X, Info, TrendingDown, Shield, Target, AlertTriangle } from 'lucide-react';
+import { Edit2, Check, X, Info, TrendingDown, Shield, Target, AlertTriangle, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrade } from '../lib/tradeContext';
 
 interface ScoringWeights {
   price: number;
@@ -29,10 +30,13 @@ const RECOMMENDED_WEIGHTS: ScoringWeights = {
 };
 
 export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: ScoringWeightsEditorProps) {
+  const { currentTrade } = useTrade();
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS);
   const [isEditing, setIsEditing] = useState(false);
   const [editWeights, setEditWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS);
   const [saving, setSaving] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [recalcStatus, setRecalcStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   useEffect(() => {
     loadWeights();
@@ -92,6 +96,7 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
         if (onWeightsChanged) {
           onWeightsChanged(editWeights);
         }
+        await triggerAwardReportRecalculation();
       } else {
         alert('Failed to save weights');
       }
@@ -100,6 +105,45 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
       alert('Failed to save weights');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const triggerAwardReportRecalculation = async () => {
+    const { data: existingReport } = await supabase
+      .from('award_reports')
+      .select('id')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingReport) return;
+
+    setRecalculating(true);
+    setRecalcStatus('idle');
+    try {
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/compute_award_report`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectId, force: true, trade: currentTrade }),
+      });
+
+      if (response.ok) {
+        setRecalcStatus('success');
+        setTimeout(() => setRecalcStatus('idle'), 4000);
+      } else {
+        setRecalcStatus('error');
+        setTimeout(() => setRecalcStatus('idle'), 4000);
+      }
+    } catch {
+      setRecalcStatus('error');
+      setTimeout(() => setRecalcStatus('idle'), 4000);
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -296,9 +340,35 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
             </div>
             {!isValidTotal && (
               <p className="text-sm text-red-300 mt-2">
-                ⚠️ Weights must sum to exactly 100% (currently {totalWeight.toFixed(1)}%)
+                Weights must sum to exactly 100% (currently {totalWeight.toFixed(1)}%)
               </p>
             )}
+          </div>
+        )}
+
+        {(recalculating || recalcStatus !== 'idle') && (
+          <div className={`mt-4 p-3 rounded-lg border flex items-center gap-3 ${
+            recalculating
+              ? 'bg-blue-900/20 border-blue-700/50'
+              : recalcStatus === 'success'
+              ? 'bg-green-900/20 border-green-700/50'
+              : 'bg-red-900/20 border-red-700/50'
+          }`}>
+            {recalculating
+              ? <RefreshCw size={16} className="text-blue-400 animate-spin flex-shrink-0" />
+              : recalcStatus === 'success'
+              ? <Check size={16} className="text-green-400 flex-shrink-0" />
+              : <X size={16} className="text-red-400 flex-shrink-0" />
+            }
+            <span className={`text-sm ${
+              recalculating ? 'text-blue-300' : recalcStatus === 'success' ? 'text-green-300' : 'text-red-300'
+            }`}>
+              {recalculating
+                ? 'Recalculating award report with updated weights...'
+                : recalcStatus === 'success'
+                ? 'Award report recalculated. Refresh the Award Report page to see updated scores.'
+                : 'Award report recalculation failed. Please manually recalculate in the Award Report step.'}
+            </span>
           </div>
         )}
       </div>

@@ -19,6 +19,14 @@ export interface SupplierAward {
   totalItems: number;
   notes: string[];
   quoteId?: string;
+  weightedTotal?: number;
+}
+
+export interface ScoringWeights {
+  price: number;
+  compliance: number;
+  coverage: number;
+  risk: number;
 }
 
 export interface AwardRecommendation {
@@ -33,4 +41,5 @@ export interface AwardSummary {
   totalSystems: number;
   equalisationMode: string;
   generatedAt: string;
+  scoringWeights?: ScoringWeights;
 }
