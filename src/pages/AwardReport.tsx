@@ -591,6 +591,15 @@ export default function AwardReport({
     }
 
     try {
+      // Always fetch the latest scoring weights directly from the project
+      const { data: projectWeightsData } = await supabase
+        .from('projects')
+        .select('scoring_weights')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      const projectScoringWeights = projectWeightsData?.scoring_weights || awardSummary.scoringWeights || { price: 45, compliance: 20, coverage: 25, risk: 10 };
+
       // Fetch organization logo if available
       let organisationLogoUrl: string | undefined = undefined;
       if (currentProject.organisation_id) {
@@ -615,7 +624,7 @@ export default function AwardReport({
 
       const suppliersWithScores = awardSummary.suppliers.map(s => {
         const weightedScore = s.weightedTotal ?? (() => {
-          const weights = awardSummary.scoringWeights || { price: 45, compliance: 20, coverage: 25, risk: 10 };
+          const weights = projectScoringWeights;
           const maxTotal = Math.max(...awardSummary.suppliers.map(sup => sup.adjustedTotal));
           const minTotal = Math.min(...awardSummary.suppliers.map(sup => sup.adjustedTotal));
           const priceRange = maxTotal - minTotal;
@@ -698,7 +707,7 @@ export default function AwardReport({
         recommendations,
         suppliers,
         approvedQuoteId: currentProject.approved_quote_id,
-        scoringWeights: awardSummary.scoringWeights,
+        scoringWeights: projectScoringWeights,
         executiveSummary: `Award recommendation analysis for ${currentProject.name}. Total systems analyzed: ${awardSummary.totalSystems}.`,
         methodology: [
           'Quote Import & Validation',
