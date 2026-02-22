@@ -835,7 +835,8 @@ export default function AwardReportEnhanced({
           'Risk Assessment',
           'Multi-Criteria Scoring'
         ],
-        additionalSections
+        additionalSections,
+        scoringWeights: weights
       });
 
       const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}`;
