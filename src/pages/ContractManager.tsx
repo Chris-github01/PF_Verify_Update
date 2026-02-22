@@ -4945,7 +4945,7 @@ function PreletAppendixStep({ projectId, awardInfo, scopeSystems, existingAppend
             </div>
           )}
 
-          {formData.pricing_basis === 'fixed_price_lump_sum' && allowances.some((a: any) => a.category === 'PS' || a.category === 'PC') && (
+          {formData.pricing_basis === 'fixed_price_lump_sum' && (
             <div className="mt-3 bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 text-sm text-amber-300">
               <div className="flex items-start gap-2">
                 <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
