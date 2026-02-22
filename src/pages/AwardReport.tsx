@@ -698,6 +698,7 @@ export default function AwardReport({
         recommendations,
         suppliers,
         approvedQuoteId: currentProject.approved_quote_id,
+        scoringWeights: awardSummary.scoringWeights,
         executiveSummary: `Award recommendation analysis for ${currentProject.name}. Total systems analyzed: ${awardSummary.totalSystems}.`,
         methodology: [
           'Quote Import & Validation',

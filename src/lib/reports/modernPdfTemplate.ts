@@ -25,6 +25,13 @@ interface SupplierRow {
   quoteId?: string | null;
 }
 
+interface ScoringWeightsForPdf {
+  price: number;
+  compliance: number;
+  coverage: number;
+  risk: number;
+}
+
 interface ModernPdfOptions {
   projectName: string;
   clientName?: string;
@@ -37,6 +44,7 @@ interface ModernPdfOptions {
   organisationLogoUrl?: string;
   renderMode?: 'screen' | 'pdf';
   approvedQuoteId?: string | null;
+  scoringWeights?: ScoringWeightsForPdf;
 }
 
 const VERIFYTRADE_ORANGE = '#f97316';
@@ -58,7 +66,8 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
     additionalSections,
     organisationLogoUrl,
     renderMode = 'screen',
-    approvedQuoteId
+    approvedQuoteId,
+    scoringWeights
   } = options;
 
   const totalSystems = suppliers[0]?.totalItems || 0;
@@ -842,7 +851,7 @@ export function generateModernPdfHtml(options: ModernPdfOptions): string {
 </head>
 <body>
   ${generateCoverPage(options)}
-  ${methodology ? generateMethodologyPages(methodology, organisationLogoUrl) : ''}
+  ${methodology ? generateMethodologyPages(methodology, organisationLogoUrl, scoringWeights) : ''}
   ${generateRecommendationsPage(options)}
   ${generateSupplierComparisonPage(options)}
   ${additionalSections ? additionalSections.map(section => generateCustomSection(section, organisationLogoUrl)).join('') : ''}
@@ -968,7 +977,8 @@ function generateRecommendationCard(rec: RecommendationCard): string {
 /**
  * Generate Methodology Pages (Pages 2-3)
  */
-function generateMethodologyPages(steps: string[], organisationLogoUrl?: string): string {
+function generateMethodologyPages(steps: string[], organisationLogoUrl?: string, scoringWeights?: ScoringWeightsForPdf): string {
+  const weights = scoringWeights || { price: 45, compliance: 20, coverage: 25, risk: 10 };
   return `
   <div class="page page-break">
     <header>
@@ -1036,28 +1046,28 @@ function generateMethodologyPages(steps: string[], organisationLogoUrl?: string)
 
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-card-value">40%</div>
+          <div class="stat-card-value">${weights.price}%</div>
           <div class="stat-card-label">Price Competitiveness</div>
           <p style="font-size: 12px; color: #6b7280; margin-top: 12px; line-height: 1.5;">
             Inverse linear scaling. Lowest price = 10 points.
           </p>
         </div>
         <div class="stat-card">
-          <div class="stat-card-value">25%</div>
+          <div class="stat-card-value">${weights.compliance}%</div>
           <div class="stat-card-label">Technical Compliance</div>
           <p style="font-size: 12px; color: #6b7280; margin-top: 12px; line-height: 1.5;">
             Based on specification adherence and risk factors.
           </p>
         </div>
         <div class="stat-card">
-          <div class="stat-card-value">20%</div>
+          <div class="stat-card-value">${weights.coverage}%</div>
           <div class="stat-card-label">Scope Coverage</div>
           <p style="font-size: 12px; color: #6b7280; margin-top: 12px; line-height: 1.5;">
             Percentage of baseline items quoted by supplier.
           </p>
         </div>
         <div class="stat-card">
-          <div class="stat-card-value">15%</div>
+          <div class="stat-card-value">${weights.risk}%</div>
           <div class="stat-card-label">Risk Assessment</div>
           <p style="font-size: 12px; color: #6b7280; margin-top: 12px; line-height: 1.5;">
             Based on missing items and risk flags identified.
@@ -1068,7 +1078,7 @@ function generateMethodologyPages(steps: string[], organisationLogoUrl?: string)
       <div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0; padding: 20px 24px; margin-top: 32px;">
         <strong style="color: #92400e; font-size: 14px;">Weighted Score Formula:</strong>
         <div style="font-family: monospace; color: #78350f; margin-top: 8px; font-size: 13px; line-height: 1.6;">
-          Score = (Price × 0.40) + (Compliance × 0.25) + (Coverage × 0.20) + (Risk × 0.15)
+          Score = (Price × ${(weights.price / 100).toFixed(2)}) + (Compliance × ${(weights.compliance / 100).toFixed(2)}) + (Coverage × ${(weights.coverage / 100).toFixed(2)}) + (Risk × ${(weights.risk / 100).toFixed(2)})
         </div>
       </div>
     </div>
