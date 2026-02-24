@@ -17,7 +17,7 @@ import BaseTrackerImportModal from '../components/BaseTrackerImportModal';
 
 interface CommercialMetrics {
   originalContractValue: number;
-  certifiedToDate: number;
+  claimedToDate: number;
   remainingExposure: number;
   variationsApproved: number;
   variationsPending: number;
@@ -121,7 +121,7 @@ export default function CommercialControlDashboard() {
     if (!awards || awards.length === 0) {
       setMetrics({
         originalContractValue: 0,
-        certifiedToDate: 0,
+        claimedToDate: 0,
         remainingExposure: 0,
         variationsApproved: 0,
         variationsPending: 0,
@@ -183,7 +183,7 @@ export default function CommercialControlDashboard() {
 
     setMetrics({
       originalContractValue: baseContractValue,
-      certifiedToDate: certified,
+      claimedToDate: certified,
       remainingExposure: baseContractValue - certified,
       variationsApproved: approvedVOs,
       variationsPending: pendingVOs,
@@ -582,8 +582,8 @@ export default function CommercialControlDashboard() {
                 tone="navy"
               />
               <SummaryStatCard
-                label="Certified to Date"
-                value={`$${metrics.certifiedToDate.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`}
+                label="Claimed to Date"
+                value={`$${metrics.claimedToDate.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`}
                 icon={CheckCircle}
                 tone="success"
                 statusDot
