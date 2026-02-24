@@ -13,15 +13,15 @@ import type {
 import { supabase } from '../supabase';
 
 const COMMON_COLUMN_PATTERNS: ColumnMapping = {
-  description: ['description', 'item', 'work description', 'scope', 'particulars'],
-  quantity: ['quantity', 'qty', 'amount', 'no.'],
+  description: ['system_description', 'work description', 'description', 'item', 'scope', 'particulars'],
+  quantity: ['contract_qty', 'quantity', 'no.'],
   unit: ['unit', 'uom', 'unit of measure'],
-  rate: ['rate', 'unit price', 'price', 'unit rate'],
-  previousCertified: ['previous', 'prev certified', 'cumulative', 'to date', 'previous total'],
-  currentClaim: ['current', 'this period', 'this month', 'claim', 'current claim'],
-  totalToDate: ['total', 'total to date', 'cumulative total', 'total certified'],
-  balance: ['balance', 'remaining', 'outstanding', 'to complete'],
-  itemNumber: ['item no', 'no.', 'ref', 'line', 'item number', '#']
+  rate: ['contract_rate', 'rate', 'unit price', 'price', 'unit rate'],
+  previousCertified: ['qty_claimed_previous', 'prev certified', 'previous total', 'previous'],
+  currentClaim: ['qty_claimed_this_period', 'this_period_amount', 'this period', 'this month', 'current claim', 'current'],
+  totalToDate: ['amount_claimed_to_date', 'total certified', 'total to date', 'cumulative total'],
+  balance: ['amount_remaining', 'balance', 'remaining', 'outstanding', 'to complete'],
+  itemNumber: ['boq_line_id', 'item no', 'no.', 'ref', 'line', 'item number', '#']
 };
 
 export async function parseExcelFile(file: File): Promise<ParsedExcelData> {
