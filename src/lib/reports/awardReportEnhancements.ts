@@ -287,19 +287,18 @@ export function estimateScopeGapCosts(
     };
   });
 
-  // Sort by cost (highest first) and return top 5
+  // Sort by cost (highest first) and return all gaps
   return gaps
     .sort((a, b) => b._sortCost - a._sortCost)
-    .slice(0, 5)
     .map(({ description, estimatedCost, severity, ...item }) => ({
       description,
       estimatedCost,
       severity,
-      system: item.category || 'Unknown System',
+      system: description,
       category: item.category,
       itemsCount: 1,
       estimatedImpact: `Est. ${formatCurrency(estimatedCost)} @ 20% markup`,
-      details: [],
+      details: item.category ? [item.category] : [],
     }));
 }
 

@@ -24,13 +24,19 @@ const VERIFYTRADE_ORANGE_LIGHT = '#fed7aa';
 export function generateSupplierGapReportHtml(data: SupplierGapReportData): string {
   const gapsHtml = data.gaps.length > 0
     ? data.gaps.map(gap => `
-        <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin-bottom: 16px; border-radius: 4px;">
-          <h3 style="margin: 0 0 8px 0; color: #991b1b; font-size: 16px; font-weight: 600;">
-            ${gap.system}${gap.category ? ` - ${gap.category}` : ''}
-          </h3>
+        <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; margin-bottom: 10px; border-radius: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+            <div style="flex: 1;">
+              <p style="margin: 0; color: #991b1b; font-size: 14px; font-weight: 600; line-height: 1.4;">
+                ${gap.system}
+              </p>
+              ${gap.category ? `<p style="margin: 2px 0 0 0; color: #b91c1c; font-size: 12px;">${gap.category}</p>` : ''}
+            </div>
+            ${gap.estimatedImpact ? `<span style="white-space: nowrap; font-size: 12px; color: #7f1d1d; font-weight: 500;">${gap.estimatedImpact}</span>` : ''}
+          </div>
           ${gap.details.length > 0 ? `
-            <ul style="margin: 8px 0 0 0; padding-left: 20px; color: #7f1d1d;">
-              ${gap.details.map(detail => `<li style="margin-bottom: 4px;">${detail}</li>`).join('')}
+            <ul style="margin: 6px 0 0 0; padding-left: 18px; color: #7f1d1d; font-size: 13px;">
+              ${gap.details.map(detail => `<li style="margin-bottom: 2px;">${detail}</li>`).join('')}
             </ul>
           ` : ''}
         </div>
