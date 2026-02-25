@@ -209,6 +209,14 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
       const result = await generateBaselineBOQ(projectId, moduleKey);
       setGenerationResult(result);
       await loadBOQData();
+
+      await supabase
+        .from('projects')
+        .update({
+          boq_builder_completed: true,
+          boq_builder_completed_at: new Date().toISOString()
+        })
+        .eq('id', projectId);
     } catch (error) {
       console.error('Error generating BOQ:', error);
       alert('Failed to generate BOQ. Please ensure quotes have been imported.');
@@ -342,6 +350,15 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
       // Step 6: Reload all data
       console.log('Step 6: Reloading data...');
       await loadBOQData();
+
+      // Step 7: Mark BOQ Builder as completed
+      await supabase
+        .from('projects')
+        .update({
+          boq_builder_completed: true,
+          boq_builder_completed_at: new Date().toISOString()
+        })
+        .eq('id', projectId);
 
       // Success notification
       console.log('Regeneration complete!');
