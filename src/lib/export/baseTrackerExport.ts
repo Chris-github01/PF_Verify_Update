@@ -263,7 +263,8 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
     row.getCell(3).value = item.description || '';
     row.getCell(4).value = item.location_zone || '';
     row.getCell(5).value = item.system_category || '';
-    row.getCell(6).value = item.unit || 'ea';
+    const rawUnit = item.unit || 'No.';
+    row.getCell(6).value = rawUnit.toLowerCase() === 'ea' ? 'No.' : rawUnit;
     row.getCell(7).value = contractQty;
     row.getCell(8).value = contractRate;
     row.getCell(9).value = contractAmount;
@@ -285,7 +286,7 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
     row.getCell(20).value = { formula: `=S${rowNum}*H${rowNum}` }; // Amount_Remaining
     row.getCell(21).value = { formula: `=IF(O${rowNum}>G${rowNum},"YES","NO")` }; // Over_Claim_Flag
     row.getCell(22).value = { formula: `=IF(AND(P${rowNum}<0.5,G${rowNum}>0),"RISK","OK")` }; // Under_Claim_Flag
-    row.getCell(23).value = { formula: `=IF(S${rowNum}<0,"COMPLETE",IF(P${rowNum}>0.8,"NEARLY DONE","ON TRACK"))` }; // Completion_Risk
+    row.getCell(23).value = { formula: `=IF(O${rowNum}=G${rowNum},"Done",IF(O${rowNum}>G${rowNum},"Over run",IF(O${rowNum}=0,"Not Started",IF(P${rowNum}>=0.8,"Nearly Done","In Progress"))))` }; // Completion_Risk
 
     // SECTION D - QS Assessment (LOCKED - QS fills later)
     row.getCell(24).value = ''; // QS_Assessed_Qty
@@ -375,8 +376,8 @@ export async function exportBaseTracker(options: BaseTrackerExportOptions): Prom
     ]
   });
 
-  // 10. Freeze panes
-  worksheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 5 }];
+  // 10. No freeze panes
+  worksheet.views = [{}];
 
   // 11. Add footer
   currentRow += 2;
