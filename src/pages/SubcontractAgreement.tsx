@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, CheckCircle, AlertCircle, FileText, Eye, Loader2, Lock, ArrowLeft } from 'lucide-react';
+import { Save, CheckCircle, AlertCircle, FileText, Eye, Loader2, ArrowLeft, History, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
 import SubcontractFormSection from '../components/SubcontractFormSection';
@@ -16,7 +16,16 @@ interface Agreement {
   status: 'draft' | 'in_review' | 'completed';
   is_locked: boolean;
   completed_at: string | null;
+  current_revision: number;
   created_at: string;
+}
+
+interface AgreementVersion {
+  id: string;
+  revision_number: number;
+  revision_label: string;
+  completed_at: string;
+  completed_by: string | null;
 }
 
 interface Template {
@@ -41,18 +50,20 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   const [fields, setFields] = useState<FieldDefinition[]>([]);
   const [values, setValues] = useState<Record<string, FieldValue>>({});
   const [sections, setSections] = useState<string[]>([]);
+  const [versions, setVersions] = useState<AgreementVersion[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isAutofilling, setIsAutofilling] = useState(false);
 
-  const isLocked = agreement?.is_locked || false;
   const isCompleted = agreement?.status === 'completed';
 
   useEffect(() => {
     if (agreementId) {
       loadAgreement();
+      loadVersions();
     }
   }, [agreementId]);
 
@@ -78,6 +89,21 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
     }
 
     setAgreement(data);
+  };
+
+  const loadVersions = async () => {
+    const { data, error } = await supabase
+      .from('subcontract_agreement_versions')
+      .select('id, revision_number, revision_label, completed_at, completed_by')
+      .eq('agreement_id', agreementId)
+      .order('revision_number', { ascending: false });
+
+    if (error) {
+      console.error('Error loading versions:', error);
+      return;
+    }
+
+    setVersions(data || []);
   };
 
   const loadTemplate = async () => {
@@ -139,44 +165,32 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
     setValues(valuesMap);
   };
 
-  // Auto-fill Contract Identity and Parties sections when agreement is first opened
   useEffect(() => {
     const attemptAutofill = async () => {
-      // Only autofill once per agreement load, when we have the data we need
       if (
         !autofillAttempted.current &&
         agreement &&
         agreement.project_id &&
-        fields.length > 0 &&
-        !isLocked
+        fields.length > 0
       ) {
         autofillAttempted.current = true;
-        console.log('[SA-2017] Triggering autofill for agreement', agreement.id);
         await autoFillFromContractSummary();
       }
     };
 
     attemptAutofill();
-  }, [agreement, fields, isLocked]);
+  }, [agreement, fields]);
 
   const autoFillFromContractSummary = async () => {
-    if (!agreement?.project_id) {
-      console.log('[SA-2017 Autofill] No project_id available');
-      return;
-    }
+    if (!agreement?.project_id) return;
 
-    console.log('[SA-2017 Autofill] Starting autofill for project', agreement.project_id);
     setIsAutofilling(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        console.error('[SA-2017 Autofill] No active session');
-        return;
-      }
+      if (!session) return;
 
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/autofill_sa2017_fields`;
-      console.log('[SA-2017 Autofill] Calling edge function:', url);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -191,31 +205,22 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[SA-2017 Autofill] HTTP error:', response.status, errorText);
         showToast('Auto-fill encountered an error. Please fill fields manually.', 'error');
         return;
       }
 
       const result = await response.json();
-      console.log('[SA-2017 Autofill] Result:', result);
 
       if (result.success) {
-        console.log('[SA-2017 Autofill] Successfully populated', result.fields_populated, 'fields');
-        // Reload field values to show the autofilled data
         await loadFieldValues();
         if (result.fields_populated > 0) {
           showToast(`Auto-filled ${result.fields_populated} fields from Contract Summary`, 'success');
-        } else {
-          console.log('[SA-2017 Autofill] No fields were populated');
         }
       } else {
-        console.error('[SA-2017 Autofill] Failed:', result.error);
         showToast('Could not auto-fill some fields. Please check manually.', 'error');
       }
     } catch (error) {
       console.error('[SA-2017 Autofill] Exception:', error);
-      // Don't show error toast to user - autofill is a nice-to-have
     } finally {
       setIsAutofilling(false);
     }
@@ -267,8 +272,6 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   };
 
   const handleSaveDraft = async () => {
-    if (isLocked) return;
-
     setIsSaving(true);
     try {
       await saveFieldValues();
@@ -283,8 +286,6 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   };
 
   const handleReviewAndSave = async () => {
-    if (isLocked) return;
-
     setIsSaving(true);
     try {
       await saveFieldValues();
@@ -299,15 +300,13 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
   };
 
   const handleComplete = async () => {
-    if (isLocked) return;
-
     const { total, filled } = countFilledFields();
     const percentage = total > 0 ? Math.round((filled / total) * 100) : 100;
 
-    let confirmMessage = 'Are you sure you want to complete this agreement? This will lock the agreement and prevent further edits.';
+    let confirmMessage = 'Complete this agreement? A new revision will be created for tracking and transparency.';
 
     if (filled < total) {
-      confirmMessage = `You are completing this agreement with ${filled} of ${total} fields filled (${percentage}%). This will lock the agreement and prevent further edits. Proceed?`;
+      confirmMessage = `You are completing this agreement with ${filled} of ${total} fields filled (${percentage}%). A new revision will be created. Proceed?`;
     }
 
     if (!confirm(confirmMessage)) {
@@ -319,22 +318,41 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
       await saveFieldValues();
 
       const { data: userData } = await supabase.auth.getUser();
+      const now = new Date().toISOString();
+      const nextRevision = (agreement?.current_revision || 0) + 1;
+      const revisionLabel = `Revision ${nextRevision}`;
 
-      const { error } = await supabase
+      const fieldSnapshot: Record<string, string> = getAllValuesMap();
+
+      const { error: versionError } = await supabase
+        .from('subcontract_agreement_versions')
+        .insert({
+          agreement_id: agreementId,
+          revision_number: nextRevision,
+          revision_label: revisionLabel,
+          completed_at: now,
+          completed_by: userData.user?.id || null,
+          field_snapshot: fieldSnapshot
+        });
+
+      if (versionError) throw versionError;
+
+      const { error: updateError } = await supabase
         .from('subcontract_agreements')
         .update({
           status: 'completed',
-          is_locked: true,
-          completed_at: new Date().toISOString(),
-          completed_by: userData.user?.id,
-          updated_at: new Date().toISOString()
+          is_locked: false,
+          completed_at: now,
+          current_revision: nextRevision,
+          updated_at: now
         })
         .eq('id', agreementId);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      showToast('Agreement completed and locked successfully', 'success');
+      showToast(`${revisionLabel} created successfully`, 'success');
       await loadAgreement();
+      await loadVersions();
     } catch (error) {
       console.error('Error completing agreement:', error);
       showToast('Failed to complete agreement', 'error');
@@ -395,6 +413,16 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
     setTimeout(() => setToast(null), 5000);
   };
 
+  const formatDate = (iso: string) => {
+    return new Date(iso).toLocaleString('en-AU', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   if (!agreement || !template) {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-900">
@@ -449,20 +477,28 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                     {agreement.status === 'in_review' && 'In Review'}
                     {agreement.status === 'completed' && 'Completed'}
                   </span>
+                  {agreement.current_revision > 0 && (
+                    <span className="text-slate-400 text-sm">
+                      Revision {agreement.current_revision}
+                    </span>
+                  )}
                   {isAutofilling && (
                     <div className="flex items-center gap-2 text-blue-400">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span className="text-sm font-medium">Auto-filling fields...</span>
                     </div>
                   )}
-                  {isLocked && (
-                    <div className="flex items-center gap-2 text-orange-400">
-                      <Lock className="w-4 h-4" />
-                      <span className="text-sm font-medium">Locked</span>
-                    </div>
-                  )}
                 </div>
                 <div className="flex gap-2">
+                  {versions.length > 0 && (
+                    <button
+                      onClick={() => setShowVersionHistory(!showVersionHistory)}
+                      className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 border border-slate-600 transition-colors flex items-center gap-2"
+                    >
+                      <History className="w-4 h-4" />
+                      History ({versions.length})
+                    </button>
+                  )}
                   {template.master_pdf_url && (
                     <button
                       onClick={() => setShowPdfViewer(!showPdfViewer)}
@@ -474,7 +510,7 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                   )}
                   <button
                     onClick={handleSaveDraft}
-                    disabled={isLocked || isSaving}
+                    disabled={isSaving}
                     className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 border border-slate-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -482,7 +518,7 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                   </button>
                   <button
                     onClick={handleReviewAndSave}
-                    disabled={isLocked || isSaving}
+                    disabled={isSaving}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />}
@@ -490,7 +526,7 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                   </button>
                   <button
                     onClick={handleComplete}
-                    disabled={isLocked || isCompleting}
+                    disabled={isCompleting}
                     className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCompleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
@@ -499,6 +535,32 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                 </div>
               </div>
             </div>
+
+            {/* Version History Panel */}
+            {showVersionHistory && versions.length > 0 && (
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg p-5">
+                <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                  <History className="w-4 h-4 text-slate-400" />
+                  Version History
+                </h3>
+                <div className="space-y-2">
+                  {versions.map(v => (
+                    <div key={v.id} className="flex items-center justify-between py-2 px-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-white">{v.revision_label}</span>
+                        <span className="px-2 py-0.5 bg-green-900/30 text-green-400 text-xs rounded border border-green-800">
+                          Completed
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-400 text-xs">
+                        <Clock className="w-3 h-3" />
+                        {formatDate(v.completed_at)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* PDF Viewer */}
             {showPdfViewer && template.master_pdf_url && (
@@ -530,7 +592,7 @@ export default function SubcontractAgreement({ agreementId, onClose }: Subcontra
                       values={values}
                       allValues={getAllValuesMap()}
                       onChange={handleFieldChange}
-                      disabled={isLocked}
+                      disabled={false}
                       defaultExpanded={false}
                     />
                   </div>
