@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import DashboardHeader from '../components/DashboardHeader';
 import SummaryStatCard from '../components/SummaryStatCard';
-import { AlertTriangle, TrendingUp, CheckCircle, Clock, AlertCircle, Download, Upload } from 'lucide-react';
+import { AlertTriangle, TrendingUp, CheckCircle, Clock, AlertCircle, Download, Upload, AlertOctagon } from 'lucide-react';
 import { downloadBaseTracker } from '../lib/export/baseTrackerExport';
 import { downloadVOTracker } from '../lib/export/voTrackerExport';
 import { generateCommercialBaseline } from '../lib/commercial/baselineGenerator';
@@ -39,6 +39,21 @@ interface TradeMetrics {
   totalValue: number;
 }
 
+interface OverRunItem {
+  id: string;
+  line_number: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unit_rate: number;
+  line_amount: number;
+  total_certified: number;
+  over_run_qty: number;
+  over_run_amount: number;
+  supplierName: string;
+  tradeName: string;
+}
+
 export default function CommercialControlDashboard() {
   const [projectId, setProjectId] = useState<string>('');
   const [projectName, setProjectName] = useState<string>('');
@@ -52,10 +67,61 @@ export default function CommercialControlDashboard() {
     awardApprovalId: string;
     supplierId: string;
   } | null>(null);
+  const [overRunItems, setOverRunItems] = useState<OverRunItem[]>([]);
+  const [loadingOverRuns, setLoadingOverRuns] = useState(false);
 
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  async function loadOverRunItems(projId: string, awardedTrades: TradeMetrics[]) {
+    if (awardedTrades.length === 0) return;
+    setLoadingOverRuns(true);
+    try {
+      const results: OverRunItem[] = [];
+      for (const trade of awardedTrades) {
+        const { data: items } = await supabase
+          .from('commercial_baseline_items')
+          .select('id, line_number, description, unit, quantity, unit_rate, line_amount, total_certified')
+          .eq('award_approval_id', trade.awardApprovalId)
+          .eq('is_active', true)
+          .gt('quantity', 0);
+
+        if (!items) continue;
+
+        for (const item of items) {
+          const contractQty = item.quantity || 0;
+          const claimedQty = item.total_certified && item.unit_rate && item.unit_rate > 0
+            ? item.total_certified / item.unit_rate
+            : item.total_certified || 0;
+          const claimedAmount = item.total_certified || 0;
+          const contractAmount = item.line_amount || 0;
+
+          if (claimedAmount > contractAmount && contractAmount > 0) {
+            results.push({
+              id: item.id,
+              line_number: item.line_number || '',
+              description: item.description,
+              unit: item.unit || '',
+              quantity: contractQty,
+              unit_rate: item.unit_rate || 0,
+              line_amount: contractAmount,
+              total_certified: claimedAmount,
+              over_run_qty: item.unit_rate && item.unit_rate > 0
+                ? Math.max(0, claimedQty - contractQty)
+                : 0,
+              over_run_amount: claimedAmount - contractAmount,
+              supplierName: trade.supplierName,
+              tradeName: trade.tradeName
+            });
+          }
+        }
+      }
+      setOverRunItems(results);
+    } finally {
+      setLoadingOverRuns(false);
+    }
+  }
 
   async function loadDashboard() {
     try {
@@ -418,6 +484,7 @@ export default function CommercialControlDashboard() {
     console.log('[Commercial Dashboard] Final trade metrics:', trades);
     console.log('[Commercial Dashboard] Setting', trades.length, 'trade metrics');
     setTradeMetrics(trades);
+    loadOverRunItems(projId, trades);
   }
 
   async function handleExportBaseTracker(trade: TradeMetrics) {
@@ -744,6 +811,82 @@ export default function CommercialControlDashboard() {
           )}
         </div>
 
+        {/* Over Run Items */}
+        {(overRunItems.length > 0 || loadingOverRuns) && (
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <AlertOctagon className="w-5 h-5 text-red-400" />
+              <h2 className="text-lg font-semibold text-white">Over Run Items</h2>
+              {overRunItems.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-red-900/60 text-red-300 text-xs font-semibold border border-red-700">
+                  {overRunItems.length} item{overRunItems.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            {loadingOverRuns ? (
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 flex items-center gap-3">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-400"></div>
+                <span className="text-gray-400 text-sm">Checking for over run items...</span>
+              </div>
+            ) : (
+              <div className="bg-gray-800 rounded-lg border border-red-800/50 overflow-hidden">
+                <div className="px-5 py-3 bg-red-900/20 border-b border-red-800/40 flex items-center justify-between">
+                  <p className="text-sm text-red-300">
+                    These line items have been claimed beyond their contracted amount. A Variation Order is required to authorise the excess.
+                  </p>
+                  <span className="text-xs text-red-400 font-semibold whitespace-nowrap ml-4">
+                    Total Over Run: ${overRunItems.reduce((s, i) => s + i.over_run_amount, 0).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <table className="min-w-full divide-y divide-gray-700">
+                  <thead className="bg-gray-900/60">
+                    <tr>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Line</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Description</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Supplier</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Unit</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Contract Qty</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Contract Amt</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Claimed Amt</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Over Run Amt</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/60">
+                    {overRunItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-red-900/10 transition-colors">
+                        <td className="px-5 py-3 text-xs text-gray-400 font-mono whitespace-nowrap">{item.line_number || '—'}</td>
+                        <td className="px-5 py-3 text-sm text-white max-w-xs truncate" title={item.description}>
+                          {item.description}
+                        </td>
+                        <td className="px-5 py-3 whitespace-nowrap">
+                          <div className="text-xs text-gray-300">{item.supplierName}</div>
+                          <div className="text-xs text-gray-500">{item.tradeName}</div>
+                        </td>
+                        <td className="px-5 py-3 text-right text-xs text-gray-400 whitespace-nowrap">{item.unit || '—'}</td>
+                        <td className="px-5 py-3 text-right text-sm text-gray-300 whitespace-nowrap">
+                          {item.quantity.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-3 text-right text-sm text-gray-300 whitespace-nowrap">
+                          ${item.line_amount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-3 text-right text-sm text-yellow-300 whitespace-nowrap">
+                          ${item.total_certified.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-3 text-right whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/60 text-red-300 text-sm font-semibold border border-red-700/50">
+                            +${item.over_run_amount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Governance Notice */}
         <div className="bg-red-900/20 border-l-4 border-red-500 p-4 rounded">
           <div className="flex">
@@ -774,7 +917,9 @@ export default function CommercialControlDashboard() {
           supplierId={importConfig.supplierId}
           onImportComplete={(result) => {
             console.log('Import completed:', result);
-            loadDashboard();
+            loadDashboard().then(() => {
+              loadOverRunItems(projectId, tradeMetrics);
+            });
           }}
         />
       )}
