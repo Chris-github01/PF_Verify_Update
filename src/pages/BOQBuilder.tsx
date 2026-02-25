@@ -87,6 +87,25 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
 
       setBoqLines(lines || []);
 
+      // If BOQ lines exist, ensure the completion flag is set in the DB
+      if (lines && lines.length > 0) {
+        const { data: proj } = await supabase
+          .from('projects')
+          .select('boq_builder_completed')
+          .eq('id', projectId)
+          .maybeSingle();
+
+        if (!(proj as any)?.boq_builder_completed) {
+          await supabase
+            .from('projects')
+            .update({
+              boq_builder_completed: true,
+              boq_builder_completed_at: new Date().toISOString()
+            })
+            .eq('id', projectId);
+        }
+      }
+
       // Load mappings
       const { data: maps, error: mapsError } = await supabase
         .from('boq_tenderer_map')

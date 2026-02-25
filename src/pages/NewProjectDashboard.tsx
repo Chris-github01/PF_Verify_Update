@@ -53,6 +53,7 @@ interface ProjectStats {
   hasReviewedItems: boolean;
   hasScopeMatrix: boolean;
   hasEqualisation: boolean;
+  hasBOQ: boolean;
   hasReports: boolean;
 }
 
@@ -90,6 +91,8 @@ export default function NewProjectDashboard({
     hasSelectedQuotes: false,
     hasReviewedItems: false,
     hasScopeMatrix: false,
+    hasEqualisation: false,
+    hasBOQ: false,
     hasReports: false,
   });
   const [steps, setSteps] = useState<StepStatus[]>([]);
@@ -210,6 +213,12 @@ export default function NewProjectDashboard({
         .eq('project_id', projectId)
         .maybeSingle();
 
+      const { data: projectRecord } = await supabase
+        .from('projects')
+        .select('boq_builder_completed')
+        .eq('id', projectId)
+        .maybeSingle();
+
       // CRITICAL: Filter reports by current trade to prevent cross-trade contamination
       const { data: reportsList } = await supabase
         .from('award_reports')
@@ -227,6 +236,7 @@ export default function NewProjectDashboard({
       // This prevents cross-trade contamination of workflow status
       const hasEqualisation = hasQuotesForTrade && !!settings?.settings?.last_equalisation_run;
       const hasReports = hasQuotesForTrade && (reportsList?.length || 0) > 0;
+      const hasBOQ = !!(projectRecord as any)?.boq_builder_completed;
 
       const newStats: ProjectStats = {
         quoteCount,
@@ -245,6 +255,7 @@ export default function NewProjectDashboard({
         hasScopeMatrix: hasMappedItems || coveragePercent === 100,
         // Equalisation and Reports only complete if THIS TRADE has quotes
         hasEqualisation,
+        hasBOQ,
         hasReports,
       };
 
@@ -285,6 +296,10 @@ export default function NewProjectDashboard({
         case 'equalisation':
           // Completed if equalisation analysis has been run
           status = projectStats.hasEqualisation ? 'completed' : projectStats.hasScopeMatrix ? 'in_progress' : 'not_started';
+          break;
+        case 'boq-builder':
+          // Completed if BOQ has been generated
+          status = projectStats.hasBOQ ? 'completed' : projectStats.hasEqualisation ? 'in_progress' : 'not_started';
           break;
         case 'reports':
           // Completed if reports have been generated
