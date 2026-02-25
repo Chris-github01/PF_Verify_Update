@@ -937,7 +937,7 @@ async function detectScopeGaps(
           description: `${tenderer.name} has not included ${boqLine.system_name} in their quote`,
           expected_requirement: `${boqLine.quantity} ${boqLine.unit} of ${boqLine.system_name}`,
           risk_if_not_included: 'Scope gap leading to variations post-award',
-          commercial_treatment: 'rfi',
+          commercial_treatment: 'NTS',
           status: 'open',
           owner_role: 'qs'
         });
@@ -963,7 +963,7 @@ async function detectScopeGaps(
           description: `${tenderer.name} quantity (${matchingItem.quantity}) is less than baseline (${boqLine.quantity})`,
           expected_requirement: `${boqLine.quantity} ${boqLine.unit}`,
           risk_if_not_included: 'Under-measured quantities may result in variations',
-          commercial_treatment: 'rfi',
+          commercial_treatment: 'NTS',
           status: 'open',
           owner_role: 'qs'
         });
@@ -989,7 +989,7 @@ async function detectScopeGaps(
           description: `${tenderer.name} quote missing attributes: ${missingAttributes.join(', ')}`,
           expected_requirement: missingAttributes.join(', '),
           risk_if_not_included: 'Unclear specifications may lead to disputes',
-          commercial_treatment: 'rfi',
+          commercial_treatment: 'NTS',
           status: 'open',
           owner_role: 'engineer'
         });

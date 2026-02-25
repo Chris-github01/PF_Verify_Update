@@ -4,7 +4,7 @@ export type IncludedStatus = 'included' | 'excluded' | 'unclear' | 'missing';
 
 export type GapType = 'missing' | 'unclear' | 'excluded' | 'under_measured' | 'unpriced' | 'lump_sum_unallocated';
 
-export type CommercialTreatment = 'include' | 'ps' | 'separate_price' | 'contingency' | 'rfi';
+export type CommercialTreatment = 'include' | 'ps' | 'separate_price' | 'contingency' | 'NTS';
 
 export type OwnerRole = 'qs' | 'engineer' | 'tenderer' | 'admin';
 
