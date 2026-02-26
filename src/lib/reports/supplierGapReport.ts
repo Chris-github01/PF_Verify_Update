@@ -32,7 +32,7 @@ export function generateSupplierGapReportHtml(data: SupplierGapReportData): stri
           <tr style="background: #fce7e7;">
             <th style="text-align: left; padding: 8px 12px; color: #7f1d1d; font-size: 12px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #fca5a5;">Item / System</th>
             ${showQty ? `<th style="text-align: center; padding: 8px 12px; color: #7f1d1d; font-size: 12px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #fca5a5; white-space: nowrap;">Qty</th>` : ''}
-            <th style="text-align: right; padding: 8px 12px; color: #7f1d1d; font-size: 12px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #fca5a5; white-space: nowrap;">Est. Impact</th>
+            ${showQty ? `<th style="text-align: right; padding: 8px 12px; color: #7f1d1d; font-size: 12px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #fca5a5; white-space: nowrap;">Est. Impact</th>` : ''}
           </tr>
         </thead>
         <tbody>
@@ -48,7 +48,7 @@ export function generateSupplierGapReportHtml(data: SupplierGapReportData): stri
                 ` : ''}
               </td>
               ${showQty ? `<td style="padding: 10px 12px; text-align: center; vertical-align: top; color: #7f1d1d; font-size: 13px; font-weight: 600; white-space: nowrap;">${gap.itemsCount > 0 ? gap.itemsCount : '—'}</td>` : ''}
-              <td style="padding: 10px 12px; text-align: right; vertical-align: top; color: #7f1d1d; font-size: 12px; font-weight: 500; white-space: nowrap;">${gap.estimatedImpact || '—'}</td>
+              ${showQty ? `<td style="padding: 10px 12px; text-align: right; vertical-align: top; color: #7f1d1d; font-size: 12px; font-weight: 500; white-space: nowrap;">${gap.estimatedImpact || '—'}</td>` : ''}
             </tr>
           `).join('')}
         </tbody>

@@ -450,7 +450,7 @@ export default function RevisionRequestModal({
               </div>
               <div className="px-6 py-5">
                 <p className="text-slate-300 text-sm mb-5">
-                  Choose whether to include quantities for each scope gap item in the report sent to the supplier.
+                  Choose whether to include quantities and estimated values for each scope gap in the report sent to the supplier.
                 </p>
                 <div className="space-y-3">
                   <button
@@ -462,7 +462,7 @@ export default function RevisionRequestModal({
                     </div>
                     <div>
                       <p className="text-white font-semibold text-sm">Include Quantities</p>
-                      <p className="text-slate-400 text-xs mt-0.5">Show item counts alongside each scope gap in the report</p>
+                      <p className="text-slate-400 text-xs mt-0.5">Show item counts and estimated values alongside each scope gap</p>
                     </div>
                   </button>
                   <button
@@ -474,7 +474,7 @@ export default function RevisionRequestModal({
                     </div>
                     <div>
                       <p className="text-white font-semibold text-sm">Do Not Include Quantities</p>
-                      <p className="text-slate-400 text-xs mt-0.5">Show only item descriptions without quantity details</p>
+                      <p className="text-slate-400 text-xs mt-0.5">Show only item descriptions — quantities and values are hidden</p>
                     </div>
                   </button>
                 </div>
