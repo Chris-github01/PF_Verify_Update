@@ -16,6 +16,7 @@ import {
   CheckSquare,
   FileSpreadsheet,
   DollarSign,
+  Shield,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -34,6 +35,7 @@ export type SidebarTab =
   | 'boq-builder'
   | 'contract'
   | 'commercial'
+  | 'scc'
   | 'reports'
   | 'insights'
   | 'systemcheck'
@@ -70,6 +72,7 @@ const menuStructure = [
     items: [
       { id: 'contract' as SidebarTab, label: 'Contract Manager', icon: Briefcase },
       { id: 'commercial' as SidebarTab, label: 'Commercial Control', icon: DollarSign },
+      { id: 'scc' as SidebarTab, label: 'Subcontract Control', icon: Shield },
     ]
   }
 ];

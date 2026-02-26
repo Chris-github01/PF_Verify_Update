@@ -17,6 +17,7 @@ import Equalisation from './pages/Equalisation';
 import BOQBuilder from './pages/BOQBuilder';
 import ContractManager from './pages/ContractManager';
 import CommercialControlDashboard from './pages/CommercialControlDashboard';
+import SCCMain from './pages/scc/SCCMain';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import ProjectReportPage from './pages/ProjectReportPage';
 import InsightsDashboard from './pages/InsightsDashboard';
@@ -807,6 +808,9 @@ function AppContent() {
 
       case 'commercial':
         return <CommercialControlDashboard />;
+
+      case 'scc':
+        return <SCCMain projectId={projectId} />;
 
       case 'reports':
         if (!projectId) {
