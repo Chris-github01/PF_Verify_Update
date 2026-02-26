@@ -16,31 +16,44 @@ interface SupplierGapReportData {
   gaps: ScopeGap[];
   generatedDate: string;
   deadline: string;
+  includeQuantities?: boolean;
 }
 
 const VERIFYTRADE_ORANGE = '#f97316';
 const VERIFYTRADE_ORANGE_LIGHT = '#fed7aa';
 
 export function generateSupplierGapReportHtml(data: SupplierGapReportData): string {
+  const showQty = data.includeQuantities === true;
+
   const gapsHtml = data.gaps.length > 0
-    ? data.gaps.map(gap => `
-        <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; margin-bottom: 10px; border-radius: 4px;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-            <div style="flex: 1;">
-              <p style="margin: 0; color: #991b1b; font-size: 14px; font-weight: 600; line-height: 1.4;">
-                ${gap.system}
-              </p>
-              ${gap.category ? `<p style="margin: 2px 0 0 0; color: #b91c1c; font-size: 12px;">${gap.category}</p>` : ''}
-            </div>
-            ${gap.estimatedImpact ? `<span style="white-space: nowrap; font-size: 12px; color: #7f1d1d; font-weight: 500;">${gap.estimatedImpact}</span>` : ''}
-          </div>
-          ${gap.details.length > 0 ? `
-            <ul style="margin: 6px 0 0 0; padding-left: 18px; color: #7f1d1d; font-size: 13px;">
-              ${gap.details.map(detail => `<li style="margin-bottom: 2px;">${detail}</li>`).join('')}
-            </ul>
-          ` : ''}
-        </div>
-      `).join('')
+    ? `
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
+        <thead>
+          <tr style="background: #fce7e7;">
+            <th style="text-align: left; padding: 8px 12px; color: #7f1d1d; font-size: 12px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #fca5a5;">Item / System</th>
+            ${showQty ? `<th style="text-align: center; padding: 8px 12px; color: #7f1d1d; font-size: 12px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #fca5a5; white-space: nowrap;">Qty</th>` : ''}
+            <th style="text-align: right; padding: 8px 12px; color: #7f1d1d; font-size: 12px; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #fca5a5; white-space: nowrap;">Est. Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.gaps.map((gap, i) => `
+            <tr style="background: ${i % 2 === 0 ? '#fef2f2' : '#fff5f5'}; border-bottom: 1px solid #fecaca;">
+              <td style="padding: 10px 12px; vertical-align: top;">
+                <p style="margin: 0; color: #991b1b; font-size: 13px; font-weight: 600; line-height: 1.4;">${gap.system}</p>
+                ${gap.category ? `<p style="margin: 2px 0 0 0; color: #b91c1c; font-size: 11px;">${gap.category}</p>` : ''}
+                ${gap.details.length > 0 ? `
+                  <ul style="margin: 4px 0 0 0; padding-left: 16px; color: #7f1d1d; font-size: 12px;">
+                    ${gap.details.map(d => `<li style="margin-bottom: 1px;">${d}</li>`).join('')}
+                  </ul>
+                ` : ''}
+              </td>
+              ${showQty ? `<td style="padding: 10px 12px; text-align: center; vertical-align: top; color: #7f1d1d; font-size: 13px; font-weight: 600; white-space: nowrap;">${gap.itemsCount > 0 ? gap.itemsCount : '—'}</td>` : ''}
+              <td style="padding: 10px 12px; text-align: right; vertical-align: top; color: #7f1d1d; font-size: 12px; font-weight: 500; white-space: nowrap;">${gap.estimatedImpact || '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
     : `
       <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 20px; border-radius: 4px; text-align: center;">
         <p style="margin: 0; color: #166534; font-size: 16px; font-weight: 600;">

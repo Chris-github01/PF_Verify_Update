@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, FileText, Calendar, CheckCircle2, AlertCircle, User, Download } from 'lucide-react';
+import { X, Mail, FileText, Calendar, CheckCircle2, AlertCircle, User, Download, Hash, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generateSupplierGapReportHtml, downloadSupplierGapReport } from '../lib/reports/supplierGapReport';
 import { generateRevisionRequestEmail } from '../lib/revisions/emailGenerator';
@@ -48,6 +48,7 @@ export default function RevisionRequestModal({
   const [emailPreviews, setEmailPreviews] = useState<Map<string, { subject: string; body: string }>>(new Map());
   const [generatingPreviews, setGeneratingPreviews] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [pdfQuantityDialog, setPdfQuantityDialog] = useState<{ supplier: SupplierGapData } | null>(null);
 
   useEffect(() => {
     const defaultDeadline = new Date();
@@ -136,6 +137,10 @@ export default function RevisionRequestModal({
   };
 
   const handleDownloadPDF = (supplier: SupplierGapData) => {
+    setPdfQuantityDialog({ supplier });
+  };
+
+  const generatePDF = (supplier: SupplierGapData, includeQuantities: boolean) => {
     const deadlineFormatted = new Date(deadline).toLocaleDateString('en-NZ', {
       year: 'numeric',
       month: 'long',
@@ -155,10 +160,12 @@ export default function RevisionRequestModal({
         month: 'long',
         day: 'numeric'
       }),
-      deadline: deadlineFormatted
+      deadline: deadlineFormatted,
+      includeQuantities
     });
 
     downloadSupplierGapReport(html, supplier.supplierName, projectName);
+    setPdfQuantityDialog(null);
     onToast?.(`PDF downloaded for ${supplier.supplierName}`, 'success');
   };
 
@@ -227,7 +234,7 @@ export default function RevisionRequestModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden border border-slate-700">
+      <div className="bg-slate-800 rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden border border-slate-700 relative">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700">
           <div>
@@ -424,6 +431,57 @@ export default function RevisionRequestModal({
             </div>
           )}
         </div>
+
+        {/* PDF Quantity Selection Dialog */}
+        {pdfQuantityDialog && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-lg">
+            <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl w-full max-w-md mx-6 overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+                <div>
+                  <h3 className="text-white font-bold text-lg">PDF Report Options</h3>
+                  <p className="text-slate-400 text-sm mt-0.5">{pdfQuantityDialog.supplier.supplierName}</p>
+                </div>
+                <button
+                  onClick={() => setPdfQuantityDialog(null)}
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="px-6 py-5">
+                <p className="text-slate-300 text-sm mb-5">
+                  Choose whether to include quantities for each scope gap item in the report sent to the supplier.
+                </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => generatePDF(pdfQuantityDialog.supplier, true)}
+                    className="w-full flex items-center gap-4 p-4 bg-slate-700/60 hover:bg-slate-700 border-2 border-slate-600 hover:border-orange-500 rounded-xl transition-all text-left group"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-500/30 transition-colors">
+                      <Hash size={20} className="text-orange-400" />
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold text-sm">Include Quantities</p>
+                      <p className="text-slate-400 text-xs mt-0.5">Show item counts alongside each scope gap in the report</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => generatePDF(pdfQuantityDialog.supplier, false)}
+                    className="w-full flex items-center gap-4 p-4 bg-slate-700/60 hover:bg-slate-700 border-2 border-slate-600 hover:border-slate-400 rounded-xl transition-all text-left group"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-slate-600/50 flex items-center justify-center flex-shrink-0 group-hover:bg-slate-600 transition-colors">
+                      <EyeOff size={20} className="text-slate-400" />
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold text-sm">Do Not Include Quantities</p>
+                      <p className="text-slate-400 text-xs mt-0.5">Show only item descriptions without quantity details</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between p-6 border-t border-slate-700 bg-slate-800/50">
