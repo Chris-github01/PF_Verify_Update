@@ -54,36 +54,44 @@ export default function CreateClient() {
     setError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user.email) throw new Error('Not authenticated');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
-      // Create organisation via RPC
-      const { data: orgData, error: orgError } = await supabase.rpc('admin_create_client_organisation', {
-        p_admin_email: session.user.email,
-        p_org_name: formData.name,
-        p_trade_type: formData.selectedTrades[0], // Primary trade
-        p_trial_days: formData.trialDays,
-        p_owner_email: formData.ownerEmail
-      });
+      const auditNamespace = `ORG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+      const trialEndDate = new Date(Date.now() + formData.trialDays * 24 * 60 * 60 * 1000).toISOString();
+      const primaryTrade = formData.selectedTrades[0];
+
+      const { data: org, error: orgError } = await supabase
+        .from('organisations')
+        .insert({
+          name: formData.name,
+          legal_name: formData.name,
+          owner_email: formData.ownerEmail.toLowerCase().trim(),
+          trade_type: primaryTrade,
+          primary_trade_focus: primaryTrade,
+          licensed_trades: formData.selectedTrades,
+          client_type: formData.clientType,
+          subscription_status: 'trial',
+          pricing_tier: 'starter',
+          trial_end_date: trialEndDate,
+          seat_limit: 5,
+          audit_namespace: auditNamespace,
+          compliance_acceptance: true,
+          created_by_admin_id: user.id,
+          industry_type: formData.clientType === 'sub_contractor' ? 'Subcontractor' : 'Main Contractor',
+          country_region: 'New Zealand',
+          jurisdiction_code_set: 'NZBC',
+          compliance_role: formData.clientType === 'sub_contractor' ? 'Reviewing party' : 'Awarding party',
+          project_size_range: '<$5m',
+        })
+        .select()
+        .single();
 
       if (orgError) throw orgError;
 
-      const orgId = orgData.organisation_id;
-
-      // Update licensed_trades and client_type
-      const { error: updateError } = await supabase
-        .from('organisations')
-        .update({
-          licensed_trades: formData.selectedTrades,
-          client_type: formData.clientType
-        })
-        .eq('id', orgId);
-
-      if (updateError) throw updateError;
-
       setSuccess({
-        organisationId: orgId,
-        message: orgData.message
+        organisationId: org.id,
+        message: `Organisation "${formData.name}" created successfully. Owner can sign up with ${formData.ownerEmail}.`
       });
     } catch (err) {
       console.error('Failed to create organisation:', err);
