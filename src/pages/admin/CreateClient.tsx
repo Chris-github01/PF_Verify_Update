@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle, DollarSign } from 'lucide-react';
+import { ArrowLeft, CheckCircle, DollarSign, Building2, HardHat } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { ALL_TRADES, TRADE_LABELS } from '../../lib/admin/adminApi';
 import PageHeader from '../../components/PageHeader';
 
+type ClientType = 'main_contractor' | 'sub_contractor';
+
 export default function CreateClient() {
   const [formData, setFormData] = useState({
     name: '',
+    clientType: 'main_contractor' as ClientType,
     selectedTrades: ['passive_fire'] as string[],
     trialDays: 14,
     ownerEmail: ''
@@ -67,10 +70,13 @@ export default function CreateClient() {
 
       const orgId = orgData.organisation_id;
 
-      // Update licensed_trades array directly
+      // Update licensed_trades and client_type
       const { error: updateError } = await supabase
         .from('organisations')
-        .update({ licensed_trades: formData.selectedTrades })
+        .update({
+          licensed_trades: formData.selectedTrades,
+          client_type: formData.clientType
+        })
         .eq('id', orgId);
 
       if (updateError) throw updateError;
@@ -124,6 +130,16 @@ export default function CreateClient() {
                 <span className="font-medium text-white">{formData.ownerEmail}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-400">Client Type:</span>
+                <span className={`px-2 py-1 text-xs font-medium rounded ${
+                  formData.clientType === 'sub_contractor'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                    : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                }`}>
+                  {formData.clientType === 'sub_contractor' ? 'Sub-contractor' : 'Main Contractor'}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-400">Licensed Trades:</span>
                 <div className="flex flex-wrap gap-1 justify-end">
                   {formData.selectedTrades.map(trade => (
@@ -165,6 +181,7 @@ export default function CreateClient() {
                   setSuccess(null);
                   setFormData({
                     name: '',
+                    clientType: 'main_contractor',
                     selectedTrades: ['passive_fire'],
                     trialDays: 14,
                     ownerEmail: ''
@@ -216,6 +233,58 @@ export default function CreateClient() {
               placeholder="e.g., Acme Fire Protection Ltd"
               className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600 text-white placeholder-gray-400 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Client Type *
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, clientType: 'main_contractor' })}
+                className={`p-4 border-2 rounded-lg text-left transition-all ${
+                  formData.clientType === 'main_contractor'
+                    ? 'border-orange-500 bg-orange-500/20 ring-2 ring-orange-500/30'
+                    : 'border-slate-600 hover:border-orange-500/50'
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-1">
+                  <Building2 size={20} className={formData.clientType === 'main_contractor' ? 'text-orange-400' : 'text-gray-400'} />
+                  <span className="font-medium text-white">Main Contractor</span>
+                  {formData.clientType === 'main_contractor' && (
+                    <CheckCircle size={16} className="ml-auto text-orange-400" />
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 ml-8">Full procurement & quote audit workflow</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, clientType: 'sub_contractor' })}
+                className={`p-4 border-2 rounded-lg text-left transition-all ${
+                  formData.clientType === 'sub_contractor'
+                    ? 'border-cyan-500 bg-cyan-500/20 ring-2 ring-cyan-500/30'
+                    : 'border-slate-600 hover:border-cyan-500/50'
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-1">
+                  <HardHat size={20} className={formData.clientType === 'sub_contractor' ? 'text-cyan-400' : 'text-gray-400'} />
+                  <span className="font-medium text-white">Sub-contractor</span>
+                  {formData.clientType === 'sub_contractor' && (
+                    <CheckCircle size={16} className="ml-auto text-cyan-400" />
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 ml-8">SCC: Subcontract Commercial Control</p>
+              </button>
+            </div>
+            {formData.clientType === 'sub_contractor' && (
+              <div className="mt-3 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                <p className="text-xs text-cyan-300 font-medium mb-1">SCC Module Enabled</p>
+                <p className="text-xs text-cyan-400">
+                  This client will access the Subcontract Commercial Control module: contract setup, progress claims, variation register, and materials tracking.
+                </p>
+              </div>
+            )}
           </div>
 
           <div>

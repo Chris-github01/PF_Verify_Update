@@ -12,6 +12,7 @@ interface Organisation {
   created_at: string;
   status?: string;
   subscription_status?: string;
+  client_type?: 'main_contractor' | 'sub_contractor';
 }
 
 interface OrganisationContextType {
@@ -20,6 +21,7 @@ interface OrganisationContextType {
   loading: boolean;
   isAdminView: boolean;
   isGodMode: boolean;
+  isSubContractor: boolean;
   setCurrentOrganisation: (org: Organisation | null) => void;
   refreshOrganisations: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
@@ -34,6 +36,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdminView, setIsAdminView] = useState(false);
   const [isGodMode, setIsGodMode] = useState(false);
+  const isSubContractor = currentOrganisation?.client_type === 'sub_contractor';
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [sessionReady, setSessionReady] = useState(false);
 
@@ -140,7 +143,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
       const { data: allOrgs, error: orgsError } = await supabase
         .from('organisations')
-        .select('id, name, created_at, subscription_status')
+        .select('id, name, created_at, subscription_status, client_type')
         .order('name', { ascending: true });
 
       if (orgsError) {
@@ -226,7 +229,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
 
     const { data: orgs, error: orgsError } = await supabase
       .from('organisations')
-      .select('id, name, created_at, subscription_status')
+      .select('id, name, created_at, subscription_status, client_type')
       .in('id', orgIds)
       .order('name', { ascending: true });
 
@@ -309,6 +312,7 @@ export function OrganisationProvider({ children }: { children: ReactNode }) {
         loading,
         isAdminView,
         isGodMode,
+        isSubContractor,
         setCurrentOrganisation: handleSetCurrentOrganisation,
         refreshOrganisations,
         hasPermission,

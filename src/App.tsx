@@ -17,6 +17,7 @@ import Equalisation from './pages/Equalisation';
 import BOQBuilder from './pages/BOQBuilder';
 import ContractManager from './pages/ContractManager';
 import CommercialControlDashboard from './pages/CommercialControlDashboard';
+import SCCDashboard from './pages/SCCDashboard';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import ProjectReportPage from './pages/ProjectReportPage';
 import InsightsDashboard from './pages/InsightsDashboard';
@@ -804,6 +805,9 @@ function AppContent() {
           }}
           onToast={(message, type) => setToast({ message, type })}
         />;
+
+      case 'scc':
+        return <SCCDashboard />;
 
       case 'commercial':
         return <CommercialControlDashboard />;

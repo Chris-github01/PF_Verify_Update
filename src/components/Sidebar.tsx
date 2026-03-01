@@ -7,15 +7,17 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Flame,
   Sparkles,
   ClipboardCheck,
   Briefcase,
   ShieldAlert,
-  RefreshCw,
   CheckSquare,
   FileSpreadsheet,
   DollarSign,
+  Layers,
+  TrendingUp,
+  RefreshCw,
+  HardHat,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -39,7 +41,8 @@ export type SidebarTab =
   | 'systemcheck'
   | 'copilotaudit'
   | 'admincenter'
-  | 'settings';
+  | 'settings'
+  | 'scc';
 
 interface SidebarProps {
   activeTab: SidebarTab;
@@ -49,8 +52,7 @@ interface SidebarProps {
   onDashboardModeChange: (mode: DashboardMode) => void;
 }
 
-// Navigation structure organized by procurement lifecycle
-const menuStructure = [
+const mainContractorMenu = [
   {
     section: 'QUOTE AUDIT (PRE-AWARD)',
     items: [
@@ -74,7 +76,19 @@ const menuStructure = [
   }
 ];
 
-// Admin items rendered separately at bottom
+const subContractorMenu = [
+  {
+    section: 'SCC: SUBCONTRACT COMMERCIAL CONTROL',
+    items: [
+      { id: 'scc' as SidebarTab, label: 'SCC Dashboard', icon: Layers },
+      { id: 'contract' as SidebarTab, label: 'Contract Setup', icon: Briefcase },
+      { id: 'commercial' as SidebarTab, label: 'Base Tracker', icon: DollarSign },
+      { id: 'reports' as SidebarTab, label: 'Progress Claims', icon: TrendingUp },
+      { id: 'scope' as SidebarTab, label: 'Variation Register', icon: RefreshCw },
+    ]
+  }
+];
+
 const adminItems = [
   { id: 'admincenter' as SidebarTab, label: 'Admin Center', icon: ShieldAlert, requiresAdminAccess: true },
   { id: 'settings' as SidebarTab, label: 'Settings', icon: Settings, requiresAdminAccess: true },
@@ -97,8 +111,10 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
     return saved === 'true';
   });
   const { currentTrade: selectedTrade } = useTrade();
-  const { hasPermission } = useOrganisation();
+  const { hasPermission, isSubContractor } = useOrganisation();
   const { isMasterAdmin } = useAdmin();
+
+  const menuStructure = isSubContractor ? subContractorMenu : mainContractorMenu;
 
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', collapsed.toString());
@@ -121,18 +137,32 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
         </div>
         {!collapsed && (
           <div className="flex flex-col text-center">
-            <span className="text-xs font-semibold tracking-wide text-slate-50">
-              Verify+ {getTradeDisplayName(selectedTrade)}
-            </span>
-            <span className="text-[10px] text-slate-400">
-              Quote Audit Engine
-            </span>
+            {isSubContractor ? (
+              <>
+                <span className="text-xs font-semibold tracking-wide text-cyan-300 flex items-center justify-center gap-1.5">
+                  <HardHat size={12} />
+                  SCC Module
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  Subcontract Commercial Control
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-xs font-semibold tracking-wide text-slate-50">
+                  Verify+ {getTradeDisplayName(selectedTrade)}
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  Quote Audit Engine
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* Dashboard Mode Toggle */}
-      {!collapsed && projectId && (
+      {/* Dashboard Mode Toggle — only for main contractors */}
+      {!isSubContractor && !collapsed && projectId && (
         <div className="px-3 pb-4 border-b border-slate-800/80">
           <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 px-3 mb-2">
             Mode
@@ -160,7 +190,6 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
                 <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_12px_rgba(251,146,60,0.8)]" />
               )}
             </button>
-            {/* Revised Quotes button hidden as per user request */}
           </div>
         </div>
       )}
@@ -169,14 +198,14 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
       <nav className="flex-1 px-3 pb-4 pt-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
         {menuStructure.map((section, sectionIndex) => (
           <div key={section.section}>
-            {/* Section Header */}
             {!collapsed && (
-              <div className={`text-[10px] uppercase tracking-[0.2em] text-slate-500 px-3 mb-2 font-semibold ${sectionIndex > 0 ? 'mt-6 pt-6 border-t border-slate-800/60' : ''}`}>
+              <div className={`text-[10px] uppercase tracking-[0.2em] px-3 mb-2 font-semibold ${
+                sectionIndex > 0 ? 'mt-6 pt-6 border-t border-slate-800/60' : ''
+              } ${isSubContractor ? 'text-cyan-600' : 'text-slate-500'}`}>
                 {section.section}
               </div>
             )}
 
-            {/* Section Items */}
             <ul className="space-y-1">
               {section.items.map((item) => {
                 const Icon = item.icon;
@@ -190,19 +219,27 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
                         group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
                         ${
                           isActive
-                            ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                            ? isSubContractor
+                              ? 'bg-cyan-900/60 text-cyan-50 shadow-[0_0_0_1px_rgba(6,182,212,0.4)]'
+                              : 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
                             : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
                         }
                         ${collapsed ? 'justify-center' : ''}
                       `}
                       title={collapsed ? item.label : undefined}
                     >
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
-                        <Icon size={16} />
+                      <span className={`inline-flex h-8 w-8 items-center justify-center rounded-xl flex-shrink-0 group-hover:bg-slate-900 ${
+                        isActive && isSubContractor ? 'bg-cyan-900/80' : 'bg-slate-900/60'
+                      }`}>
+                        <Icon size={16} className={isActive && isSubContractor ? 'text-cyan-400' : ''} />
                       </span>
                       {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
                       {!collapsed && isActive && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          isSubContractor
+                            ? 'bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)]'
+                            : 'bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]'
+                        }`} />
                       )}
                     </button>
                   </li>
@@ -212,7 +249,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
           </div>
         ))}
 
-        {/* Admin Section - only show if admin */}
+        {/* Admin Section */}
         {isMasterAdmin && (
           <div>
             {!collapsed && (
@@ -222,9 +259,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
             )}
             <ul className="space-y-1">
               {adminItems.map((item) => {
-                if (item.requiresAdminAccess && !isMasterAdmin) {
-                  return null;
-                }
+                if (item.requiresAdminAccess && !isMasterAdmin) return null;
 
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
