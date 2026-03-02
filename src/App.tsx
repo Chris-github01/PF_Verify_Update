@@ -18,6 +18,10 @@ import BOQBuilder from './pages/BOQBuilder';
 import ContractManager from './pages/ContractManager';
 import CommercialControlDashboard from './pages/CommercialControlDashboard';
 import SCCDashboard from './pages/SCCDashboard';
+import SCCQuoteImport from './pages/scc/SCCQuoteImport';
+import SCCContractSetup from './pages/scc/SCCContractSetup';
+import SCCProgressClaims from './pages/scc/SCCProgressClaims';
+import SCCRetentionMaterials from './pages/scc/SCCRetentionMaterials';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import ProjectReportPage from './pages/ProjectReportPage';
 import InsightsDashboard from './pages/InsightsDashboard';
@@ -807,6 +811,21 @@ function AppContent() {
         />;
 
       case 'scc':
+        return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
+
+      case 'scc-quote-import':
+        return <SCCQuoteImport onContinue={() => setActiveTab('scc-contract-setup')} />;
+
+      case 'scc-contract-setup':
+        return <SCCContractSetup />;
+
+      case 'scc-claims':
+        return <SCCProgressClaims />;
+
+      case 'scc-retention':
+        return <SCCRetentionMaterials />;
+
+      case 'scc-variations':
         return <SCCDashboard />;
 
       case 'commercial':

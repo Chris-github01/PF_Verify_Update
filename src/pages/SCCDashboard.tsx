@@ -83,7 +83,7 @@ function formatDate(d: string | null) {
   return new Date(d).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function SCCDashboard() {
+export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const { currentOrganisation } = useOrganisation();
   const [contracts, setContracts] = useState<SCCContract[]>([]);
   const [recentClaims, setRecentClaims] = useState<SCCClaimPeriod[]>([]);
@@ -300,9 +300,11 @@ export default function SCCDashboard() {
                     <FileText size={40} className="text-gray-600 mb-3" />
                     <p className="text-gray-400 font-medium">No contracts yet</p>
                     <p className="text-gray-500 text-sm mt-1">Set up your first subcontract to get started</p>
-                    <button className="mt-4 flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600 transition-colors">
+                    <button
+                      onClick={() => onNavigate?.('scc-quote-import')}
+                      className="mt-4 flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600 transition-colors">
                       <Plus size={16} />
-                      New Contract
+                      Import Quote
                     </button>
                   </div>
                 ) : (
@@ -426,7 +428,9 @@ export default function SCCDashboard() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-white">{contracts.length} Contract{contracts.length !== 1 ? 's' : ''}</h3>
-                <button className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600 transition-colors">
+                <button
+                  onClick={() => onNavigate?.('scc-contract-setup')}
+                  className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600 transition-colors">
                   <Plus size={16} />
                   New Contract
                 </button>
@@ -439,7 +443,9 @@ export default function SCCDashboard() {
                     Create your first SCC contract by importing your approved quote and subcontract agreement.
                     The system locks a contract snapshot as your commercial baseline.
                   </p>
-                  <button className="mt-6 flex items-center gap-2 px-5 py-2.5 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors">
+                  <button
+                    onClick={() => onNavigate?.('scc-contract-setup')}
+                    className="mt-6 flex items-center gap-2 px-5 py-2.5 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors">
                     <Plus size={18} />
                     Set Up First Contract
                   </button>
@@ -503,6 +509,7 @@ export default function SCCDashboard() {
                   )}
                 </div>
                 <button
+                  onClick={() => onNavigate?.('scc-claims')}
                   className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600 transition-colors disabled:bg-slate-700 disabled:cursor-not-allowed"
                   disabled={contracts.length === 0}
                 >
@@ -574,6 +581,7 @@ export default function SCCDashboard() {
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-white">Variation Register</h3>
                 <button
+                  onClick={() => onNavigate?.('scc-variations')}
                   className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600 transition-colors disabled:bg-slate-700 disabled:cursor-not-allowed"
                   disabled={contracts.length === 0}
                 >

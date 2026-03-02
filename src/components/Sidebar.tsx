@@ -42,7 +42,12 @@ export type SidebarTab =
   | 'copilotaudit'
   | 'admincenter'
   | 'settings'
-  | 'scc';
+  | 'scc'
+  | 'scc-quote-import'
+  | 'scc-contract-setup'
+  | 'scc-claims'
+  | 'scc-retention'
+  | 'scc-variations';
 
 interface SidebarProps {
   activeTab: SidebarTab;
@@ -80,11 +85,12 @@ const subContractorMenu = [
   {
     section: 'SCC: SUBCONTRACT COMMERCIAL CONTROL',
     items: [
-      { id: 'scc' as SidebarTab, label: 'SCC Dashboard', icon: Layers },
-      { id: 'contract' as SidebarTab, label: 'Contract Setup', icon: Briefcase },
-      { id: 'commercial' as SidebarTab, label: 'Base Tracker', icon: DollarSign },
-      { id: 'reports' as SidebarTab, label: 'Progress Claims', icon: TrendingUp },
-      { id: 'scope' as SidebarTab, label: 'Variation Register', icon: RefreshCw },
+      { id: 'scc' as SidebarTab,                label: 'SCC Dashboard',     icon: Layers     },
+      { id: 'scc-quote-import' as SidebarTab,   label: 'Quote Import',      icon: FileText   },
+      { id: 'scc-contract-setup' as SidebarTab, label: 'Contract Setup',    icon: Briefcase  },
+      { id: 'scc-claims' as SidebarTab,         label: 'Progress Claims',   icon: TrendingUp },
+      { id: 'scc-retention' as SidebarTab,      label: 'Retention & Materials', icon: DollarSign },
+      { id: 'scc-variations' as SidebarTab,     label: 'Variation Register', icon: RefreshCw },
     ]
   }
 ];
