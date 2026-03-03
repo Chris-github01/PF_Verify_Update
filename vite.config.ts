@@ -7,6 +7,8 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
-    hmr: true,
+    hmr: {
+      timeout: 30000,
+    },
   },
 });
