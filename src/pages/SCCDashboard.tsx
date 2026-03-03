@@ -17,11 +17,13 @@ import {
   Layers,
   Zap,
   ShieldAlert,
+  Receipt,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
 import PageHeader from '../components/PageHeader';
 import EarlyWarningPanel, { type EarlyWarningReport } from '../components/scc/EarlyWarningPanel';
+import PaymentClaimsList from './scc/PaymentClaimsList';
 
 interface SCCContract {
   id: string;
@@ -69,7 +71,7 @@ const CLAIM_STATUS: Record<string, { label: string; color: string; bg: string }>
   rejected:         { label: 'Rejected',            color: 'text-red-300',    bg: 'bg-red-500/20'    },
 };
 
-type ActiveView = 'overview' | 'contracts' | 'claims' | 'variations' | 'early_warning';
+type ActiveView = 'overview' | 'contracts' | 'claims' | 'payment_claims' | 'variations' | 'early_warning';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-NZ', {
@@ -142,6 +144,7 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
     { id: 'overview' as ActiveView,        label: 'Overview',        icon: BarChart3 },
     { id: 'contracts' as ActiveView,        label: 'Contracts',       icon: FileText },
     { id: 'claims' as ActiveView,           label: 'Claims',          icon: TrendingUp },
+    { id: 'payment_claims' as ActiveView,   label: 'Payment Claims',  icon: Receipt },
     { id: 'variations' as ActiveView,       label: 'Variations',      icon: RefreshCw },
     { id: 'early_warning' as ActiveView,    label: 'Early Warnings',  icon: AlertTriangle, badge: openWarnings > 0 ? openWarnings : undefined },
   ];
@@ -573,6 +576,11 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                 </div>
               )}
             </div>
+          )}
+
+          {/* Payment Claims View */}
+          {activeView === 'payment_claims' && (
+            <PaymentClaimsList />
           )}
 
           {/* Variations View */}
