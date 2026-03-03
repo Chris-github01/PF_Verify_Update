@@ -71,7 +71,12 @@ const BLANK_CONTRACT = {
   contract_end_date: '',
 };
 
-export default function SCCContractSetup() {
+interface SCCContractSetupProps {
+  importId?: string | null;
+  onImportConsumed?: () => void;
+}
+
+export default function SCCContractSetup({ importId, onImportConsumed }: SCCContractSetupProps = {}) {
   const { currentOrganisation } = useOrganisation();
   const [contracts, setContracts] = useState<SCCContract[]>([]);
   const [scopeLines, setScopeLines] = useState<ScopeLine[]>([]);
@@ -82,10 +87,47 @@ export default function SCCContractSetup() {
   const [form, setForm] = useState<typeof BLANK_CONTRACT>(BLANK_CONTRACT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prefillImportId, setPrefillImportId] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentOrganisation?.id) loadContracts();
   }, [currentOrganisation?.id]);
+
+  useEffect(() => {
+    if (importId && currentOrganisation?.id) {
+      prefillFromImport(importId);
+    }
+  }, [importId, currentOrganisation?.id]);
+
+  const prefillFromImport = async (id: string) => {
+    const { data } = await supabase
+      .from('scc_quote_imports')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!data) return;
+
+    setForm({
+      contract_number: '',
+      contract_name: data.file_name
+        ? data.file_name.replace(/\.[^/.]+$/, '')
+        : '',
+      subcontractor_name: '',
+      subcontractor_company: data.main_contractor || '',
+      contract_value: data.total_value || 0,
+      retention_percentage: 5,
+      retention_limit_pct: 5,
+      payment_terms_days: 20,
+      payment_claim_prefix: 'PC',
+      defects_liability_months: 12,
+      contract_start_date: '',
+      contract_end_date: '',
+    });
+    setPrefillImportId(id);
+    setView('new');
+    if (onImportConsumed) onImportConsumed();
+  };
 
   const loadContracts = async () => {
     if (!currentOrganisation?.id) return;
@@ -145,10 +187,20 @@ export default function SCCContractSetup() {
           status: 'setup',
           snapshot_locked: false,
           next_claim_number: 1,
+          quote_import_id: prefillImportId || null,
         })
         .select()
         .single();
       if (err) throw err;
+
+      if (prefillImportId) {
+        await supabase
+          .from('scc_quote_imports')
+          .update({ contract_id: data.id, updated_at: new Date().toISOString() })
+          .eq('id', prefillImportId);
+        setPrefillImportId(null);
+      }
+
       setContracts(prev => [data, ...prev]);
       setForm(BLANK_CONTRACT);
       setView('list');
@@ -212,7 +264,14 @@ export default function SCCContractSetup() {
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6 space-y-5">
-          <h3 className="font-semibold text-white">Contract Details</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-white">Contract Details</h3>
+            {prefillImportId && (
+              <span className="flex items-center gap-1.5 text-xs text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 rounded-full px-3 py-1">
+                <CheckCircle size={12} /> Pre-filled from quote import
+              </span>
+            )}
+          </div>
           {error && (
             <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-300 text-sm">
               <AlertCircle size={16} /> {error}
@@ -337,7 +396,7 @@ export default function SCCContractSetup() {
 
           <div className="flex items-center gap-3 pt-2">
             <button
-              onClick={() => { setView('list'); setError(null); setForm(BLANK_CONTRACT); }}
+              onClick={() => { setView('list'); setError(null); setForm(BLANK_CONTRACT); setPrefillImportId(null); }}
               className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm transition-colors"
             >
               Cancel

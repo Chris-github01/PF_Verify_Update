@@ -82,6 +82,7 @@ function AppContent() {
   const [orgLicensing, setOrgLicensing] = useState<{ licensed_trades: string[]; subscription_status: string } | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
+  const [sccImportId, setSccImportId] = useState<string | null>(null);
   const [isTrialExpired, setIsTrialExpired] = useState(false);
   const [checkingTrial, setCheckingTrial] = useState(false);
   const { currentOrganisation, organisations, loading: orgLoading, isGodMode, setCurrentOrganisation } = useOrganisation();
@@ -814,10 +815,10 @@ function AppContent() {
         return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
 
       case 'scc-quote-import':
-        return <SCCQuoteImport onContinue={() => setActiveTab('scc-contract-setup')} />;
+        return <SCCQuoteImport onContinue={(importId) => { setSccImportId(importId); setActiveTab('scc-contract-setup'); }} />;
 
       case 'scc-contract-setup':
-        return <SCCContractSetup />;
+        return <SCCContractSetup importId={sccImportId} onImportConsumed={() => setSccImportId(null)} />;
 
       case 'scc-claims':
         return <SCCProgressClaims />;
