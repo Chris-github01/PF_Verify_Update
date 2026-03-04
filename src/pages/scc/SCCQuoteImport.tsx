@@ -596,34 +596,76 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">Quote Import</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Step 1 — Import your approved quote as the contract baseline</p>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {imports[0]?.status === 'parsing' ? 'Step 2 — AI is parsing your quote' :
+             imports[0]?.status === 'parsed' || imports[0]?.status === 'reviewed' ? 'Step 3 — Review and clean the extracted lines' :
+             imports[0]?.status === 'locked' ? 'Step 4 — Baseline locked as contract truth' :
+             'Step 1 — Import your approved quote as the contract baseline'}
+          </p>
         </div>
       </div>
 
       {/* Workflow Steps Banner */}
-      <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-5">
-        <div className="flex items-center gap-6 overflow-x-auto pb-1">
-          {[
-            { num: 1, label: 'Import Quote',    desc: 'Upload PDF or Excel',   active: true },
-            { num: 2, label: 'AI Parsing',       desc: 'Auto-extract line items' },
-            { num: 3, label: 'Review Lines',     desc: 'Check & clean data'    },
-            { num: 4, label: 'Lock Baseline',    desc: 'Freeze as contract truth' },
-          ].map((step, i) => (
-            <div key={step.num} className="flex items-center gap-4 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step.active ? 'bg-cyan-500 text-white' : 'bg-slate-700 text-gray-500'}`}>
-                  {step.num}
-                </div>
-                <div>
-                  <p className={`text-sm font-medium ${step.active ? 'text-white' : 'text-gray-500'}`}>{step.label}</p>
-                  <p className="text-xs text-gray-600">{step.desc}</p>
-                </div>
-              </div>
-              {i < 3 && <ChevronRight size={16} className="text-gray-700 flex-shrink-0" />}
+      {(() => {
+        const latestImport = imports[0] ?? null;
+        const statusToStep: Record<string, number> = {
+          uploaded: 1, parsing: 2, parsed: 3, reviewed: 3, locked: 4,
+        };
+        const currentStep = latestImport ? (statusToStep[latestImport.status] ?? 1) : 1;
+        const steps = [
+          { num: 1, label: 'Import Quote',  desc: 'Upload PDF or Excel' },
+          { num: 2, label: 'AI Parsing',    desc: 'Auto-extract line items' },
+          { num: 3, label: 'Review Lines',  desc: 'Check & clean data' },
+          { num: 4, label: 'Lock Baseline', desc: 'Freeze as contract truth' },
+        ];
+        const handleStepClick = (stepNum: number) => {
+          if (!latestImport) return;
+          if (stepNum === 1) { setView('list'); return; }
+          if (stepNum <= currentStep) {
+            setSelectedImport(latestImport);
+            setEditingMeta({
+              main_contractor: latestImport.main_contractor || '',
+              project_name: latestImport.project_name || '',
+              quote_reference: latestImport.quote_reference || '',
+              trade_type: latestImport.trade_type || '',
+            });
+            setView('review');
+          }
+        };
+        return (
+          <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-5">
+            <div className="flex items-center gap-6 overflow-x-auto pb-1">
+              {steps.map((step, i) => {
+                const isActive = step.num === currentStep;
+                const isCompleted = step.num < currentStep;
+                const isClickable = latestImport && step.num <= currentStep;
+                return (
+                  <div key={step.num} className="flex items-center gap-4 flex-shrink-0">
+                    <button
+                      onClick={() => handleStepClick(step.num)}
+                      disabled={!isClickable}
+                      className={`flex items-center gap-3 text-left transition-opacity ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default opacity-40'}`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+                        isActive ? 'bg-cyan-500 text-white' :
+                        isCompleted ? 'bg-cyan-800 text-cyan-300' :
+                        'bg-slate-700 text-gray-500'
+                      }`}>
+                        {isCompleted ? <CheckCircle size={16} /> : step.num}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-medium ${isActive ? 'text-white' : isCompleted ? 'text-cyan-400' : 'text-gray-500'}`}>{step.label}</p>
+                        <p className="text-xs text-gray-600">{step.desc}</p>
+                      </div>
+                    </button>
+                    {i < 3 && <ChevronRight size={16} className="text-gray-700 flex-shrink-0" />}
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        );
+      })()}
 
       {/* Upload form */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
