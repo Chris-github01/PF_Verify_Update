@@ -31,9 +31,9 @@ interface SCCContract {
 
 interface ScopeLine {
   id: string;
-  line_reference: string;
+  line_number: string;
   description: string;
-  contract_amount: number;
+  line_total: number;
   claim_method: string;
   unit: string | null;
   original_qty: number | null;
@@ -235,9 +235,9 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
       .insert({
         contract_id: selected.id,
         organisation_id: currentOrganisation.id,
-        line_reference: `L${(scopeLines.length + 1).toString().padStart(2, '0')}`,
+        line_number: `L${(scopeLines.length + 1).toString().padStart(2, '0')}`,
         description: 'New scope line — click to edit',
-        contract_amount: 0,
+        line_total: 0,
         claim_method: 'percentage',
         pct_claimed_to_date: 0,
         amount_claimed_to_date: 0,
@@ -276,9 +276,9 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
       const toInsert = lineItems.map((item, idx) => ({
         contract_id: selected.id,
         organisation_id: currentOrganisation.id,
-        line_reference: item.line_number || `L${(idx + 1).toString().padStart(2, '0')}`,
+        line_number: item.line_number || `L${(idx + 1).toString().padStart(2, '0')}`,
         description: item.description,
-        contract_amount: item.total_amount || 0,
+        line_total: item.total_amount || 0,
         claim_method: (item.unit && item.quantity) ? 'quantity' : 'percentage',
         unit: item.unit || null,
         original_qty: item.quantity || null,
@@ -313,7 +313,7 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
     setScopeLines(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
   };
 
-  const totalScope = scopeLines.reduce((s, l) => s + (l.contract_amount || 0), 0);
+  const totalScope = scopeLines.reduce((s, l) => s + (l.line_total || 0), 0);
   const totalClaimed = scopeLines.reduce((s, l) => s + (l.amount_claimed_to_date || 0), 0);
   const totalBalance = totalScope - totalClaimed;
 
@@ -619,14 +619,14 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
                   </thead>
                   <tbody className="divide-y divide-slate-700/30">
                     {scopeLines.map(line => {
-                      const pct = line.contract_amount > 0 ? Math.round((line.amount_claimed_to_date / line.contract_amount) * 100) : 0;
+                      const pct = line.line_total > 0 ? Math.round((line.amount_claimed_to_date / line.line_total) * 100) : 0;
                       return (
                         <tr key={line.id} className="hover:bg-slate-700/20 transition-colors">
                           <td className="px-4 py-3">
                             <input
                               type="text"
-                              value={line.line_reference}
-                              onChange={e => updateScopeLine(line.id, { line_reference: e.target.value })}
+                              value={line.line_number}
+                              onChange={e => updateScopeLine(line.id, { line_number: e.target.value })}
                               disabled={selected.snapshot_locked}
                               className="w-16 bg-transparent border-0 text-gray-400 text-xs focus:bg-slate-900/60 focus:border focus:border-cyan-500 rounded px-1 py-0.5 disabled:cursor-default"
                             />
@@ -655,8 +655,8 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
                           <td className="px-4 py-3 text-right">
                             <input
                               type="number"
-                              value={line.contract_amount}
-                              onChange={e => updateScopeLine(line.id, { contract_amount: parseFloat(e.target.value) || 0 })}
+                              value={line.line_total}
+                              onChange={e => updateScopeLine(line.id, { line_total: parseFloat(e.target.value) || 0 })}
                               disabled={selected.snapshot_locked}
                               className="w-24 bg-transparent border-0 text-right text-white font-medium text-sm focus:bg-slate-900/60 focus:border focus:border-cyan-500 rounded px-1 py-0.5 disabled:cursor-default"
                             />
