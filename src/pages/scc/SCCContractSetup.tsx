@@ -34,10 +34,11 @@ interface ScopeLine {
   line_number: string;
   description: string;
   line_total: number;
+  qty_contract: number;
   claim_method: string;
   unit: string | null;
   original_qty: number | null;
-  unit_rate: number | null;
+  unit_rate: number;
   qty_claimed_to_date: number;
   pct_claimed_to_date: number;
   amount_claimed_to_date: number;
@@ -237,7 +238,8 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
         organisation_id: currentOrganisation.id,
         line_number: `L${(scopeLines.length + 1).toString().padStart(2, '0')}`,
         description: 'New scope line — click to edit',
-        line_total: 0,
+        qty_contract: 1,
+        unit_rate: 0,
         claim_method: 'percentage',
         pct_claimed_to_date: 0,
         amount_claimed_to_date: 0,
@@ -273,20 +275,26 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
         return;
       }
 
-      const toInsert = lineItems.map((item, idx) => ({
-        contract_id: selected.id,
-        organisation_id: currentOrganisation.id,
-        line_number: item.line_number || `L${(idx + 1).toString().padStart(2, '0')}`,
-        description: item.description,
-        line_total: item.total_amount || 0,
-        claim_method: (item.unit && item.quantity) ? 'quantity' : 'percentage',
-        unit: item.unit || null,
-        original_qty: item.quantity || null,
-        unit_rate: item.unit_rate || null,
-        pct_claimed_to_date: 0,
-        amount_claimed_to_date: 0,
-        qty_claimed_to_date: 0,
-      }));
+      const toInsert = lineItems.map((item, idx) => {
+        const hasQtyRate = item.unit_rate && item.quantity;
+        const qty = hasQtyRate ? (item.quantity || 1) : 1;
+        const rate = hasQtyRate ? (item.unit_rate || 0) : (item.total_amount || 0);
+        return {
+          contract_id: selected.id,
+          organisation_id: currentOrganisation.id,
+          line_number: item.line_number || `L${(idx + 1).toString().padStart(2, '0')}`,
+          description: item.description,
+          qty_contract: qty,
+          unit_rate: rate,
+          claim_method: hasQtyRate ? 'quantity' : 'percentage',
+          unit: item.unit || 'item',
+          original_qty: item.quantity || null,
+          source_quote_line_id: item.id || null,
+          pct_claimed_to_date: 0,
+          amount_claimed_to_date: 0,
+          qty_claimed_to_date: 0,
+        };
+      });
 
       const allInserted: ScopeLine[] = [];
       const BATCH = 50;
@@ -309,7 +317,9 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
   };
 
   const updateScopeLine = async (id: string, updates: Partial<ScopeLine>) => {
-    await supabase.from('scc_scope_lines').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', id);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { line_total: _generated, ...writable } = updates as ScopeLine & { line_total?: number };
+    await supabase.from('scc_scope_lines').update(writable).eq('id', id);
     setScopeLines(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
   };
 
@@ -655,9 +665,10 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
                           <td className="px-4 py-3 text-right">
                             <input
                               type="number"
-                              value={line.line_total}
-                              onChange={e => updateScopeLine(line.id, { line_total: parseFloat(e.target.value) || 0 })}
+                              value={line.unit_rate}
+                              onChange={e => updateScopeLine(line.id, { unit_rate: parseFloat(e.target.value) || 0 })}
                               disabled={selected.snapshot_locked}
+                              title="Rate (line total = qty × rate)"
                               className="w-24 bg-transparent border-0 text-right text-white font-medium text-sm focus:bg-slate-900/60 focus:border focus:border-cyan-500 rounded px-1 py-0.5 disabled:cursor-default"
                             />
                           </td>
