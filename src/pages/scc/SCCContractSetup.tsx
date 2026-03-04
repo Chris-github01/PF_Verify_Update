@@ -153,7 +153,12 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
   };
 
   const openDetail = async (contract: SCCContract) => {
-    setSelected(contract);
+    const { data: fresh } = await supabase
+      .from('scc_contracts')
+      .select('*')
+      .eq('id', contract.id)
+      .maybeSingle();
+    setSelected(fresh || contract);
     setView('detail');
     await loadScopeLines(contract.id);
   };
@@ -225,7 +230,7 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
 
   const addScopeLine = async () => {
     if (!selected || !currentOrganisation?.id) return;
-    const { data } = await supabase
+    const { data, error: insertErr } = await supabase
       .from('scc_scope_lines')
       .insert({
         contract_id: selected.id,
@@ -240,20 +245,27 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
       })
       .select()
       .single();
+    if (insertErr) { alert(`Failed to add scope line: ${insertErr.message}`); return; }
     if (data) setScopeLines(prev => [...prev, data]);
   };
 
   const generateFromImport = async () => {
-    if (!selected || !selected.quote_import_id || !currentOrganisation?.id) return;
+    if (!selected || !currentOrganisation?.id) return;
+    if (!selected.quote_import_id) {
+      alert('This contract has no linked quote import. Please create the contract from a locked quote import.');
+      return;
+    }
     setSaving(true);
     try {
-      const { data: lineItems } = await supabase
+      const { data: lineItems, error: fetchErr } = await supabase
         .from('scc_quote_line_items')
         .select('*')
         .eq('import_id', selected.quote_import_id)
         .eq('include_in_baseline', true)
         .eq('is_excluded', false)
         .order('created_at', { ascending: true });
+
+      if (fetchErr) throw fetchErr;
 
       if (!lineItems || lineItems.length === 0) {
         alert('No baseline line items found in the linked quote import. Make sure the quote is locked and lines are marked as included.');
@@ -276,14 +288,21 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
         qty_claimed_to_date: 0,
       }));
 
-      const { data: inserted } = await supabase
-        .from('scc_scope_lines')
-        .insert(toInsert)
-        .select();
+      const allInserted: ScopeLine[] = [];
+      const BATCH = 50;
+      for (let i = 0; i < toInsert.length; i += BATCH) {
+        const { data: batch, error: insertErr } = await supabase
+          .from('scc_scope_lines')
+          .insert(toInsert.slice(i, i + BATCH))
+          .select();
+        if (insertErr) throw insertErr;
+        if (batch) allInserted.push(...batch);
+      }
 
-      if (inserted) setScopeLines(prev => [...prev, ...inserted]);
-    } catch (e) {
-      alert('Failed to generate scope lines. Please try again.');
+      setScopeLines(prev => [...prev, ...allInserted]);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : JSON.stringify(e);
+      alert(`Failed to generate scope lines: ${msg}`);
     } finally {
       setSaving(false);
     }
