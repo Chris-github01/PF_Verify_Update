@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Lock, Plus, ChevronRight, RefreshCw, CheckCircle, AlertCircle,
   Briefcase, DollarSign, Calendar, Users, Percent, Settings2,
-  ArrowRight, Building2, Hash, FileText
+  ArrowRight, Building2, Hash, FileText, Sparkles
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
@@ -241,6 +241,52 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
       .select()
       .single();
     if (data) setScopeLines(prev => [...prev, data]);
+  };
+
+  const generateFromImport = async () => {
+    if (!selected || !selected.quote_import_id || !currentOrganisation?.id) return;
+    setSaving(true);
+    try {
+      const { data: lineItems } = await supabase
+        .from('scc_quote_line_items')
+        .select('*')
+        .eq('import_id', selected.quote_import_id)
+        .eq('include_in_baseline', true)
+        .eq('is_excluded', false)
+        .order('created_at', { ascending: true });
+
+      if (!lineItems || lineItems.length === 0) {
+        alert('No baseline line items found in the linked quote import. Make sure the quote is locked and lines are marked as included.');
+        setSaving(false);
+        return;
+      }
+
+      const toInsert = lineItems.map((item, idx) => ({
+        contract_id: selected.id,
+        organisation_id: currentOrganisation.id,
+        line_reference: item.line_number || `L${(idx + 1).toString().padStart(2, '0')}`,
+        description: item.description,
+        contract_amount: item.total_amount || 0,
+        claim_method: (item.unit && item.quantity) ? 'quantity' : 'percentage',
+        unit: item.unit || null,
+        original_qty: item.quantity || null,
+        unit_rate: item.unit_rate || null,
+        pct_claimed_to_date: 0,
+        amount_claimed_to_date: 0,
+        qty_claimed_to_date: 0,
+      }));
+
+      const { data: inserted } = await supabase
+        .from('scc_scope_lines')
+        .insert(toInsert)
+        .select();
+
+      if (inserted) setScopeLines(prev => [...prev, ...inserted]);
+    } catch (e) {
+      alert('Failed to generate scope lines. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateScopeLine = async (id: string, updates: Partial<ScopeLine>) => {
@@ -482,12 +528,24 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
               <div className="flex items-center gap-2">
                 {loadingScope && <RefreshCw size={14} className="animate-spin text-gray-400" />}
                 {!selected.snapshot_locked && (
-                  <button
-                    onClick={addScopeLine}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-cyan-400 hover:text-white hover:bg-cyan-500/10 rounded-lg transition-colors"
-                  >
-                    <Plus size={14} /> Add Line
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {selected.quote_import_id && scopeLines.length === 0 && (
+                      <button
+                        onClick={generateFromImport}
+                        disabled={saving}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {saving ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        Generate from Import
+                      </button>
+                    )}
+                    <button
+                      onClick={addScopeLine}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-cyan-400 hover:text-white hover:bg-cyan-500/10 rounded-lg transition-colors"
+                    >
+                      <Plus size={14} /> Add Line
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -495,15 +553,36 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
               <div className="flex flex-col items-center justify-center py-12 text-center px-6">
                 <FileText size={32} className="text-gray-600 mb-3" />
                 <p className="text-gray-400">No scope lines yet</p>
-                <p className="text-gray-500 text-xs mt-1">
-                  {selected.quote_import_id
-                    ? 'Scope lines can be auto-generated from your locked quote import.'
-                    : 'Add scope lines manually or import from a quote.'}
-                </p>
-                {!selected.snapshot_locked && (
-                  <button onClick={addScopeLine} className="mt-3 flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-sm rounded-lg transition-colors">
-                    <Plus size={14} /> Add First Scope Line
-                  </button>
+                {selected.quote_import_id ? (
+                  <>
+                    <p className="text-gray-500 text-xs mt-1 max-w-xs">
+                      Scope lines can be auto-generated from your locked quote import. All included baseline lines will be imported.
+                    </p>
+                    {!selected.snapshot_locked && (
+                      <div className="flex items-center gap-3 mt-4">
+                        <button
+                          onClick={generateFromImport}
+                          disabled={saving}
+                          className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+                        >
+                          {saving ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                          Generate from Import
+                        </button>
+                        <button onClick={addScopeLine} className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors">
+                          <Plus size={14} /> Add Manually
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-500 text-xs mt-1">Add scope lines manually or link a quote import.</p>
+                    {!selected.snapshot_locked && (
+                      <button onClick={addScopeLine} className="mt-3 flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-sm rounded-lg transition-colors">
+                        <Plus size={14} /> Add First Scope Line
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
