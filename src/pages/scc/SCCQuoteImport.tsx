@@ -59,7 +59,7 @@ function fmt(n: number | null): string {
   return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 }).format(n);
 }
 
-export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWorkflow?: (sentinelProjectId: string) => void } = {}) {
+export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWorkflow?: (sentinelProjectId: string, importId: string) => void } = {}) {
   const { currentOrganisation } = useOrganisation();
   const { currentTrade } = useTrade();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -500,7 +500,7 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
                       {saving ? 'Saving…' : 'Update Details'}
                     </button>
                     <button
-                      onClick={() => onProceedToWorkflow(sentinelProjectId)}
+                      onClick={() => onProceedToWorkflow(sentinelProjectId, selectedImport.id)}
                       className="w-full flex items-center justify-center gap-2 py-3 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold rounded-xl transition-colors"
                     >
                       Next: Review & Clean <ArrowRight size={15} />
@@ -776,7 +776,7 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
                     )}
                     {impIsActive && onProceedToWorkflow && sentinelProjectId && (
                       <button
-                        onClick={() => onProceedToWorkflow(sentinelProjectId)}
+                        onClick={() => onProceedToWorkflow(sentinelProjectId, imp.id)}
                         className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-cyan-500 hover:bg-cyan-600 rounded-lg transition-colors"
                       >
                         Next: Review & Clean <ArrowRight size={14} />
@@ -838,7 +838,7 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
                 </div>
               </div>
               <button
-                onClick={() => onProceedToWorkflow(sentinelProjectId)}
+                onClick={() => latestImport && onProceedToWorkflow(sentinelProjectId, latestImport.id)}
                 className="flex items-center gap-2 px-5 py-3 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-bold rounded-xl transition-colors whitespace-nowrap flex-shrink-0"
               >
                 Next: Review & Clean <ArrowRight size={16} />

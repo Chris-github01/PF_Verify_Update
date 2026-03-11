@@ -157,21 +157,32 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
     }
   };
 
-  const persistProgress = async (step: WorkflowStep, completed: Set<WorkflowStep>) => {
+  const persistProgress = async (
+    step: WorkflowStep,
+    completed: Set<WorkflowStep>,
+    importIdOverride?: string,
+  ) => {
     if (!currentOrganisation?.id) return;
+    const targetId = importIdOverride ?? latestImportId;
+    if (!targetId) {
+      console.warn('persistProgress: no latestImportId — skipping write');
+      return;
+    }
     try {
       const completedArr = Array.from(completed);
-      await supabase
+      const { error } = await supabase
         .from('scc_quote_imports')
         .update({
           scc_workflow_step: step,
           completed_steps: completedArr,
           updated_at: new Date().toISOString(),
         })
-        .eq('organisation_id', currentOrganisation.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-    } catch {
+        .eq('id', targetId);
+      if (error) {
+        console.error('persistProgress failed:', error.message);
+      }
+    } catch (err) {
+      console.error('persistProgress exception:', err);
     }
   };
 
@@ -194,11 +205,12 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
     }
   };
 
-  const handleProceedToWorkflow = (pid: string) => {
+  const handleProceedToWorkflow = (pid: string, importId?: string) => {
     setSentinelProjectId(pid);
+    if (importId) setLatestImportId(importId);
     const completed = markComplete('import');
     setCurrentStep('review_clean');
-    persistProgress('review_clean', completed);
+    persistProgress('review_clean', completed, importId ?? latestImportId ?? undefined);
   };
 
   const handleNext = (from: WorkflowStep) => {
