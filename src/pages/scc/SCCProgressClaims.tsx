@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Plus, RefreshCw, ChevronRight, Lock, CheckCircle, AlertTriangle,
   AlertCircle, Clock, TrendingUp, DollarSign, FileText, Send,
-  Percent, Hash, ArrowUpRight, ArrowDownRight, Calendar
+  Percent, Hash, ArrowUpRight, ArrowDownRight, Calendar, Info, X
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
@@ -93,6 +93,7 @@ function fmtDate(d: string | null): string {
 export default function SCCProgressClaims() {
   const { currentOrganisation } = useOrganisation();
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [dismissedIntro, setDismissedIntro] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [claims, setClaims] = useState<ClaimPeriod[]>([]);
   const [scopeLines, setScopeLines] = useState<ScopeLine[]>([]);
@@ -316,8 +317,13 @@ export default function SCCProgressClaims() {
           <div className="flex items-start gap-3 bg-red-900/20 border border-red-500/30 rounded-xl px-5 py-4">
             <AlertTriangle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-red-300 font-semibold text-sm">{overrunLines.length} line{overrunLines.length !== 1 ? 's' : ''} exceed contracted amount — Commercial Hold applied</p>
-              <p className="text-red-400/70 text-xs mt-0.5">These lines will trigger Early Warning Notices and cannot be certified until resolved.</p>
+              <p className="text-red-300 font-semibold text-sm">{overrunLines.length} line{overrunLines.length !== 1 ? 's' : ''} exceed the agreed contract amount</p>
+              <p className="text-red-200/80 text-xs mt-1 leading-relaxed">
+                <span className="font-semibold text-red-300">What this means:</span> You're claiming more than what was agreed for one or more line items. These are flagged as "Commercial Hold" — the main contractor will not certify them for payment until you agree on a revised amount or raise a variation.
+              </p>
+              <p className="text-red-400/70 text-xs mt-1.5">
+                <span className="font-semibold">What to do:</span> Raise an Early Warning or Variation for each red-flagged line, then re-submit this claim once agreed.
+              </p>
             </div>
           </div>
         )}
@@ -367,11 +373,26 @@ export default function SCCProgressClaims() {
               <thead>
                 <tr className="border-b border-slate-700/50 bg-slate-900/30">
                   <th className="text-left px-4 py-3 text-gray-400 font-medium">Scope Line</th>
-                  <th className="text-right px-4 py-3 text-gray-400 font-medium">Contract</th>
-                  <th className="text-right px-4 py-3 text-gray-400 font-medium">Prev Claimed</th>
-                  <th className="text-center px-4 py-3 text-gray-400 font-medium">This Period</th>
-                  <th className="text-right px-4 py-3 text-gray-400 font-medium">This Period $</th>
-                  <th className="text-right px-4 py-3 text-gray-400 font-medium">Cumulative</th>
+                  <th className="text-right px-4 py-3 text-gray-400 font-medium">
+                    <span>Contract Value</span>
+                    <p className="text-gray-600 text-xs font-normal">agreed amount</p>
+                  </th>
+                  <th className="text-right px-4 py-3 text-gray-400 font-medium">
+                    <span>Already Claimed</span>
+                    <p className="text-gray-600 text-xs font-normal">from earlier claims</p>
+                  </th>
+                  <th className="text-center px-4 py-3 text-gray-400 font-medium">
+                    <span>Claim This Month</span>
+                    <p className="text-gray-600 text-xs font-normal">enter % or qty</p>
+                  </th>
+                  <th className="text-right px-4 py-3 text-gray-400 font-medium">
+                    <span>Amount This Period</span>
+                    <p className="text-gray-600 text-xs font-normal">calculated for you</p>
+                  </th>
+                  <th className="text-right px-4 py-3 text-gray-400 font-medium">
+                    <span>Running Total</span>
+                    <p className="text-gray-600 text-xs font-normal">all claims to date</p>
+                  </th>
                   <th className="text-center px-4 py-3 text-gray-400 font-medium">Status</th>
                 </tr>
               </thead>
@@ -403,33 +424,39 @@ export default function SCCProgressClaims() {
                       </td>
                       <td className="px-4 py-4">
                         {isEditable ? (
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex flex-col items-center gap-1">
                             {scopeLine.claim_method === 'percentage' ? (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={100}
-                                  step={1}
-                                  value={bd.pct}
-                                  onChange={e => setBuilderData(prev => ({ ...prev, [scopeLine.id]: { ...prev[scopeLine.id] || { qty: 0 }, pct: parseFloat(e.target.value) || 0 } }))}
-                                  onBlur={() => saveClaimLine(scopeLine, bd.pct, bd.qty)}
-                                  className="w-16 text-right bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-white text-sm focus:border-cyan-500"
-                                />
-                                <Percent size={12} className="text-gray-500" />
-                              </div>
+                              <>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                    value={bd.pct}
+                                    onChange={e => setBuilderData(prev => ({ ...prev, [scopeLine.id]: { ...prev[scopeLine.id] || { qty: 0 }, pct: parseFloat(e.target.value) || 0 } }))}
+                                    onBlur={() => saveClaimLine(scopeLine, bd.pct, bd.qty)}
+                                    className="w-16 text-right bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-white text-sm focus:border-cyan-500"
+                                  />
+                                  <Percent size={12} className="text-gray-500" />
+                                </div>
+                                <p className="text-gray-600 text-xs text-center leading-tight">cumulative<br/>% complete</p>
+                              </>
                             ) : scopeLine.claim_method === 'quantity' ? (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={bd.qty}
-                                  onChange={e => setBuilderData(prev => ({ ...prev, [scopeLine.id]: { ...prev[scopeLine.id] || { pct: 0 }, qty: parseFloat(e.target.value) || 0 } }))}
-                                  onBlur={() => saveClaimLine(scopeLine, bd.pct, bd.qty)}
-                                  className="w-20 text-right bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-white text-sm focus:border-cyan-500"
-                                />
-                                <Hash size={12} className="text-gray-500" />
-                              </div>
+                              <>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={bd.qty}
+                                    onChange={e => setBuilderData(prev => ({ ...prev, [scopeLine.id]: { ...prev[scopeLine.id] || { pct: 0 }, qty: parseFloat(e.target.value) || 0 } }))}
+                                    onBlur={() => saveClaimLine(scopeLine, bd.pct, bd.qty)}
+                                    className="w-20 text-right bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-white text-sm focus:border-cyan-500"
+                                  />
+                                  <Hash size={12} className="text-gray-500" />
+                                </div>
+                                <p className="text-gray-600 text-xs text-center leading-tight">units installed<br/>this period</p>
+                              </>
                             ) : (
                               <button
                                 onClick={() => saveClaimLine(scopeLine, bd.pct > 0 ? 0 : 100, 0)}
@@ -521,7 +548,7 @@ export default function SCCProgressClaims() {
             <TrendingUp size={48} className="text-gray-600 mb-4 mx-auto" />
             <p className="text-white font-semibold text-lg mb-2">No claims yet</p>
             <p className="text-gray-400 text-sm max-w-sm mx-auto mb-6">
-              Create your first progress claim. The system will number it {selectedContract.payment_claim_prefix}1 and open the claim builder.
+              No claims yet for this contract. Click below to create your first one — the system will number it {selectedContract.payment_claim_prefix}1 and open the claim builder where you fill in this month's progress.
             </p>
             <button onClick={createClaim} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl font-medium transition-colors">
               <Plus size={18} /> Create {selectedContract.payment_claim_prefix}1
@@ -592,8 +619,43 @@ export default function SCCProgressClaims() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-white">Progress Claims</h2>
-        <p className="text-sm text-gray-400 mt-0.5">Step 3 — Build period-by-period payment claims</p>
+        <p className="text-sm text-gray-400 mt-0.5">Raise your monthly payment claim for each active contract</p>
       </div>
+
+      {!dismissedIntro && (
+        <div className="rounded-2xl border bg-blue-500/10 border-blue-500/20 p-5 flex gap-4">
+          <div className="w-8 h-8 rounded-lg bg-slate-800/60 flex items-center justify-center flex-shrink-0">
+            <Info size={16} className="text-blue-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-blue-300 mb-1">How to raise a progress claim</p>
+            <p className="text-slate-300 text-xs leading-relaxed mb-3">
+              Each month, you tell the system how much of each scope item you've completed — either as a percentage done or as a number of units installed. It automatically calculates the dollar amount, deducts retention, and generates your claim document ready to send.
+            </p>
+            <ol className="space-y-1">
+              {[
+                'Click a contract card below to open its claims list',
+                'Click "New Claim Period" to start the current month\'s claim',
+                'For each line item, enter the % complete or qty installed this period',
+                'Click "Recalculate" to update totals, then "Submit Claim" when ready',
+                'If any lines show red (overrun), you\'ll need to raise a variation first',
+              ].map((task, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                  <span className="font-bold flex-shrink-0 text-blue-300">{i + 1}.</span>
+                  {task}
+                </li>
+              ))}
+            </ol>
+          </div>
+          <button
+            onClick={() => setDismissedIntro(true)}
+            className="text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0 self-start"
+            title="Dismiss"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -604,7 +666,7 @@ export default function SCCProgressClaims() {
           <Lock size={40} className="text-gray-600 mb-4 mx-auto" />
           <p className="text-white font-semibold text-lg mb-2">No active contracts</p>
           <p className="text-gray-400 text-sm max-w-sm mx-auto">
-            Lock a contract in Contract Setup before raising progress claims.
+            Before you can raise a progress claim, you need to lock a contract in "Contract Setup". Locking it confirms the scope and agreed amounts — then you can start claiming each month.
           </p>
         </div>
       ) : (

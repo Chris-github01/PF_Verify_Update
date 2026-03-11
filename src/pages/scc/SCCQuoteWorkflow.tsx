@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload, Scissors, Sparkles, Grid3x3 as Grid3X3, CheckCircle, Loader2 } from 'lucide-react';
+import { Upload, Scissors, Sparkles, Grid3x3 as Grid3X3, CheckCircle, Loader2, X, Info } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 import SCCQuoteImport from './SCCQuoteImport';
@@ -10,11 +10,62 @@ import ScopeMatrix from '../ScopeMatrix';
 type WorkflowStep = 'import' | 'review_clean' | 'quote_intelligence' | 'scope_matrix';
 
 const STEPS: { id: WorkflowStep; label: string; desc: string; icon: React.ComponentType<{ size: number; className?: string }> }[] = [
-  { id: 'import',            label: 'Quote Import',       desc: 'Parse & establish baseline',  icon: Upload },
-  { id: 'review_clean',      label: 'Review & Clean',     desc: 'Normalise & map items',        icon: Scissors },
-  { id: 'quote_intelligence',label: 'Quote Intelligence', desc: 'AI-powered analysis',          icon: Sparkles },
-  { id: 'scope_matrix',      label: 'Scope Matrix',       desc: 'Compare & validate scope',     icon: Grid3X3 },
+  { id: 'import',             label: 'Quote Import',       desc: 'Parse & establish baseline',  icon: Upload },
+  { id: 'review_clean',       label: 'Review & Clean',     desc: 'Tidy up line items',           icon: Scissors },
+  { id: 'quote_intelligence', label: 'Quote Intelligence', desc: 'AI-powered analysis',          icon: Sparkles },
+  { id: 'scope_matrix',       label: 'Scope Matrix',       desc: 'Compare & validate scope',     icon: Grid3X3 },
 ];
+
+const STEP_INTROS: Record<WorkflowStep, { title: string; what: string; tasks: string[]; color: string; bg: string }> = {
+  import: {
+    title: 'Upload your subcontractor\'s quote',
+    what: 'The AI reads your quote document and extracts every line item automatically. You then review the items, toggle any you want to exclude, and set it as your active baseline.',
+    tasks: [
+      'Upload a PDF, Excel (.xlsx), or CSV file',
+      'Wait for the AI to finish parsing (usually under a minute)',
+      'Check the items look right — toggle off anything you want to exclude',
+      'Click "Set as Active Baseline" to lock in the scope',
+    ],
+    color: 'text-cyan-300',
+    bg: 'bg-cyan-500/10 border-cyan-500/20',
+  },
+  review_clean: {
+    title: 'Tidy up the extracted line items',
+    what: 'This step normalises the data — fixing unit spellings, grouping items into standard categories, and flagging anything that looks unusual. Click "Smart Clean" to run it automatically.',
+    tasks: [
+      'Click "Smart Clean" to automatically fix units and categorise items',
+      'Review any items flagged in red — they may need your attention',
+      'Edit individual line descriptions if anything is unclear',
+      'Click "Next" when you\'re happy with the result',
+    ],
+    color: 'text-blue-300',
+    bg: 'bg-blue-500/10 border-blue-500/20',
+  },
+  quote_intelligence: {
+    title: 'Get an AI analysis of the quote',
+    what: 'The AI summarises the quote for you — highlighting risks, identifying unusual pricing, and flagging items that might cause problems down the track. Useful to share with your PM.',
+    tasks: [
+      'Review the AI\'s summary of the quote',
+      'Check the risk flags — red items need your attention',
+      'Note any items marked as unusual or high-value',
+      'Click "Next" to continue, or "Back" to revisit previous steps',
+    ],
+    color: 'text-amber-300',
+    bg: 'bg-amber-500/10 border-amber-500/20',
+  },
+  scope_matrix: {
+    title: 'Check how the scope maps to standard categories',
+    what: 'This view shows how every line item in the quote maps to standard construction work categories. It\'s a way to confirm you\'ve been awarded the full scope and nothing important is missing.',
+    tasks: [
+      'Select the quotes you want to compare',
+      'Click "Generate Scope Matrix" to build the comparison',
+      'Look for any gaps — grey cells mean that category isn\'t covered',
+      'Export to Excel if you want to share the comparison with your team',
+    ],
+    color: 'text-emerald-300',
+    bg: 'bg-emerald-500/10 border-emerald-500/20',
+  },
+};
 
 const STEP_ORDER: WorkflowStep[] = ['import', 'review_clean', 'quote_intelligence', 'scope_matrix'];
 
@@ -24,6 +75,7 @@ export default function SCCQuoteWorkflow() {
   const [sentinelProjectId, setSentinelProjectId] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(true);
   const [completedSteps, setCompletedSteps] = useState<Set<WorkflowStep>>(new Set());
+  const [dismissedIntros, setDismissedIntros] = useState<Set<WorkflowStep>>(new Set());
 
   useEffect(() => {
     if (currentOrganisation?.id) {
@@ -48,6 +100,10 @@ export default function SCCQuoteWorkflow() {
 
   const markComplete = (step: WorkflowStep) => {
     setCompletedSteps(prev => new Set([...prev, step]));
+  };
+
+  const dismissIntro = (step: WorkflowStep) => {
+    setDismissedIntros(prev => new Set([...prev, step]));
   };
 
   const goToStep = (step: WorkflowStep) => {
@@ -80,6 +136,8 @@ export default function SCCQuoteWorkflow() {
   };
 
   const currentStepIdx = STEP_ORDER.indexOf(currentStep);
+  const intro = STEP_INTROS[currentStep];
+  const showIntro = !dismissedIntros.has(currentStep);
 
   return (
     <div className="flex flex-col h-full">
@@ -137,6 +195,34 @@ export default function SCCQuoteWorkflow() {
           </div>
         ) : (
           <>
+            {/* Step intro card — shown until dismissed */}
+            {showIntro && (
+              <div className={`mx-6 mt-5 rounded-2xl border ${intro.bg} p-5 flex gap-4`}>
+                <div className="w-8 h-8 rounded-lg bg-slate-800/60 flex items-center justify-center flex-shrink-0">
+                  <Info size={16} className={intro.color} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${intro.color} mb-1`}>{intro.title}</p>
+                  <p className="text-slate-300 text-xs leading-relaxed mb-3">{intro.what}</p>
+                  <ol className="space-y-1">
+                    {intro.tasks.map((task, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                        <span className={`font-bold flex-shrink-0 ${intro.color}`}>{i + 1}.</span>
+                        {task}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+                <button
+                  onClick={() => dismissIntro(currentStep)}
+                  className="text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0 self-start"
+                  title="Dismiss"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
             {currentStep === 'import' && (
               <div className="p-6">
                 <SCCQuoteImport

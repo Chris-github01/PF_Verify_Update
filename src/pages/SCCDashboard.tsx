@@ -18,6 +18,10 @@ import {
   Zap,
   ShieldAlert,
   Receipt,
+  Rocket,
+  PlayCircle,
+  Send,
+  ThumbsUp,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
@@ -289,6 +293,114 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
         <>
           {/* Overview */}
           {activeView === 'overview' && (
+            <div className="space-y-6">
+            {/* ── Smart "What's Next" Guidance Panel ── */}
+            {(() => {
+              const lockedContracts = contracts.filter(c => c.snapshot_locked);
+              const unlockedContracts = contracts.filter(c => !c.snapshot_locked);
+              const draftClaims = recentClaims.filter(c => c.status === 'draft');
+              const submittedClaims = recentClaims.filter(c => ['submitted', 'under_review'].includes(c.status));
+
+              type GuidanceState = 'no_contract' | 'need_lock' | 'need_claim' | 'claim_in_draft' | 'all_good';
+              let state: GuidanceState = 'all_good';
+              if (contracts.length === 0) state = 'no_contract';
+              else if (unlockedContracts.length > 0 && lockedContracts.length === 0) state = 'need_lock';
+              else if (lockedContracts.length > 0 && recentClaims.length === 0) state = 'need_claim';
+              else if (draftClaims.length > 0) state = 'claim_in_draft';
+
+              const config = {
+                no_contract: {
+                  icon: Rocket,
+                  badge: 'Start Here',
+                  badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+                  borderColor: 'border-cyan-500/30',
+                  bg: 'bg-cyan-500/5',
+                  title: 'Step 1 — Import your awarded quote',
+                  body: 'To get started, upload the PDF or Excel quote you received from your subcontractor. The AI will read through it and pull out all the line items automatically — no manual typing needed.',
+                  tip: 'Tip: You can upload a PDF, Excel spreadsheet, or CSV file. Most supplier quotes work straight away.',
+                  action: 'Import Your First Quote',
+                  onClick: () => onNavigate?.('scc-quote-import'),
+                },
+                need_lock: {
+                  icon: Lock,
+                  badge: 'Action Needed',
+                  badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+                  borderColor: 'border-amber-500/30',
+                  bg: 'bg-amber-500/5',
+                  title: 'Step 2 — Lock your contract snapshot',
+                  body: `Your contract "${unlockedContracts[0]?.contract_name || 'contract'}" is set up but not yet locked. Locking confirms your awarded scope and price — this becomes the official record that all future claims are measured against. You can't create a claim until this is done.`,
+                  tip: 'Tip: Locking is permanent, so make sure the scope lines and value look correct first.',
+                  action: 'Go to Contract Setup',
+                  onClick: () => onNavigate?.('scc-quote-import'),
+                },
+                need_claim: {
+                  icon: PlayCircle,
+                  badge: "You're Ready to Claim",
+                  badgeColor: 'bg-green-500/20 text-green-300 border-green-500/30',
+                  borderColor: 'border-green-500/30',
+                  bg: 'bg-green-500/5',
+                  title: 'Step 3 — Create your first progress claim',
+                  body: `Your contract is locked and ready. Now you can start claiming! Create "PC1" for the first period you've worked. Enter the percentage of each scope item you've completed and the system calculates everything else.`,
+                  tip: 'Tip: Most contracts claim monthly. Enter the % done for each line — e.g. "Sprinkler heads: 40% complete."',
+                  action: 'Create PC1',
+                  onClick: () => onNavigate?.('scc-claims'),
+                },
+                claim_in_draft: {
+                  icon: Send,
+                  badge: 'Draft Ready to Submit',
+                  badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+                  borderColor: 'border-blue-500/30',
+                  bg: 'bg-blue-500/5',
+                  title: `Submit your pending claim — ${draftClaims[0]?.period_name || 'draft'}`,
+                  body: `You have a draft claim ready to go. Once you've entered the % complete or quantities for each line, click "Submit Claim" to formally lodge it. This creates a locked record that the head contractor will certify against.`,
+                  tip: 'Tip: Double-check your quantities before submitting — once submitted, you need to raise a variation to make changes.',
+                  action: 'Go to Progress Claims',
+                  onClick: () => onNavigate?.('scc-claims'),
+                },
+                all_good: {
+                  icon: ThumbsUp,
+                  badge: "You're on Track",
+                  badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+                  borderColor: 'border-emerald-500/30',
+                  bg: 'bg-emerald-500/5',
+                  title: submittedClaims.length > 0 ? `${submittedClaims.length} claim${submittedClaims.length > 1 ? 's' : ''} awaiting certification` : 'Contract is up to date',
+                  body: submittedClaims.length > 0
+                    ? 'Your claims are submitted and waiting for the head contractor to certify them. Once certified, mark them as paid to keep your records current.'
+                    : 'No immediate action required. Create a new claim period when you are ready to claim for the next period of work.',
+                  tip: 'Tip: Keep your retention tracking up to date so you know how much money is being held back.',
+                  action: submittedClaims.length > 0 ? 'View Submitted Claims' : 'View Claims',
+                  onClick: () => onNavigate?.('scc-claims'),
+                },
+              }[state];
+
+              const Icon = config.icon;
+              return (
+                <div className={`rounded-2xl border ${config.borderColor} ${config.bg} p-5`}>
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800/60 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Icon size={18} className="text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${config.badgeColor}`}>
+                          {config.badge}
+                        </span>
+                        <h3 className="text-white font-semibold text-sm">{config.title}</h3>
+                      </div>
+                      <p className="text-gray-300 text-sm leading-relaxed mb-2">{config.body}</p>
+                      <p className="text-gray-500 text-xs">{config.tip}</p>
+                    </div>
+                    <button
+                      onClick={config.onClick}
+                      className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/15 text-white text-sm font-medium rounded-xl transition-colors flex-shrink-0 border border-white/10"
+                    >
+                      {config.action} <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Active Contracts */}
               <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
@@ -402,27 +514,72 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                 </div>
               )}
 
-              {/* Workflow Guide */}
+              {/* Workflow Guide — clickable tiles */}
               <div className={`${earlyWarnings.length > 0 ? '' : 'lg:col-span-2'} bg-slate-800/50 border border-slate-700/50 rounded-xl p-5`}>
-                <h3 className="font-semibold text-white mb-4">SCC Workflow — Award to Payment</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <h3 className="font-semibold text-white mb-1">How the SCC workflow works</h3>
+                <p className="text-xs text-gray-500 mb-4">Click any step to jump straight there.</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
-                    { step: '01', title: 'Contract Setup',   desc: 'Import approved quote, lock the contract snapshot as baseline truth', icon: Lock,        color: 'text-cyan-400',   bg: 'bg-cyan-500/20'   },
-                    { step: '02', title: 'Base Tracker',     desc: 'Scope lines auto-created from locked schedule — claim method & rules set', icon: Layers,     color: 'text-blue-400',   bg: 'bg-blue-500/20'   },
-                    { step: '03', title: 'Progress Claims',  desc: 'Build claim period by period — % complete, qty, evidence attached', icon: TrendingUp,   color: 'text-green-400',  bg: 'bg-green-500/20'  },
-                    { step: '04', title: 'Governance',       desc: 'Overrun = auto Early Warning. Commercial Hold until VO approved.', icon: ShieldAlert,  color: 'text-red-400',    bg: 'bg-red-500/20'    },
+                    {
+                      step: '01',
+                      title: 'Import Quote',
+                      plain: 'Upload your subcontractor\'s quote. AI reads the line items for you.',
+                      icon: Lock,
+                      color: 'text-cyan-400',
+                      bg: 'bg-cyan-500/20',
+                      hoverBorder: 'hover:border-cyan-500/50',
+                      navigate: () => onNavigate?.('scc-quote-import'),
+                    },
+                    {
+                      step: '02',
+                      title: 'Lock Contract',
+                      plain: 'Confirm the scope and value. This becomes the official baseline.',
+                      icon: Layers,
+                      color: 'text-blue-400',
+                      bg: 'bg-blue-500/20',
+                      hoverBorder: 'hover:border-blue-500/50',
+                      navigate: () => onNavigate?.('scc-quote-import'),
+                    },
+                    {
+                      step: '03',
+                      title: 'Claim Each Month',
+                      plain: 'Enter % complete per line. System calculates what you\'re owed.',
+                      icon: TrendingUp,
+                      color: 'text-green-400',
+                      bg: 'bg-green-500/20',
+                      hoverBorder: 'hover:border-green-500/50',
+                      navigate: () => onNavigate?.('scc-claims'),
+                    },
+                    {
+                      step: '04',
+                      title: 'Watch for Warnings',
+                      plain: 'If you claim more than the contract allows, the system alerts you.',
+                      icon: ShieldAlert,
+                      color: 'text-red-400',
+                      bg: 'bg-red-500/20',
+                      hoverBorder: 'hover:border-red-500/50',
+                      navigate: () => setActiveView('early_warning'),
+                    },
                   ].map(item => (
-                    <div key={item.step}>
-                      <div className={`w-10 h-10 ${item.bg} rounded-xl flex items-center justify-center mb-3`}>
-                        <item.icon size={20} className={item.color} />
+                    <button
+                      key={item.step}
+                      onClick={item.navigate}
+                      className={`text-left p-4 rounded-xl border border-slate-700/50 bg-slate-900/30 ${item.hoverBorder} hover:bg-slate-800/50 transition-all group`}
+                    >
+                      <div className={`w-9 h-9 ${item.bg} rounded-xl flex items-center justify-center mb-3`}>
+                        <item.icon size={18} className={item.color} />
                       </div>
                       <p className="text-xs text-gray-500 font-mono mb-1">STEP {item.step}</p>
-                      <p className="font-semibold text-white text-sm mb-1">{item.title}</p>
-                      <p className="text-xs text-gray-400 leading-relaxed">{item.desc}</p>
-                    </div>
+                      <p className="font-semibold text-white text-sm mb-1.5">{item.title}</p>
+                      <p className="text-xs text-gray-400 leading-relaxed">{item.plain}</p>
+                      <p className={`text-xs ${item.color} mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1`}>
+                        Go here <ChevronRight size={11} />
+                      </p>
+                    </button>
                   ))}
                 </div>
               </div>
+            </div>
             </div>
           )}
 
