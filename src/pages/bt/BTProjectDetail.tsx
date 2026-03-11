@@ -1,10 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  ChevronLeft, LayoutDashboard, List, TrendingUp, FileText,
-  RefreshCw, Paperclip, Activity, Lock, Unlock, Plus, Trash2,
-  Save, Edit3, AlertTriangle, CheckCircle, Download, FileSpreadsheet,
-  Upload, Eye
-} from 'lucide-react';
+import { ChevronLeft, LayoutDashboard, List, TrendingUp, FileText, RefreshCw, Paperclip, Activity, Lock, Unlock, Plus, Trash2, Save, CreditCard as Edit3, AlertTriangle, CheckCircle, Download, FileSpreadsheet, Upload, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 import type {
