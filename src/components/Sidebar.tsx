@@ -45,6 +45,7 @@ export type SidebarTab =
   | 'settings'
   | 'scc'
   | 'scc-quote-import'
+  | 'scc-base-tracker'
   | 'scc-claims'
   | 'scc-retention'
   | 'scc-variations'
@@ -92,9 +93,10 @@ const subContractorMenu = [
   {
     section: 'SCC: SUBCONTRACT COMMERCIAL CONTROL',
     items: [
-      { id: 'scc' as SidebarTab,              label: 'SCC Dashboard',         icon: Layers     },
-      { id: 'scc-quote-import' as SidebarTab, label: 'Quote Import',          icon: FileText   },
-      { id: 'scc-claims' as SidebarTab,       label: 'Payment Claims',        icon: TrendingUp },
+      { id: 'scc' as SidebarTab,               label: 'SCC Dashboard',         icon: Layers     },
+      { id: 'scc-quote-import' as SidebarTab,  label: 'Quote Import',          icon: FileText   },
+      { id: 'scc-base-tracker' as SidebarTab,  label: 'Base Tracker',          icon: BookOpen   },
+      { id: 'scc-claims' as SidebarTab,        label: 'Payment Claims',        icon: TrendingUp },
       { id: 'scc-retention' as SidebarTab,    label: 'Retention & Materials', icon: DollarSign },
       { id: 'scc-variations' as SidebarTab,   label: 'Variation Register',    icon: RefreshCw  },
     ]

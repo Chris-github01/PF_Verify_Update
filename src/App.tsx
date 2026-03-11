@@ -814,7 +814,10 @@ function AppContent() {
         return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
 
       case 'scc-quote-import':
-        return <SCCQuoteWorkflow onFinish={() => setActiveTab('scc')} />;
+        return <SCCQuoteWorkflow onFinish={() => setActiveTab('scc-base-tracker')} />;
+
+      case 'scc-base-tracker':
+        return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
 
 
       case 'scc-claims':
