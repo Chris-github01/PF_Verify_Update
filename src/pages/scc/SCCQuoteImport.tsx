@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Upload, CheckCircle, Clock,
   ChevronRight, Eye, RefreshCw, ToggleLeft, ToggleRight,
-  Loader2, Package, ArrowRight
+  Loader2, Package, ArrowRight, FileText, Zap, ClipboardList, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
@@ -53,19 +53,6 @@ interface ParsingJob {
   filename: string;
   updated_at: string;
 }
-
-const STATUS_CONFIG: Record<string, {
-  label: string;
-  color: string;
-  bg: string;
-  icon: React.ComponentType<{ size: number; className?: string }>;
-}> = {
-  uploaded:  { label: 'Uploaded',  color: 'text-gray-300',   bg: 'bg-gray-500/20',   icon: Clock },
-  parsing:   { label: 'Parsing…',  color: 'text-yellow-300', bg: 'bg-yellow-500/20', icon: RefreshCw },
-  parsed:    { label: 'Parsed',    color: 'text-blue-300',   bg: 'bg-blue-500/20',   icon: Eye },
-  reviewed:  { label: 'Active Baseline', color: 'text-green-300', bg: 'bg-green-500/20', icon: CheckCircle },
-  locked:    { label: 'Active Baseline', color: 'text-green-300', bg: 'bg-green-500/20', icon: CheckCircle },
-};
 
 function fmt(n: number | null): string {
   if (n === null || n === undefined) return '—';
@@ -375,30 +362,44 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
     .filter(l => l.include_in_baseline && !l.is_excluded)
     .reduce((s, l) => s + (l.total_amount || 0), 0);
 
+  const latestImport = imports[0] ?? null;
+  const latestJob = latestImport ? activeJobs[latestImport.id] : null;
+  const isParsing = latestImport?.status === 'parsing' || !!(latestJob && (latestJob.status === 'pending' || latestJob.status === 'processing'));
+  const isParsed = latestImport?.status === 'parsed';
+  const isActive = latestImport?.status === 'reviewed' || latestImport?.status === 'locked';
+
   if (view === 'review' && selectedImport) {
-    const cfg = STATUS_CONFIG[selectedImport.status] || STATUS_CONFIG.uploaded;
     const activeJob = activeJobs[selectedImport.id];
-    const isParsing = selectedImport.status === 'parsing' || !!activeJob;
-    const isActive = selectedImport.status === 'reviewed' || selectedImport.status === 'locked';
+    const reviewIsParsing = selectedImport.status === 'parsing' || !!activeJob;
+    const reviewIsActive = selectedImport.status === 'reviewed' || selectedImport.status === 'locked';
 
     return (
       <div className="space-y-6">
+        {/* Header with back button */}
         <div className="flex items-center gap-3">
-          <button onClick={() => { setView('list'); if (pollingRef.current) clearInterval(pollingRef.current); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1">
-            <ChevronRight size={16} className="rotate-180" /> Back
+          <button
+            onClick={() => { setView('list'); if (pollingRef.current) clearInterval(pollingRef.current); }}
+            className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-700/40 transition-colors"
+          >
+            <ChevronRight size={16} className="rotate-180" /> Back to list
           </button>
           <span className="text-gray-600">/</span>
-          <span className="text-white font-medium">{selectedImport.file_name}</span>
-          <span className={`text-xs px-2 py-0.5 rounded ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+          <span className="text-white font-medium truncate">{selectedImport.file_name}</span>
+          {reviewIsActive && (
+            <span className="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-300 flex-shrink-0 flex items-center gap-1">
+              <CheckCircle size={11} /> Active Baseline
+            </span>
+          )}
         </div>
 
-        {isParsing && activeJob && (
+        {/* Parsing progress */}
+        {reviewIsParsing && activeJob && (
           <div className="flex items-center gap-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-5 py-4">
             <Loader2 size={20} className="text-yellow-400 animate-spin flex-shrink-0" />
             <div className="flex-1">
-              <p className="text-yellow-300 font-semibold text-sm">Parsing in progress — {activeJob.progress}%</p>
+              <p className="text-yellow-300 font-semibold text-sm">AI is reading your quote — {activeJob.progress}%</p>
               <p className="text-yellow-400/70 text-xs mt-0.5">
-                Using the same AI parsing engine as the main quote audit platform. This may take 15–60 seconds.
+                This usually takes 15–60 seconds. Line items will appear automatically when done.
               </p>
               <div className="mt-2 w-full bg-yellow-900/30 rounded-full h-1.5">
                 <div
@@ -410,10 +411,29 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
           </div>
         )}
 
+        {/* What to do on this screen */}
+        {!reviewIsParsing && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-5 py-4 flex gap-3">
+            <AlertCircle size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-blue-300 text-sm font-semibold mb-1">
+                {reviewIsActive ? 'This quote is your active baseline' : 'Review the line items, then confirm as your baseline'}
+              </p>
+              <p className="text-blue-300/70 text-xs">
+                {reviewIsActive
+                  ? 'You can still toggle individual items on/off at any time. When ready, click "Next: Review & Clean" below.'
+                  : 'Toggle off any items you want to exclude from your contract baseline, fill in the details on the left, then click "Confirm as Active Baseline".'}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left panel */}
           <div className="space-y-4">
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-              <h3 className="font-semibold text-white mb-4">Quote Details</h3>
+              <h3 className="font-semibold text-white mb-1">Quote Details</h3>
+              <p className="text-xs text-gray-500 mb-4">Fill these in to help identify this quote later</p>
               <div className="space-y-3">
                 {[
                   { key: 'main_contractor', label: 'Main Contractor' },
@@ -432,11 +452,6 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
                   </div>
                 ))}
               </div>
-              {!isParsing && (
-                <button onClick={saveMeta} disabled={saving} className="mt-4 w-full py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
-                  {saving ? 'Saving…' : isActive ? 'Update Details' : 'Save & Set as Active Baseline'}
-                </button>
-              )}
             </div>
 
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
@@ -444,61 +459,81 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Total Lines</span>
-                  <span className="text-white font-medium">{isParsing ? '…' : lineItems.length}</span>
+                  <span className="text-white font-medium">{reviewIsParsing ? '…' : lineItems.length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Included</span>
-                  <span className="text-green-400 font-medium">{isParsing ? '…' : includedCount}</span>
+                  <span className="text-green-400 font-medium">{reviewIsParsing ? '…' : includedCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Excluded</span>
-                  <span className="text-red-400 font-medium">{isParsing ? '…' : lineItems.length - includedCount}</span>
+                  <span className="text-red-400 font-medium">{reviewIsParsing ? '…' : lineItems.length - includedCount}</span>
                 </div>
                 <div className="border-t border-slate-700/50 pt-2 flex justify-between">
                   <span className="text-gray-400">Baseline Value</span>
-                  <span className="text-cyan-400 font-bold">{isParsing ? '…' : fmt(includedTotal)}</span>
+                  <span className="text-cyan-400 font-bold">{reviewIsParsing ? '…' : fmt(includedTotal)}</span>
                 </div>
               </div>
-              {isActive && (
-                <>
-                  <div className="mt-3 flex items-center gap-2 text-green-400 text-xs">
-                    <CheckCircle size={13} />
-                    <span>Active baseline — adjustable at any time</span>
-                  </div>
-                  {onProceedToWorkflow && sentinelProjectId && (
+            </div>
+
+            {/* Primary CTA */}
+            {!reviewIsParsing && (
+              <div className="space-y-3">
+                {!reviewIsActive && (
+                  <button
+                    onClick={saveMeta}
+                    disabled={saving}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                    {saving ? 'Saving…' : 'Confirm as Active Baseline'}
+                  </button>
+                )}
+
+                {reviewIsActive && onProceedToWorkflow && sentinelProjectId && (
+                  <>
+                    <button
+                      onClick={saveMeta}
+                      disabled={saving}
+                      className="w-full py-2 text-sm text-gray-400 hover:text-white border border-slate-700 hover:border-slate-500 rounded-xl transition-colors"
+                    >
+                      {saving ? 'Saving…' : 'Update Details'}
+                    </button>
                     <button
                       onClick={() => onProceedToWorkflow(sentinelProjectId)}
-                      className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold rounded-xl transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold rounded-xl transition-colors"
                     >
-                      Continue to Review &amp; Clean <ArrowRight size={15} />
+                      Next: Review & Clean <ArrowRight size={15} />
                     </button>
-                  )}
-                </>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
+          {/* Right panel — line items */}
           <div className="lg:col-span-2 bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
-              <h3 className="font-semibold text-white">Parsed Line Items</h3>
+              <div>
+                <h3 className="font-semibold text-white">Parsed Line Items</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Toggle the switch to include or exclude each line from your baseline</p>
+              </div>
               <div className="flex items-center gap-2">
-                {(loadingLines || isParsing) && <Loader2 size={16} className="animate-spin text-cyan-400" />}
-                {!isParsing && lineItems.length > 0 && !loadingLines && (
+                {(loadingLines || reviewIsParsing) && <Loader2 size={16} className="animate-spin text-cyan-400" />}
+                {!reviewIsParsing && lineItems.length > 0 && !loadingLines && (
                   <span className="text-xs text-gray-500">{lineItems.length} items</span>
                 )}
               </div>
             </div>
 
-            {isParsing ? (
+            {reviewIsParsing ? (
               <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-                <div className="relative mb-6">
-                  <div className="w-16 h-16 bg-yellow-500/10 rounded-2xl flex items-center justify-center">
-                    <Loader2 size={32} className="text-yellow-400 animate-spin" />
-                  </div>
+                <div className="w-16 h-16 bg-yellow-500/10 rounded-2xl flex items-center justify-center mb-6">
+                  <Loader2 size={32} className="text-yellow-400 animate-spin" />
                 </div>
                 <p className="text-white font-semibold text-lg mb-2">AI Parsing in Progress</p>
                 <p className="text-gray-400 text-sm max-w-sm">
-                  The quote is being parsed using VerifyTrade's AI extraction engine. Line items will appear here automatically once complete.
+                  The quote is being read by the AI. Line items will appear here automatically — no need to refresh.
                 </p>
                 <div className="mt-4 text-xs text-gray-600">
                   {activeJob?.progress || 0}% complete
@@ -585,91 +620,39 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-white">Quote Import</h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {imports[0]?.status === 'parsing' ? 'AI is parsing your quote' :
-             imports[0]?.status === 'parsed' ? 'Review and adjust the extracted line items' :
-             imports[0]?.status === 'reviewed' || imports[0]?.status === 'locked' ? 'Active baseline set — proceed to Review & Clean' :
-             'Import your awarded quote as the contract baseline'}
-          </p>
-        </div>
-        {onProceedToWorkflow && sentinelProjectId && (imports[0]?.status === 'reviewed' || imports[0]?.status === 'locked') && (
-          <button
-            onClick={() => onProceedToWorkflow(sentinelProjectId)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold rounded-xl transition-colors flex-shrink-0"
-          >
-            Review &amp; Clean <ArrowRight size={15} />
-          </button>
-        )}
+      {/* Page title */}
+      <div>
+        <h2 className="text-xl font-bold text-white">Step 1 of 3 — Import Your Quote</h2>
+        <p className="text-sm text-gray-400 mt-1">
+          Upload the subcontractor's quote. The AI will extract every line item automatically.
+        </p>
       </div>
 
-      {/* Workflow Steps Banner */}
-      {(() => {
-        const latestImport = imports[0] ?? null;
-        const statusToStep: Record<string, number> = {
-          uploaded: 1, parsing: 2, parsed: 3, reviewed: 4, locked: 4,
-        };
-        const currentStep = latestImport ? (statusToStep[latestImport.status] ?? 1) : 1;
-        const steps = [
-          { num: 1, label: 'Import Quote',    desc: 'Upload PDF or Excel' },
-          { num: 2, label: 'AI Parsing',       desc: 'Auto-extract line items' },
-          { num: 3, label: 'Review Lines',     desc: 'Check & adjust data' },
-          { num: 4, label: 'Active Baseline',  desc: 'Flexible baseline set' },
-        ];
-        const handleStepClick = (stepNum: number) => {
-          if (!latestImport) return;
-          if (stepNum === 1) { setView('list'); return; }
-          if (stepNum <= currentStep) {
-            setSelectedImport(latestImport);
-            setEditingMeta({
-              main_contractor: latestImport.main_contractor || '',
-              project_name: latestImport.project_name || '',
-              quote_reference: latestImport.quote_reference || '',
-              trade_type: latestImport.trade_type || '',
-            });
-            setView('review');
-          }
-        };
-        return (
-          <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-5">
-            <div className="flex items-center gap-6 overflow-x-auto pb-1">
-              {steps.map((step, i) => {
-                const isActive = step.num === currentStep;
-                const isCompleted = step.num < currentStep;
-                const isClickable = latestImport && step.num <= currentStep;
-                return (
-                  <div key={step.num} className="flex items-center gap-4 flex-shrink-0">
-                    <button
-                      onClick={() => handleStepClick(step.num)}
-                      disabled={!isClickable}
-                      className={`flex items-center gap-3 text-left transition-opacity ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default opacity-40'}`}
-                    >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-                        isActive ? 'bg-cyan-500 text-white' :
-                        isCompleted ? 'bg-cyan-800 text-cyan-300' :
-                        'bg-slate-700 text-gray-500'
-                      }`}>
-                        {isCompleted ? <CheckCircle size={16} /> : step.num}
-                      </div>
-                      <div>
-                        <p className={`text-sm font-medium ${isActive ? 'text-white' : isCompleted ? 'text-cyan-400' : 'text-gray-500'}`}>{step.label}</p>
-                        <p className="text-xs text-gray-600">{step.desc}</p>
-                      </div>
-                    </button>
-                    {i < steps.length - 1 && <ChevronRight size={16} className="text-gray-700 flex-shrink-0" />}
-                  </div>
-                );
-              })}
+      {/* How it works — only shown when no imports yet */}
+      {!loading && imports.length === 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            { icon: Upload, label: '1. Upload', desc: 'Upload any PDF, Excel, or CSV quote file', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+            { icon: Zap, label: '2. AI Reads It', desc: 'The AI extracts every line item automatically', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+            { icon: ClipboardList, label: '3. Review & Confirm', desc: 'Toggle items, then confirm as your baseline', color: 'text-green-400', bg: 'bg-green-500/10' },
+          ].map(({ icon: Icon, label, desc, color, bg }) => (
+            <div key={label} className={`rounded-xl border border-slate-700/50 p-4 ${bg}/20 flex gap-3 items-start`}>
+              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
+                <Icon size={18} className={color} />
+              </div>
+              <div>
+                <p className={`text-sm font-semibold ${color}`}>{label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+              </div>
             </div>
-          </div>
-        );
-      })()}
+          ))}
+        </div>
+      )}
 
       {/* Upload form */}
       <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-        <h3 className="font-semibold text-white mb-4">Upload a Quote</h3>
+        <h3 className="font-semibold text-white mb-1">Upload a Quote</h3>
+        <p className="text-xs text-gray-500 mb-4">Enter the supplier name, then upload the file</p>
         <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
@@ -693,80 +676,198 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
             {uploading ? 'Uploading…' : 'Import Quote'}
           </button>
         </div>
-        <p className="text-xs text-gray-500 mt-2">Supports PDF, Excel (.xlsx, .xls), and CSV — same parsing engine as the main platform</p>
+        <p className="text-xs text-gray-600 mt-2">Supports PDF, Excel (.xlsx, .xls), and CSV</p>
         <input ref={fileRef} type="file" accept=".pdf,.xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect} />
       </div>
 
+      {/* Imports list */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <RefreshCw size={24} className="animate-spin text-cyan-400" />
         </div>
       ) : imports.length === 0 ? (
-        <div className="border-2 border-dashed border-slate-700 hover:border-cyan-500/50 rounded-2xl p-16 text-center">
+        <div className="border-2 border-dashed border-slate-700 hover:border-cyan-500/50 rounded-2xl p-16 text-center transition-colors">
           <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Upload size={32} className="text-gray-600" />
+            <FileText size={32} className="text-gray-600" />
           </div>
-          <p className="text-white font-semibold text-lg mb-2">No imports yet</p>
+          <p className="text-white font-semibold text-lg mb-2">No quotes imported yet</p>
           <p className="text-gray-400 text-sm max-w-sm mx-auto">
-            Enter a supplier name above and upload the quote you submitted to the main contractor. The AI engine will extract all line items automatically.
+            Enter a supplier name above and upload the quote file to get started.
           </p>
         </div>
       ) : (
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/50">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
             <h3 className="font-semibold text-white">{imports.length} Import{imports.length !== 1 ? 's' : ''}</h3>
-            <button onClick={loadImports} className="text-gray-500 hover:text-white transition-colors">
+            <button onClick={loadImports} className="text-gray-500 hover:text-white transition-colors p-1">
               <RefreshCw size={14} />
             </button>
           </div>
-          <div className="divide-y divide-slate-700/30">
-            {imports.map(imp => {
-              const cfg = STATUS_CONFIG[imp.status] || STATUS_CONFIG.uploaded;
-              const Icon = cfg.icon;
-              const job = activeJobs[imp.id];
 
-              return (
-                <div key={imp.id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-700/20 transition-colors">
-                  <div className={`w-10 h-10 ${cfg.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                    {job && (job.status === 'pending' || job.status === 'processing')
+          {imports.map(imp => {
+            const job = activeJobs[imp.id];
+            const isJobParsing = job && (job.status === 'pending' || job.status === 'processing');
+            const impIsParsing = imp.status === 'parsing' || !!isJobParsing;
+            const impIsParsed = imp.status === 'parsed';
+            const impIsActive = imp.status === 'reviewed' || imp.status === 'locked';
+
+            return (
+              <div
+                key={imp.id}
+                className={`rounded-xl border transition-all ${
+                  impIsActive
+                    ? 'border-green-500/40 bg-green-500/5'
+                    : impIsParsed
+                    ? 'border-cyan-500/40 bg-cyan-500/5'
+                    : 'border-slate-700/50 bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-4 px-5 py-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    impIsActive ? 'bg-green-500/20' : impIsParsed ? 'bg-cyan-500/20' : impIsParsing ? 'bg-yellow-500/20' : 'bg-slate-700/50'
+                  }`}>
+                    {isJobParsing
                       ? <Loader2 size={18} className="text-yellow-400 animate-spin" />
-                      : <Icon size={18} className={cfg.color} />}
+                      : impIsActive
+                      ? <CheckCircle size={18} className="text-green-400" />
+                      : impIsParsed
+                      ? <Eye size={18} className="text-cyan-400" />
+                      : impIsParsing
+                      ? <Loader2 size={18} className="text-yellow-400 animate-spin" />
+                      : <Clock size={18} className="text-gray-500" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="font-medium text-white truncate">{imp.file_name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${cfg.bg} ${cfg.color} flex-shrink-0`}>{cfg.label}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${
+                        impIsActive ? 'bg-green-500/20 text-green-300' :
+                        impIsParsed ? 'bg-cyan-500/20 text-cyan-300' :
+                        impIsParsing ? 'bg-yellow-500/20 text-yellow-300' :
+                        'bg-slate-700 text-gray-400'
+                      }`}>
+                        {impIsActive ? 'Active Baseline' : impIsParsed ? 'Ready to Review' : impIsParsing ? 'Parsing…' : 'Uploaded'}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                    <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
                       {imp.project_name && <span>{imp.project_name}</span>}
                       {imp.main_contractor && <span>{imp.main_contractor}</span>}
                       {imp.parsed_line_count > 0 && <span>{imp.parsed_line_count} lines</span>}
                       {imp.total_value != null && <span className="text-cyan-400 font-medium">{fmt(imp.total_value)}</span>}
-                      {job && (job.status === 'pending' || job.status === 'processing') && (
+                      {isJobParsing && (
                         <span className="text-yellow-400">{job.progress}% parsed</span>
                       )}
                     </div>
-                    {job && (job.status === 'pending' || job.status === 'processing') && (
+                    {isJobParsing && (
                       <div className="mt-1.5 w-48 bg-slate-700/50 rounded-full h-1">
                         <div className="h-1 bg-yellow-400 rounded-full transition-all duration-500" style={{ width: `${job.progress}%` }} />
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {imp.status !== 'parsing' && (
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {impIsParsed && (
                       <button
                         onClick={() => openReview(imp)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-cyan-400 hover:text-white hover:bg-cyan-500/10 rounded-lg transition-colors"
+                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-cyan-500 hover:bg-cyan-600 rounded-lg transition-colors"
+                      >
+                        <Eye size={14} /> Review & Confirm
+                      </button>
+                    )}
+                    {impIsActive && onProceedToWorkflow && sentinelProjectId && (
+                      <button
+                        onClick={() => onProceedToWorkflow(sentinelProjectId)}
+                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-cyan-500 hover:bg-cyan-600 rounded-lg transition-colors"
+                      >
+                        Next: Review & Clean <ArrowRight size={14} />
+                      </button>
+                    )}
+                    {(impIsParsed || impIsActive) && (
+                      <button
+                        onClick={() => openReview(imp)}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
+                        title="View details"
                       >
                         <Eye size={14} />
-                        Review
                       </button>
                     )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Inline guidance strip for parsed-but-not-confirmed state */}
+                {impIsParsed && (
+                  <div className="border-t border-cyan-500/20 px-5 py-3 flex items-center gap-2 bg-cyan-500/5">
+                    <AlertCircle size={14} className="text-cyan-400 flex-shrink-0" />
+                    <p className="text-xs text-cyan-300">
+                      Quote has been parsed. Click <strong>Review & Confirm</strong> to check the line items and set this as your active baseline.
+                    </p>
+                  </div>
+                )}
+
+                {impIsActive && (
+                  <div className="border-t border-green-500/20 px-5 py-3 flex items-center gap-2 bg-green-500/5">
+                    <CheckCircle size={14} className="text-green-400 flex-shrink-0" />
+                    <p className="text-xs text-green-300">
+                      Active baseline set. Click <strong>Next: Review & Clean</strong> to continue to the next step.
+                    </p>
+                  </div>
+                )}
+
+                {impIsParsing && (
+                  <div className="border-t border-yellow-500/20 px-5 py-3 flex items-center gap-2 bg-yellow-500/5">
+                    <Loader2 size={14} className="text-yellow-400 animate-spin flex-shrink-0" />
+                    <p className="text-xs text-yellow-300">
+                      AI is reading your quote. Line items will appear automatically when parsing is complete — no action needed.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Prominent CTA if active baseline exists and we're on the list view */}
+          {isActive && onProceedToWorkflow && sentinelProjectId && (
+            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-cyan-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <CheckCircle size={20} className="text-cyan-400" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold text-sm">Baseline ready — proceed to Step 2</p>
+                  <p className="text-cyan-300/70 text-xs mt-0.5">Review & Clean normalises your line items for accurate analysis</p>
+                </div>
+              </div>
+              <button
+                onClick={() => onProceedToWorkflow(sentinelProjectId)}
+                className="flex items-center gap-2 px-5 py-3 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-bold rounded-xl transition-colors whitespace-nowrap flex-shrink-0"
+              >
+                Next: Review & Clean <ArrowRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Prompt to review parsed-but-not-confirmed import */}
+          {isParsed && !isActive && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <AlertCircle size={20} className="text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold text-sm">Quote parsed — review and confirm to continue</p>
+                  <p className="text-amber-300/70 text-xs mt-0.5">You need to confirm the baseline before moving to the next step</p>
+                </div>
+              </div>
+              {latestImport && (
+                <button
+                  onClick={() => openReview(latestImport)}
+                  className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition-colors whitespace-nowrap flex-shrink-0"
+                >
+                  Review & Confirm <ArrowRight size={16} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
