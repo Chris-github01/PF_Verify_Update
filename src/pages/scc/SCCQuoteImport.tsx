@@ -155,6 +155,14 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
   };
 
   const syncQuoteItemsToImport = async (importId: string, quoteId: string) => {
+    const { data: existing } = await supabase
+      .from('scc_quote_line_items')
+      .select('id')
+      .eq('import_id', importId)
+      .limit(1);
+
+    if (existing && existing.length > 0) return;
+
     const { data: items } = await supabase
       .from('quote_items')
       .select('*')
