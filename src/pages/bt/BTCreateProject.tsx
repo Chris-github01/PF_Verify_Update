@@ -50,6 +50,7 @@ export default function BTCreateProject({ onNavigate, projectId: mainProjectId, 
         .from('bt_projects')
         .insert({
           organisation_id: currentOrganisation.id,
+          main_project_id: mainProjectId || null,
           project_name: form.project_name.trim(),
           project_code: form.project_code.trim() || null,
           client_name: form.client_name.trim() || null,

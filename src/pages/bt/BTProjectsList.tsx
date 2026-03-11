@@ -62,17 +62,23 @@ export default function BTProjectsList({ onNavigate, projectId: mainProjectId, p
 
   useEffect(() => {
     if (currentOrganisation) loadProjects();
-  }, [currentOrganisation?.id]);
+  }, [currentOrganisation?.id, mainProjectId]);
 
   const loadProjects = async () => {
     if (!currentOrganisation) return;
     setLoading(true);
     try {
-      const { data: projects } = await supabase
+      let query = supabase
         .from('bt_projects')
         .select('*')
         .eq('organisation_id', currentOrganisation.id)
         .order('updated_at', { ascending: false });
+
+      if (mainProjectId) {
+        query = query.eq('main_project_id', mainProjectId);
+      }
+
+      const { data: projects } = await query;
 
       if (!projects) { setRows([]); return; }
 

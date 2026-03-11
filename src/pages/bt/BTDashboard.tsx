@@ -67,18 +67,24 @@ export default function BTDashboard({ onNavigate, projectId, projectName, projec
 
   useEffect(() => {
     if (currentOrganisation) loadData();
-  }, [currentOrganisation?.id]);
+  }, [currentOrganisation?.id, projectId]);
 
   const loadData = async () => {
     if (!currentOrganisation) return;
     setLoading(true);
     try {
+      let projectsQuery = supabase
+        .from('bt_projects')
+        .select('*')
+        .eq('organisation_id', currentOrganisation.id)
+        .order('updated_at', { ascending: false });
+
+      if (projectId) {
+        projectsQuery = projectsQuery.eq('main_project_id', projectId);
+      }
+
       const [projectsRes, claimsRes, variationsRes, activityRes] = await Promise.all([
-        supabase
-          .from('bt_projects')
-          .select('*')
-          .eq('organisation_id', currentOrganisation.id)
-          .order('updated_at', { ascending: false }),
+        projectsQuery,
         supabase
           .from('bt_claim_periods')
           .select('*')
