@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Wand2, ChevronDown, ChevronUp, Check, X, Edit2, ToggleLeft, ToggleRight,
-  AlertCircle, CheckCircle, Loader2, RefreshCw, ArrowRight, ArrowLeft, Package
-} from 'lucide-react';
+import { Wand2, ChevronDown, ChevronUp, Check, X, CreditCard as Edit2, ToggleLeft, ToggleRight, AlertCircle, CheckCircle, Loader2, RefreshCw, ArrowRight, ArrowLeft, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 
