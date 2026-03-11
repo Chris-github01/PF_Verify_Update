@@ -22,6 +22,7 @@ import SCCQuoteImport from './pages/scc/SCCQuoteImport';
 import SCCContractSetup from './pages/scc/SCCContractSetup';
 import SCCProgressClaims from './pages/scc/SCCProgressClaims';
 import SCCRetentionMaterials from './pages/scc/SCCRetentionMaterials';
+import BaselineTrackerModule from './pages/bt/BaselineTrackerModule';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import ProjectReportPage from './pages/ProjectReportPage';
 import InsightsDashboard from './pages/InsightsDashboard';
@@ -828,6 +829,10 @@ function AppContent() {
 
       case 'scc-variations':
         return <SCCDashboard />;
+
+      case 'bt-dashboard':
+      case 'bt-projects':
+        return <BaselineTrackerModule />;
 
       case 'commercial':
         return <CommercialControlDashboard />;

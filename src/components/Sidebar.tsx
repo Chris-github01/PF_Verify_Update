@@ -18,6 +18,8 @@ import {
   TrendingUp,
   RefreshCw,
   HardHat,
+  BookOpen,
+  FolderOpen,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -47,7 +49,9 @@ export type SidebarTab =
   | 'scc-contract-setup'
   | 'scc-claims'
   | 'scc-retention'
-  | 'scc-variations';
+  | 'scc-variations'
+  | 'bt-dashboard'
+  | 'bt-projects';
 
 interface SidebarProps {
   activeTab: SidebarTab;
@@ -78,6 +82,13 @@ const mainContractorMenu = [
       { id: 'contract' as SidebarTab, label: 'Contract Manager', icon: Briefcase },
       { id: 'commercial' as SidebarTab, label: 'Commercial Control', icon: DollarSign },
     ]
+  },
+  {
+    section: 'BASELINE TRACKER',
+    items: [
+      { id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard',  icon: BookOpen   },
+      { id: 'bt-projects' as SidebarTab,  label: 'BT Projects',   icon: FolderOpen },
+    ]
   }
 ];
 
@@ -91,6 +102,13 @@ const subContractorMenu = [
       { id: 'scc-claims' as SidebarTab,         label: 'Progress Claims',   icon: TrendingUp },
       { id: 'scc-retention' as SidebarTab,      label: 'Retention & Materials', icon: DollarSign },
       { id: 'scc-variations' as SidebarTab,     label: 'Variation Register', icon: RefreshCw },
+    ]
+  },
+  {
+    section: 'BASELINE TRACKER',
+    items: [
+      { id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard',  icon: BookOpen   },
+      { id: 'bt-projects' as SidebarTab,  label: 'BT Projects',   icon: FolderOpen },
     ]
   }
 ];
