@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Upload, CheckCircle, Clock, Lock,
+  Upload, CheckCircle, Clock,
   ChevronRight, Eye, RefreshCw, ToggleLeft, ToggleRight,
-  ArrowRight, Loader2, Package
+  Loader2, Package
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
@@ -63,8 +63,8 @@ const STATUS_CONFIG: Record<string, {
   uploaded:  { label: 'Uploaded',  color: 'text-gray-300',   bg: 'bg-gray-500/20',   icon: Clock },
   parsing:   { label: 'Parsing…',  color: 'text-yellow-300', bg: 'bg-yellow-500/20', icon: RefreshCw },
   parsed:    { label: 'Parsed',    color: 'text-blue-300',   bg: 'bg-blue-500/20',   icon: Eye },
-  reviewed:  { label: 'Reviewed',  color: 'text-green-300',  bg: 'bg-green-500/20',  icon: CheckCircle },
-  locked:    { label: 'Locked',    color: 'text-cyan-300',   bg: 'bg-cyan-500/20',   icon: Lock },
+  reviewed:  { label: 'Active Baseline', color: 'text-green-300', bg: 'bg-green-500/20', icon: CheckCircle },
+  locked:    { label: 'Active Baseline', color: 'text-green-300', bg: 'bg-green-500/20', icon: CheckCircle },
 };
 
 function fmt(n: number | null): string {
@@ -72,7 +72,7 @@ function fmt(n: number | null): string {
   return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 }).format(n);
 }
 
-export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId: string) => void }) {
+export default function SCCQuoteImport() {
   const { currentOrganisation } = useOrganisation();
   const { currentTrade } = useTrade();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -348,19 +348,6 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
     setSaving(false);
   };
 
-  const lockAsBaseline = async () => {
-    if (!selectedImport) return;
-    setSaving(true);
-    await supabase
-      .from('scc_quote_imports')
-      .update({ status: 'locked', locked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', selectedImport.id);
-    setImports(prev => prev.map(i => i.id === selectedImport.id ? { ...i, status: 'locked' } : i));
-    setSelectedImport(prev => prev ? { ...prev, status: 'locked' } : null);
-    setSaving(false);
-    if (onContinue) onContinue(selectedImport.id);
-  };
-
   const includedCount = lineItems.filter(l => l.include_in_baseline && !l.is_excluded).length;
   const includedTotal = lineItems
     .filter(l => l.include_in_baseline && !l.is_excluded)
@@ -370,6 +357,7 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
     const cfg = STATUS_CONFIG[selectedImport.status] || STATUS_CONFIG.uploaded;
     const activeJob = activeJobs[selectedImport.id];
     const isParsing = selectedImport.status === 'parsing' || !!activeJob;
+    const isActive = selectedImport.status === 'reviewed' || selectedImport.status === 'locked';
 
     return (
       <div className="space-y-6">
@@ -417,15 +405,14 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
                       type="text"
                       value={(editingMeta as Record<string, string>)[field.key] || ''}
                       onChange={e => setEditingMeta(prev => ({ ...prev, [field.key]: e.target.value }))}
-                      disabled={selectedImport.status === 'locked'}
-                      className="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                     />
                   </div>
                 ))}
               </div>
-              {selectedImport.status !== 'locked' && selectedImport.status !== 'parsing' && (
-                <button onClick={saveMeta} disabled={saving} className="mt-4 w-full py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
-                  {saving ? 'Saving…' : 'Save Details'}
+              {!isParsing && (
+                <button onClick={saveMeta} disabled={saving} className="mt-4 w-full py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
+                  {saving ? 'Saving…' : isActive ? 'Update Details' : 'Save & Set as Active Baseline'}
                 </button>
               )}
             </div>
@@ -450,34 +437,13 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
                   <span className="text-cyan-400 font-bold">{isParsing ? '…' : fmt(includedTotal)}</span>
                 </div>
               </div>
+              {isActive && (
+                <div className="mt-3 flex items-center gap-2 text-green-400 text-xs">
+                  <CheckCircle size={13} />
+                  <span>Active baseline — adjustable at any time</span>
+                </div>
+              )}
             </div>
-
-            {!isParsing && selectedImport.status !== 'locked' && (
-              <button
-                onClick={lockAsBaseline}
-                disabled={saving || includedCount === 0}
-                className="w-full py-3 bg-cyan-500 hover:bg-cyan-600 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors"
-              >
-                <Lock size={16} />
-                Lock as Contract Baseline
-              </button>
-            )}
-
-            {selectedImport.status === 'locked' && (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
-                <CheckCircle size={24} className="text-green-400 mx-auto mb-2" />
-                <p className="text-green-300 font-semibold text-sm">Baseline Locked</p>
-                <p className="text-green-400/70 text-xs mt-1">This quote is locked as the contract baseline.</p>
-                {onContinue && (
-                  <button
-                    onClick={() => onContinue(selectedImport.id)}
-                    className="mt-3 flex items-center gap-2 mx-auto px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-sm rounded-lg transition-colors"
-                  >
-                    Continue to Contract Setup <ArrowRight size={14} />
-                  </button>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="lg:col-span-2 bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
@@ -500,7 +466,7 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
                 </div>
                 <p className="text-white font-semibold text-lg mb-2">AI Parsing in Progress</p>
                 <p className="text-gray-400 text-sm max-w-sm">
-                  The quote is being parsed using VerifyTrade's AI extraction engine — the same engine used in the main quote audit platform. Line items will appear here automatically once complete.
+                  The quote is being parsed using VerifyTrade's AI extraction engine. Line items will appear here automatically once complete.
                 </p>
                 <div className="mt-4 text-xs text-gray-600">
                   {activeJob?.progress || 0}% complete
@@ -558,17 +524,11 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-white">{fmt(line.total_amount)}</td>
                         <td className="px-4 py-3 text-center">
-                          {selectedImport.status !== 'locked' ? (
-                            <button onClick={() => toggleLineInclude(line.id, line.include_in_baseline)}>
-                              {line.include_in_baseline
-                                ? <ToggleRight size={20} className="text-cyan-400" />
-                                : <ToggleLeft size={20} className="text-gray-600" />}
-                            </button>
-                          ) : (
-                            line.include_in_baseline
-                              ? <CheckCircle size={14} className="text-green-400 mx-auto" />
-                              : <span className="text-gray-600 text-xs">—</span>
-                          )}
+                          <button onClick={() => toggleLineInclude(line.id, line.include_in_baseline)}>
+                            {line.include_in_baseline
+                              ? <ToggleRight size={20} className="text-cyan-400" />
+                              : <ToggleLeft size={20} className="text-gray-600" />}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -597,10 +557,10 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
         <div>
           <h2 className="text-xl font-bold text-white">Quote Import</h2>
           <p className="text-sm text-gray-400 mt-0.5">
-            {imports[0]?.status === 'parsing' ? 'Step 2 — AI is parsing your quote' :
-             imports[0]?.status === 'parsed' || imports[0]?.status === 'reviewed' ? 'Step 3 — Review and clean the extracted lines' :
-             imports[0]?.status === 'locked' ? 'Step 4 — Baseline locked. Proceed to Baseline Tracker to manage progress claims.' :
-             'Step 1 — Import your awarded quote as the contract baseline'}
+            {imports[0]?.status === 'parsing' ? 'AI is parsing your quote' :
+             imports[0]?.status === 'parsed' ? 'Review and adjust the extracted line items' :
+             imports[0]?.status === 'reviewed' || imports[0]?.status === 'locked' ? 'Active baseline — adjustable at any time via Review' :
+             'Import your awarded quote as the contract baseline'}
           </p>
         </div>
       </div>
@@ -609,23 +569,18 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
       {(() => {
         const latestImport = imports[0] ?? null;
         const statusToStep: Record<string, number> = {
-          uploaded: 1, parsing: 2, parsed: 3, reviewed: 3, locked: 4,
+          uploaded: 1, parsing: 2, parsed: 3, reviewed: 4, locked: 4,
         };
         const currentStep = latestImport ? (statusToStep[latestImport.status] ?? 1) : 1;
         const steps = [
-          { num: 1, label: 'Import Quote',      desc: 'Upload PDF or Excel' },
-          { num: 2, label: 'AI Parsing',         desc: 'Auto-extract line items' },
-          { num: 3, label: 'Review Lines',       desc: 'Check & clean data' },
-          { num: 4, label: 'Lock Baseline',      desc: 'Freeze as contract truth' },
-          { num: 5, label: 'Baseline Tracker',   desc: 'Track progress claims' },
+          { num: 1, label: 'Import Quote',    desc: 'Upload PDF or Excel' },
+          { num: 2, label: 'AI Parsing',       desc: 'Auto-extract line items' },
+          { num: 3, label: 'Review Lines',     desc: 'Check & adjust data' },
+          { num: 4, label: 'Active Baseline',  desc: 'Flexible baseline set' },
         ];
         const handleStepClick = (stepNum: number) => {
           if (!latestImport) return;
           if (stepNum === 1) { setView('list'); return; }
-          if (stepNum === 5 && latestImport.status === 'locked' && onContinue) {
-            onContinue(latestImport.id);
-            return;
-          }
           if (stepNum <= currentStep) {
             setSelectedImport(latestImport);
             setEditingMeta({
@@ -641,11 +596,9 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
           <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-5">
             <div className="flex items-center gap-6 overflow-x-auto pb-1">
               {steps.map((step, i) => {
-                const isStep5 = step.num === 5;
-                const isStep5Unlocked = isStep5 && latestImport?.status === 'locked' && !!onContinue;
                 const isActive = step.num === currentStep;
                 const isCompleted = step.num < currentStep;
-                const isClickable = isStep5Unlocked || (latestImport && step.num <= currentStep);
+                const isClickable = latestImport && step.num <= currentStep;
                 return (
                   <div key={step.num} className="flex items-center gap-4 flex-shrink-0">
                     <button
@@ -656,17 +609,16 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                         isActive ? 'bg-cyan-500 text-white' :
                         isCompleted ? 'bg-cyan-800 text-cyan-300' :
-                        isStep5Unlocked ? 'bg-cyan-600 text-white' :
                         'bg-slate-700 text-gray-500'
                       }`}>
-                        {isCompleted ? <CheckCircle size={16} /> : isStep5Unlocked ? <ArrowRight size={16} /> : step.num}
+                        {isCompleted ? <CheckCircle size={16} /> : step.num}
                       </div>
                       <div>
-                        <p className={`text-sm font-medium ${isActive ? 'text-white' : isCompleted ? 'text-cyan-400' : isStep5Unlocked ? 'text-cyan-400' : 'text-gray-500'}`}>{step.label}</p>
+                        <p className={`text-sm font-medium ${isActive ? 'text-white' : isCompleted ? 'text-cyan-400' : 'text-gray-500'}`}>{step.label}</p>
                         <p className="text-xs text-gray-600">{step.desc}</p>
                       </div>
                     </button>
-                    {i < 4 && <ChevronRight size={16} className="text-gray-700 flex-shrink-0" />}
+                    {i < steps.length - 1 && <ChevronRight size={16} className="text-gray-700 flex-shrink-0" />}
                   </div>
                 );
               })}
@@ -767,15 +719,7 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
                         className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-cyan-400 hover:text-white hover:bg-cyan-500/10 rounded-lg transition-colors"
                       >
                         <Eye size={14} />
-                        {imp.status === 'locked' ? 'View' : 'Review'}
-                      </button>
-                    )}
-                    {imp.status === 'locked' && onContinue && (
-                      <button
-                        onClick={() => onContinue(imp.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-cyan-500 hover:bg-cyan-600 rounded-lg transition-colors"
-                      >
-                        Continue <ArrowRight size={14} />
+                        Review
                       </button>
                     )}
                   </div>

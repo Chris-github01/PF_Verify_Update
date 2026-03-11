@@ -814,7 +814,7 @@ function AppContent() {
         return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
 
       case 'scc-quote-import':
-        return <SCCQuoteImport onContinue={(_importId) => { setActiveTab('bt-dashboard'); }} />;
+        return <SCCQuoteImport />;
 
 
       case 'scc-claims':
