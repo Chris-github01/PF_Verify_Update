@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Upload, Scissors, Sparkles, CheckCircle, Loader2, X, Info } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Upload, Scissors, Sparkles, CheckCircle, Loader2, X, Info, ArrowRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 import SCCQuoteImport from './SCCQuoteImport';
@@ -8,15 +8,22 @@ import QuoteIntelligence from '../QuoteIntelligence';
 
 type WorkflowStep = 'import' | 'review_clean' | 'quote_intelligence';
 
-const STEPS: { id: WorkflowStep; label: string; desc: string; icon: React.ComponentType<{ size: number; className?: string }> }[] = [
+const STEPS: {
+  id: WorkflowStep;
+  label: string;
+  desc: string;
+  icon: React.ComponentType<{ size: number; className?: string }>;
+}[] = [
   { id: 'import',             label: 'Quote Import',       desc: 'Parse & establish baseline', icon: Upload },
   { id: 'review_clean',       label: 'Review & Clean',     desc: 'Tidy up line items',          icon: Scissors },
   { id: 'quote_intelligence', label: 'Quote Intelligence', desc: 'AI-powered analysis',         icon: Sparkles },
 ];
 
-const STEP_INTROS: Record<WorkflowStep, { title: string; what: string; tasks: string[]; color: string; bg: string }> = {
+const STEP_INTROS: Record<WorkflowStep, {
+  title: string; what: string; tasks: string[]; color: string; bg: string;
+}> = {
   import: {
-    title: 'Upload your subcontractor\'s quote',
+    title: "Upload your subcontractor's quote",
     what: 'The AI reads your quote document and extracts every line item automatically. You then review the items, toggle any you want to exclude, and set it as your active baseline.',
     tasks: [
       'Upload a PDF, Excel (.xlsx), or CSV file',
@@ -34,7 +41,7 @@ const STEP_INTROS: Record<WorkflowStep, { title: string; what: string; tasks: st
       'Click "Smart Clean" to automatically fix units and categorise items',
       'Review any items flagged in red — they may need your attention',
       'Edit individual line descriptions if anything is unclear',
-      'Click "Next" when you\'re happy with the result',
+      "Click \"Next\" when you're happy with the result",
     ],
     color: 'text-blue-300',
     bg: 'bg-blue-500/10 border-blue-500/20',
@@ -43,7 +50,7 @@ const STEP_INTROS: Record<WorkflowStep, { title: string; what: string; tasks: st
     title: 'Get an AI analysis of the quote',
     what: 'The AI summarises the quote for you — highlighting risks, identifying unusual pricing, and flagging items that might cause problems down the track. Useful to share with your PM.',
     tasks: [
-      'Review the AI\'s summary of the quote',
+      "Review the AI's summary of the quote",
       'Check the risk flags — red items need your attention',
       'Note any items marked as unusual or high-value',
       'Click "Finish" to complete the workflow and move to the Base Tracker',
@@ -81,6 +88,7 @@ function deriveWorkflowState(
 
 export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void } = {}) {
   const { currentOrganisation } = useOrganisation();
+
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('import');
   const [sentinelProjectId, setSentinelProjectId] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(true);
@@ -88,6 +96,20 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
   const [dismissedIntros, setDismissedIntros] = useState<Set<WorkflowStep>>(new Set());
   const [finished, setFinished] = useState(false);
   const [latestImportId, setLatestImportId] = useState<string | null>(null);
+  const [allDoneResume, setAllDoneResume] = useState(false);
+
+  const completedStepsRef = useRef<Set<WorkflowStep>>(new Set());
+  const latestImportIdRef = useRef<string | null>(null);
+
+  const syncCompletedRef = (s: Set<WorkflowStep>) => {
+    completedStepsRef.current = s;
+    setCompletedSteps(s);
+  };
+
+  const syncImportIdRef = (id: string | null) => {
+    latestImportIdRef.current = id;
+    setLatestImportId(id);
+  };
 
   useEffect(() => {
     if (currentOrganisation?.id) {
@@ -106,15 +128,24 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
           .select('id, status, scc_workflow_step, completed_steps, parsing_job_id')
           .eq('organisation_id', currentOrganisation.id)
           .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
+          .limit(10)
+          .then(({ data }) => {
+            if (!data || data.length === 0) return { data: null };
+            const withSteps = data.find(r =>
+              Array.isArray(r.completed_steps) && r.completed_steps.length > 0
+            );
+            const withStatus = data.find(r =>
+              r.status === 'reviewed' || r.status === 'locked' || r.status === 'parsed'
+            );
+            return { data: withSteps ?? withStatus ?? data[0] };
+          }),
       ]);
 
       const pid: string | null = projectRes.data ?? null;
       if (pid) setSentinelProjectId(pid);
 
       const latestImport = importRes.data;
-      if (latestImport?.id) setLatestImportId(latestImport.id);
+      if (latestImport?.id) syncImportIdRef(latestImport.id);
 
       if (pid && latestImport?.parsing_job_id) {
         const { data: job } = await supabase
@@ -148,8 +179,15 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
         savedCompletedSteps,
       );
 
-      setCompletedSteps(completed);
+      syncCompletedRef(completed);
       setCurrentStep(step);
+
+      if (
+        completed.size === STEP_ORDER.length &&
+        savedStep === STEP_ORDER[STEP_ORDER.length - 1]
+      ) {
+        setAllDoneResume(true);
+      }
     } catch (err) {
       console.error('Failed to initialise SCC workflow:', err);
     } finally {
@@ -163,7 +201,7 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
     importIdOverride?: string,
   ) => {
     if (!currentOrganisation?.id) return;
-    const targetId = importIdOverride ?? latestImportId;
+    const targetId = importIdOverride ?? latestImportIdRef.current;
     if (!targetId) {
       console.warn('persistProgress: no latestImportId — skipping write');
       return;
@@ -187,8 +225,8 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
   };
 
   const markComplete = (step: WorkflowStep): Set<WorkflowStep> => {
-    const next = new Set([...completedSteps, step]);
-    setCompletedSteps(next);
+    const next = new Set([...completedStepsRef.current, step]);
+    syncCompletedRef(next);
     return next;
   };
 
@@ -199,18 +237,21 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
   const goToStep = (step: WorkflowStep) => {
     const stepIdx = STEP_ORDER.indexOf(step);
     const currentIdx = STEP_ORDER.indexOf(currentStep);
-    if (stepIdx <= currentIdx || completedSteps.has(step) || stepIdx === currentIdx + 1) {
+    const current = completedStepsRef.current;
+    if (stepIdx <= currentIdx || current.has(step) || stepIdx === currentIdx + 1) {
+      setAllDoneResume(false);
       setCurrentStep(step);
-      persistProgress(step, completedSteps);
+      persistProgress(step, current);
     }
   };
 
   const handleProceedToWorkflow = (pid: string, importId?: string) => {
     setSentinelProjectId(pid);
-    if (importId) setLatestImportId(importId);
+    if (importId) syncImportIdRef(importId);
     const completed = markComplete('import');
     setCurrentStep('review_clean');
-    persistProgress('review_clean', completed, importId ?? latestImportId ?? undefined);
+    setAllDoneResume(false);
+    persistProgress('review_clean', completed, importId ?? latestImportIdRef.current ?? undefined);
   };
 
   const handleNext = (from: WorkflowStep) => {
@@ -219,6 +260,7 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
     if (idx < STEP_ORDER.length - 1) {
       const next = STEP_ORDER[idx + 1];
       setCurrentStep(next);
+      setAllDoneResume(false);
       persistProgress(next, completed);
     } else {
       persistProgress(from, completed);
@@ -234,7 +276,8 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
     if (idx > 0) {
       const prev = STEP_ORDER[idx - 1];
       setCurrentStep(prev);
-      persistProgress(prev, completedSteps);
+      setAllDoneResume(false);
+      persistProgress(prev, completedStepsRef.current);
     }
   };
 
@@ -252,20 +295,18 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
         <p className="text-gray-400 text-sm max-w-sm mb-8">
           Your quote has been imported, cleaned, and analysed. Opening the Base Tracker…
         </p>
-        <div className="w-8 h-8">
-          <Loader2 size={28} className="text-cyan-400 animate-spin" />
-        </div>
+        <Loader2 size={28} className="text-cyan-400 animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Workflow Stepper Header */}
+      {/* Stepper Header */}
       <div className="px-6 pt-5 pb-4 border-b border-slate-800/60 bg-slate-900/30 flex-shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {STEPS.map((step, i) => {
-            const isActive = step.id === currentStep;
+            const isActive = step.id === currentStep && !allDoneResume;
             const isCompleted = completedSteps.has(step.id);
             const stepIdx = STEP_ORDER.indexOf(step.id);
             const isClickable = isCompleted || stepIdx <= currentStepIdx;
@@ -279,29 +320,36 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all ${
                     isActive
                       ? 'bg-cyan-900/60 border border-cyan-700/60 cursor-default'
+                      : isCompleted && !isActive
+                      ? 'hover:bg-green-900/20 cursor-pointer border border-transparent'
                       : isClickable
                       ? 'hover:bg-slate-800/60 cursor-pointer border border-transparent'
                       : 'opacity-35 cursor-default border border-transparent'
                   }`}
                 >
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                    isCompleted ? 'bg-green-700 text-white' :
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    isCompleted ? 'bg-green-600 text-white' :
                     isActive ? 'bg-cyan-500 text-white' :
                     'bg-slate-700 text-slate-400'
                   }`}>
-                    {isCompleted ? <CheckCircle size={13} /> : <Icon size={12} />}
+                    {isCompleted
+                      ? <CheckCircle size={13} />
+                      : <Icon size={12} />}
                   </div>
                   <div className="text-left">
                     <p className={`text-xs font-semibold whitespace-nowrap ${
-                      isActive ? 'text-cyan-200' : isCompleted ? 'text-green-400' : 'text-slate-400'
+                      isActive ? 'text-cyan-200' :
+                      isCompleted ? 'text-green-400' :
+                      'text-slate-400'
                     }`}>{step.label}</p>
                     <p className="text-xs text-slate-600 whitespace-nowrap hidden sm:block">{step.desc}</p>
                   </div>
                 </button>
                 {i < STEPS.length - 1 && (
-                  <div className={`w-6 h-px flex-shrink-0 ${
-                    completedSteps.has(STEP_ORDER[i]) ? 'bg-green-700' :
-                    i < currentStepIdx ? 'bg-cyan-700' : 'bg-slate-700'
+                  <div className={`w-6 h-px flex-shrink-0 transition-colors ${
+                    completedSteps.has(STEP_ORDER[i]) ? 'bg-green-600' :
+                    i < currentStepIdx ? 'bg-cyan-700' :
+                    'bg-slate-700'
                   }`} />
                 )}
               </div>
@@ -309,15 +357,14 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
           })}
         </div>
 
-        {/* Progress summary strip */}
         {completedSteps.size > 0 && (
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-800/60">
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-800/60 flex-wrap">
             <span className="text-xs text-slate-500">Progress:</span>
             {STEP_ORDER.map(s => (
               <span key={s} className={`text-xs px-2 py-0.5 rounded-full ${
                 completedSteps.has(s)
                   ? 'bg-green-500/15 text-green-400'
-                  : s === currentStep
+                  : s === currentStep && !allDoneResume
                   ? 'bg-cyan-500/15 text-cyan-400'
                   : 'bg-slate-700/50 text-slate-500'
               }`}>
@@ -330,13 +377,37 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
 
       {/* Step Content */}
       <div className="flex-1 overflow-y-auto">
-        {loadingProject && currentStep !== 'import' ? (
+        {loadingProject ? (
           <div className="flex items-center justify-center h-64">
             <Loader2 size={24} className="animate-spin text-cyan-400" />
           </div>
+        ) : allDoneResume ? (
+          /* All-done resume state — shown when user returns after completing all 3 steps */
+          <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+            <div className="w-20 h-20 bg-green-500/15 rounded-2xl flex items-center justify-center mb-6">
+              <CheckCircle size={40} className="text-green-400" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">All steps completed</h2>
+            <p className="text-slate-400 text-sm max-w-sm mb-8">
+              You've already finished the Quote Import workflow. Head to the Base Tracker to manage your contract, or re-run any step using the stepper above.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => onFinish?.()}
+                className="flex items-center gap-2 px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold rounded-xl transition-colors"
+              >
+                Open Base Tracker <ArrowRight size={15} />
+              </button>
+              <button
+                onClick={() => goToStep('import')}
+                className="px-4 py-3 text-sm text-slate-400 border border-slate-700 hover:border-slate-500 rounded-xl transition-colors"
+              >
+                Review steps
+              </button>
+            </div>
+          </div>
         ) : (
           <>
-            {/* Step intro card — shown until dismissed */}
             {showIntro && (
               <div className={`mx-6 mt-5 rounded-2xl border ${intro.bg} p-5 flex gap-4`}>
                 <div className="w-8 h-8 rounded-lg bg-slate-800/60 flex items-center justify-center flex-shrink-0">
@@ -364,7 +435,6 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
               </div>
             )}
 
-            {/* Resuming banner — shown when returning to a step that was previously completed */}
             {completedSteps.has(currentStep) && (
               <div className="mx-6 mt-3 px-4 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center gap-2.5">
                 <CheckCircle size={14} className="text-green-400 flex-shrink-0" />
@@ -376,9 +446,7 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
 
             {currentStep === 'import' && (
               <div className="p-6">
-                <SCCQuoteImport
-                  onProceedToWorkflow={handleProceedToWorkflow}
-                />
+                <SCCQuoteImport onProceedToWorkflow={handleProceedToWorkflow} />
               </div>
             )}
 
@@ -402,7 +470,6 @@ export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void }
                 hideRecommendedActions
               />
             )}
-
           </>
         )}
       </div>
