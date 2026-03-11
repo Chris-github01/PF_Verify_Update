@@ -99,7 +99,7 @@ const subContractorMenu = [
       { id: 'scc' as SidebarTab,                label: 'SCC Dashboard',     icon: Layers     },
       { id: 'scc-quote-import' as SidebarTab,   label: 'Quote Import',      icon: FileText   },
       { id: 'scc-contract-setup' as SidebarTab, label: 'Contract Setup',    icon: Briefcase  },
-      { id: 'scc-claims' as SidebarTab,         label: 'Progress Claims',   icon: TrendingUp },
+      { id: 'scc-claims' as SidebarTab,         label: 'Payment Claims',    icon: TrendingUp },
       { id: 'scc-retention' as SidebarTab,      label: 'Retention & Materials', icon: DollarSign },
       { id: 'scc-variations' as SidebarTab,     label: 'Variation Register', icon: RefreshCw },
     ]

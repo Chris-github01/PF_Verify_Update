@@ -20,7 +20,7 @@ import CommercialControlDashboard from './pages/CommercialControlDashboard';
 import SCCDashboard from './pages/SCCDashboard';
 import SCCQuoteImport from './pages/scc/SCCQuoteImport';
 import SCCContractSetup from './pages/scc/SCCContractSetup';
-import SCCProgressClaims from './pages/scc/SCCProgressClaims';
+import PaymentClaimsList from './pages/scc/PaymentClaimsList';
 import SCCRetentionMaterials from './pages/scc/SCCRetentionMaterials';
 import BaselineTrackerModule from './pages/bt/BaselineTrackerModule';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
@@ -822,7 +822,7 @@ function AppContent() {
         return <SCCContractSetup importId={sccImportId} onImportConsumed={() => setSccImportId(null)} />;
 
       case 'scc-claims':
-        return <SCCProgressClaims />;
+        return <PaymentClaimsList />;
 
       case 'scc-retention':
         return <SCCRetentionMaterials />;
