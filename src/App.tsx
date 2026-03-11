@@ -84,7 +84,7 @@ function AppContent() {
   const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
   const [isTrialExpired, setIsTrialExpired] = useState(false);
   const [checkingTrial, setCheckingTrial] = useState(false);
-  const { currentOrganisation, organisations, loading: orgLoading, isGodMode, setCurrentOrganisation } = useOrganisation();
+  const { currentOrganisation, organisations, loading: orgLoading, isGodMode, isSubContractor, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
   const { currentTrade } = useTrade();
 
@@ -261,6 +261,13 @@ function AppContent() {
       // Keep the selected project - one project can have data for multiple trades
     }
   }, [currentTrade]);
+
+  // Redirect subcontractors away from the generic project dashboard to the SCC module
+  useEffect(() => {
+    if (isSubContractor && (activeTab === 'dashboard' || activeTab === 'quotes' || activeTab === 'quoteselect' || activeTab === 'review' || activeTab === 'scope' || activeTab === 'equalisation' || activeTab === 'boq' || activeTab === 'reports')) {
+      setActiveTab('scc');
+    }
+  }, [isSubContractor]);
 
   // Projects are loaded by initializeApp() - no separate effect needed
   // Removed to prevent duplicate loadAllProjects() calls and loops
@@ -573,6 +580,9 @@ function AppContent() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
+        if (isSubContractor) {
+          return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
+        }
         return <NewProjectDashboard
           projectId={projectId}
           projectName={projectInfo?.name}
