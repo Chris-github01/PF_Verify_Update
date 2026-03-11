@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, LayoutDashboard, List, TrendingUp, FileText, RefreshCw, Paperclip, Activity, Lock, Unlock, Plus, Trash2, Save, CreditCard as Edit3, AlertTriangle, CheckCircle, Download, FileSpreadsheet, Upload, Eye } from 'lucide-react';
+import { ChevronLeft, LayoutDashboard, List, TrendingUp, FileText, RefreshCw, Paperclip, Activity, Lock, Unlock, Plus, Trash2, AlertTriangle, CheckCircle, Download, FileSpreadsheet, Upload, Eye } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 import type {
@@ -9,6 +9,7 @@ import type {
 import {
   exportBaselineSnapshot, exportProgressSummary, downloadBlob
 } from '../../lib/export/baselineTrackerExport';
+import BTImportFromQuoteModal from './BTImportFromQuoteModal';
 
 type Tab = 'overview' | 'baseline' | 'progress' | 'claims' | 'variations' | 'attachments' | 'activity';
 
@@ -55,6 +56,7 @@ export default function BTProjectDetail({ projectId, onNavigate }: BTProjectDeta
   const [newVariation, setNewVariation] = useState<Partial<BTVariation> | null>(null);
   const [saving, setSaving] = useState(false);
   const [exportingBaseline, setExportingBaseline] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!currentOrganisation) return;
@@ -451,12 +453,20 @@ export default function BTProjectDetail({ projectId, onNavigate }: BTProjectDeta
               </div>
               <div className="flex items-center gap-2">
                 {!baselineLocked && (
-                  <button
-                    onClick={() => setNewLineItem({ unit: 'No.', baseline_quantity: 1, baseline_rate: 0, claim_method: 'quantity_based' })}
-                    className="flex items-center gap-2 px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-medium transition-colors"
-                  >
-                    <Plus size={14} /> Add Line
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-medium transition-colors"
+                    >
+                      <Upload size={14} /> Import from Quote
+                    </button>
+                    <button
+                      onClick={() => setNewLineItem({ unit: 'No.', baseline_quantity: 1, baseline_rate: 0, claim_method: 'quantity_based' })}
+                      className="flex items-center gap-2 px-3 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-medium transition-colors"
+                    >
+                      <Plus size={14} /> Add Line
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={handleExportBaseline}
@@ -551,16 +561,27 @@ export default function BTProjectDetail({ projectId, onNavigate }: BTProjectDeta
             )}
 
             {lineItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-700 py-12 text-center">
+              <div className="rounded-xl border border-dashed border-slate-700 py-12 text-center px-6">
                 <List size={24} className="mx-auto text-slate-600 mb-3" />
-                <p className="text-slate-400 text-sm">No line items yet</p>
+                <p className="text-slate-300 font-medium">No line items yet</p>
+                <p className="text-slate-500 text-xs mt-1 mb-5 max-w-sm mx-auto">
+                  Establish the baseline from a parsed Quote Import, or add lines manually.
+                </p>
                 {!baselineLocked && (
-                  <button
-                    onClick={() => setNewLineItem({ unit: 'No.', baseline_quantity: 1, baseline_rate: 0, claim_method: 'quantity_based' })}
-                    className="mt-3 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1"
-                  >
-                    <Plus size={13} /> Add First Line
-                  </button>
+                  <div className="flex items-center justify-center gap-3 flex-wrap">
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl text-sm font-semibold transition-colors"
+                    >
+                      <Upload size={15} /> Import from Quote
+                    </button>
+                    <button
+                      onClick={() => setNewLineItem({ unit: 'No.', baseline_quantity: 1, baseline_rate: 0, claim_method: 'quantity_based' })}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-sm font-medium transition-colors"
+                    >
+                      <Plus size={15} /> Add Line Manually
+                    </button>
+                  </div>
                 )}
               </div>
             ) : (
@@ -946,6 +967,18 @@ export default function BTProjectDetail({ projectId, onNavigate }: BTProjectDeta
           </div>
         )}
       </div>
+
+      {showImportModal && header && currentOrganisation && (
+        <BTImportFromQuoteModal
+          organisationId={currentOrganisation.id}
+          baselineHeaderId={header.id}
+          onImported={async () => {
+            setShowImportModal(false);
+            await loadData();
+          }}
+          onClose={() => setShowImportModal(false)}
+        />
+      )}
     </div>
   );
 }
