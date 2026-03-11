@@ -3,7 +3,7 @@ import { Upload, Scissors, Sparkles, Grid3x3 as Grid3X3, CheckCircle, Loader2, X
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 import SCCQuoteImport from './SCCQuoteImport';
-import ReviewClean from '../ReviewClean';
+import SCCReviewClean from './SCCReviewClean';
 import QuoteIntelligence from '../QuoteIntelligence';
 import ScopeMatrix from '../ScopeMatrix';
 
@@ -306,10 +306,8 @@ export default function SCCQuoteWorkflow() {
               </div>
             )}
 
-            {currentStep === 'review_clean' && sentinelProjectId && (
-              <ReviewClean
-                projectId={sentinelProjectId}
-                dashboardMode="original"
+            {currentStep === 'review_clean' && (
+              <SCCReviewClean
                 onNavigateBack={() => handleBack('review_clean')}
                 onNavigateNext={() => handleNext('review_clean')}
               />
