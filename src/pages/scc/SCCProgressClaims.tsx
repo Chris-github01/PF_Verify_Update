@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
+import { useTrade } from '../../lib/tradeContext';
 
 interface Contract {
   id: string;
@@ -92,6 +93,7 @@ function fmtDate(d: string | null): string {
 
 export default function SCCProgressClaims() {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [dismissedIntro, setDismissedIntro] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
@@ -106,7 +108,7 @@ export default function SCCProgressClaims() {
 
   useEffect(() => {
     if (currentOrganisation?.id) loadContracts();
-  }, [currentOrganisation?.id]);
+  }, [currentOrganisation?.id, currentTrade]);
 
   const loadContracts = async () => {
     if (!currentOrganisation?.id) return;
@@ -115,6 +117,7 @@ export default function SCCProgressClaims() {
       .from('scc_contracts')
       .select('*')
       .eq('organisation_id', currentOrganisation.id)
+      .eq('trade', currentTrade)
       .eq('snapshot_locked', true)
       .order('created_at', { ascending: false });
     setContracts(data || []);

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
+import { useTrade } from '../../lib/tradeContext';
 
 interface Contract {
   id: string;
@@ -87,6 +88,7 @@ type ActiveTab = 'retention' | 'on_site' | 'off_site';
 
 export default function SCCRetentionMaterials() {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('retention');
@@ -102,7 +104,7 @@ export default function SCCRetentionMaterials() {
 
   useEffect(() => {
     if (currentOrganisation?.id) loadContracts();
-  }, [currentOrganisation?.id]);
+  }, [currentOrganisation?.id, currentTrade]);
 
   const loadContracts = async () => {
     if (!currentOrganisation?.id) return;
@@ -111,6 +113,7 @@ export default function SCCRetentionMaterials() {
       .from('scc_contracts')
       .select('id, contract_name, contract_number, contract_value, retention_percentage, retention_limit_pct, payment_claim_prefix')
       .eq('organisation_id', currentOrganisation.id)
+      .eq('trade', currentTrade)
       .eq('snapshot_locked', true)
       .order('created_at', { ascending: false });
     setContracts(data || []);

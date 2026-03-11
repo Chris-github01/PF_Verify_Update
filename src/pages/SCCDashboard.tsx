@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrganisation } from '../lib/organisationContext';
+import { useTrade } from '../lib/tradeContext';
 import PageHeader from '../components/PageHeader';
 import EarlyWarningPanel, { type EarlyWarningReport } from '../components/scc/EarlyWarningPanel';
 import PaymentClaimsList from './scc/PaymentClaimsList';
@@ -91,6 +92,7 @@ function formatDate(d: string | null) {
 
 export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [contracts, setContracts] = useState<SCCContract[]>([]);
   const [recentClaims, setRecentClaims] = useState<SCCClaimPeriod[]>([]);
   const [earlyWarnings, setEarlyWarnings] = useState<EarlyWarningReport[]>([]);
@@ -99,7 +101,7 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
 
   useEffect(() => {
     if (currentOrganisation?.id) loadData();
-  }, [currentOrganisation?.id]);
+  }, [currentOrganisation?.id, currentTrade]);
 
   const loadData = async () => {
     if (!currentOrganisation?.id) return;
@@ -110,17 +112,20 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
           .from('scc_contracts')
           .select('*')
           .eq('organisation_id', currentOrganisation.id)
+          .eq('trade', currentTrade)
           .order('created_at', { ascending: false }),
         supabase
           .from('scc_claim_periods')
           .select('*')
           .eq('organisation_id', currentOrganisation.id)
+          .eq('trade', currentTrade)
           .order('created_at', { ascending: false })
           .limit(20),
         supabase
           .from('scc_early_warning_reports')
           .select('*')
           .eq('organisation_id', currentOrganisation.id)
+          .eq('trade_type', currentTrade)
           .order('created_at', { ascending: false }),
       ]);
 

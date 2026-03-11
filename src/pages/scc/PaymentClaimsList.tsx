@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
+import { useTrade } from '../../lib/tradeContext';
 import PaymentClaimForm from './PaymentClaimForm';
 
 interface PaymentClaimSummary {
@@ -65,6 +66,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 
 export default function PaymentClaimsList() {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [view, setView] = useState<'list' | 'form'>('list');
   const [claims, setClaims] = useState<PaymentClaimSummary[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -78,7 +80,7 @@ export default function PaymentClaimsList() {
 
   useEffect(() => {
     if (currentOrganisation?.id) loadData();
-  }, [currentOrganisation?.id]);
+  }, [currentOrganisation?.id, currentTrade]);
 
   const loadData = async () => {
     if (!currentOrganisation?.id) return;
@@ -88,11 +90,13 @@ export default function PaymentClaimsList() {
         .from('payment_claims')
         .select('*')
         .eq('organisation_id', currentOrganisation.id)
+        .eq('trade', currentTrade)
         .order('created_at', { ascending: false }),
       supabase
         .from('scc_contracts')
         .select('id, contract_name, contract_number, subcontractor_company, contract_value')
         .eq('organisation_id', currentOrganisation.id)
+        .eq('trade', currentTrade)
         .eq('snapshot_locked', true)
         .order('created_at', { ascending: false }),
     ]);

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
+import { useTrade } from '../../lib/tradeContext';
 import {
   computeClaimTotals, computeLineTotal, LEGAL_NOTICE,
   type ClaimLine, type ClaimTotals
@@ -108,6 +109,7 @@ const DEFAULT_CLAIM: Omit<PaymentClaim, 'id'> = {
 
 export default function PaymentClaimForm({ claimId, contractId, onBack, onSaved }: Props) {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [claim, setClaim] = useState<PaymentClaim | null>(null);
   const [lines, setLines] = useState<ClaimLine[]>([]);
   const [activity, setActivity] = useState<ActivityLog[]>([]);
@@ -231,7 +233,7 @@ export default function PaymentClaimForm({ claimId, contractId, onBack, onSaved 
       if (isNew || !claim.id) {
         const { data, error: err } = await supabase
           .from('payment_claims')
-          .insert({ organisation_id: currentOrganisation.id, contract_id: contractId || null, status: 'draft', ...buildSavePayload(totals) })
+          .insert({ organisation_id: currentOrganisation.id, contract_id: contractId || null, status: 'draft', trade: currentTrade, ...buildSavePayload(totals) })
           .select().single();
         if (err || !data) throw err || new Error('Failed to create');
         const newId = data.id;

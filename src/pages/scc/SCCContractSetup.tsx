@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
+import { useTrade } from '../../lib/tradeContext';
 
 interface SCCContract {
   id: string;
@@ -79,6 +80,7 @@ interface SCCContractSetupProps {
 
 export default function SCCContractSetup({ importId, onImportConsumed }: SCCContractSetupProps = {}) {
   const { currentOrganisation } = useOrganisation();
+  const { currentTrade } = useTrade();
   const [contracts, setContracts] = useState<SCCContract[]>([]);
   const [scopeLines, setScopeLines] = useState<ScopeLine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +94,7 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
 
   useEffect(() => {
     if (currentOrganisation?.id) loadContracts();
-  }, [currentOrganisation?.id]);
+  }, [currentOrganisation?.id, currentTrade]);
 
   useEffect(() => {
     if (importId && currentOrganisation?.id) {
@@ -137,6 +139,7 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
       .from('scc_contracts')
       .select('*')
       .eq('organisation_id', currentOrganisation.id)
+      .eq('trade', currentTrade)
       .order('created_at', { ascending: false });
     setContracts(data || []);
     setLoading(false);
@@ -194,6 +197,7 @@ export default function SCCContractSetup({ importId, onImportConsumed }: SCCCont
           snapshot_locked: false,
           next_claim_number: 1,
           quote_import_id: prefillImportId || null,
+          trade: currentTrade,
         })
         .select()
         .single();
