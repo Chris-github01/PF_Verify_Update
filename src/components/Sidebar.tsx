@@ -96,19 +96,17 @@ const subContractorMenu = [
   {
     section: 'SCC: SUBCONTRACT COMMERCIAL CONTROL',
     items: [
-      { id: 'scc' as SidebarTab,                label: 'SCC Dashboard',     icon: Layers     },
-      { id: 'scc-quote-import' as SidebarTab,   label: 'Quote Import',      icon: FileText   },
-      { id: 'scc-contract-setup' as SidebarTab, label: 'Contract Setup',    icon: Briefcase  },
-      { id: 'scc-claims' as SidebarTab,         label: 'Payment Claims',    icon: TrendingUp },
-      { id: 'scc-retention' as SidebarTab,      label: 'Retention & Materials', icon: DollarSign },
-      { id: 'scc-variations' as SidebarTab,     label: 'Variation Register', icon: RefreshCw },
+      { id: 'scc' as SidebarTab,              label: 'SCC Dashboard',         icon: Layers     },
+      { id: 'scc-quote-import' as SidebarTab, label: 'Quote Import',          icon: FileText   },
+      { id: 'scc-claims' as SidebarTab,       label: 'Payment Claims',        icon: TrendingUp },
+      { id: 'scc-retention' as SidebarTab,    label: 'Retention & Materials', icon: DollarSign },
+      { id: 'scc-variations' as SidebarTab,   label: 'Variation Register',    icon: RefreshCw  },
     ]
   },
   {
     section: 'BASELINE TRACKER',
     items: [
-      { id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard',  icon: BookOpen   },
-      { id: 'bt-projects' as SidebarTab,  label: 'BT Projects',   icon: FolderOpen },
+      { id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard', icon: BookOpen },
     ]
   }
 ];

@@ -816,10 +816,10 @@ function AppContent() {
         return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
 
       case 'scc-quote-import':
-        return <SCCQuoteImport onContinue={(importId) => { setSccImportId(importId); setActiveTab('scc-contract-setup'); }} />;
+        return <SCCQuoteImport onContinue={(_importId) => { setActiveTab('bt-dashboard'); }} />;
 
       case 'scc-contract-setup':
-        return <SCCContractSetup importId={sccImportId} onImportConsumed={() => setSccImportId(null)} />;
+        return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
 
       case 'scc-claims':
         return <PaymentClaimsList />;

@@ -599,8 +599,8 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
           <p className="text-sm text-gray-400 mt-0.5">
             {imports[0]?.status === 'parsing' ? 'Step 2 — AI is parsing your quote' :
              imports[0]?.status === 'parsed' || imports[0]?.status === 'reviewed' ? 'Step 3 — Review and clean the extracted lines' :
-             imports[0]?.status === 'locked' ? 'Step 4 — Baseline locked as contract truth' :
-             'Step 1 — Import your approved quote as the contract baseline'}
+             imports[0]?.status === 'locked' ? 'Step 4 — Baseline locked. Proceed to Baseline Tracker to manage progress claims.' :
+             'Step 1 — Import your awarded quote as the contract baseline'}
           </p>
         </div>
       </div>
@@ -613,14 +613,19 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
         };
         const currentStep = latestImport ? (statusToStep[latestImport.status] ?? 1) : 1;
         const steps = [
-          { num: 1, label: 'Import Quote',  desc: 'Upload PDF or Excel' },
-          { num: 2, label: 'AI Parsing',    desc: 'Auto-extract line items' },
-          { num: 3, label: 'Review Lines',  desc: 'Check & clean data' },
-          { num: 4, label: 'Lock Baseline', desc: 'Freeze as contract truth' },
+          { num: 1, label: 'Import Quote',      desc: 'Upload PDF or Excel' },
+          { num: 2, label: 'AI Parsing',         desc: 'Auto-extract line items' },
+          { num: 3, label: 'Review Lines',       desc: 'Check & clean data' },
+          { num: 4, label: 'Lock Baseline',      desc: 'Freeze as contract truth' },
+          { num: 5, label: 'Baseline Tracker',   desc: 'Track progress claims' },
         ];
         const handleStepClick = (stepNum: number) => {
           if (!latestImport) return;
           if (stepNum === 1) { setView('list'); return; }
+          if (stepNum === 5 && latestImport.status === 'locked' && onContinue) {
+            onContinue(latestImport.id);
+            return;
+          }
           if (stepNum <= currentStep) {
             setSelectedImport(latestImport);
             setEditingMeta({
@@ -636,9 +641,11 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
           <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-5">
             <div className="flex items-center gap-6 overflow-x-auto pb-1">
               {steps.map((step, i) => {
+                const isStep5 = step.num === 5;
+                const isStep5Unlocked = isStep5 && latestImport?.status === 'locked' && !!onContinue;
                 const isActive = step.num === currentStep;
                 const isCompleted = step.num < currentStep;
-                const isClickable = latestImport && step.num <= currentStep;
+                const isClickable = isStep5Unlocked || (latestImport && step.num <= currentStep);
                 return (
                   <div key={step.num} className="flex items-center gap-4 flex-shrink-0">
                     <button
@@ -649,16 +656,17 @@ export default function SCCQuoteImport({ onContinue }: { onContinue?: (importId:
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
                         isActive ? 'bg-cyan-500 text-white' :
                         isCompleted ? 'bg-cyan-800 text-cyan-300' :
+                        isStep5Unlocked ? 'bg-cyan-600 text-white' :
                         'bg-slate-700 text-gray-500'
                       }`}>
-                        {isCompleted ? <CheckCircle size={16} /> : step.num}
+                        {isCompleted ? <CheckCircle size={16} /> : isStep5Unlocked ? <ArrowRight size={16} /> : step.num}
                       </div>
                       <div>
-                        <p className={`text-sm font-medium ${isActive ? 'text-white' : isCompleted ? 'text-cyan-400' : 'text-gray-500'}`}>{step.label}</p>
+                        <p className={`text-sm font-medium ${isActive ? 'text-white' : isCompleted ? 'text-cyan-400' : isStep5Unlocked ? 'text-cyan-400' : 'text-gray-500'}`}>{step.label}</p>
                         <p className="text-xs text-gray-600">{step.desc}</p>
                       </div>
                     </button>
-                    {i < 3 && <ChevronRight size={16} className="text-gray-700 flex-shrink-0" />}
+                    {i < 4 && <ChevronRight size={16} className="text-gray-700 flex-shrink-0" />}
                   </div>
                 );
               })}
