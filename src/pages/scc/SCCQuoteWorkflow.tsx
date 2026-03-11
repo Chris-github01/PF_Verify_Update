@@ -69,6 +69,17 @@ const STEP_INTROS: Record<WorkflowStep, { title: string; what: string; tasks: st
 
 const STEP_ORDER: WorkflowStep[] = ['import', 'review_clean', 'quote_intelligence', 'scope_matrix'];
 
+function deriveWorkflowState(importStatus: string | null): { completed: Set<WorkflowStep>; step: WorkflowStep } {
+  if (!importStatus) return { completed: new Set(), step: 'import' };
+  if (importStatus === 'reviewed' || importStatus === 'locked') {
+    return { completed: new Set(['import'] as WorkflowStep[]), step: 'review_clean' };
+  }
+  if (importStatus === 'parsed') {
+    return { completed: new Set(['import'] as WorkflowStep[]), step: 'review_clean' };
+  }
+  return { completed: new Set(), step: 'import' };
+}
+
 export default function SCCQuoteWorkflow() {
   const { currentOrganisation } = useOrganisation();
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('import');
@@ -79,22 +90,57 @@ export default function SCCQuoteWorkflow() {
 
   useEffect(() => {
     if (currentOrganisation?.id) {
-      ensureSentinelProject();
+      initialiseWorkflow();
     }
   }, [currentOrganisation?.id]);
 
-  const ensureSentinelProject = async () => {
+  const initialiseWorkflow = async () => {
     if (!currentOrganisation?.id) return;
     setLoadingProject(true);
     try {
-      const { data } = await supabase.rpc('get_or_create_scc_sentinel_project', {
-        org_id: currentOrganisation.id,
-      });
-      if (data) setSentinelProjectId(data);
+      const [projectRes, importRes] = await Promise.all([
+        supabase.rpc('get_or_create_scc_sentinel_project', { org_id: currentOrganisation.id }),
+        supabase
+          .from('scc_quote_imports')
+          .select('status, scc_workflow_step')
+          .eq('organisation_id', currentOrganisation.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      if (projectRes.data) setSentinelProjectId(projectRes.data);
+
+      const latestImport = importRes.data;
+      const savedStep = latestImport?.scc_workflow_step as WorkflowStep | null;
+
+      if (savedStep && STEP_ORDER.includes(savedStep)) {
+        const idx = STEP_ORDER.indexOf(savedStep);
+        const completed = new Set(STEP_ORDER.slice(0, idx)) as Set<WorkflowStep>;
+        setCompletedSteps(completed);
+        setCurrentStep(savedStep);
+      } else {
+        const { completed, step } = deriveWorkflowState(latestImport?.status ?? null);
+        setCompletedSteps(completed);
+        setCurrentStep(step);
+      }
     } catch (err) {
-      console.error('Failed to get SCC sentinel project:', err);
+      console.error('Failed to initialise SCC workflow:', err);
     } finally {
       setLoadingProject(false);
+    }
+  };
+
+  const persistStep = async (step: WorkflowStep) => {
+    if (!currentOrganisation?.id) return;
+    try {
+      await supabase
+        .from('scc_quote_imports')
+        .update({ scc_workflow_step: step, updated_at: new Date().toISOString() })
+        .eq('organisation_id', currentOrganisation.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+    } catch {
     }
   };
 
@@ -111,6 +157,7 @@ export default function SCCQuoteWorkflow() {
     const currentIdx = STEP_ORDER.indexOf(currentStep);
     if (stepIdx <= currentIdx || completedSteps.has(step) || stepIdx === currentIdx + 1) {
       setCurrentStep(step);
+      persistStep(step);
     }
   };
 
@@ -118,20 +165,25 @@ export default function SCCQuoteWorkflow() {
     setSentinelProjectId(pid);
     markComplete('import');
     setCurrentStep('review_clean');
+    persistStep('review_clean');
   };
 
   const handleNext = (from: WorkflowStep) => {
     markComplete(from);
     const idx = STEP_ORDER.indexOf(from);
     if (idx < STEP_ORDER.length - 1) {
-      setCurrentStep(STEP_ORDER[idx + 1]);
+      const next = STEP_ORDER[idx + 1];
+      setCurrentStep(next);
+      persistStep(next);
     }
   };
 
   const handleBack = (from: WorkflowStep) => {
     const idx = STEP_ORDER.indexOf(from);
     if (idx > 0) {
-      setCurrentStep(STEP_ORDER[idx - 1]);
+      const prev = STEP_ORDER[idx - 1];
+      setCurrentStep(prev);
+      persistStep(prev);
     }
   };
 
