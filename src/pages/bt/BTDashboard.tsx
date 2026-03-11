@@ -25,6 +25,10 @@ interface RecentProject {
 
 interface BTDashboardProps {
   onNavigate: (view: string, projectId?: string) => void;
+  projectId?: string;
+  projectName?: string;
+  projectClient?: string;
+  projectReference?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -47,7 +51,7 @@ const claimStatusColors: Record<string, string> = {
   disputed: 'bg-red-900/50 text-red-300',
 };
 
-export default function BTDashboard({ onNavigate }: BTDashboardProps) {
+export default function BTDashboard({ onNavigate, projectId, projectName, projectClient, projectReference }: BTDashboardProps) {
   const { currentOrganisation } = useOrganisation();
   const [stats, setStats] = useState<DashboardStats>({
     totalProjects: 0,
@@ -170,7 +174,15 @@ export default function BTDashboard({ onNavigate }: BTDashboardProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-50">Baseline Tracker</h1>
-          <p className="text-sm text-slate-400 mt-1">Supplier baseline, progress and payment claim management</p>
+          {projectName ? (
+            <p className="text-sm text-cyan-400 mt-1 font-medium">
+              {projectName}
+              {projectClient && <span className="text-slate-400 font-normal"> &mdash; {projectClient}</span>}
+              {projectReference && <span className="text-slate-500 font-normal text-xs ml-2">({projectReference})</span>}
+            </p>
+          ) : (
+            <p className="text-sm text-slate-400 mt-1">Supplier baseline, progress and payment claim management</p>
+          )}
         </div>
         <button
           onClick={() => onNavigate('bt-project-new')}

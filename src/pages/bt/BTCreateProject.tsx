@@ -1,26 +1,30 @@
 import { useState } from 'react';
-import { ChevronLeft, Save, FolderOpen, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Save, FolderOpen, AlertCircle, Link } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 import type { BTSourceType, BTClaimFrequency } from '../../types/baselineTracker.types';
 
 interface BTCreateProjectProps {
   onNavigate: (view: string, projectId?: string) => void;
+  projectId?: string;
+  projectName?: string;
+  projectClient?: string;
+  projectReference?: string;
 }
 
-export default function BTCreateProject({ onNavigate }: BTCreateProjectProps) {
+export default function BTCreateProject({ onNavigate, projectId: mainProjectId, projectName, projectClient, projectReference }: BTCreateProjectProps) {
   const { currentOrganisation } = useOrganisation();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
-    project_name: '',
+    project_name: projectName || '',
     project_code: '',
-    client_name: '',
+    client_name: projectClient || '',
     main_contractor_name: '',
     site_address: '',
-    contract_reference: '',
-    linked_quote_audit_reference: '',
+    contract_reference: projectReference || '',
+    linked_quote_audit_reference: mainProjectId || '',
     source_type: 'manual' as BTSourceType,
     start_date: '',
     end_date: '',
@@ -133,6 +137,16 @@ export default function BTCreateProject({ onNavigate }: BTCreateProjectProps) {
           <p className="text-xs text-slate-400 mt-0.5">Create a new Baseline Tracker project</p>
         </div>
       </div>
+
+      {projectName && (
+        <div className="mb-6 flex items-start gap-2 rounded-xl bg-cyan-900/20 border border-cyan-700/50 px-4 py-3">
+          <Link size={15} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-cyan-300">
+            Pre-filled from current project: <span className="font-semibold">{projectName}</span>
+            {projectClient && <span className="text-cyan-400/70"> &mdash; {projectClient}</span>}
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 flex items-start gap-2 rounded-xl bg-red-900/30 border border-red-700 px-4 py-3">

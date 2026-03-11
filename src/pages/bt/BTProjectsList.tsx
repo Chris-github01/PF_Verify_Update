@@ -16,6 +16,10 @@ interface ProjectRow {
 
 interface BTProjectsListProps {
   onNavigate: (view: string, projectId?: string) => void;
+  projectId?: string;
+  projectName?: string;
+  projectClient?: string;
+  projectReference?: string;
 }
 
 const STATUS_FILTERS = ['all', 'draft', 'active', 'claim_in_progress', 'submitted', 'closed', 'archived'];
@@ -49,7 +53,7 @@ const claimChip: Record<string, string> = {
   disputed: 'bg-red-900/50 text-red-300',
 };
 
-export default function BTProjectsList({ onNavigate }: BTProjectsListProps) {
+export default function BTProjectsList({ onNavigate, projectId: mainProjectId, projectName, projectClient, projectReference }: BTProjectsListProps) {
   const { currentOrganisation } = useOrganisation();
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +129,15 @@ export default function BTProjectsList({ onNavigate }: BTProjectsListProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-50">Projects</h1>
-          <p className="text-sm text-slate-400 mt-1">All baseline tracker projects</p>
+          {projectName ? (
+            <p className="text-sm text-cyan-400 mt-1 font-medium">
+              {projectName}
+              {projectClient && <span className="text-slate-400 font-normal"> &mdash; {projectClient}</span>}
+              {projectReference && <span className="text-slate-500 font-normal text-xs ml-2">({projectReference})</span>}
+            </p>
+          ) : (
+            <p className="text-sm text-slate-400 mt-1">All baseline tracker projects</p>
+          )}
         </div>
         <button
           onClick={() => onNavigate('bt-project-new')}

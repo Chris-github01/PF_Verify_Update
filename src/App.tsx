@@ -832,7 +832,7 @@ function AppContent() {
 
       case 'bt-dashboard':
       case 'bt-projects':
-        return <BaselineTrackerModule />;
+        return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
 
       case 'commercial':
         return <CommercialControlDashboard />;

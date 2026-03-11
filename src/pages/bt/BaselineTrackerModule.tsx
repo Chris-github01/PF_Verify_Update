@@ -12,7 +12,14 @@ type BTView =
   | 'bt-project-detail'
   | 'bt-claim-detail';
 
-export default function BaselineTrackerModule() {
+interface BaselineTrackerModuleProps {
+  projectId?: string;
+  projectName?: string;
+  projectClient?: string;
+  projectReference?: string;
+}
+
+export default function BaselineTrackerModule({ projectId, projectName, projectClient, projectReference }: BaselineTrackerModuleProps) {
   const [view, setView] = useState<BTView>('bt-dashboard');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
@@ -45,16 +52,18 @@ export default function BaselineTrackerModule() {
     }
   };
 
+  const contextProps = { projectId, projectName, projectClient, projectReference };
+
   if (view === 'bt-dashboard') {
-    return <BTDashboard onNavigate={handleNavigate} />;
+    return <BTDashboard onNavigate={handleNavigate} {...contextProps} />;
   }
 
   if (view === 'bt-projects') {
-    return <BTProjectsList onNavigate={handleNavigate} />;
+    return <BTProjectsList onNavigate={handleNavigate} {...contextProps} />;
   }
 
   if (view === 'bt-project-new') {
-    return <BTCreateProject onNavigate={handleNavigate} />;
+    return <BTCreateProject onNavigate={handleNavigate} {...contextProps} />;
   }
 
   if (view === 'bt-project-detail' && selectedProjectId) {
@@ -65,5 +74,5 @@ export default function BaselineTrackerModule() {
     return <BTClaimDetail claimId={selectedClaimId} onNavigate={handleNavigate} />;
   }
 
-  return <BTDashboard onNavigate={handleNavigate} />;
+  return <BTDashboard onNavigate={handleNavigate} {...contextProps} />;
 }
