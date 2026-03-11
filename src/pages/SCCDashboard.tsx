@@ -197,49 +197,67 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+        <button
+          onClick={() => setActiveView('contracts')}
+          className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 text-left hover:bg-slate-700/50 hover:border-cyan-500/40 transition-all group"
+        >
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center group-hover:bg-cyan-500/30 transition-colors">
               <FileText size={16} className="text-cyan-400" />
             </div>
             <span className="text-sm text-gray-400">Total Contracts</span>
           </div>
           <div className="text-2xl font-bold text-white">{contracts.length}</div>
-          <div className="text-xs text-green-400 mt-1">{activeContracts} active</div>
-        </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-xs text-green-400">{activeContracts} active</span>
+            <span className="text-xs text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">View <ChevronRight size={11} /></span>
+          </div>
+        </button>
 
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+        <button
+          onClick={() => setActiveView('contracts')}
+          className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 text-left hover:bg-slate-700/50 hover:border-green-500/40 transition-all group"
+        >
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center group-hover:bg-green-500/30 transition-colors">
               <DollarSign size={16} className="text-green-400" />
             </div>
             <span className="text-sm text-gray-400">Contract Value</span>
           </div>
           <div className="text-2xl font-bold text-white">{formatCurrency(totalContractValue)}</div>
-          <div className="text-xs text-gray-500 mt-1">across all contracts</div>
-        </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-xs text-gray-500">across all contracts</span>
+            <span className="text-xs text-green-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">View <ChevronRight size={11} /></span>
+          </div>
+        </button>
 
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
+        <button
+          onClick={() => setActiveView('claims')}
+          className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 text-left hover:bg-slate-700/50 hover:border-blue-500/40 transition-all group"
+        >
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
               <TrendingUp size={16} className="text-blue-400" />
             </div>
             <span className="text-sm text-gray-400">Total Claimed</span>
           </div>
           <div className="text-2xl font-bold text-white">{formatCurrency(totalClaimed)}</div>
-          <div className="text-xs text-gray-500 mt-1">cumulative to date</div>
-        </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-xs text-gray-500">cumulative to date</span>
+            <span className="text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">View claims <ChevronRight size={11} /></span>
+          </div>
+        </button>
 
-        <div
-          onClick={() => openWarnings > 0 && setActiveView('early_warning')}
-          className={`rounded-xl p-4 transition-colors ${
+        <button
+          onClick={() => openWarnings > 0 ? setActiveView('early_warning') : setActiveView('claims')}
+          className={`rounded-xl p-4 text-left transition-all group ${
             openWarnings > 0
-              ? 'bg-red-500/10 border border-red-500/30 cursor-pointer hover:bg-red-500/15'
-              : 'bg-slate-800/50 border border-slate-700/50'
+              ? 'bg-red-500/10 border border-red-500/30 hover:bg-red-500/15 hover:border-red-500/50'
+              : 'bg-slate-800/50 border border-slate-700/50 hover:bg-slate-700/50 hover:border-yellow-500/40'
           }`}
         >
           <div className="flex items-center gap-2 mb-3">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${openWarnings > 0 ? 'bg-red-500/20' : 'bg-yellow-500/20'}`}>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${openWarnings > 0 ? 'bg-red-500/20 group-hover:bg-red-500/30' : 'bg-yellow-500/20 group-hover:bg-yellow-500/30'}`}>
               {openWarnings > 0
                 ? <AlertTriangle size={16} className="text-red-400" />
                 : <Clock size={16} className="text-yellow-400" />}
@@ -249,10 +267,15 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
           <div className={`text-2xl font-bold ${openWarnings > 0 ? 'text-red-300' : 'text-white'}`}>
             {openWarnings > 0 ? openWarnings : pendingApproval}
           </div>
-          <div className={`text-xs mt-1 ${openWarnings > 0 ? 'text-red-400/70' : 'text-gray-500'}`}>
-            {openWarnings > 0 ? 'action required' : 'claims awaiting response'}
+          <div className="flex items-center justify-between mt-1">
+            <span className={`text-xs ${openWarnings > 0 ? 'text-red-400/70' : 'text-gray-500'}`}>
+              {openWarnings > 0 ? 'action required' : 'claims awaiting response'}
+            </span>
+            <span className={`text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 ${openWarnings > 0 ? 'text-red-400' : 'text-yellow-400'}`}>
+              {openWarnings > 0 ? 'Review' : 'View'} <ChevronRight size={11} />
+            </span>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Navigation Tabs */}
@@ -426,18 +449,41 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                   <div className="divide-y divide-slate-700/30">
                     {contracts.slice(0, 5).map(contract => {
                       const cfg = CONTRACT_STATUS[contract.status] || CONTRACT_STATUS.setup;
+                      const needsLock = !contract.snapshot_locked;
                       return (
-                        <div key={contract.id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-700/20 transition-colors cursor-pointer">
+                        <div
+                          key={contract.id}
+                          onClick={() => setActiveView('contracts')}
+                          className="flex items-center gap-4 px-5 py-4 hover:bg-slate-700/30 transition-colors cursor-pointer group"
+                        >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <span className="font-medium text-white truncate">{contract.contract_name || contract.contract_number}</span>
+                              <span className="font-medium text-white truncate group-hover:text-cyan-300 transition-colors">{contract.contract_name || contract.contract_number}</span>
                               {contract.snapshot_locked && <Lock size={12} className="text-gray-500 flex-shrink-0" />}
                             </div>
                             <div className="text-xs text-gray-400">{contract.subcontractor_company || contract.subcontractor_name}</div>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <div className="text-sm font-semibold text-white">{formatCurrency(contract.contract_value)}</div>
-                            <span className={`text-xs px-2 py-0.5 rounded ${cfg.bg} ${cfg.color} ${cfg.border} border`}>{cfg.label}</span>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            {needsLock && (
+                              <button
+                                onClick={e => { e.stopPropagation(); onNavigate?.('scc-quote-import'); }}
+                                className="hidden group-hover:flex items-center gap-1 text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-lg hover:bg-amber-500/25 transition-colors"
+                              >
+                                <Lock size={11} /> Lock snapshot
+                              </button>
+                            )}
+                            {!needsLock && (
+                              <button
+                                onClick={e => { e.stopPropagation(); onNavigate?.('scc-claims'); }}
+                                className="hidden group-hover:flex items-center gap-1 text-xs text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2.5 py-1 rounded-lg hover:bg-cyan-500/25 transition-colors"
+                              >
+                                <Plus size={11} /> New claim
+                              </button>
+                            )}
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-white">{formatCurrency(contract.contract_value)}</div>
+                              <span className={`text-xs px-2 py-0.5 rounded ${cfg.bg} ${cfg.color} ${cfg.border} border`}>{cfg.label}</span>
+                            </div>
                           </div>
                         </div>
                       );
@@ -465,18 +511,50 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                     {recentClaims.slice(0, 5).map(claim => {
                       const cfg = CLAIM_STATUS[claim.status] || CLAIM_STATUS.draft;
                       const isHeld = claim.status === 'commercial_hold';
+                      const isDraft = claim.status === 'draft';
+                      const isWarning = claim.status === 'overrun_flagged';
                       return (
-                        <div key={claim.id} className={`flex items-center gap-4 px-5 py-4 transition-colors cursor-pointer ${isHeld ? 'bg-red-500/5 hover:bg-red-500/10' : 'hover:bg-slate-700/20'}`}>
+                        <div
+                          key={claim.id}
+                          onClick={() => setActiveView('claims')}
+                          className={`flex items-center gap-4 px-5 py-4 transition-colors cursor-pointer group ${isHeld ? 'bg-red-500/5 hover:bg-red-500/10' : 'hover:bg-slate-700/30'}`}
+                        >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <span className="font-medium text-white text-sm truncate">{claim.period_name}</span>
+                              <span className={`font-medium text-sm truncate transition-colors ${isHeld ? 'text-red-300' : 'text-white group-hover:text-cyan-300'}`}>{claim.period_name}</span>
                               {isHeld && <Lock size={11} className="text-red-400 flex-shrink-0" />}
                             </div>
                             <div className="text-xs text-gray-400">{formatDate(claim.claim_date)}</div>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <div className="text-sm font-semibold text-white">{formatCurrency(claim.net_payable_this_period)}</div>
-                            <span className={`text-xs px-2 py-0.5 rounded ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            {isDraft && (
+                              <button
+                                onClick={e => { e.stopPropagation(); onNavigate?.('scc-claims'); }}
+                                className="hidden group-hover:flex items-center gap-1 text-xs text-blue-300 bg-blue-500/15 border border-blue-500/30 px-2.5 py-1 rounded-lg hover:bg-blue-500/25 transition-colors"
+                              >
+                                <Send size={11} /> Submit
+                              </button>
+                            )}
+                            {isHeld && (
+                              <button
+                                onClick={e => { e.stopPropagation(); setActiveView('early_warning'); }}
+                                className="hidden group-hover:flex items-center gap-1 text-xs text-red-300 bg-red-500/15 border border-red-500/30 px-2.5 py-1 rounded-lg hover:bg-red-500/25 transition-colors"
+                              >
+                                <ShieldAlert size={11} /> Resolve hold
+                              </button>
+                            )}
+                            {isWarning && (
+                              <button
+                                onClick={e => { e.stopPropagation(); setActiveView('early_warning'); }}
+                                className="hidden group-hover:flex items-center gap-1 text-xs text-orange-300 bg-orange-500/15 border border-orange-500/30 px-2.5 py-1 rounded-lg hover:bg-orange-500/25 transition-colors"
+                              >
+                                <AlertTriangle size={11} /> Review warning
+                              </button>
+                            )}
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-white">{formatCurrency(claim.net_payable_this_period)}</div>
+                              <span className={`text-xs px-2 py-0.5 rounded ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+                            </div>
                           </div>
                         </div>
                       );
@@ -626,10 +704,15 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                     <tbody className="divide-y divide-slate-700/30">
                       {contracts.map(contract => {
                         const cfg = CONTRACT_STATUS[contract.status] || CONTRACT_STATUS.setup;
+                        const needsLock = !contract.snapshot_locked;
                         return (
-                          <tr key={contract.id} className="hover:bg-slate-700/20 transition-colors cursor-pointer">
+                          <tr
+                            key={contract.id}
+                            className="hover:bg-slate-700/20 transition-colors cursor-pointer group"
+                            onClick={() => needsLock ? onNavigate?.('scc-quote-import') : onNavigate?.('scc-claims')}
+                          >
                             <td className="px-5 py-4">
-                              <div className="font-medium text-white">{contract.contract_name || contract.contract_number}</div>
+                              <div className="font-medium text-white group-hover:text-cyan-300 transition-colors">{contract.contract_name || contract.contract_number}</div>
                               <div className="text-xs text-gray-500">{contract.contract_number}</div>
                             </td>
                             <td className="px-5 py-4 text-gray-300">{contract.subcontractor_company || contract.subcontractor_name}</td>
@@ -641,7 +724,12 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                               {contract.snapshot_locked ? (
                                 <div className="flex items-center gap-1.5 text-green-400 text-xs"><Lock size={12} />Locked</div>
                               ) : (
-                                <div className="flex items-center gap-1.5 text-yellow-400 text-xs"><AlertCircle size={12} />Unlocked</div>
+                                <button
+                                  onClick={e => { e.stopPropagation(); onNavigate?.('scc-quote-import'); }}
+                                  className="flex items-center gap-1.5 text-amber-400 text-xs hover:text-amber-300 transition-colors"
+                                >
+                                  <AlertCircle size={12} />Unlock — lock now
+                                </button>
                               )}
                             </td>
                             <td className="px-5 py-4 text-gray-400 text-xs">{formatDate(contract.contract_start_date)}</td>
@@ -703,11 +791,17 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                         const cfg = CLAIM_STATUS[claim.status] || CLAIM_STATUS.draft;
                         const variance = claim.approved_amount !== null ? claim.approved_amount - claim.net_payable_this_period : null;
                         const isHeld = claim.status === 'commercial_hold';
+                        const isDraft = claim.status === 'draft';
+                        const isWarning = claim.status === 'overrun_flagged';
                         return (
-                          <tr key={claim.id} className={`transition-colors cursor-pointer ${isHeld ? 'bg-red-500/5 hover:bg-red-500/10' : 'hover:bg-slate-700/20'}`}>
+                          <tr
+                            key={claim.id}
+                            onClick={() => onNavigate?.('scc-claims')}
+                            className={`transition-colors cursor-pointer group ${isHeld ? 'bg-red-500/5 hover:bg-red-500/10' : 'hover:bg-slate-700/20'}`}
+                          >
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-white">{claim.period_name}</span>
+                                <span className={`font-medium transition-colors ${isHeld ? 'text-red-300' : 'text-white group-hover:text-cyan-300'}`}>{claim.period_name}</span>
                                 {isHeld && <Lock size={12} className="text-red-400" />}
                               </div>
                             </td>
@@ -723,7 +817,25 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                               ) : <span className="text-gray-500">—</span>}
                             </td>
                             <td className="px-5 py-4">
-                              <span className={`text-xs px-2 py-1 rounded ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs px-2 py-1 rounded ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+                                {isDraft && (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); onNavigate?.('scc-claims'); }}
+                                    className="hidden group-hover:flex items-center gap-1 text-xs text-blue-300 bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 rounded hover:bg-blue-500/25 transition-colors"
+                                  >
+                                    <Send size={10} /> Submit
+                                  </button>
+                                )}
+                                {(isHeld || isWarning) && (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setActiveView('early_warning'); }}
+                                    className="hidden group-hover:flex items-center gap-1 text-xs text-red-300 bg-red-500/15 border border-red-500/30 px-2 py-0.5 rounded hover:bg-red-500/25 transition-colors"
+                                  >
+                                    <ShieldAlert size={10} /> Resolve
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
