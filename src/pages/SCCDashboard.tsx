@@ -432,7 +432,7 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-white">{contracts.length} Contract{contracts.length !== 1 ? 's' : ''}</h3>
                 <button
-                  onClick={() => onNavigate?.('scc-contract-setup')}
+                  onClick={() => onNavigate?.('scc-quote-import')}
                   className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600 transition-colors">
                   <Plus size={16} />
                   New Contract
@@ -447,7 +447,7 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
                     The system locks a contract snapshot as your commercial baseline.
                   </p>
                   <button
-                    onClick={() => onNavigate?.('scc-contract-setup')}
+                    onClick={() => onNavigate?.('scc-quote-import')}
                     className="mt-6 flex items-center gap-2 px-5 py-2.5 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors">
                     <Plus size={18} />
                     Set Up First Contract

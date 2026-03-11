@@ -19,7 +19,6 @@ import ContractManager from './pages/ContractManager';
 import CommercialControlDashboard from './pages/CommercialControlDashboard';
 import SCCDashboard from './pages/SCCDashboard';
 import SCCQuoteImport from './pages/scc/SCCQuoteImport';
-import SCCContractSetup from './pages/scc/SCCContractSetup';
 import PaymentClaimsList from './pages/scc/PaymentClaimsList';
 import SCCRetentionMaterials from './pages/scc/SCCRetentionMaterials';
 import BaselineTrackerModule from './pages/bt/BaselineTrackerModule';
@@ -83,7 +82,6 @@ function AppContent() {
   const [orgLicensing, setOrgLicensing] = useState<{ licensed_trades: string[]; subscription_status: string } | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
-  const [sccImportId, setSccImportId] = useState<string | null>(null);
   const [isTrialExpired, setIsTrialExpired] = useState(false);
   const [checkingTrial, setCheckingTrial] = useState(false);
   const { currentOrganisation, organisations, loading: orgLoading, isGodMode, setCurrentOrganisation } = useOrganisation();
@@ -818,8 +816,6 @@ function AppContent() {
       case 'scc-quote-import':
         return <SCCQuoteImport onContinue={(_importId) => { setActiveTab('bt-dashboard'); }} />;
 
-      case 'scc-contract-setup':
-        return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
 
       case 'scc-claims':
         return <PaymentClaimsList />;
@@ -831,7 +827,6 @@ function AppContent() {
         return <SCCDashboard />;
 
       case 'bt-dashboard':
-      case 'bt-projects':
         return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
 
       case 'commercial':

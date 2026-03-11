@@ -19,7 +19,6 @@ import {
   RefreshCw,
   HardHat,
   BookOpen,
-  FolderOpen,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -46,12 +45,10 @@ export type SidebarTab =
   | 'settings'
   | 'scc'
   | 'scc-quote-import'
-  | 'scc-contract-setup'
   | 'scc-claims'
   | 'scc-retention'
   | 'scc-variations'
-  | 'bt-dashboard'
-  | 'bt-projects';
+  | 'bt-dashboard';
 
 interface SidebarProps {
   activeTab: SidebarTab;
@@ -86,8 +83,7 @@ const mainContractorMenu = [
   {
     section: 'BASELINE TRACKER',
     items: [
-      { id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard',  icon: BookOpen   },
-      { id: 'bt-projects' as SidebarTab,  label: 'BT Projects',   icon: FolderOpen },
+      { id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard', icon: BookOpen },
     ]
   }
 ];
