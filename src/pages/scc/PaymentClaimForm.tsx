@@ -12,6 +12,7 @@ import {
   type ClaimLine, type ClaimTotals
 } from '../../lib/scc/paymentClaimCalculations';
 import { exportPaymentClaimExcel, type ClaimHeader } from '../../lib/scc/paymentClaimExport';
+import { exportPaymentClaimPDF } from '../../lib/scc/paymentClaimPDF';
 
 interface PaymentClaim {
   id: string;
@@ -327,7 +328,41 @@ export default function PaymentClaimForm({ claimId, contractId, onBack, onSaved 
   };
 
   const handlePdfPrint = () => {
-    window.print();
+    if (!claim) return;
+    const totals = buildTotals();
+    if (!totals) return;
+    const header: ClaimHeader = {
+      claim_number: claim.claim_number,
+      our_ref: claim.our_ref,
+      internal_reference: claim.internal_reference,
+      trade: claim.trade,
+      project_name: claim.project_name,
+      site_location: claim.site_location,
+      claim_period: claim.claim_period,
+      claim_period_start: claim.claim_period_start,
+      claim_period_end: claim.claim_period_end,
+      submission_date: claim.submission_date,
+      last_date_for_submitting: claim.last_date_for_submitting,
+      due_date: claim.due_date,
+      payer_company: claim.payer_company,
+      payer_attention: claim.payer_attention,
+      payer_address: claim.payer_address,
+      payee_company: claim.payee_company,
+      payee_contact: claim.payee_contact,
+      payee_address: claim.payee_address,
+      bank_name: claim.bank_name,
+      account_name: claim.account_name,
+      account_number: claim.account_number,
+      payment_notes: claim.payment_notes,
+      retention_rate_tier1: claim.retention_rate_tier1,
+      retention_rate_tier2: claim.retention_rate_tier2,
+      retention_rate_tier3: claim.retention_rate_tier3,
+      retention_released: claim.retention_released,
+      previous_net_claimed: claim.previous_net_claimed,
+      net_payment_certified: claim.net_payment_certified,
+      status: claim.status,
+    };
+    exportPaymentClaimPDF(header, lines, totals, claim.logo_url);
   };
 
   const uploadLogo = async (file: File) => {
