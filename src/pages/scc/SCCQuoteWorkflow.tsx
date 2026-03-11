@@ -66,13 +66,14 @@ function deriveWorkflowState(importStatus: string | null): { completed: Set<Work
   return { completed: new Set(), step: 'import' };
 }
 
-export default function SCCQuoteWorkflow() {
+export default function SCCQuoteWorkflow({ onFinish }: { onFinish?: () => void } = {}) {
   const { currentOrganisation } = useOrganisation();
   const [currentStep, setCurrentStep] = useState<WorkflowStep>('import');
   const [sentinelProjectId, setSentinelProjectId] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(true);
   const [completedSteps, setCompletedSteps] = useState<Set<WorkflowStep>>(new Set());
   const [dismissedIntros, setDismissedIntros] = useState<Set<WorkflowStep>>(new Set());
+  const [finished, setFinished] = useState(false);
 
   useEffect(() => {
     if (currentOrganisation?.id) {
@@ -184,6 +185,11 @@ export default function SCCQuoteWorkflow() {
       const next = STEP_ORDER[idx + 1];
       setCurrentStep(next);
       persistStep(next);
+    } else {
+      setFinished(true);
+      setTimeout(() => {
+        onFinish?.();
+      }, 1800);
     }
   };
 
@@ -199,6 +205,23 @@ export default function SCCQuoteWorkflow() {
   const currentStepIdx = STEP_ORDER.indexOf(currentStep);
   const intro = STEP_INTROS[currentStep];
   const showIntro = !dismissedIntros.has(currentStep);
+
+  if (finished) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-24 px-6 text-center">
+        <div className="w-20 h-20 bg-green-500/20 rounded-2xl flex items-center justify-center mb-6">
+          <CheckCircle size={40} className="text-green-400" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Workflow Complete</h2>
+        <p className="text-gray-400 text-sm max-w-sm mb-8">
+          Your quote has been imported, cleaned, and analysed. Returning to the SCC Dashboard…
+        </p>
+        <div className="w-8 h-8">
+          <Loader2 size={28} className="text-cyan-400 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">

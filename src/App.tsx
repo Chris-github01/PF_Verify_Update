@@ -814,7 +814,7 @@ function AppContent() {
         return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
 
       case 'scc-quote-import':
-        return <SCCQuoteWorkflow />;
+        return <SCCQuoteWorkflow onFinish={() => setActiveTab('scc')} />;
 
 
       case 'scc-claims':
