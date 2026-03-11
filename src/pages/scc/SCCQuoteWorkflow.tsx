@@ -1,19 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Upload, Scissors, Sparkles, Grid3x3 as Grid3X3, CheckCircle, Loader2, X, Info } from 'lucide-react';
+import { Upload, Scissors, Sparkles, CheckCircle, Loader2, X, Info } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 import SCCQuoteImport from './SCCQuoteImport';
 import SCCReviewClean from './SCCReviewClean';
 import QuoteIntelligence from '../QuoteIntelligence';
-import ScopeMatrix from '../ScopeMatrix';
 
-type WorkflowStep = 'import' | 'review_clean' | 'quote_intelligence' | 'scope_matrix';
+type WorkflowStep = 'import' | 'review_clean' | 'quote_intelligence';
 
 const STEPS: { id: WorkflowStep; label: string; desc: string; icon: React.ComponentType<{ size: number; className?: string }> }[] = [
-  { id: 'import',             label: 'Quote Import',       desc: 'Parse & establish baseline',  icon: Upload },
-  { id: 'review_clean',       label: 'Review & Clean',     desc: 'Tidy up line items',           icon: Scissors },
-  { id: 'quote_intelligence', label: 'Quote Intelligence', desc: 'AI-powered analysis',          icon: Sparkles },
-  { id: 'scope_matrix',       label: 'Scope Matrix',       desc: 'Compare & validate scope',     icon: Grid3X3 },
+  { id: 'import',             label: 'Quote Import',       desc: 'Parse & establish baseline', icon: Upload },
+  { id: 'review_clean',       label: 'Review & Clean',     desc: 'Tidy up line items',          icon: Scissors },
+  { id: 'quote_intelligence', label: 'Quote Intelligence', desc: 'AI-powered analysis',         icon: Sparkles },
 ];
 
 const STEP_INTROS: Record<WorkflowStep, { title: string; what: string; tasks: string[]; color: string; bg: string }> = {
@@ -53,21 +51,9 @@ const STEP_INTROS: Record<WorkflowStep, { title: string; what: string; tasks: st
     color: 'text-amber-300',
     bg: 'bg-amber-500/10 border-amber-500/20',
   },
-  scope_matrix: {
-    title: 'Check how the scope maps to standard categories',
-    what: 'This view shows how every line item in the quote maps to standard construction work categories. It\'s a way to confirm you\'ve been awarded the full scope and nothing important is missing.',
-    tasks: [
-      'Select the quotes you want to compare',
-      'Click "Generate Scope Matrix" to build the comparison',
-      'Look for any gaps — grey cells mean that category isn\'t covered',
-      'Export to Excel if you want to share the comparison with your team',
-    ],
-    color: 'text-emerald-300',
-    bg: 'bg-emerald-500/10 border-emerald-500/20',
-  },
 };
 
-const STEP_ORDER: WorkflowStep[] = ['import', 'review_clean', 'quote_intelligence', 'scope_matrix'];
+const STEP_ORDER: WorkflowStep[] = ['import', 'review_clean', 'quote_intelligence'];
 
 function deriveWorkflowState(importStatus: string | null): { completed: Set<WorkflowStep>; step: WorkflowStep } {
   if (!importStatus) return { completed: new Set(), step: 'import' };
@@ -322,17 +308,6 @@ export default function SCCQuoteWorkflow() {
               />
             )}
 
-            {currentStep === 'scope_matrix' && sentinelProjectId && (
-              <ScopeMatrix
-                projectId={sentinelProjectId}
-                dashboardMode="original"
-                onNavigateBack={() => handleBack('scope_matrix')}
-                onNavigateNext={() => {
-                  markComplete('scope_matrix');
-                  setCurrentStep('import');
-                }}
-              />
-            )}
           </>
         )}
       </div>
