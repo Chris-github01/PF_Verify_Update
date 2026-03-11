@@ -208,15 +208,21 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
 
     await supabase.from('scc_quote_line_items').insert(lineRows);
 
-    await supabase
-      .from('scc_quote_imports')
-      .update({
-        status: 'parsed',
-        parsed_line_count: items.length,
-        total_value: total,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', importId);
+    await Promise.all([
+      supabase
+        .from('scc_quote_imports')
+        .update({
+          status: 'parsed',
+          parsed_line_count: items.length,
+          total_value: total,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', importId),
+      supabase
+        .from('quotes')
+        .update({ is_selected: true, updated_at: new Date().toISOString() })
+        .eq('id', quoteId),
+    ]);
 
     setImports(prev => prev.map(i =>
       i.id === importId
@@ -339,10 +345,26 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
   const saveMeta = async () => {
     if (!selectedImport) return;
     setSaving(true);
+
     await supabase
       .from('scc_quote_imports')
       .update({ ...editingMeta, status: 'reviewed', updated_at: new Date().toISOString() })
       .eq('id', selectedImport.id);
+
+    if (selectedImport.parsing_job_id) {
+      const { data: job } = await supabase
+        .from('parsing_jobs')
+        .select('quote_id')
+        .eq('id', selectedImport.parsing_job_id)
+        .maybeSingle();
+      if (job?.quote_id) {
+        await supabase
+          .from('quotes')
+          .update({ is_selected: true, updated_at: new Date().toISOString() })
+          .eq('id', job.quote_id);
+      }
+    }
+
     setImports(prev => prev.map(i => i.id === selectedImport.id ? { ...i, ...editingMeta, status: 'reviewed' } : i));
     setSelectedImport(prev => prev ? { ...prev, ...editingMeta, status: 'reviewed' } : null);
     setSaving(false);

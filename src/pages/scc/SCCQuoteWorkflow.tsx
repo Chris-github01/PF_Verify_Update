@@ -102,16 +102,39 @@ export default function SCCQuoteWorkflow() {
         supabase.rpc('get_or_create_scc_sentinel_project', { org_id: currentOrganisation.id }),
         supabase
           .from('scc_quote_imports')
-          .select('status, scc_workflow_step')
+          .select('status, scc_workflow_step, parsing_job_id')
           .eq('organisation_id', currentOrganisation.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
       ]);
 
-      if (projectRes.data) setSentinelProjectId(projectRes.data);
+      const pid: string | null = projectRes.data ?? null;
+      if (pid) setSentinelProjectId(pid);
 
       const latestImport = importRes.data;
+
+      if (pid && latestImport?.parsing_job_id) {
+        const { data: job } = await supabase
+          .from('parsing_jobs')
+          .select('quote_id')
+          .eq('id', latestImport.parsing_job_id)
+          .maybeSingle();
+        if (job?.quote_id) {
+          const { data: quote } = await supabase
+            .from('quotes')
+            .select('is_selected')
+            .eq('id', job.quote_id)
+            .maybeSingle();
+          if (quote && !quote.is_selected) {
+            await supabase
+              .from('quotes')
+              .update({ is_selected: true, updated_at: new Date().toISOString() })
+              .eq('id', job.quote_id);
+          }
+        }
+      }
+
       const savedStep = latestImport?.scc_workflow_step as WorkflowStep | null;
 
       if (savedStep && STEP_ORDER.includes(savedStep)) {
