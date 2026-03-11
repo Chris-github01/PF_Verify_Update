@@ -15,6 +15,11 @@ interface QuoteIntelligenceReportProps {
   onNavigateNext?: () => void;
   dashboardMode?: DashboardMode;
   onQuotesSelected?: (quoteIds: string[]) => void;
+  workflowStep?: number;
+  workflowTotal?: number;
+  nextLabel?: string;
+  backLabel?: string;
+  hideRecommendedActions?: boolean;
 }
 
 interface OriginalQuote {
@@ -23,7 +28,7 @@ interface OriginalQuote {
   quote_reference: string;
 }
 
-export default function QuoteIntelligenceReport({ projectId, projectName, onNavigateBack, onNavigateNext, dashboardMode = 'original', onQuotesSelected }: QuoteIntelligenceReportProps) {
+export default function QuoteIntelligenceReport({ projectId, projectName, onNavigateBack, onNavigateNext, dashboardMode = 'original', onQuotesSelected, workflowStep = 3, workflowTotal = 7, nextLabel = 'Next: Scope Matrix', backLabel = 'Back: Review & Clean', hideRecommendedActions = false }: QuoteIntelligenceReportProps) {
   const { currentTrade } = useTrade();
   const [analysis, setAnalysis] = useState<QuoteIntelligenceAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
@@ -691,64 +696,66 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           <h2 className="text-lg font-bold text-slate-100">Recommended Actions</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="border border-slate-700 rounded-lg p-4 hover:border-blue-500 hover:shadow-md transition-all">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                <Target className="text-blue-600" size={20} />
+        {!hideRecommendedActions && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="border border-slate-700 rounded-lg p-4 hover:border-blue-500 hover:shadow-md transition-all">
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                  <Target className="text-blue-600" size={20} />
+                </div>
+                <ArrowRight className="text-gray-400" size={18} />
               </div>
-              <ArrowRight className="text-gray-400" size={18} />
+              <h3 className="font-semibold text-gray-900 mb-2">Normalise Remaining Items</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Ensure all line items have standardized units and attributes for accurate comparison.
+              </p>
+              <button
+                onClick={onNavigateBack}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Go to Review & Clean →
+              </button>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Normalise Remaining Items</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Ensure all line items have standardized units and attributes for accurate comparison.
-            </p>
-            <button
-              onClick={onNavigateBack}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Go to Review & Clean →
-            </button>
-          </div>
 
-          <div className="border border-gray-200 rounded-lg p-4 hover:border-green-300 hover:shadow-md transition-all">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
-                <TrendingUp className="text-green-600" size={20} />
+            <div className="border border-gray-200 rounded-lg p-4 hover:border-green-300 hover:shadow-md transition-all">
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="text-green-600" size={20} />
+                </div>
+                <ArrowRight className="text-gray-400" size={18} />
               </div>
-              <ArrowRight className="text-gray-400" size={18} />
+              <h3 className="font-semibold text-gray-900 mb-2">Map Unmapped Systems</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Complete system mapping to improve coverage analysis and reporting accuracy.
+              </p>
+              <button
+                onClick={onNavigateBack}
+                className="text-sm text-green-600 hover:text-green-700 font-medium"
+              >
+                Go to Review & Clean →
+              </button>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Map Unmapped Systems</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Complete system mapping to improve coverage analysis and reporting accuracy.
-            </p>
-            <button
-              onClick={onNavigateBack}
-              className="text-sm text-green-600 hover:text-green-700 font-medium"
-            >
-              Go to Review & Clean →
-            </button>
-          </div>
 
-          <div className="border border-gray-200 rounded-lg p-4 hover:border-purple-300 hover:shadow-md transition-all">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-                <Shield className="text-purple-600" size={20} />
+            <div className="border border-gray-200 rounded-lg p-4 hover:border-slate-400 hover:shadow-md transition-all">
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                  <Shield className="text-slate-600" size={20} />
+                </div>
+                <ArrowRight className="text-gray-400" size={18} />
               </div>
-              <ArrowRight className="text-gray-400" size={18} />
+              <h3 className="font-semibold text-gray-900 mb-2">Review Problematic Rows</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Address flagged items to improve quote quality before generating reports.
+              </p>
+              <button
+                onClick={onNavigateBack}
+                className="text-sm text-slate-600 hover:text-slate-700 font-medium"
+              >
+                Go to Review & Clean →
+              </button>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Review Problematic Rows</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Address flagged items to improve quote quality before generating reports.
-            </p>
-            <button
-              onClick={onNavigateBack}
-              className="text-sm text-purple-600 hover:text-purple-700 font-medium"
-            >
-              Go to Review & Clean →
-            </button>
           </div>
-        </div>
+        )}
       </div>
 
       {analysis.coverageGaps && analysis.coverageGaps.length > 0 && (
@@ -785,12 +792,12 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
       )}
 
       <WorkflowNav
-        currentStep={3}
-        totalSteps={7}
+        currentStep={workflowStep}
+        totalSteps={workflowTotal}
         onBack={onNavigateBack}
         onNext={onNavigateNext}
-        backLabel="Back: Review & Clean"
-        nextLabel="Next: Scope Matrix"
+        backLabel={backLabel}
+        nextLabel={nextLabel}
       />
     </div>
   );

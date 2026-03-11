@@ -7,6 +7,11 @@ interface QuoteIntelligenceProps {
   onNavigateNext: () => void;
   dashboardMode?: DashboardMode;
   onQuotesSelected?: (quoteIds: string[]) => void;
+  workflowStep?: number;
+  workflowTotal?: number;
+  nextLabel?: string;
+  backLabel?: string;
+  hideRecommendedActions?: boolean;
 }
 
 export default function QuoteIntelligence(props: QuoteIntelligenceProps) {

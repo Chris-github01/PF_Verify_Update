@@ -305,6 +305,11 @@ export default function SCCQuoteWorkflow() {
                 dashboardMode="original"
                 onNavigateBack={() => handleBack('quote_intelligence')}
                 onNavigateNext={() => handleNext('quote_intelligence')}
+                workflowStep={2}
+                workflowTotal={3}
+                backLabel="Back: Review & Clean"
+                nextLabel="Finish"
+                hideRecommendedActions
               />
             )}
 
