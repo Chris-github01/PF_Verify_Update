@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload, Scissors, Sparkles, Grid3X3, CheckCircle, Loader2 } from 'lucide-react';
+import { Upload, Scissors, Sparkles, Grid3x3 as Grid3X3, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
 import SCCQuoteImport from './SCCQuoteImport';
