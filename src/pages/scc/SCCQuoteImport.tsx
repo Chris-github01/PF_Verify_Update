@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Upload, CheckCircle, Clock,
   ChevronRight, Eye, RefreshCw, ToggleLeft, ToggleRight,
-  Loader2, Package
+  Loader2, Package, ArrowRight
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useOrganisation } from '../../lib/organisationContext';
@@ -72,7 +72,7 @@ function fmt(n: number | null): string {
   return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 }).format(n);
 }
 
-export default function SCCQuoteImport() {
+export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWorkflow?: (sentinelProjectId: string) => void } = {}) {
   const { currentOrganisation } = useOrganisation();
   const { currentTrade } = useTrade();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -438,10 +438,20 @@ export default function SCCQuoteImport() {
                 </div>
               </div>
               {isActive && (
-                <div className="mt-3 flex items-center gap-2 text-green-400 text-xs">
-                  <CheckCircle size={13} />
-                  <span>Active baseline — adjustable at any time</span>
-                </div>
+                <>
+                  <div className="mt-3 flex items-center gap-2 text-green-400 text-xs">
+                    <CheckCircle size={13} />
+                    <span>Active baseline — adjustable at any time</span>
+                  </div>
+                  {onProceedToWorkflow && sentinelProjectId && (
+                    <button
+                      onClick={() => onProceedToWorkflow(sentinelProjectId)}
+                      className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold rounded-xl transition-colors"
+                    >
+                      Continue to Review &amp; Clean <ArrowRight size={15} />
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -559,10 +569,18 @@ export default function SCCQuoteImport() {
           <p className="text-sm text-gray-400 mt-0.5">
             {imports[0]?.status === 'parsing' ? 'AI is parsing your quote' :
              imports[0]?.status === 'parsed' ? 'Review and adjust the extracted line items' :
-             imports[0]?.status === 'reviewed' || imports[0]?.status === 'locked' ? 'Active baseline — adjustable at any time via Review' :
+             imports[0]?.status === 'reviewed' || imports[0]?.status === 'locked' ? 'Active baseline set — proceed to Review & Clean' :
              'Import your awarded quote as the contract baseline'}
           </p>
         </div>
+        {onProceedToWorkflow && sentinelProjectId && (imports[0]?.status === 'reviewed' || imports[0]?.status === 'locked') && (
+          <button
+            onClick={() => onProceedToWorkflow(sentinelProjectId)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold rounded-xl transition-colors flex-shrink-0"
+          >
+            Review &amp; Clean <ArrowRight size={15} />
+          </button>
+        )}
       </div>
 
       {/* Workflow Steps Banner */}

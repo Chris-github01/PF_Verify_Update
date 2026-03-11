@@ -18,7 +18,7 @@ import BOQBuilder from './pages/BOQBuilder';
 import ContractManager from './pages/ContractManager';
 import CommercialControlDashboard from './pages/CommercialControlDashboard';
 import SCCDashboard from './pages/SCCDashboard';
-import SCCQuoteImport from './pages/scc/SCCQuoteImport';
+import SCCQuoteWorkflow from './pages/scc/SCCQuoteWorkflow';
 import PaymentClaimsList from './pages/scc/PaymentClaimsList';
 import SCCRetentionMaterials from './pages/scc/SCCRetentionMaterials';
 import BaselineTrackerModule from './pages/bt/BaselineTrackerModule';
@@ -814,7 +814,7 @@ function AppContent() {
         return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
 
       case 'scc-quote-import':
-        return <SCCQuoteImport />;
+        return <SCCQuoteWorkflow />;
 
 
       case 'scc-claims':
