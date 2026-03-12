@@ -21,6 +21,7 @@ import SCCDashboard from './pages/SCCDashboard';
 import SCCQuoteWorkflow from './pages/scc/SCCQuoteWorkflow';
 import PaymentClaimsList from './pages/scc/PaymentClaimsList';
 import SCCRetentionMaterials from './pages/scc/SCCRetentionMaterials';
+import VerifyStock from './pages/scc/VerifyStock';
 import BaselineTrackerModule from './pages/bt/BaselineTrackerModule';
 import EnhancedReportsHub from './pages/EnhancedReportsHub';
 import ProjectReportPage from './pages/ProjectReportPage';
@@ -838,6 +839,8 @@ function AppContent() {
 
       case 'scc-variations':
         return <SCCDashboard />;
+      case 'scc-verify-stock':
+        return <VerifyStock />;
 
       case 'bt-dashboard':
         return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;

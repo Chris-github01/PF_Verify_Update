@@ -19,6 +19,7 @@ import {
   RefreshCw,
   HardHat,
   BookOpen,
+  Package,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -49,6 +50,7 @@ export type SidebarTab =
   | 'scc-claims'
   | 'scc-retention'
   | 'scc-variations'
+  | 'scc-verify-stock'
   | 'bt-dashboard';
 
 interface SidebarProps {
@@ -98,7 +100,13 @@ const subContractorMenu = [
       { id: 'scc-base-tracker' as SidebarTab,  label: 'Base Tracker',          icon: BookOpen   },
       { id: 'scc-claims' as SidebarTab,        label: 'Payment Claims',        icon: TrendingUp },
       { id: 'scc-retention' as SidebarTab,    label: 'Retention & Materials', icon: DollarSign },
-      { id: 'scc-variations' as SidebarTab,   label: 'Variation Register',    icon: RefreshCw  },
+      { id: 'scc-variations' as SidebarTab,    label: 'Variation Register',    icon: RefreshCw  },
+    ]
+  },
+  {
+    section: 'STOCK MANAGEMENT',
+    items: [
+      { id: 'scc-verify-stock' as SidebarTab, label: 'Verify Stock',           icon: Package    },
     ]
   },
   {
