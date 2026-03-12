@@ -9,6 +9,7 @@ import type {
   StockAdjustment,
   StockAlert,
   VerifyStockSummary,
+  CategoryReport,
 } from '../../types/verifystock.types';
 
 export function useStockItems() {
@@ -60,6 +61,44 @@ export function useStockItems() {
   useEffect(() => { load(); }, [load]);
 
   return { items, loading, error, refresh: load };
+}
+
+export function useStockItem(id: string | null) {
+  const { currentOrganisation } = useOrganisation();
+  const [item, setItem] = useState<StockItemWithLevel | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!id || !currentOrganisation?.id) return;
+    setLoading(true);
+    try {
+      const { data: si } = await supabase
+        .from('vs_stock_items')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      const { data: level } = await supabase
+        .from('vs_stock_levels')
+        .select('*')
+        .eq('stock_item_id', id)
+        .maybeSingle();
+
+      if (!si) { setItem(null); return; }
+      const qty = level?.quantity_on_hand ?? 0;
+      let status: StockItemWithLevel['status'] = 'ok';
+      if (qty === 0) status = 'out';
+      else if (qty < si.min_quantity) status = 'low';
+      else if (si.max_quantity && qty > si.max_quantity) status = 'over';
+      setItem({ ...si, stock_level: level ?? undefined, status });
+    } finally {
+      setLoading(false);
+    }
+  }, [id, currentOrganisation?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { item, loading, refresh: load };
 }
 
 export function useStockAlerts() {
@@ -117,7 +156,7 @@ export function useVerifications(stockItemId?: string) {
         .select('*, stock_item:vs_stock_items(name, sku)')
         .eq('organisation_id', currentOrganisation.id)
         .order('verified_at', { ascending: false })
-        .limit(100);
+        .limit(200);
 
       if (stockItemId) query = query.eq('stock_item_id', stockItemId);
 
@@ -133,18 +172,75 @@ export function useVerifications(stockItemId?: string) {
   return { verifications, loading, refresh: load };
 }
 
-export function useVerifyStockSummary() {
-  const { items, loading: itemsLoading } = useStockItems();
-  const { alerts, loading: alertsLoading } = useStockAlerts();
+export function useAdjustments(stockItemId?: string) {
+  const { currentOrganisation } = useOrganisation();
+  const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const summary: VerifyStockSummary = {
+  const load = useCallback(async () => {
+    if (!currentOrganisation?.id) return;
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('vs_stock_adjustments')
+        .select('*, stock_item:vs_stock_items(name, sku)')
+        .eq('organisation_id', currentOrganisation.id)
+        .order('adjusted_at', { ascending: false })
+        .limit(200);
+
+      if (stockItemId) query = query.eq('stock_item_id', stockItemId);
+
+      const { data } = await query;
+      setAdjustments(data || []);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentOrganisation?.id, stockItemId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { adjustments, loading, refresh: load };
+}
+
+export function useVerifyStockSummary(items: StockItemWithLevel[], unreadAlerts: number): VerifyStockSummary {
+  const total_portfolio_value = items.reduce((sum, item) => {
+    const qty = item.stock_level?.quantity_on_hand ?? 0;
+    return sum + qty * (item.unit_cost ?? 0);
+  }, 0);
+
+  return {
     total_items: items.length,
     low_stock_count: items.filter((i) => i.status === 'low').length,
     out_of_stock_count: items.filter((i) => i.status === 'out').length,
-    unread_alerts: alerts.length,
+    overstock_count: items.filter((i) => i.status === 'over').length,
+    unread_alerts: unreadAlerts,
+    total_portfolio_value,
   };
+}
 
-  return { summary, loading: itemsLoading || alertsLoading };
+export function useCategoryReports(items: StockItemWithLevel[]): CategoryReport[] {
+  const map = new Map<string, CategoryReport>();
+  for (const item of items) {
+    const cat = item.category || 'Uncategorised';
+    const qty = item.stock_level?.quantity_on_hand ?? 0;
+    const value = qty * (item.unit_cost ?? 0);
+    const existing = map.get(cat);
+    if (existing) {
+      existing.item_count++;
+      existing.total_value += value;
+      if (item.status === 'low') existing.low_count++;
+      if (item.status === 'out') existing.out_count++;
+    } else {
+      map.set(cat, {
+        category: cat,
+        item_count: 1,
+        total_value: value,
+        low_count: item.status === 'low' ? 1 : 0,
+        out_count: item.status === 'out' ? 1 : 0,
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.total_value - a.total_value);
 }
 
 export async function createStockItem(
@@ -159,7 +255,6 @@ export async function createStockItem(
     active: true,
   });
   if (error) return { error: error.message };
-
   return { error: null };
 }
 
@@ -201,7 +296,6 @@ export async function recordVerification(
     { onConflict: 'stock_item_id' }
   );
   if (levelErr) return { error: levelErr.message };
-
   return { error: null };
 }
 
@@ -242,6 +336,5 @@ export async function recordAdjustment(
     { onConflict: 'stock_item_id' }
   );
   if (levelErr) return { error: levelErr.message };
-
   return { error: null };
 }

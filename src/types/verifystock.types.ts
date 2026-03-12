@@ -68,14 +68,26 @@ export interface StockAlert {
   stock_item?: StockItem;
 }
 
+export type StockStatus = 'ok' | 'low' | 'out' | 'over';
+
 export interface StockItemWithLevel extends StockItem {
   stock_level?: StockLevel;
-  status: 'ok' | 'low' | 'out' | 'over';
+  status: StockStatus;
 }
 
 export interface VerifyStockSummary {
   total_items: number;
   low_stock_count: number;
   out_of_stock_count: number;
+  overstock_count: number;
   unread_alerts: number;
+  total_portfolio_value: number;
+}
+
+export interface CategoryReport {
+  category: string;
+  item_count: number;
+  total_value: number;
+  low_count: number;
+  out_count: number;
 }
