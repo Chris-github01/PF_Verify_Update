@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Package, Bell, ClipboardCheck, Plus, AlertTriangle, CheckCircle, XCircle, TrendingUp, Search, X, ChevronDown, RefreshCw, BarChart3, History, ChevronRight, ArrowLeft, CreditCard as Edit3, DollarSign, Layers, Activity, ShoppingCart, ClipboardList, ArrowLeftRight, Minus } from 'lucide-react';
+import { VerifyStockSettings } from './VerifyStockSettings';
+import { Package, Bell, ClipboardCheck, Plus, AlertTriangle, CheckCircle, XCircle, TrendingUp, Search, X, ChevronDown, RefreshCw, BarChart3, History, ChevronRight, ArrowLeft, CreditCard as Edit3, DollarSign, Layers, Activity, ShoppingCart, ClipboardList, ArrowLeftRight, Minus, Settings as SettingsIcon } from 'lucide-react';
 import { useOrganisation } from '../../lib/organisationContext';
 import {
   useStockItems,
@@ -17,7 +18,7 @@ import {
 } from '../../lib/verifystock/useVerifyStock';
 import type { StockItemWithLevel, StockAdjustment } from '../../types/verifystock.types';
 
-type View = 'dashboard' | 'catalogue' | 'verify' | 'alerts' | 'reports' | 'item-detail';
+type View = 'dashboard' | 'catalogue' | 'verify' | 'alerts' | 'reports' | 'item-detail' | 'settings';
 type ReportTab = 'overview' | 'inventory' | 'activity';
 
 const STATUS_CONFIG = {
@@ -529,6 +530,7 @@ export default function VerifyStock() {
     { id: 'verify', label: 'Verify', icon: ClipboardCheck },
     { id: 'reports', label: 'Reports', icon: BarChart3 },
     { id: 'alerts', label: 'Alerts', icon: Bell, badge: alerts.length },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
 
   const openItemDetail = (id: string) => { setSelectedItemId(id); setView('item-detail'); };
@@ -541,22 +543,24 @@ export default function VerifyStock() {
       <div className="flex-none border-b border-slate-800 bg-slate-900/50">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {view === 'item-detail' && (
-              <button onClick={() => { setView('catalogue'); setSelectedItemId(null); }}
+            {(view === 'item-detail' || view === 'settings') && (
+              <button onClick={() => { setView(view === 'settings' ? 'dashboard' : 'catalogue'); setSelectedItemId(null); }}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
                 <ArrowLeft size={16} />
               </button>
             )}
             <div>
-              <h1 className="text-lg font-bold text-white">Verify Stock</h1>
-              <p className="text-slate-500 text-xs">Material tracking & reconciliation</p>
+              <h1 className="text-lg font-bold text-white">
+                {view === 'settings' ? 'Settings' : 'Verify Stock'}
+              </h1>
+              {view !== 'settings' && <p className="text-slate-500 text-xs">Material tracking & reconciliation</p>}
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onSaved} className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
               <RefreshCw size={15} />
             </button>
-            {view !== 'item-detail' && (
+            {view !== 'item-detail' && view !== 'settings' && (
               <button onClick={() => setShowAddItem(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg font-medium transition-colors">
                 <Plus size={15} /> Add Item
@@ -565,7 +569,7 @@ export default function VerifyStock() {
           </div>
         </div>
 
-        {view !== 'item-detail' && (
+        {view !== 'item-detail' && view !== 'settings' && (
           <div className="flex gap-0.5 px-6 pb-0">
             {navItems.map(n => {
               const Icon = n.icon;
@@ -1092,6 +1096,9 @@ export default function VerifyStock() {
             onRefreshAll={onSaved}
           />
         )}
+
+        {/* ── SETTINGS ── */}
+        {view === 'settings' && <VerifyStockSettings />}
       </div>
 
       {/* Global modals */}
