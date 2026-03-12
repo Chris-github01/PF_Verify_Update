@@ -1,21 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import {
-  Package,
-  Bell,
-  ClipboardCheck,
-  Plus,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  TrendingUp,
-  Search,
-  X,
-  ChevronDown,
-  RefreshCw,
-  Edit2,
-  History,
-} from 'lucide-react';
+import { Package, Bell, ClipboardCheck, Plus, AlertTriangle, CheckCircle, XCircle, TrendingUp, Search, X, ChevronDown, RefreshCw, CreditCard as Edit2, History } from 'lucide-react';
 import { useOrganisation } from '../../lib/organisationContext';
 import {
   useStockItems,
