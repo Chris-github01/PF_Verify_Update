@@ -1,7 +1,13 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { VerifyStockSettings } from './VerifyStockSettings';
-import { Package, Bell, ClipboardCheck, Plus, AlertTriangle, CheckCircle, XCircle, TrendingUp, Search, X, ChevronDown, RefreshCw, BarChart3, History, ChevronRight, ArrowLeft, CreditCard as Edit3, DollarSign, Layers, Activity, ShoppingCart, ClipboardList, ArrowLeftRight, Minus, Settings as SettingsIcon } from 'lucide-react';
+import VSCreateOrder from './VSCreateOrder';
+import VSOutstandingOrders from './VSOutstandingOrders';
+import VSFindStockModal from './VSFindStockModal';
+import VSAddStock from './VSAddStock';
+import VSRemoveStock from './VSRemoveStock';
+import VSTransferStock from './VSTransferStock';
+import { Package, Bell, ClipboardCheck, Plus, AlertTriangle, CheckCircle, XCircle, TrendingUp, Search, X, ChevronDown, RefreshCw, BarChart3, ChevronRight, ArrowLeft, CreditCard as Edit3, DollarSign, Layers, Activity, ShoppingCart, ClipboardList, ArrowLeftRight, Minus, Settings as SettingsIcon } from 'lucide-react';
 import { useOrganisation } from '../../lib/organisationContext';
 import {
   useStockItems,
@@ -12,13 +18,13 @@ import {
   useVerifyStockSummary,
   useCategoryReports,
   createStockItem,
-  updateStockItem,
   recordVerification,
   recordAdjustment,
 } from '../../lib/verifystock/useVerifyStock';
 import type { StockItemWithLevel, StockAdjustment } from '../../types/verifystock.types';
+import type { VsOrder } from '../../types/verifystock.orders.types';
 
-type View = 'dashboard' | 'catalogue' | 'verify' | 'alerts' | 'reports' | 'item-detail' | 'settings';
+type View = 'dashboard' | 'catalogue' | 'verify' | 'alerts' | 'reports' | 'item-detail' | 'settings' | 'create-order' | 'outstanding-orders' | 'add-stock' | 'remove-stock' | 'transfer-stock';
 type ReportTab = 'overview' | 'inventory' | 'activity';
 
 const STATUS_CONFIG = {
@@ -495,6 +501,7 @@ function ItemDetailView({
 }
 
 export default function VerifyStock() {
+  const { currentOrganisation } = useOrganisation();
   const [view, setView] = useState<View>('dashboard');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -505,6 +512,8 @@ export default function VerifyStock() {
   const [adjustItem, setAdjustItem] = useState<StockItemWithLevel | null>(null);
   const [adjustDefaultType, setAdjustDefaultType] = useState<StockAdjustment['adjustment_type']>('ADD');
   const [quickAction, setQuickAction] = useState<{ mode: StockAdjustment['adjustment_type']; search: string } | null>(null);
+  const [transferOrders, setTransferOrders] = useState<VsOrder[]>([]);
+  const [showFindStock, setShowFindStock] = useState(false);
 
   const { items, loading: itemsLoading, refresh: refreshItems } = useStockItems();
   const { alerts, loading: alertsLoading, markRead, markAllRead, refresh: refreshAlerts } = useStockAlerts();
@@ -543,24 +552,32 @@ export default function VerifyStock() {
       <div className="flex-none border-b border-slate-800 bg-slate-900/50">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {(view === 'item-detail' || view === 'settings') && (
-              <button onClick={() => { setView(view === 'settings' ? 'dashboard' : 'catalogue'); setSelectedItemId(null); }}
+            {(view === 'item-detail' || view === 'settings' || view === 'create-order' || view === 'outstanding-orders' || view === 'add-stock' || view === 'remove-stock' || view === 'transfer-stock') && (
+              <button onClick={() => { setView(view === 'item-detail' ? 'catalogue' : 'dashboard'); setSelectedItemId(null); }}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
                 <ArrowLeft size={16} />
               </button>
             )}
             <div>
               <h1 className="text-lg font-bold text-white">
-                {view === 'settings' ? 'Settings' : 'Verify Stock'}
+                {view === 'settings' ? 'Settings'
+                  : view === 'create-order' ? 'Create Order'
+                  : view === 'outstanding-orders' ? 'Outstanding Orders'
+                  : view === 'add-stock' ? 'Add Stock'
+                  : view === 'remove-stock' ? 'Remove Stock'
+                  : view === 'transfer-stock' ? 'Transfer Stock'
+                  : 'Verify Stock'}
               </h1>
-              {view !== 'settings' && <p className="text-slate-500 text-xs">Material tracking & reconciliation</p>}
+              {view !== 'settings' && view !== 'create-order' && view !== 'outstanding-orders' && view !== 'add-stock' && view !== 'remove-stock' && view !== 'transfer-stock' && (
+                <p className="text-slate-500 text-xs">Material tracking & reconciliation</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onSaved} className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
               <RefreshCw size={15} />
             </button>
-            {view !== 'item-detail' && view !== 'settings' && (
+            {view !== 'item-detail' && view !== 'settings' && view !== 'create-order' && view !== 'outstanding-orders' && view !== 'add-stock' && view !== 'remove-stock' && view !== 'transfer-stock' && (
               <button onClick={() => setShowAddItem(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg font-medium transition-colors">
                 <Plus size={15} /> Add Item
@@ -569,7 +586,7 @@ export default function VerifyStock() {
           </div>
         </div>
 
-        {view !== 'item-detail' && view !== 'settings' && (
+        {view !== 'item-detail' && view !== 'settings' && view !== 'create-order' && view !== 'outstanding-orders' && view !== 'add-stock' && view !== 'remove-stock' && view !== 'transfer-stock' && (
           <div className="flex gap-0.5 px-6 pb-0">
             {navItems.map(n => {
               const Icon = n.icon;
@@ -611,27 +628,27 @@ export default function VerifyStock() {
             <div>
               <h3 className="text-white font-semibold text-sm mb-3">Quick Actions</h3>
               <div className="flex flex-col gap-2">
-                <button onClick={() => setView('catalogue')}
+                <button onClick={() => setView('create-order')}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm rounded-lg transition-colors">
                   <ShoppingCart size={16} /> Create Order
                 </button>
-                <button onClick={() => setView('catalogue')}
+                <button onClick={() => setView('outstanding-orders')}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm rounded-lg transition-colors">
                   <ClipboardList size={16} /> Outstanding Orders
                 </button>
-                <button onClick={() => setView('catalogue')}
+                <button onClick={() => setShowFindStock(true)}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm rounded-lg transition-colors">
                   <Search size={16} /> Find Stock
                 </button>
-                <button onClick={() => setQuickAction({ mode: 'ADD', search: '' })}
+                <button onClick={() => setView('add-stock')}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm rounded-lg transition-colors">
                   <Plus size={16} /> Add Stock
                 </button>
-                <button onClick={() => setQuickAction({ mode: 'REMOVE', search: '' })}
+                <button onClick={() => setView('remove-stock')}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-red-600 hover:bg-red-500 text-white font-semibold text-sm rounded-lg transition-colors">
                   <Minus size={16} /> Remove Stock
                 </button>
-                <button onClick={() => setQuickAction({ mode: 'TRANSFER_OUT', search: '' })}
+                <button onClick={() => { setTransferOrders([]); setView('transfer-stock'); }}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm rounded-lg transition-colors">
                   <ArrowLeftRight size={16} /> Transfer Stock
                 </button>
@@ -1099,12 +1116,53 @@ export default function VerifyStock() {
 
         {/* ── SETTINGS ── */}
         {view === 'settings' && <VerifyStockSettings />}
+
+        {/* ── CREATE ORDER ── */}
+        {view === 'create-order' && (
+          <VSCreateOrder
+            onBack={() => setView('dashboard')}
+            onOrderCreated={() => setView('outstanding-orders')}
+          />
+        )}
+
+        {/* ── OUTSTANDING ORDERS ── */}
+        {view === 'outstanding-orders' && (
+          <VSOutstandingOrders
+            onBack={() => setView('dashboard')}
+            onGoToTransfer={(orders) => { setTransferOrders(orders); setView('transfer-stock'); }}
+          />
+        )}
+
+        {/* ── ADD STOCK ── */}
+        {view === 'add-stock' && (
+          <VSAddStock onBack={() => setView('dashboard')} />
+        )}
+
+        {/* ── REMOVE STOCK ── */}
+        {view === 'remove-stock' && (
+          <VSRemoveStock onBack={() => setView('dashboard')} />
+        )}
+
+        {/* ── TRANSFER STOCK ── */}
+        {view === 'transfer-stock' && (
+          <VSTransferStock
+            onBack={() => setView('dashboard')}
+            preloadedOrders={transferOrders}
+          />
+        )}
       </div>
 
       {/* Global modals */}
       {showAddItem && <AddItemModal onClose={() => setShowAddItem(false)} onSaved={onSaved} />}
       {verifyItem && <VerifyModal item={verifyItem} onClose={() => setVerifyItem(null)} onSaved={onSaved} />}
       {adjustItem && <AdjustModal item={adjustItem} defaultType={adjustDefaultType} onClose={() => { setAdjustItem(null); setAdjustDefaultType('ADD'); }} onSaved={onSaved} />}
+      {showFindStock && currentOrganisation?.id && (
+        <VSFindStockModal
+          orgId={currentOrganisation.id}
+          onClose={() => setShowFindStock(false)}
+          readOnly
+        />
+      )}
 
       {quickAction && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
