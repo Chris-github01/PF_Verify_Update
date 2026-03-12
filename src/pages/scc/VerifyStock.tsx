@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Package, Bell, ClipboardCheck, Plus, AlertTriangle, CheckCircle, XCircle, TrendingUp, Search, X, ChevronDown, RefreshCw, BarChart3, History, ChevronRight, ArrowLeft, CreditCard as Edit3, DollarSign, Layers, Activity } from 'lucide-react';
+import { Package, Bell, ClipboardCheck, Plus, AlertTriangle, CheckCircle, XCircle, TrendingUp, Search, X, ChevronDown, RefreshCw, BarChart3, History, ChevronRight, ArrowLeft, CreditCard as Edit3, DollarSign, Layers, Activity, ShoppingCart, ClipboardList, ArrowLeftRight, Minus } from 'lucide-react';
 import { useOrganisation } from '../../lib/organisationContext';
 import {
   useStockItems,
@@ -218,9 +218,9 @@ function VerifyModal({ item, onClose, onSaved }: { item: StockItemWithLevel; onC
   );
 }
 
-function AdjustModal({ item, onClose, onSaved }: { item: StockItemWithLevel; onClose: () => void; onSaved: () => void }) {
+function AdjustModal({ item, onClose, onSaved, defaultType = 'ADD' }: { item: StockItemWithLevel; onClose: () => void; onSaved: () => void; defaultType?: StockAdjustment['adjustment_type'] }) {
   const { currentOrganisation } = useOrganisation();
-  const [type, setType] = useState<StockAdjustment['adjustment_type']>('ADD');
+  const [type, setType] = useState<StockAdjustment['adjustment_type']>(defaultType);
   const [qty, setQty] = useState(1);
   const [reason, setReason] = useState('');
   const [reference, setReference] = useState('');
@@ -502,6 +502,8 @@ export default function VerifyStock() {
   const [showAddItem, setShowAddItem] = useState(false);
   const [verifyItem, setVerifyItem] = useState<StockItemWithLevel | null>(null);
   const [adjustItem, setAdjustItem] = useState<StockItemWithLevel | null>(null);
+  const [adjustDefaultType, setAdjustDefaultType] = useState<StockAdjustment['adjustment_type']>('ADD');
+  const [quickAction, setQuickAction] = useState<{ mode: StockAdjustment['adjustment_type']; search: string } | null>(null);
 
   const { items, loading: itemsLoading, refresh: refreshItems } = useStockItems();
   const { alerts, loading: alertsLoading, markRead, markAllRead, refresh: refreshAlerts } = useStockAlerts();
@@ -600,6 +602,36 @@ export default function VerifyStock() {
               <StatCard label="Out of Stock" value={summary.out_of_stock_count} sub="Needs restocking" color="text-red-400" icon={XCircle} />
               <StatCard label="Overstock" value={summary.overstock_count} color="text-sky-400" icon={TrendingUp} />
               <StatCard label="Portfolio Value" value={`$${Math.round(summary.total_portfolio_value).toLocaleString()}`} color="text-emerald-300" icon={DollarSign} />
+            </div>
+
+            <div>
+              <h3 className="text-white font-semibold text-sm mb-3">Quick Actions</h3>
+              <div className="flex flex-col gap-2">
+                <button onClick={() => setView('catalogue')}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm rounded-lg transition-colors">
+                  <ShoppingCart size={16} /> Create Order
+                </button>
+                <button onClick={() => setView('catalogue')}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm rounded-lg transition-colors">
+                  <ClipboardList size={16} /> Outstanding Orders
+                </button>
+                <button onClick={() => setView('catalogue')}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm rounded-lg transition-colors">
+                  <Search size={16} /> Find Stock
+                </button>
+                <button onClick={() => setQuickAction({ mode: 'ADD', search: '' })}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm rounded-lg transition-colors">
+                  <Plus size={16} /> Add Stock
+                </button>
+                <button onClick={() => setQuickAction({ mode: 'REMOVE', search: '' })}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-red-600 hover:bg-red-500 text-white font-semibold text-sm rounded-lg transition-colors">
+                  <Minus size={16} /> Remove Stock
+                </button>
+                <button onClick={() => setQuickAction({ mode: 'TRANSFER_OUT', search: '' })}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm rounded-lg transition-colors">
+                  <ArrowLeftRight size={16} /> Transfer Stock
+                </button>
+              </div>
             </div>
 
             {(summary.out_of_stock_count > 0 || summary.low_stock_count > 0) && (
@@ -1065,7 +1097,57 @@ export default function VerifyStock() {
       {/* Global modals */}
       {showAddItem && <AddItemModal onClose={() => setShowAddItem(false)} onSaved={onSaved} />}
       {verifyItem && <VerifyModal item={verifyItem} onClose={() => setVerifyItem(null)} onSaved={onSaved} />}
-      {adjustItem && <AdjustModal item={adjustItem} onClose={() => setAdjustItem(null)} onSaved={onSaved} />}
+      {adjustItem && <AdjustModal item={adjustItem} defaultType={adjustDefaultType} onClose={() => { setAdjustItem(null); setAdjustDefaultType('ADD'); }} onSaved={onSaved} />}
+
+      {quickAction && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+              <div>
+                <h2 className="text-white font-semibold text-base">
+                  {quickAction.mode === 'ADD' ? 'Add Stock' : quickAction.mode === 'REMOVE' ? 'Remove Stock' : 'Transfer Stock'}
+                </h2>
+                <p className="text-slate-400 text-xs mt-0.5">Select an item to continue</p>
+              </div>
+              <button onClick={() => setQuickAction(null)} className="text-slate-400 hover:text-white transition-colors"><X size={18} /></button>
+            </div>
+            <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+              <div className="relative">
+                <Search size={13} className="absolute left-3 top-3 text-slate-500" />
+                <input
+                  autoFocus
+                  value={quickAction.search}
+                  onChange={e => setQuickAction(prev => prev ? { ...prev, search: e.target.value } : null)}
+                  placeholder="Search items..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              {items
+                .filter(i => !quickAction.search || i.name.toLowerCase().includes(quickAction.search.toLowerCase()))
+                .map(item => {
+                  const cfg = STATUS_CONFIG[item.status];
+                  return (
+                    <button key={item.id} onClick={() => { setAdjustDefaultType(quickAction.mode); setAdjustItem(item); setQuickAction(null); }}
+                      className="w-full flex items-center justify-between bg-slate-800/50 hover:bg-slate-800 border border-slate-700/40 rounded-xl px-4 py-3 transition-colors text-left">
+                      <div>
+                        <p className="text-white font-medium text-sm">{item.name}</p>
+                        {item.location && <p className="text-slate-500 text-xs">{item.location}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-semibold text-sm">{item.stock_level?.quantity_on_hand ?? 0} <span className="text-slate-500 text-xs">{item.unit}</span></span>
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${cfg.color} ${cfg.bg}`}>{cfg.label}</span>
+                      </div>
+                    </button>
+                  );
+                })
+              }
+              {items.filter(i => !quickAction.search || i.name.toLowerCase().includes(quickAction.search.toLowerCase())).length === 0 && (
+                <p className="text-slate-500 text-sm text-center py-6">No items found</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
