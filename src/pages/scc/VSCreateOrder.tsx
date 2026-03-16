@@ -15,7 +15,7 @@ interface Props {
 interface VsSupplier { id: string; name: string; }
 interface VsMaterial { id: string; name: string; unit: string; supplier_id: string | null; price: number | null; }
 interface VsProject { id: string; name: string; project_number: string | null; }
-interface VsLocation { id: string; name: string; type: string; }
+interface VsLocation { id: string; name: string; type: string; numberplate: string | null; }
 interface UserProfile { nearest_location_id: string | null; last_lat: number | null; last_lon: number | null; nearest_location_name?: string; }
 interface StockSearchRow { material_id: string; material_name: string; supplier_name: string | null; location_name: string | null; quantity: number; }
 
@@ -70,6 +70,8 @@ export default function VSCreateOrder({ onBack, onOrderCreated }: Props) {
   const [suppliers, setSuppliers] = useState<VsSupplier[]>([]);
   const [materials, setMaterials] = useState<VsMaterial[]>([]);
   const [projects, setProjects] = useState<VsProject[]>([]);
+  const [locations, setLocations] = useState<VsLocation[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<{ id: string; name: string; type: string; numberplate: string | null } | null>(null);
 
   const [selectedProject, setSelectedProject] = useState<{ id: string; name: string } | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<{ id: string; name: string } | null>(null);
@@ -82,7 +84,7 @@ export default function VSCreateOrder({ onBack, onOrderCreated }: Props) {
   const [qtyModal, setQtyModal] = useState<{ row: StockSearchRow } | null>(null);
   const [qtyInput, setQtyInput] = useState('1');
 
-  const [picker, setPicker] = useState<'project' | 'supplier' | 'material' | null>(null);
+  const [picker, setPicker] = useState<'project' | 'supplier' | 'material' | 'location' | null>(null);
 
   const [sourcing, setSourcing] = useState<SourcingPlanItem[] | null>(null);
   const [sourcingLoading, setSourcingLoading] = useState(false);
@@ -96,11 +98,12 @@ export default function VSCreateOrder({ onBack, onOrderCreated }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !orgId) return;
 
-      const [{ data: p }, { data: sups }, { data: mats }, { data: projs }] = await Promise.all([
+      const [{ data: p }, { data: sups }, { data: mats }, { data: projs }, { data: locs }] = await Promise.all([
         supabase.from('vs_user_profiles').select('*').eq('id', user.id).maybeSingle(),
         supabase.from('vs_suppliers').select('id,name').eq('organisation_id', orgId).eq('active', true).order('name'),
         supabase.from('vs_materials').select('id,name,unit,supplier_id,price').eq('organisation_id', orgId).eq('active', true).order('name'),
         supabase.from('vs_projects').select('id,name,project_number').eq('organisation_id', orgId).eq('active', true).order('name'),
+        supabase.from('vs_locations').select('id,name,type,numberplate').eq('organisation_id', orgId).eq('active', true).order('type').order('name'),
       ]);
 
       if (p) {
@@ -113,6 +116,7 @@ export default function VSCreateOrder({ onBack, onOrderCreated }: Props) {
       setSuppliers(sups || []);
       setMaterials(mats || []);
       setProjects(projs || []);
+      setLocations((locs || []) as VsLocation[]);
     };
     load();
   }, [orgId]);
@@ -298,6 +302,44 @@ export default function VSCreateOrder({ onBack, onOrderCreated }: Props) {
             </button>
           </div>
 
+          {/* Deliver to Location selector */}
+          {locations.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deliver To (Optional)</label>
+              <button onClick={() => setPicker('location')}
+                className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3.5 hover:border-sky-400 transition-colors">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {selectedLocation ? (
+                    <>
+                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${
+                        selectedLocation.type === 'van'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-sky-50 text-sky-700 border-sky-200'
+                      }`}>
+                        {selectedLocation.type === 'van' ? 'Van' : 'Storeroom'}
+                      </span>
+                      <span className="text-gray-900 font-medium text-sm truncate">{selectedLocation.name}</span>
+                      {selectedLocation.numberplate && (
+                        <span className="text-gray-500 text-xs font-mono">{selectedLocation.numberplate}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-400 text-sm">Select delivery location...</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-none">
+                  {selectedLocation && (
+                    <button onClick={e => { e.stopPropagation(); setSelectedLocation(null); }}
+                      className="p-0.5 text-gray-300 hover:text-red-400 transition-colors">
+                      <X size={13} />
+                    </button>
+                  )}
+                  <ChevronDown size={16} className="text-gray-400" />
+                </div>
+              </button>
+            </div>
+          )}
+
           {/* Supplier selector */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Supplier</label>
@@ -422,6 +464,31 @@ export default function VSCreateOrder({ onBack, onOrderCreated }: Props) {
           onSelect={(id, label) => {
             const mat = filteredMaterials.find(m => m.id === id);
             setSelectedMaterial({ id, name: label, unit: mat?.unit || 'ea' });
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)}
+          searchable
+        />
+      )}
+      {picker === 'location' && (
+        <PickerModal
+          title="Select Delivery Location"
+          items={[
+            { id: '', label: 'No location' },
+            ...locations.map(l => ({
+              id: l.id,
+              label: l.name,
+              sub: l.type === 'van' && l.numberplate
+                ? `Van · ${l.numberplate}`
+                : l.type === 'storeroom' ? 'Storeroom' : l.type,
+            })),
+          ]}
+          onSelect={(id, label) => {
+            if (!id) { setSelectedLocation(null); }
+            else {
+              const loc = locations.find(l => l.id === id);
+              setSelectedLocation({ id, name: label, type: loc?.type || 'storeroom', numberplate: loc?.numberplate || null });
+            }
             setPicker(null);
           }}
           onClose={() => setPicker(null)}

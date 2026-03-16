@@ -7,7 +7,7 @@ import {
   Check, ArrowLeft, MapPin as PinIcon, Shield
 } from 'lucide-react';
 
-type AdminScreen = 'settings' | 'users' | 'materials' | 'suppliers' | 'locations' | 'projects' | 'reports' | 'nearest-van' | 'data-projects' | 'data-suppliers' | 'data-materials';
+type AdminScreen = 'settings' | 'users' | 'materials' | 'suppliers' | 'locations' | 'projects' | 'reports' | 'nearest-van' | 'data-projects' | 'data-suppliers' | 'data-materials' | 'data-locations';
 
 interface VsUserProfile {
   id: string;
@@ -48,6 +48,7 @@ interface VsLocation {
   name: string;
   type: 'storeroom' | 'van' | 'site';
   address: string | null;
+  numberplate: string | null;
   lat: number | null;
   lng: number | null;
   active: boolean;
@@ -1415,6 +1416,226 @@ function DataSettingsMaterials({ orgId, onBack }: { orgId: string; onBack: () =>
   );
 }
 
+function DataSettingsLocations({ orgId, onBack }: { orgId: string; onBack: () => void }) {
+  const [locations, setLocations] = useState<VsLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editLoc, setEditLoc] = useState<VsLocation | null>(null);
+  const [form, setForm] = useState({ name: '', type: 'storeroom' as VsLocation['type'], address: '', numberplate: '' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState<'' | 'storeroom' | 'van'>('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('vs_locations')
+      .select('*')
+      .eq('organisation_id', orgId)
+      .eq('active', true)
+      .order('type')
+      .order('name');
+    setLocations((data || []) as VsLocation[]);
+    setLoading(false);
+  }, [orgId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openAdd = () => {
+    setEditLoc(null);
+    setForm({ name: '', type: 'storeroom', address: '', numberplate: '' });
+    setShowForm(true);
+  };
+
+  const openEdit = (l: VsLocation) => {
+    setEditLoc(l);
+    setForm({ name: l.name, type: l.type === 'site' ? 'storeroom' : l.type, address: l.address || '', numberplate: l.numberplate || '' });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) return;
+    if (form.type === 'van' && !form.numberplate.trim()) return;
+    setSaving(true);
+    const payload: Partial<VsLocation> & { organisation_id?: string } = {
+      name: form.name.trim(),
+      type: form.type,
+      address: form.address || null,
+      numberplate: form.type === 'van' ? form.numberplate.trim().toUpperCase() : null,
+    };
+    let error;
+    if (editLoc) {
+      ({ error } = await supabase.from('vs_locations').update(payload).eq('id', editLoc.id));
+    } else {
+      ({ error } = await supabase.from('vs_locations').insert({ ...payload, organisation_id: orgId }));
+    }
+    if (error) setMsg({ type: 'err', text: error.message });
+    else {
+      setMsg({ type: 'ok', text: editLoc ? 'Location updated.' : 'Location added.' });
+      setShowForm(false);
+      setEditLoc(null);
+      await load();
+    }
+    setSaving(false);
+  };
+
+  const remove = async (id: string) => {
+    await supabase.from('vs_locations').update({ active: false }).eq('id', id);
+    await load();
+  };
+
+  const filtered = locations.filter(l => {
+    const matchSearch = !search || l.name.toLowerCase().includes(search.toLowerCase()) || (l.numberplate || '').toLowerCase().includes(search.toLowerCase());
+    const matchType = !filterType || l.type === filterType;
+    return matchSearch && matchType;
+  });
+
+  const storeroomCount = locations.filter(l => l.type === 'storeroom').length;
+  const vanCount = locations.filter(l => l.type === 'van').length;
+
+  const typeConfig = {
+    storeroom: { color: 'text-sky-400', bg: 'bg-sky-900/30', border: 'border-sky-700/40', label: 'Storeroom' },
+    van: { color: 'text-emerald-400', bg: 'bg-emerald-900/30', border: 'border-emerald-700/40', label: 'Van' },
+    site: { color: 'text-amber-400', bg: 'bg-amber-900/30', border: 'border-amber-700/40', label: 'Site' },
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <SubScreenHeader
+        title="Locations"
+        onBack={onBack}
+        action={
+          <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-lg font-medium transition-colors">
+            <Plus size={13} /> Add Location
+          </button>
+        }
+      />
+      <Msg msg={msg} />
+
+      <div className="px-4 pt-4 pb-2 space-y-2">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-3 text-slate-500" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search locations..."
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-9 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-sky-500 placeholder-slate-500" />
+          </div>
+          <div className="flex gap-1">
+            {(['', 'storeroom', 'van'] as const).map(t => (
+              <button key={t} onClick={() => setFilterType(t)}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  filterType === t
+                    ? 'bg-sky-600 text-white'
+                    : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-white'
+                }`}>
+                {t === '' ? 'All' : t === 'storeroom' ? 'Storerooms' : 'Vans'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <div className="flex-1 bg-sky-900/20 border border-sky-700/30 rounded-lg px-3 py-2 flex items-center gap-2">
+            <MapPin size={13} className="text-sky-400" />
+            <span className="text-sky-300 text-xs font-semibold">{storeroomCount}</span>
+            <span className="text-slate-400 text-xs">Storeroom{storeroomCount !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex-1 bg-emerald-900/20 border border-emerald-700/30 rounded-lg px-3 py-2 flex items-center gap-2">
+            <Truck size={13} className="text-emerald-400" />
+            <span className="text-emerald-300 text-xs font-semibold">{vanCount}</span>
+            <span className="text-slate-400 text-xs">Van{vanCount !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16"><div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-6">
+          {filtered.map(loc => {
+            const cfg = typeConfig[loc.type] || typeConfig.storeroom;
+            return (
+              <div key={loc.id} className="flex items-center justify-between bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-white font-medium text-sm">{loc.name}</p>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border capitalize ${cfg.color} ${cfg.bg} ${cfg.border}`}>
+                      {cfg.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {loc.type === 'van' && loc.numberplate && (
+                      <span className="inline-flex items-center gap-1 text-xs bg-slate-700 text-slate-200 border border-slate-600 rounded-md px-2 py-0.5 font-mono font-semibold tracking-wide">
+                        {loc.numberplate}
+                      </span>
+                    )}
+                    {loc.address && <span className="text-slate-500 text-xs truncate">{loc.address}</span>}
+                    {!loc.address && loc.type !== 'van' && <span className="text-slate-600 text-xs">No address set</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 ml-3 flex-none">
+                  <button onClick={() => openEdit(loc)} className="p-1.5 text-slate-500 hover:text-sky-400 transition-colors rounded-md hover:bg-slate-700/50"><Pencil size={14} /></button>
+                  <button onClick={() => remove(loc.id)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors rounded-md hover:bg-slate-700/50"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center py-16 gap-3">
+              <MapPin size={32} className="text-slate-600" />
+              <p className="text-slate-500 text-sm">{search || filterType ? 'No locations match your filter' : 'No locations yet'}</p>
+              {!search && !filterType && (
+                <button onClick={openAdd} className="text-sky-400 text-sm font-medium hover:text-sky-300 transition-colors">Add your first location</button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showForm && (
+        <BottomSheet title={editLoc ? 'Edit Location' : 'Add Location'} onClose={() => { setShowForm(false); setEditLoc(null); }}>
+          <InputField label="Location Name" required value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g. Main Storeroom" />
+          <div>
+            <label className="block text-slate-400 text-xs font-medium mb-2">Category</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['storeroom', 'van'] as const).map(t => (
+                <button key={t} type="button" onClick={() => setForm(p => ({ ...p, type: t }))}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${
+                    form.type === t
+                      ? t === 'storeroom'
+                        ? 'bg-sky-600/20 border-sky-500 text-sky-300'
+                        : 'bg-emerald-600/20 border-emerald-500 text-emerald-300'
+                      : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-500'
+                  }`}>
+                  {t === 'storeroom' ? <MapPin size={15} /> : <Truck size={15} />}
+                  {t === 'storeroom' ? 'Storeroom' : 'Van'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {form.type === 'van' && (
+            <div>
+              <label className="block text-slate-400 text-xs font-medium mb-1.5">Numberplate <span className="text-red-400">*</span></label>
+              <input
+                value={form.numberplate}
+                onChange={e => setForm(p => ({ ...p, numberplate: e.target.value.toUpperCase() }))}
+                placeholder="e.g. ABC123"
+                maxLength={10}
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm font-mono tracking-widest uppercase focus:outline-none focus:border-emerald-500 placeholder-slate-500"
+              />
+              <p className="text-slate-500 text-xs mt-1">Vehicle registration plate</p>
+            </div>
+          )}
+          {form.type === 'storeroom' && (
+            <InputField label="Address" value={form.address} onChange={v => setForm(p => ({ ...p, address: v }))} placeholder="Optional address" />
+          )}
+          <SheetActions onCancel={() => { setShowForm(false); setEditLoc(null); }} onSave={save} saving={saving} saveLabel={editLoc ? 'Update' : 'Add'} />
+        </BottomSheet>
+      )}
+    </div>
+  );
+}
+
 export function VerifyStockSettings() {
   const { currentOrganisation } = useOrganisation();
   const [screen, setScreen] = useState<AdminScreen>('settings');
@@ -1482,6 +1703,7 @@ export function VerifyStockSettings() {
   if (screen === 'data-projects') return <DataSettingsProjects orgId={orgId} onBack={() => setScreen('settings')} />;
   if (screen === 'data-suppliers') return <DataSettingsSuppliers orgId={orgId} onBack={() => setScreen('settings')} />;
   if (screen === 'data-materials') return <DataSettingsMaterials orgId={orgId} onBack={() => setScreen('settings')} />;
+  if (screen === 'data-locations') return <DataSettingsLocations orgId={orgId} onBack={() => setScreen('settings')} />;
 
   const adminTools = [
     { icon: Users, label: 'Manage Users & Roles', screen: 'users' as AdminScreen, color: 'text-sky-400' },
@@ -1501,7 +1723,7 @@ export function VerifyStockSettings() {
         <div className="flex items-center gap-2 mb-3">
           <span className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Data Settings</span>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <DataSettingsCard
             icon={FolderOpen}
             label="Projects"
@@ -1531,6 +1753,16 @@ export function VerifyStockSettings() {
             orgId={orgId}
             table="vs_materials"
             onClick={() => setScreen('data-materials')}
+          />
+          <DataSettingsCard
+            icon={MapPin}
+            label="Locations"
+            color="text-rose-400"
+            bgColor="bg-rose-900/20"
+            borderColor="border-rose-700/30"
+            orgId={orgId}
+            table="vs_locations"
+            onClick={() => setScreen('data-locations')}
           />
         </div>
       </div>
