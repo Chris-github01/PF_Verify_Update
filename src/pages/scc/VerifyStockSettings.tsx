@@ -7,7 +7,7 @@ import {
   Check, ArrowLeft, MapPin as PinIcon, Shield
 } from 'lucide-react';
 
-type AdminScreen = 'settings' | 'users' | 'materials' | 'suppliers' | 'locations' | 'projects' | 'reports' | 'nearest-van';
+type AdminScreen = 'settings' | 'users' | 'materials' | 'suppliers' | 'locations' | 'projects' | 'reports' | 'nearest-van' | 'data-projects' | 'data-suppliers' | 'data-materials';
 
 interface VsUserProfile {
   id: string;
@@ -975,6 +975,446 @@ function FindNearestVan({ orgId, onBack }: { orgId: string; onBack: () => void }
   );
 }
 
+function DataSettingsCard({
+  icon: Icon, label, color, bgColor, borderColor, orgId, table, onClick,
+}: {
+  icon: React.ElementType; label: string; color: string; bgColor: string; borderColor: string;
+  orgId: string; table: string; onClick: () => void;
+}) {
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!orgId) return;
+    supabase.from(table as 'vs_projects').select('id', { count: 'exact', head: true }).eq('organisation_id', orgId).eq('active', true)
+      .then(({ count: c }) => setCount(c ?? 0));
+  }, [orgId, table]);
+
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-col items-center gap-2 p-4 rounded-xl border ${bgColor} ${borderColor} hover:opacity-90 transition-opacity text-center`}
+    >
+      <div className={`w-9 h-9 rounded-lg bg-slate-800/60 flex items-center justify-center`}>
+        <Icon size={18} className={color} />
+      </div>
+      <span className="text-white text-xs font-semibold">{label}</span>
+      <span className={`text-lg font-bold ${color}`}>
+        {count === null ? '—' : count}
+      </span>
+    </button>
+  );
+}
+
+function DataSettingsProjects({ orgId, onBack }: { orgId: string; onBack: () => void }) {
+  const [projects, setProjects] = useState<VsProject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editProj, setEditProj] = useState<VsProject | null>(null);
+  const [form, setForm] = useState({ name: '', project_number: '', client_name: '', address: '' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('vs_projects').select('*').eq('organisation_id', orgId).eq('active', true).order('name');
+    setProjects(data || []);
+    setLoading(false);
+  }, [orgId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openAdd = () => { setEditProj(null); setForm({ name: '', project_number: '', client_name: '', address: '' }); setShowForm(true); };
+  const openEdit = (p: VsProject) => { setEditProj(p); setForm({ name: p.name, project_number: p.project_number || '', client_name: p.client_name || '', address: p.address || '' }); setShowForm(true); };
+
+  const save = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const payload = { name: form.name.trim(), project_number: form.project_number || null, client_name: form.client_name || null, address: form.address || null };
+    let error;
+    if (editProj) {
+      ({ error } = await supabase.from('vs_projects').update(payload).eq('id', editProj.id));
+    } else {
+      ({ error } = await supabase.from('vs_projects').insert({ ...payload, organisation_id: orgId }));
+    }
+    if (error) setMsg({ type: 'err', text: error.message });
+    else { setMsg({ type: 'ok', text: editProj ? 'Project updated.' : 'Project added.' }); setShowForm(false); setEditProj(null); await load(); }
+    setSaving(false);
+  };
+
+  const remove = async (id: string) => {
+    await supabase.from('vs_projects').update({ active: false }).eq('id', id);
+    await load();
+  };
+
+  const filtered = projects.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.project_number || '').toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="flex flex-col h-full">
+      <SubScreenHeader
+        title="Projects"
+        onBack={onBack}
+        action={
+          <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-lg font-medium transition-colors">
+            <Plus size={13} /> Add Project
+          </button>
+        }
+      />
+      <Msg msg={msg} />
+      <div className="p-4">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-3 text-slate-500" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects..."
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-9 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-sky-500 placeholder-slate-500" />
+        </div>
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-16"><div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-6">
+          {filtered.map(p => (
+            <div key={p.id} className="flex items-start justify-between bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-medium text-sm">{p.name}</p>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {p.project_number && (
+                    <span className="inline-flex items-center text-xs bg-sky-900/30 text-sky-300 border border-sky-700/30 rounded-md px-2 py-0.5">{p.project_number}</span>
+                  )}
+                  {p.client_name && (
+                    <span className="text-slate-400 text-xs">{p.client_name}</span>
+                  )}
+                </div>
+                {p.address && <p className="text-slate-500 text-xs mt-1">{p.address}</p>}
+              </div>
+              <div className="flex items-center gap-1 ml-3 flex-none">
+                <button onClick={() => openEdit(p)} className="p-1.5 text-slate-500 hover:text-sky-400 transition-colors rounded-md hover:bg-slate-700/50"><Pencil size={14} /></button>
+                <button onClick={() => remove(p.id)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors rounded-md hover:bg-slate-700/50"><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center py-16 gap-3">
+              <FolderOpen size={32} className="text-slate-600" />
+              <p className="text-slate-500 text-sm">{search ? 'No projects match your search' : 'No projects yet'}</p>
+              {!search && <button onClick={openAdd} className="text-sky-400 text-sm font-medium hover:text-sky-300 transition-colors">Add your first project</button>}
+            </div>
+          )}
+        </div>
+      )}
+      {showForm && (
+        <BottomSheet title={editProj ? 'Edit Project' : 'Add Project'} onClose={() => { setShowForm(false); setEditProj(null); }}>
+          <InputField label="Project Name" required value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g. 22 Queen St Fitout" />
+          <div className="grid grid-cols-2 gap-3">
+            <InputField label="Project Number" value={form.project_number} onChange={v => setForm(p => ({ ...p, project_number: v }))} placeholder="e.g. PRJ-001" />
+            <InputField label="Client Name" value={form.client_name} onChange={v => setForm(p => ({ ...p, client_name: v }))} placeholder="e.g. ABC Corp" />
+          </div>
+          <InputField label="Address" value={form.address} onChange={v => setForm(p => ({ ...p, address: v }))} placeholder="Optional" />
+          <SheetActions onCancel={() => { setShowForm(false); setEditProj(null); }} onSave={save} saving={saving} saveLabel={editProj ? 'Update' : 'Add'} />
+        </BottomSheet>
+      )}
+    </div>
+  );
+}
+
+function DataSettingsSuppliers({ orgId, onBack }: { orgId: string; onBack: () => void }) {
+  const [suppliers, setSuppliers] = useState<VsSupplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editSup, setEditSup] = useState<VsSupplier | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: '', phone: '', address: '', emailInput: '' });
+  const [emails, setEmails] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('vs_suppliers').select('*').eq('organisation_id', orgId).eq('active', true).order('name');
+    setSuppliers(data || []);
+    setLoading(false);
+  }, [orgId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openAdd = () => { setEditSup(null); setForm({ name: '', phone: '', address: '', emailInput: '' }); setEmails([]); setShowForm(true); };
+  const openEdit = (s: VsSupplier) => { setEditSup(s); setForm({ name: s.name, phone: s.phone || '', address: s.address || '', emailInput: '' }); setEmails(s.emails || []); setShowForm(true); };
+
+  const addEmail = () => {
+    const e = form.emailInput.trim();
+    if (e && !emails.includes(e)) setEmails(prev => [...prev, e]);
+    setForm(prev => ({ ...prev, emailInput: '' }));
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const payload = { name: form.name.trim(), phone: form.phone || null, address: form.address || null, emails };
+    let error;
+    if (editSup) {
+      ({ error } = await supabase.from('vs_suppliers').update(payload).eq('id', editSup.id));
+    } else {
+      ({ error } = await supabase.from('vs_suppliers').insert({ ...payload, organisation_id: orgId }));
+    }
+    if (error) setMsg({ type: 'err', text: error.message });
+    else { setMsg({ type: 'ok', text: 'Supplier saved.' }); setShowForm(false); setEditSup(null); await load(); }
+    setSaving(false);
+  };
+
+  const deactivate = async (id: string) => {
+    await supabase.from('vs_suppliers').update({ active: false }).eq('id', id);
+    await load();
+  };
+
+  const filtered = suppliers.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="flex flex-col h-full">
+      <SubScreenHeader
+        title="Suppliers"
+        onBack={onBack}
+        action={
+          <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-lg font-medium transition-colors">
+            <Plus size={13} /> Add Supplier
+          </button>
+        }
+      />
+      <Msg msg={msg} />
+      <div className="p-4">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-3 text-slate-500" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search suppliers..."
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-9 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-sky-500 placeholder-slate-500" />
+        </div>
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-16"><div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-6">
+          {filtered.map(s => (
+            <div key={s.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium text-sm">{s.name}</p>
+                  {s.emails.length > 0 && (
+                    <p className="text-slate-400 text-xs mt-1 truncate">{s.emails.join(', ')}</p>
+                  )}
+                  <div className="flex gap-3 mt-1">
+                    {s.phone && <span className="text-slate-500 text-xs">{s.phone}</span>}
+                    {s.address && <span className="text-slate-500 text-xs truncate">{s.address}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 ml-3 flex-none">
+                  <button onClick={() => openEdit(s)} className="p-1.5 text-slate-500 hover:text-sky-400 transition-colors rounded-md hover:bg-slate-700/50"><Pencil size={14} /></button>
+                  <button onClick={() => deactivate(s.id)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors rounded-md hover:bg-slate-700/50"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center py-16 gap-3">
+              <Truck size={32} className="text-slate-600" />
+              <p className="text-slate-500 text-sm">{search ? 'No suppliers match your search' : 'No suppliers yet'}</p>
+              {!search && <button onClick={openAdd} className="text-sky-400 text-sm font-medium hover:text-sky-300 transition-colors">Add your first supplier</button>}
+            </div>
+          )}
+        </div>
+      )}
+      {showForm && (
+        <BottomSheet title={editSup ? 'Edit Supplier' : 'Add Supplier'} onClose={() => { setShowForm(false); setEditSup(null); }}>
+          <InputField label="Name" required value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="Supplier name" />
+          <div className="grid grid-cols-2 gap-3">
+            <InputField label="Phone" value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} placeholder="+64 9 000 0000" />
+            <InputField label="Address" value={form.address} onChange={v => setForm(p => ({ ...p, address: v }))} placeholder="Optional" />
+          </div>
+          <div>
+            <label className="block text-slate-400 text-xs font-medium mb-1.5">Email Addresses</label>
+            <div className="flex gap-2">
+              <input value={form.emailInput} onChange={e => setForm(p => ({ ...p, emailInput: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && addEmail()} placeholder="Add email..."
+                className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-sky-500 placeholder-slate-500" />
+              <button onClick={addEmail} className="px-3 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg transition-colors"><Plus size={15} /></button>
+            </div>
+            {emails.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {emails.map(e => (
+                  <span key={e} className="flex items-center gap-1 bg-sky-900/40 text-sky-300 border border-sky-700/40 rounded-full px-3 py-1 text-xs">
+                    {e}
+                    <button onClick={() => setEmails(prev => prev.filter(x => x !== e))} className="hover:text-white transition-colors"><X size={10} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <SheetActions onCancel={() => { setShowForm(false); setEditSup(null); }} onSave={save} saving={saving} />
+        </BottomSheet>
+      )}
+    </div>
+  );
+}
+
+function DataSettingsMaterials({ orgId, onBack }: { orgId: string; onBack: () => void }) {
+  const [materials, setMaterials] = useState<VsMaterial[]>([]);
+  const [suppliers, setSuppliers] = useState<VsSupplier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<VsMaterial | null>(null);
+  const [form, setForm] = useState({ name: '', type: '', unit: 'ea', price: '', supplier_id: '' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [search, setSearch] = useState('');
+  const [filterSupplier, setFilterSupplier] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [{ data: mats }, { data: sups }] = await Promise.all([
+      supabase.from('vs_materials').select('*').eq('organisation_id', orgId).eq('active', true).order('name'),
+      supabase.from('vs_suppliers').select('*').eq('organisation_id', orgId).eq('active', true).order('name'),
+    ]);
+    setMaterials(mats || []);
+    setSuppliers(sups || []);
+    setLoading(false);
+  }, [orgId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openAdd = () => { setEditItem(null); setForm({ name: '', type: '', unit: 'ea', price: '', supplier_id: '' }); setShowForm(true); };
+  const openEdit = (m: VsMaterial) => {
+    setEditItem(m);
+    setForm({ name: m.name, type: m.type || '', unit: m.unit, price: m.price?.toString() || '', supplier_id: m.supplier_id || '' });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const payload = {
+      organisation_id: orgId,
+      name: form.name.trim(),
+      type: form.type || null,
+      unit: form.unit || 'ea',
+      price: form.price ? parseFloat(form.price) : null,
+      supplier_id: form.supplier_id || null,
+    };
+    let error;
+    if (editItem) {
+      ({ error } = await supabase.from('vs_materials').update(payload).eq('id', editItem.id));
+    } else {
+      const sku = `SKU-${Date.now().toString(36).toUpperCase()}`;
+      ({ error } = await supabase.from('vs_materials').insert({ ...payload, sku }));
+    }
+    if (error) setMsg({ type: 'err', text: error.message });
+    else {
+      setMsg({ type: 'ok', text: editItem ? 'Material updated.' : 'Material added.' });
+      setShowForm(false); setEditItem(null);
+      await load();
+    }
+    setSaving(false);
+  };
+
+  const remove = async (id: string) => {
+    await supabase.from('vs_materials').update({ active: false }).eq('id', id);
+    await load();
+  };
+
+  const filtered = materials.filter(m => {
+    const matchSearch = !search || m.name.toLowerCase().includes(search.toLowerCase()) || (m.sku || '').toLowerCase().includes(search.toLowerCase());
+    const matchSupplier = !filterSupplier || m.supplier_id === filterSupplier;
+    return matchSearch && matchSupplier;
+  });
+
+  return (
+    <div className="flex flex-col h-full">
+      <SubScreenHeader
+        title="Materials"
+        onBack={onBack}
+        action={
+          <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-lg font-medium transition-colors">
+            <Plus size={13} /> Add Material
+          </button>
+        }
+      />
+      <Msg msg={msg} />
+      <div className="p-4 space-y-2">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-3 text-slate-500" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search materials..."
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-9 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-sky-500 placeholder-slate-500" />
+        </div>
+        {suppliers.length > 0 && (
+          <select value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-sky-500">
+            <option value="">All suppliers</option>
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-16"><div className="w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-6">
+          {filtered.map(m => {
+            const sup = suppliers.find(s => s.id === m.supplier_id);
+            return (
+              <div key={m.id} className="flex items-center justify-between bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3.5">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-white text-sm font-medium truncate">{m.name}</p>
+                    {m.sku && <span className="text-xs text-slate-500 font-mono">{m.sku}</span>}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {m.type && <span className="text-slate-500 text-xs">{m.type}</span>}
+                    <span className="text-slate-600 text-xs">·</span>
+                    <span className="text-slate-400 text-xs">{m.unit}</span>
+                    {sup && (
+                      <>
+                        <span className="text-slate-600 text-xs">·</span>
+                        <span className="text-amber-400/80 text-xs">{sup.name}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 ml-3 flex-none">
+                  {m.price != null && (
+                    <span className="text-emerald-400 text-sm font-semibold">${m.price.toFixed(2)}</span>
+                  )}
+                  <button onClick={() => openEdit(m)} className="p-1.5 text-slate-500 hover:text-sky-400 transition-colors rounded-md hover:bg-slate-700/50"><Pencil size={14} /></button>
+                  <button onClick={() => remove(m.id)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors rounded-md hover:bg-slate-700/50"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="flex flex-col items-center py-16 gap-3">
+              <Package size={32} className="text-slate-600" />
+              <p className="text-slate-500 text-sm">{search || filterSupplier ? 'No materials match your filter' : 'No materials yet'}</p>
+              {!search && !filterSupplier && <button onClick={openAdd} className="text-sky-400 text-sm font-medium hover:text-sky-300 transition-colors">Add your first material</button>}
+            </div>
+          )}
+        </div>
+      )}
+      {showForm && (
+        <BottomSheet title={editItem ? 'Edit Material' : 'Add Material'} onClose={() => { setShowForm(false); setEditItem(null); }}>
+          <InputField label="Name" required value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="Material name" />
+          <InputField label="Type / Category" value={form.type} onChange={v => setForm(p => ({ ...p, type: v }))} placeholder="e.g. Pipe, Fitting, Valve" />
+          <div className="grid grid-cols-2 gap-3">
+            <InputField label="Unit" value={form.unit} onChange={v => setForm(p => ({ ...p, unit: v }))} placeholder="ea" />
+            <InputField label="Price ($)" value={form.price} onChange={v => setForm(p => ({ ...p, price: v }))} placeholder="0.00" />
+          </div>
+          <div>
+            <label className="block text-slate-400 text-xs font-medium mb-1.5">Supplier</label>
+            <select value={form.supplier_id} onChange={e => setForm(prev => ({ ...prev, supplier_id: e.target.value }))}
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-sky-500">
+              <option value="">None</option>
+              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <SheetActions onCancel={() => { setShowForm(false); setEditItem(null); }} onSave={save} saving={saving} saveLabel={editItem ? 'Update' : 'Add'} />
+        </BottomSheet>
+      )}
+    </div>
+  );
+}
+
 export function VerifyStockSettings() {
   const { currentOrganisation } = useOrganisation();
   const [screen, setScreen] = useState<AdminScreen>('settings');
@@ -1039,6 +1479,9 @@ export function VerifyStockSettings() {
   if (screen === 'projects') return <ManageProjects orgId={orgId} onBack={() => setScreen('settings')} />;
   if (screen === 'reports') return <ViewReports orgId={orgId} onBack={() => setScreen('settings')} />;
   if (screen === 'nearest-van') return <FindNearestVan orgId={orgId} onBack={() => setScreen('settings')} />;
+  if (screen === 'data-projects') return <DataSettingsProjects orgId={orgId} onBack={() => setScreen('settings')} />;
+  if (screen === 'data-suppliers') return <DataSettingsSuppliers orgId={orgId} onBack={() => setScreen('settings')} />;
+  if (screen === 'data-materials') return <DataSettingsMaterials orgId={orgId} onBack={() => setScreen('settings')} />;
 
   const adminTools = [
     { icon: Users, label: 'Manage Users & Roles', screen: 'users' as AdminScreen, color: 'text-sky-400' },
@@ -1052,6 +1495,46 @@ export function VerifyStockSettings() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
+
+      {/* Data Settings — always visible */}
+      <div className="mt-5 mx-5">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Data Settings</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <DataSettingsCard
+            icon={FolderOpen}
+            label="Projects"
+            color="text-sky-400"
+            bgColor="bg-sky-900/20"
+            borderColor="border-sky-700/30"
+            orgId={orgId}
+            table="vs_projects"
+            onClick={() => setScreen('data-projects')}
+          />
+          <DataSettingsCard
+            icon={Truck}
+            label="Suppliers"
+            color="text-amber-400"
+            bgColor="bg-amber-900/20"
+            borderColor="border-amber-700/30"
+            orgId={orgId}
+            table="vs_suppliers"
+            onClick={() => setScreen('data-suppliers')}
+          />
+          <DataSettingsCard
+            icon={Package}
+            label="Materials"
+            color="text-emerald-400"
+            bgColor="bg-emerald-900/20"
+            borderColor="border-emerald-700/30"
+            orgId={orgId}
+            table="vs_materials"
+            onClick={() => setScreen('data-materials')}
+          />
+        </div>
+      </div>
+
       {profile?.last_lat != null && (
         <div className="mx-5 mt-5 px-4 py-3 bg-slate-800/60 border border-slate-700/50 rounded-xl flex items-start gap-3">
           <PinIcon size={14} className="text-emerald-400 mt-0.5 flex-none" />
