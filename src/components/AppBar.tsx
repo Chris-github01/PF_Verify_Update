@@ -21,6 +21,8 @@ interface AppBarProps {
   onMobileMenuToggle: () => void;
   onCopilotOpen: () => void;
   onOrganisationClick?: () => void;
+  sccContractName?: string | null;
+  onSccContractClick?: () => void;
 }
 
 interface Project {
@@ -41,6 +43,8 @@ export default function AppBar({
   onMobileMenuToggle,
   onCopilotOpen,
   onOrganisationClick,
+  sccContractName,
+  onSccContractClick,
 }: AppBarProps) {
   const { currentOrganisation } = useOrganisation();
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
@@ -137,6 +141,16 @@ export default function AppBar({
           <div className="hidden md:flex">
             <TradeSelectorDropdown />
           </div>
+
+          {sccContractName && (
+            <button
+              onClick={onSccContractClick}
+              className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1 text-xs text-slate-200 shadow-sm hover:border-cyan-500 hover:text-cyan-200 transition-colors"
+            >
+              {sccContractName}
+              <ChevronDown size={12} className="text-slate-400" />
+            </button>
+          )}
 
           {currentProjectId && currentProjectName && (
             <div className="relative" ref={dropdownRef}>

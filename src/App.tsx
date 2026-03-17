@@ -18,6 +18,7 @@ import BOQBuilder from './pages/BOQBuilder';
 import ContractManager from './pages/ContractManager';
 import CommercialControlDashboard from './pages/CommercialControlDashboard';
 import SCCDashboard from './pages/SCCDashboard';
+import SCCContractPicker from './pages/scc/SCCContractPicker';
 import SCCQuoteWorkflow from './pages/scc/SCCQuoteWorkflow';
 import PaymentClaimsList from './pages/scc/PaymentClaimsList';
 import SCCRetentionMaterials from './pages/scc/SCCRetentionMaterials';
@@ -86,8 +87,8 @@ function AppContent() {
   const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
   const [isTrialExpired, setIsTrialExpired] = useState(false);
   const [checkingTrial, setCheckingTrial] = useState(false);
-  const [sccContractId, setSccContractId] = useState<string | null>(null);
-  const [sccContractName, setSccContractName] = useState<string | null>(null);
+  const [sccContractId, setSccContractId] = useState<string | null>(() => localStorage.getItem('scc_current_contract_id'));
+  const [sccContractName, setSccContractName] = useState<string | null>(() => localStorage.getItem('scc_current_contract_name'));
   const { currentOrganisation, organisations, loading: orgLoading, isGodMode, isSubContractor, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
   const { currentTrade } = useTrade();
@@ -148,8 +149,12 @@ function AppContent() {
           setProjectInfo(null);
           setAllProjects([]);
           setActiveTab('dashboard');
+          setSccContractId(null);
+          setSccContractName(null);
           localStorage.removeItem('passivefire_current_project_id');
           localStorage.removeItem('passivefire_current_organisation_id');
+          localStorage.removeItem('scc_current_contract_id');
+          localStorage.removeItem('scc_current_contract_name');
         }
       })();
     });
@@ -825,30 +830,52 @@ function AppContent() {
         />;
 
       case 'scc':
-        return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} sccContractId={sccContractId} />;
-
       case 'scc-quote-import':
-        return <SCCQuoteWorkflow onFinish={() => {
-          setActiveTab('scc-base-tracker');
-        }} />;
-
       case 'scc-base-tracker':
-        return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
-
-
       case 'scc-claims':
-        return <PaymentClaimsList sccContractId={sccContractId} />;
-
       case 'scc-retention':
-        return <SCCRetentionMaterials sccContractId={sccContractId} />;
-
       case 'scc-variations':
-        return <SCCDashboard />;
       case 'scc-verify-stock':
-        return <VerifyStock />;
-
-      case 'scc-plant-hire':
-        return <PlantHire onBack={() => setActiveTab('scc')} />;
+      case 'scc-plant-hire': {
+        if (!sccContractId) {
+          return (
+            <SCCContractPicker
+              onContractSelect={(id, name) => {
+                setSccContractId(id);
+                setSccContractName(name);
+                localStorage.setItem('scc_current_contract_id', id);
+                localStorage.setItem('scc_current_contract_name', name);
+                setActiveTab('scc');
+              }}
+            />
+          );
+        }
+        if (activeTab === 'scc') {
+          return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} sccContractId={sccContractId} />;
+        }
+        if (activeTab === 'scc-quote-import') {
+          return <SCCQuoteWorkflow onFinish={() => setActiveTab('scc-base-tracker')} />;
+        }
+        if (activeTab === 'scc-base-tracker') {
+          return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
+        }
+        if (activeTab === 'scc-claims') {
+          return <PaymentClaimsList sccContractId={sccContractId} />;
+        }
+        if (activeTab === 'scc-retention') {
+          return <SCCRetentionMaterials sccContractId={sccContractId} />;
+        }
+        if (activeTab === 'scc-variations') {
+          return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} sccContractId={sccContractId} />;
+        }
+        if (activeTab === 'scc-verify-stock') {
+          return <VerifyStock />;
+        }
+        if (activeTab === 'scc-plant-hire') {
+          return <PlantHire onBack={() => setActiveTab('scc')} />;
+        }
+        return null;
+      }
 
       case 'bt-dashboard':
         return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
@@ -1172,6 +1199,13 @@ function AppContent() {
             onSccContractChange={(id, name) => {
               setSccContractId(id);
               setSccContractName(name);
+              if (id) {
+                localStorage.setItem('scc_current_contract_id', id);
+                localStorage.setItem('scc_current_contract_name', name);
+              } else {
+                localStorage.removeItem('scc_current_contract_id');
+                localStorage.removeItem('scc_current_contract_name');
+              }
             }}
           />
         }
@@ -1205,8 +1239,8 @@ function AppContent() {
             <AppBar
               activeTab={'project'}
               onTabChange={() => {}}
-              currentProjectId={projectId || undefined}
-              currentProjectName={projectInfo?.name}
+              currentProjectId={isSubContractor ? undefined : (projectId || undefined)}
+              currentProjectName={isSubContractor ? undefined : projectInfo?.name}
               onProjectChange={handleProjectSelect}
               onSearchOpen={() => {}}
               notificationCount={0}
@@ -1214,11 +1248,23 @@ function AppContent() {
               mobileMenuOpen={mobileMenuOpen}
               onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
               onCopilotOpen={() => setIsCopilotOpen(true)}
+              sccContractName={isSubContractor ? sccContractName : undefined}
+              onSccContractClick={isSubContractor ? () => {
+                setSccContractId(null);
+                setSccContractName(null);
+                localStorage.removeItem('scc_current_contract_id');
+                localStorage.removeItem('scc_current_contract_name');
+                setActiveTab('scc');
+              } : undefined}
               onOrganisationClick={() => {
                 setProjectId(null);
                 setProjectInfo(null);
                 setActiveTab('dashboard');
                 setCurrentOrganisation(null);
+                setSccContractId(null);
+                setSccContractName(null);
+                localStorage.removeItem('scc_current_contract_id');
+                localStorage.removeItem('scc_current_contract_name');
               }}
             />
           </>

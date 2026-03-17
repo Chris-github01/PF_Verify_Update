@@ -178,9 +178,6 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setSccContracts(data || []);
-        if (data && data.length > 0 && !sccContractId && onSccContractChange) {
-          onSccContractChange(data[0].id, data[0].contract_name);
-        }
       });
   }, [isSubContractor, currentOrganisation?.id]);
 
