@@ -20,6 +20,7 @@ import {
   HardHat,
   BookOpen,
   Package,
+  Truck,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -51,6 +52,7 @@ export type SidebarTab =
   | 'scc-retention'
   | 'scc-variations'
   | 'scc-verify-stock'
+  | 'scc-plant-hire'
   | 'bt-dashboard';
 
 interface SidebarProps {
@@ -106,7 +108,8 @@ const subContractorMenu = [
   {
     section: 'STOCK MANAGEMENT',
     items: [
-      { id: 'scc-verify-stock' as SidebarTab, label: 'Verify Stock',           icon: Package    },
+      { id: 'scc-verify-stock' as SidebarTab, label: 'Verify Stock',  icon: Package },
+      { id: 'scc-plant-hire'  as SidebarTab, label: 'Plant Hire',    icon: Truck   },
     ]
   },
   {
