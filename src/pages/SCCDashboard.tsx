@@ -153,6 +153,8 @@ export default function SCCDashboard({ onNavigate, sccContractId }: { onNavigate
     }
   };
 
+  const activeContract = sccContractId ? contracts.find(c => c.id === sccContractId) ?? contracts[0] : null;
+
   const totalContractValue = contracts.reduce((s, c) => s + (c.contract_value || 0), 0);
   const activeContracts = contracts.filter(c => c.status === 'active').length;
   const totalClaimed = recentClaims.reduce((s, c) => s + (c.total_claimed_cumulative || 0), 0);
@@ -174,14 +176,23 @@ export default function SCCDashboard({ onNavigate, sccContractId }: { onNavigate
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <PageHeader
-          title="Subcontract Commercial Control"
-          subtitle="SCC — Contract-aligned claim building, overrun governance, and payment reconciliation"
-        />
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-sm text-slate-500 mb-1">
+            SCC &rsaquo; <span className="text-cyan-500">{activeContract ? activeContract.contract_name : 'All Contracts'}</span>
+          </div>
+          <h1 className="text-3xl font-bold text-white">
+            {activeContract ? activeContract.contract_name : 'Subcontract Commercial Control'}
+          </h1>
+          <p className="text-slate-400 mt-1">
+            {activeContract
+              ? `${activeContract.subcontractor_company ? activeContract.subcontractor_company + ' · ' : ''}${CONTRACT_STATUS[activeContract.status]?.label ?? activeContract.status} · Contract-aligned claim building and payment reconciliation`
+              : 'SCC — Contract-aligned claim building, overrun governance, and payment reconciliation'}
+          </p>
+        </div>
         <button
           onClick={loadData}
-          className="p-2 text-gray-400 hover:text-white hover:bg-slate-700/50 rounded transition-colors"
+          className="p-2 text-gray-400 hover:text-white hover:bg-slate-700/50 rounded transition-colors mt-1"
           title="Refresh"
         >
           <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
