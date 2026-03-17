@@ -21,12 +21,16 @@ import {
   BookOpen,
   Package,
   Truck,
+  Building2,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
 import { useAdmin } from '../lib/adminContext';
 import { useTrade } from '../lib/tradeContext';
 import type { Trade } from '../lib/userPreferences';
+import { supabase } from '../lib/supabase';
 
 export type SidebarTab =
   | 'dashboard'
@@ -55,12 +59,23 @@ export type SidebarTab =
   | 'scc-plant-hire'
   | 'bt-dashboard';
 
+interface SccContract {
+  id: string;
+  contract_name: string;
+  contract_number: string;
+  subcontractor_company: string;
+  status: string;
+}
+
 interface SidebarProps {
   activeTab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
   projectId?: string | null;
   dashboardMode: DashboardMode;
   onDashboardModeChange: (mode: DashboardMode) => void;
+  sccContractId?: string | null;
+  sccContractName?: string | null;
+  onSccContractChange?: (id: string | null, name: string | null) => void;
 }
 
 const mainContractorMenu = [
@@ -136,13 +151,15 @@ const getTradeDisplayName = (trade: Trade): string => {
   return tradeNames[trade];
 };
 
-export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMode, onDashboardModeChange }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMode, onDashboardModeChange, sccContractId, sccContractName, onSccContractChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved === 'true';
   });
+  const [sccContracts, setSccContracts] = useState<SccContract[]>([]);
+  const [sccPickerOpen, setSccPickerOpen] = useState(false);
   const { currentTrade: selectedTrade } = useTrade();
-  const { hasPermission, isSubContractor } = useOrganisation();
+  const { hasPermission, isSubContractor, currentOrganisation } = useOrganisation();
   const { isMasterAdmin } = useAdmin();
 
   const menuStructure = isSubContractor ? subContractorMenu : mainContractorMenu;
@@ -150,6 +167,22 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', collapsed.toString());
   }, [collapsed]);
+
+  useEffect(() => {
+    if (!isSubContractor || !currentOrganisation?.id) return;
+    supabase
+      .from('scc_contracts')
+      .select('id, contract_name, contract_number, subcontractor_company, status')
+      .eq('organisation_id', currentOrganisation.id)
+      .in('status', ['setup', 'active'])
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setSccContracts(data || []);
+        if (data && data.length > 0 && !sccContractId && onSccContractChange) {
+          onSccContractChange(data[0].id, data[0].contract_name);
+        }
+      });
+  }, [isSubContractor, currentOrganisation?.id]);
 
   return (
     <aside
@@ -191,6 +224,76 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
           </div>
         )}
       </div>
+
+      {/* SCC Contract Selector — only for subcontractors */}
+      {isSubContractor && !collapsed && (
+        <div className="px-3 pb-3 border-b border-slate-800/80">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-700 px-1 mb-2 font-semibold">
+            Active Contract
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setSccPickerOpen(!sccPickerOpen)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 bg-slate-900/60 border border-slate-700/60 rounded-xl text-left hover:border-cyan-500/50 transition-all group"
+            >
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-900/40 flex-shrink-0">
+                <Building2 size={13} className="text-cyan-400" />
+              </span>
+              <span className="flex-1 min-w-0">
+                {sccContractName ? (
+                  <span className="block text-xs font-medium text-white truncate">{sccContractName}</span>
+                ) : (
+                  <span className="block text-xs text-slate-400">Select a contract...</span>
+                )}
+                {sccContracts.length > 0 && (
+                  <span className="block text-[10px] text-slate-500">{sccContracts.length} contract{sccContracts.length !== 1 ? 's' : ''} available</span>
+                )}
+              </span>
+              <ChevronDown size={14} className={`text-slate-400 transition-transform flex-shrink-0 ${sccPickerOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {sccPickerOpen && (
+              <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+                {sccContracts.length === 0 ? (
+                  <div className="px-4 py-3 text-xs text-slate-400 text-center">
+                    No active contracts found.<br />
+                    <button
+                      onClick={() => { onTabChange('scc-quote-import'); setSccPickerOpen(false); }}
+                      className="mt-1 text-cyan-400 hover:text-cyan-300 underline"
+                    >
+                      Import a quote to create one
+                    </button>
+                  </div>
+                ) : (
+                  <ul className="py-1 max-h-48 overflow-y-auto">
+                    {sccContracts.map((c) => (
+                      <li key={c.id}>
+                        <button
+                          onClick={() => {
+                            onSccContractChange?.(c.id, c.contract_name);
+                            setSccPickerOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-800 transition-colors"
+                        >
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-xs font-medium text-white truncate">{c.contract_name}</span>
+                            <span className="block text-[10px] text-slate-400 truncate">
+                              {c.contract_number && `#${c.contract_number} · `}{c.subcontractor_company}
+                            </span>
+                          </span>
+                          {sccContractId === c.id && (
+                            <Check size={13} className="text-cyan-400 flex-shrink-0" />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Dashboard Mode Toggle — only for main contractors */}
       {!isSubContractor && !collapsed && projectId && (

@@ -90,7 +90,7 @@ function formatDate(d: string | null) {
   return new Date(d).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
+export default function SCCDashboard({ onNavigate, sccContractId }: { onNavigate?: (tab: string) => void; sccContractId?: string | null } = {}) {
   const { currentOrganisation } = useOrganisation();
   const { currentTrade } = useTrade();
   const [contracts, setContracts] = useState<SCCContract[]>([]);
@@ -101,33 +101,47 @@ export default function SCCDashboard({ onNavigate }: { onNavigate?: (tab: string
 
   useEffect(() => {
     if (currentOrganisation?.id) loadData();
-  }, [currentOrganisation?.id, currentTrade]);
+  }, [currentOrganisation?.id, currentTrade, sccContractId]);
 
   const loadData = async () => {
     if (!currentOrganisation?.id) return;
     setLoading(true);
     try {
-      const [contractsRes, claimsRes, ewRes] = await Promise.all([
-        supabase
-          .from('scc_contracts')
-          .select('*')
-          .eq('organisation_id', currentOrganisation.id)
-          .eq('trade', currentTrade)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('scc_claim_periods')
-          .select('*')
-          .eq('organisation_id', currentOrganisation.id)
-          .eq('trade', currentTrade)
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('scc_early_warning_reports')
-          .select('*')
-          .eq('organisation_id', currentOrganisation.id)
-          .eq('trade_type', currentTrade)
-          .order('created_at', { ascending: false }),
-      ]);
+      let contractsQuery = supabase
+        .from('scc_contracts')
+        .select('*')
+        .eq('organisation_id', currentOrganisation.id)
+        .eq('trade', currentTrade)
+        .order('created_at', { ascending: false });
+
+      if (sccContractId) {
+        contractsQuery = contractsQuery.eq('id', sccContractId);
+      }
+
+      let claimsQuery = supabase
+        .from('scc_claim_periods')
+        .select('*')
+        .eq('organisation_id', currentOrganisation.id)
+        .eq('trade', currentTrade)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (sccContractId) {
+        claimsQuery = claimsQuery.eq('contract_id', sccContractId);
+      }
+
+      let ewQuery = supabase
+        .from('scc_early_warning_reports')
+        .select('*')
+        .eq('organisation_id', currentOrganisation.id)
+        .eq('trade_type', currentTrade)
+        .order('created_at', { ascending: false });
+
+      if (sccContractId) {
+        ewQuery = ewQuery.eq('contract_id', sccContractId);
+      }
+
+      const [contractsRes, claimsRes, ewRes] = await Promise.all([contractsQuery, claimsQuery, ewQuery]);
 
       setContracts(contractsRes.data || []);
       setRecentClaims(claimsRes.data || []);

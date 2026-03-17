@@ -86,7 +86,7 @@ function fmtDate(d: string | null): string {
 
 type ActiveTab = 'retention' | 'on_site' | 'off_site';
 
-export default function SCCRetentionMaterials() {
+export default function SCCRetentionMaterials({ sccContractId }: { sccContractId?: string | null } = {}) {
   const { currentOrganisation } = useOrganisation();
   const { currentTrade } = useTrade();
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -104,19 +104,24 @@ export default function SCCRetentionMaterials() {
 
   useEffect(() => {
     if (currentOrganisation?.id) loadContracts();
-  }, [currentOrganisation?.id, currentTrade]);
+  }, [currentOrganisation?.id, currentTrade, sccContractId]);
 
   const loadContracts = async () => {
     if (!currentOrganisation?.id) return;
     setLoading(true);
-    const { data } = await supabase
+    let q = supabase
       .from('scc_contracts')
       .select('id, contract_name, contract_number, contract_value, retention_percentage, retention_limit_pct, payment_claim_prefix')
       .eq('organisation_id', currentOrganisation.id)
       .eq('trade', currentTrade)
       .eq('snapshot_locked', true)
       .order('created_at', { ascending: false });
+    if (sccContractId) q = q.eq('id', sccContractId);
+    const { data } = await q;
     setContracts(data || []);
+    if (data && data.length === 1 && !selectedContract) {
+      loadContractData(data[0]);
+    }
     setLoading(false);
   };
 

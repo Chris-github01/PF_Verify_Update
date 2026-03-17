@@ -86,6 +86,8 @@ function AppContent() {
   const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
   const [isTrialExpired, setIsTrialExpired] = useState(false);
   const [checkingTrial, setCheckingTrial] = useState(false);
+  const [sccContractId, setSccContractId] = useState<string | null>(null);
+  const [sccContractName, setSccContractName] = useState<string | null>(null);
   const { currentOrganisation, organisations, loading: orgLoading, isGodMode, isSubContractor, setCurrentOrganisation } = useOrganisation();
   const { isMasterAdmin, loading: adminLoading } = useAdmin();
   const { currentTrade } = useTrade();
@@ -823,20 +825,22 @@ function AppContent() {
         />;
 
       case 'scc':
-        return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} />;
+        return <SCCDashboard onNavigate={(tab) => setActiveTab(tab as SidebarTab)} sccContractId={sccContractId} />;
 
       case 'scc-quote-import':
-        return <SCCQuoteWorkflow onFinish={() => setActiveTab('scc-base-tracker')} />;
+        return <SCCQuoteWorkflow onFinish={() => {
+          setActiveTab('scc-base-tracker');
+        }} />;
 
       case 'scc-base-tracker':
         return <BaselineTrackerModule projectId={projectId || undefined} projectName={projectInfo?.name} projectClient={projectInfo?.client || undefined} projectReference={projectInfo?.reference || undefined} />;
 
 
       case 'scc-claims':
-        return <PaymentClaimsList />;
+        return <PaymentClaimsList sccContractId={sccContractId} />;
 
       case 'scc-retention':
-        return <SCCRetentionMaterials />;
+        return <SCCRetentionMaterials sccContractId={sccContractId} />;
 
       case 'scc-variations':
         return <SCCDashboard />;
@@ -1163,6 +1167,12 @@ function AppContent() {
             projectId={projectId}
             dashboardMode={dashboardMode}
             onDashboardModeChange={setDashboardMode}
+            sccContractId={sccContractId}
+            sccContractName={sccContractName}
+            onSccContractChange={(id, name) => {
+              setSccContractId(id);
+              setSccContractName(name);
+            }}
           />
         }
         topBar={

@@ -64,14 +64,14 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   cancelled: { label: 'Cancelled', color: 'text-red-300',    bg: 'bg-red-500/20',    icon: XCircle },
 };
 
-export default function PaymentClaimsList() {
+export default function PaymentClaimsList({ sccContractId }: { sccContractId?: string | null } = {}) {
   const { currentOrganisation } = useOrganisation();
   const { currentTrade } = useTrade();
   const [view, setView] = useState<'list' | 'form'>('list');
   const [claims, setClaims] = useState<PaymentClaimSummary[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
-  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
+  const [selectedContractId, setSelectedContractId] = useState<string | null>(sccContractId || null);
   const [loading, setLoading] = useState(true);
   const [showContractPicker, setShowContractPicker] = useState(false);
   const [search, setSearch] = useState('');
@@ -80,26 +80,39 @@ export default function PaymentClaimsList() {
 
   useEffect(() => {
     if (currentOrganisation?.id) loadData();
-  }, [currentOrganisation?.id, currentTrade]);
+  }, [currentOrganisation?.id, currentTrade, sccContractId]);
+
+  useEffect(() => {
+    if (sccContractId) setSelectedContractId(sccContractId);
+  }, [sccContractId]);
 
   const loadData = async () => {
     if (!currentOrganisation?.id) return;
     setLoading(true);
-    const [{ data: claimsData }, { data: contractsData }] = await Promise.all([
-      supabase
-        .from('payment_claims')
-        .select('*')
-        .eq('organisation_id', currentOrganisation.id)
-        .eq('trade', currentTrade)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('scc_contracts')
-        .select('id, contract_name, contract_number, subcontractor_company, contract_value')
-        .eq('organisation_id', currentOrganisation.id)
-        .eq('trade', currentTrade)
-        .eq('snapshot_locked', true)
-        .order('created_at', { ascending: false }),
-    ]);
+    let claimsQuery = supabase
+      .from('payment_claims')
+      .select('*')
+      .eq('organisation_id', currentOrganisation.id)
+      .eq('trade', currentTrade)
+      .order('created_at', { ascending: false });
+
+    if (sccContractId) {
+      claimsQuery = claimsQuery.eq('contract_id', sccContractId);
+    }
+
+    let contractsQuery = supabase
+      .from('scc_contracts')
+      .select('id, contract_name, contract_number, subcontractor_company, contract_value')
+      .eq('organisation_id', currentOrganisation.id)
+      .eq('trade', currentTrade)
+      .eq('snapshot_locked', true)
+      .order('created_at', { ascending: false });
+
+    if (sccContractId) {
+      contractsQuery = contractsQuery.eq('id', sccContractId);
+    }
+
+    const [{ data: claimsData }, { data: contractsData }] = await Promise.all([claimsQuery, contractsQuery]);
     setClaims(claimsData || []);
     setContracts(contractsData || []);
     setLoading(false);
