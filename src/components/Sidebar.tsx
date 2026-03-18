@@ -126,12 +126,6 @@ const subContractorMenu = [
       { id: 'scc-verify-stock' as SidebarTab, label: 'Verify Stock',  icon: Package },
       { id: 'scc-plant-hire'  as SidebarTab, label: 'Plant Hire',    icon: Truck   },
     ]
-  },
-  {
-    section: 'BASELINE TRACKER',
-    items: [
-      { id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard', icon: BookOpen },
-    ]
   }
 ];
 
