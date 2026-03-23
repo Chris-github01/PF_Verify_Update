@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Trash2, CreditCard as Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckCircle, Shield, Download } from 'lucide-react';
 import { exportSafeClassificationAudit } from '../lib/export/safeClassificationExport';
 import ClassificationAuditView from '../components/ClassificationAuditView';
+import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import { normaliseUnit, normaliseNumber, deriveRate, deriveTotal } from '../lib/normaliser/unitNormaliser';
@@ -28,6 +29,8 @@ interface Quote {
   reconciliation_status?: string;
   reconciliation_variance?: number;
   reconciliation_notes?: string;
+  main_scope_total?: number;
+  main_scope_count?: number;
 }
 
 interface QuoteItem {
@@ -286,7 +289,27 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         }
       });
 
-      setQuotes(filteredQuotes);
+      const quoteIds = filteredQuotes.map(q => q.id);
+      let itemsByQuote: Record<string, { quantity: number; unit_price: number; total_price: number; description: string }[]> = {};
+      if (quoteIds.length > 0) {
+        const { data: allItems } = await supabase
+          .from('quote_items')
+          .select('quote_id, description, quantity, unit_price, total_price')
+          .in('quote_id', quoteIds);
+        if (allItems) {
+          for (const item of allItems) {
+            if (!itemsByQuote[item.quote_id]) itemsByQuote[item.quote_id] = [];
+            itemsByQuote[item.quote_id].push(item);
+          }
+        }
+      }
+
+      const quotesWithScope = filteredQuotes.map(q => {
+        const { summary } = classifyParsedQuoteRows(itemsByQuote[q.id] ?? []);
+        return { ...q, main_scope_total: summary.main_scope_total, main_scope_count: summary.counts.main_scope };
+      });
+
+      setQuotes(quotesWithScope);
 
       const { data: jobsData } = await supabase
         .from('parsing_jobs')
@@ -302,7 +325,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         });
       }
 
-      const filtered = filteredQuotes.filter(quote => {
+      const filtered = quotesWithScope.filter(quote => {
         const job = jobMap.get(quote.id);
         const itemCount = quote.items_count || 0;
 
@@ -1220,7 +1243,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                         onClick={() => setSelectedQuote(quote.id)}
                       >
                         <span className="text-base font-bold text-slate-100">
-                          ${quote.total_amount.toLocaleString()}
+                          ${(quote.main_scope_total ?? quote.total_amount).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-500/20 text-green-300 border border-green-500/30">
                           Ready

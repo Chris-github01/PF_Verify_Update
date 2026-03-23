@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
+import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
 import type { DashboardMode } from '../App';
 
 interface Quote {
@@ -10,11 +11,14 @@ interface Quote {
   quote_reference: string;
   total_amount: number;
   items_count: number;
-  final_items_count?: number; // v3 parsing: source of truth
+  final_items_count?: number;
+  inserted_items_count?: number;
   status: string;
   is_selected: boolean;
   file_name?: string;
   quoted_total?: number;
+  main_scope_total?: number;
+  main_scope_count?: number;
 }
 
 interface QuoteSelectProps {
@@ -61,17 +65,37 @@ export default function QuoteSelect({
         }
       }) || [];
 
-      // Use inserted_items_count as single source of truth
-      // This represents the actual count of items in quote_items table
-      // Fallback chain: inserted_items_count -> final_items_count -> items_count
-      const quotesWithCounts = filteredQuotes.map(quote => ({
-        ...quote,
-        items_count: (quote.inserted_items_count && quote.inserted_items_count > 0)
-          ? quote.inserted_items_count
-          : (quote.final_items_count && quote.final_items_count > 0)
-          ? quote.final_items_count
-          : quote.items_count ?? 0,
-      }));
+      const quoteIds = filteredQuotes.map(q => q.id);
+      let itemsByQuote: Record<string, { quantity: number; unit_price: number; total_price: number; description: string }[]> = {};
+
+      if (quoteIds.length > 0) {
+        const { data: allItems } = await supabase
+          .from('quote_items')
+          .select('quote_id, description, quantity, unit_price, total_price')
+          .in('quote_id', quoteIds);
+
+        if (allItems) {
+          for (const item of allItems) {
+            if (!itemsByQuote[item.quote_id]) itemsByQuote[item.quote_id] = [];
+            itemsByQuote[item.quote_id].push(item);
+          }
+        }
+      }
+
+      const quotesWithCounts = filteredQuotes.map(quote => {
+        const rawItems = itemsByQuote[quote.id] ?? [];
+        const { summary } = classifyParsedQuoteRows(rawItems);
+        return {
+          ...quote,
+          items_count: (quote.inserted_items_count && quote.inserted_items_count > 0)
+            ? quote.inserted_items_count
+            : (quote.final_items_count && quote.final_items_count > 0)
+            ? quote.final_items_count
+            : quote.items_count ?? 0,
+          main_scope_total: summary.main_scope_total,
+          main_scope_count: summary.counts.main_scope,
+        };
+      });
 
       setQuotes(quotesWithCounts);
       setMessage(null);
@@ -338,15 +362,15 @@ export default function QuoteSelect({
 
                     <div className="flex items-center gap-4 text-xs">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-slate-400">Total:</span>
+                        <span className="text-slate-400">Main Scope:</span>
                         <span className="font-semibold text-slate-100">
-                          ${(quote.total_amount || 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${(quote.main_scope_total ?? quote.total_amount ?? 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-slate-400">Items:</span>
                         <span className="font-medium text-slate-300">
-                          {quote.items_count.toLocaleString()}
+                          {(quote.main_scope_count ?? quote.items_count).toLocaleString()}
                         </span>
                       </div>
                     </div>
