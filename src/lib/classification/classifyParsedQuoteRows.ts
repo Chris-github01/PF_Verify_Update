@@ -66,7 +66,7 @@ export interface ClassificationResult {
   summary: ClassificationSummary;
 }
 
-const DEFAULT_MISSING_LINES: MissingExtractedLine[] = [
+export const GFLOBAL_KNOWN_MISSING_LINES: MissingExtractedLine[] = [
   {
     type: 'missing_extracted_line',
     description: 'Unit Entry - Cable Bundle (Data)* 20mm -/30/30 13mm (min.) GIB Wall',
@@ -126,22 +126,21 @@ function classifyRow(
     };
   }
 
-  // RULE 3 — MAIN SCOPE (positive match required)
+  // RULE 3 — MAIN SCOPE (requires pricing + at least 2 non-pricing detail signals)
   const signals = matchesDetailSignals(description, qty, rate, total);
-  const signalCount = [
+  const nonPricingSignalCount = [
     signals.hasFRR,
     signals.hasSubstrate,
     signals.hasMeasurableElement,
-    signals.hasPricingStructure,
   ].filter(Boolean).length;
 
-  if (signals.hasPricingStructure && signalCount >= 2) {
-    const confidence: ClassificationConfidence = signalCount >= 3 ? 'high' : 'medium';
+  if (signals.hasPricingStructure && nonPricingSignalCount >= 2) {
+    const confidence: ClassificationConfidence = nonPricingSignalCount >= 3 ? 'high' : 'medium';
     const matchedSignals = [
       signals.hasFRR ? 'FRR pattern' : null,
       signals.hasSubstrate ? 'substrate' : null,
       signals.hasMeasurableElement ? 'measurable element' : null,
-      signals.hasPricingStructure ? 'pricing structure' : null,
+      'pricing structure',
     ]
       .filter(Boolean)
       .join(', ');
@@ -155,11 +154,11 @@ function classifyRow(
     };
   }
 
-  // RULE 4 — REVIEW REQUIRED (fallsafe — no guessing)
+  // RULE 4 — REVIEW REQUIRED (failsafe — no guessing)
   return {
     safe_classification_tag: 'review_required',
     safe_counts_toward_total: false,
-    safe_classification_reason: `Insufficient detail signals to classify confidently (signals matched: ${signalCount}/4)`,
+    safe_classification_reason: `Insufficient detail signals to classify confidently (non-pricing signals matched: ${nonPricingSignalCount}/3, pricing: ${signals.hasPricingStructure})`,
     safe_classification_confidence: 'low',
     safe_rule_applied: 'fallback_review_required',
   };
@@ -168,7 +167,7 @@ function classifyRow(
 export function classifyParsedQuoteRows(
   rows: ParsedQuoteRow[],
   options: ClassificationOptions = {},
-  missingLines: MissingExtractedLine[] = DEFAULT_MISSING_LINES,
+  missingLines: MissingExtractedLine[] = [],
   documentTotal: number | null = null
 ): ClassificationResult {
   const enrichedRows: EnrichedQuoteRow[] = rows.map(row => {
@@ -201,7 +200,7 @@ export function getSafeQuotedTotal(enrichedRows: EnrichedQuoteRow[]): number {
 
 export function getSafeAdjustmentSummary(
   enrichedRows: EnrichedQuoteRow[],
-  missingLines: MissingExtractedLine[],
+  missingLines: MissingExtractedLine[] = [],
   documentTotal: number | null = null
 ): ClassificationSummary {
   return buildSummary(enrichedRows, missingLines, documentTotal);

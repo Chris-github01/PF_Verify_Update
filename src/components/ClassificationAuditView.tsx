@@ -18,12 +18,14 @@ import {
   type ClassificationSummary,
   type ParsedQuoteRow,
 } from '../lib/classification/classifyParsedQuoteRows';
+export type { MissingExtractedLine };
 import type { ClassificationTag } from '../lib/classification/classificationRules';
 
 interface ClassificationAuditViewProps {
   quoteId: string;
   supplierName: string;
   documentTotal?: number | null;
+  knownMissingLines?: MissingExtractedLine[];
   onClose?: () => void;
 }
 
@@ -118,6 +120,7 @@ export default function ClassificationAuditView({
   quoteId,
   supplierName,
   documentTotal,
+  knownMissingLines = [],
   onClose,
 }: ClassificationAuditViewProps) {
   const [loading, setLoading] = useState(true);
@@ -156,7 +159,7 @@ export default function ClassificationAuditView({
         source: item.source,
       }));
 
-      const result = classifyParsedQuoteRows(rows, {}, undefined, documentTotal ?? null);
+      const result = classifyParsedQuoteRows(rows, {}, knownMissingLines, documentTotal ?? null);
       setEnrichedRows(result.enrichedRows);
       setMissingLines(result.missingLines);
       setSummary(result.summary);

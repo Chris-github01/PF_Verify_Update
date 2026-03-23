@@ -26,8 +26,6 @@ export const DEFAULT_SUMMARY_PHRASES: SummaryPhrase[] = [
   { phrase: 'required to achieve compliance', matchType: 'contains' },
   { phrase: 'required to achieve insulation rating', matchType: 'contains' },
   { phrase: 'can be removed if insulation rating is not required', matchType: 'contains' },
-  { phrase: 'not shown on layout', matchType: 'contains' },
-  { phrase: 'extra over for fire stopping', matchType: 'contains' },
 ];
 
 export const DEFAULT_OPTIONAL_FAMILIES: OptionalFamily[] = [
