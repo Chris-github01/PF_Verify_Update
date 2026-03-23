@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Trash2, CreditCard as Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckCircle, Shield } from 'lucide-react';
+import { Trash2, CreditCard as Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckCircle, Shield, Download } from 'lucide-react';
+import { exportSafeClassificationAudit } from '../lib/export/safeClassificationExport';
 import ClassificationAuditView from '../components/ClassificationAuditView';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
@@ -189,7 +190,34 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
   const [showMatchDetails, setShowMatchDetails] = useState<string | null>(null);
   const [isTableExpanded, setIsTableExpanded] = useState(false);
   const [showClassificationAudit, setShowClassificationAudit] = useState(false);
+  const [exportingSafeAudit, setExportingSafeAudit] = useState(false);
   const availableSystems = SYSTEM_TEMPLATES;
+
+  const handleExportSafeClassificationAudit = async () => {
+    if (!selectedQuote || !selectedQuoteData) return;
+    setExportingSafeAudit(true);
+    try {
+      const { data: proj } = await supabase
+        .from('projects')
+        .select('name')
+        .eq('id', projectId)
+        .maybeSingle();
+      const projectName = proj?.name ?? projectId;
+      await exportSafeClassificationAudit({
+        projectId,
+        projectName,
+        quoteId: selectedQuote,
+        supplierName: selectedQuoteData.supplier_name,
+        documentTotal: selectedQuoteData.quoted_total ?? null,
+        knownMissingLines: [],
+      });
+    } catch (err) {
+      console.error('[ReviewClean] Safe export failed:', err);
+      setMessage({ type: 'error', text: 'Safe export failed. See console for details.' });
+    } finally {
+      setExportingSafeAudit(false);
+    }
+  };
 
   const updateProjectTimestamp = async () => {
     await supabase
@@ -1243,6 +1271,15 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                 >
                   <Shield size={14} />
                   Classification Audit
+                </button>
+                <button
+                  onClick={handleExportSafeClassificationAudit}
+                  disabled={exportingSafeAudit || !selectedQuote || items.length === 0}
+                  className="flex items-center gap-2 px-3 py-2 border border-emerald-600/60 text-emerald-300 rounded-lg hover:bg-emerald-700/20 transition-colors disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-sm"
+                  title="Export safe classification audit to Excel — parallel export, does not modify the current default export"
+                >
+                  <Download size={14} />
+                  {exportingSafeAudit ? 'Exporting...' : 'Export Safe Comparison'}
                 </button>
                 <button
                   onClick={handleProcessAllPendingQuotes}
