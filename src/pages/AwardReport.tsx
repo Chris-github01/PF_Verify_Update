@@ -75,7 +75,6 @@ export default function AwardReport({
   useEffect(() => {
     console.log('🔄 AwardReport useEffect triggered:', { reportId, projectId, currentTrade });
 
-    // Clear ALL state when trade or report changes
     console.log('🧹 Clearing all report state...');
     setComparisonData([]);
     setAwardSummary(null);
@@ -86,12 +85,10 @@ export default function AwardReport({
     setQuotesMap(new Map());
     setLoadedReportTrade(null);
 
-    // CRITICAL: Pre-validate reportId against trade BEFORE loading anything
     const validateAndLoad = async () => {
       if (reportId) {
         console.log('🔒 PRE-VALIDATING reportId against current trade:', { reportId, currentTrade });
 
-        // Quick check: Does this reportId belong to the current trade?
         const { data: tradeCheck, error: tradeError } = await supabase
           .from('award_reports')
           .select('trade, id')
@@ -116,7 +113,7 @@ export default function AwardReport({
           console.error('Report trade:', reportTrade, '| Current trade:', currentTrade);
           console.error('REFUSING TO LOAD - Staying in empty state');
           setLoading(false);
-          return; // Do not proceed
+          return;
         }
 
         console.log('✅ Trade validation passed, proceeding to load report');
@@ -155,7 +152,6 @@ export default function AwardReport({
       if (data) {
         setCurrentProject(data);
 
-        // Fetch organization logo if available
         if (data.organisation_id) {
           const { data: orgData } = await supabase
             .from('organisations')
@@ -199,7 +195,6 @@ export default function AwardReport({
         .maybeSingle();
 
       if (approvals) {
-        // Get user email using the RPC function
         const { data: userData } = await supabase
           .rpc('get_user_details', { p_user_id: approvals.approved_by_user_id })
           .maybeSingle();
@@ -244,7 +239,6 @@ export default function AwardReport({
       setReportTimestamp(reportData.created_at);
       setLoadedReportTrade(reportData.trade || 'passive_fire');
 
-      // Load approval data for this report
       await loadApprovalData(reportData.id);
 
       const { data: quotesData } = await supabase
@@ -261,7 +255,6 @@ export default function AwardReport({
     } catch (error: any) {
       console.error('❌ Error in loadLatestReport:', error);
 
-      // CRITICAL: Clear ALL state on ANY error to prevent stale data display
       console.log('🧹 Clearing all state due to error...');
       setComparisonData([]);
       setAwardSummary(null);
@@ -301,14 +294,12 @@ export default function AwardReport({
         throw new Error(`Report not found with ID: ${reportId}. It may have been deleted or you may not have permission to view it.`);
       }
 
-      // Check if report matches current trade - CRITICAL CHECK
       const reportTrade = reportData.trade || 'passive_fire';
       if (reportTrade !== currentTrade) {
         console.error('🚫🚫🚫 CRITICAL: TRADE MISMATCH DETECTED 🚫🚫🚫');
         console.error('Report trade:', reportTrade, '| Current trade:', currentTrade);
         console.error('CLEARING ALL STATE AND BLOCKING RENDER');
 
-        // IMMEDIATELY clear ALL state before throwing
         setComparisonData([]);
         setAwardSummary(null);
         setAiAnalysis(null);
@@ -333,7 +324,6 @@ export default function AwardReport({
       setReportTimestamp(reportData.created_at);
       setLoadedReportTrade(reportData.trade || 'passive_fire');
 
-      // Load approval data for this report
       await loadApprovalData(reportData.id);
 
       const { data: quotesData } = await supabase
@@ -350,7 +340,6 @@ export default function AwardReport({
     } catch (error: any) {
       console.error('❌ Error in loadSavedReport:', error);
 
-      // CRITICAL: Clear ALL state on ANY error to prevent stale data display
       console.log('🧹 Clearing all state due to error...');
       setComparisonData([]);
       setAwardSummary(null);
@@ -446,7 +435,6 @@ export default function AwardReport({
       comparisonData.forEach((row) => {
         const dataRow = [row.description || '', row.quantity || 0, row.unit || ''];
 
-        // Extract service type and type from the row (same for all suppliers)
         const rowData = row as any;
         const serviceType = rowData.service || rowData.systemLabel || '';
         const type = rowData.category || rowData.subclass || '';
@@ -591,7 +579,6 @@ export default function AwardReport({
     }
 
     try {
-      // Always fetch the latest scoring weights directly from the project
       const { data: projectWeightsData } = await supabase
         .from('projects')
         .select('scoring_weights')
@@ -600,7 +587,6 @@ export default function AwardReport({
 
       const projectScoringWeights = projectWeightsData?.scoring_weights || awardSummary.scoringWeights || { price: 45, compliance: 20, coverage: 25, risk: 10 };
 
-      // Fetch organization logo if available
       let organisationLogoUrl: string | undefined = undefined;
       if (currentProject.organisation_id) {
         const { data: orgData } = await supabase
@@ -610,7 +596,6 @@ export default function AwardReport({
           .maybeSingle();
 
         if (orgData?.logo_url) {
-          // Get public URL for the logo (bucket is now public)
           const { data: urlData } = supabase.storage
             .from('organisation-logos')
             .getPublicUrl(orgData.logo_url);
@@ -669,7 +654,6 @@ export default function AwardReport({
       } else {
         const bestValue = sortedSuppliers[0];
         const lowestRisk = [...sortedSuppliers].sort((a, b) => a.riskScore - b.riskScore)[0];
-        // Use highest weighted score for balanced choice
         const balanced = [...sortedSuppliers].sort((a, b) => b.weightedScore - a.weightedScore)[0];
 
         recommendations = [
@@ -766,10 +750,8 @@ export default function AwardReport({
     setShowApprovalModal(false);
     setSelectedSupplierForApproval(null);
 
-    // Reload the project info to get updated approval status
     await loadProjectInfo();
 
-    // Optionally reload the report
     if (currentReportId) {
       await loadSavedReport(currentReportId);
     }
@@ -823,7 +805,6 @@ export default function AwardReport({
   const criticalGaps = aiAnalysis?.gapsAndRisks?.filter((g: any) => g.severity === 'HIGH') || [];
   const nonCriticalGaps = aiAnalysis?.gapsAndRisks?.filter((g: any) => g.severity !== 'HIGH') || [];
 
-  // CRITICAL RENDER-LEVEL CHECK: Block display if data trade doesn't match current trade
   const hasData = comparisonData.length > 0 || awardSummary !== null;
   const tradeMismatch = hasData && loadedReportTrade && loadedReportTrade !== currentTrade;
 
@@ -960,10 +941,10 @@ export default function AwardReport({
           <div className="flex items-center justify-center min-h-96">
             <div className="text-center max-w-md">
               <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-              <h3 className="text-2xl font-bold text-red-400 mb-2">🚫 Trade Mismatch Detected</h3>
+              <h3 className="text-2xl font-bold text-red-400 mb-2">Trade Mismatch Detected</h3>
               <p className="text-slate-400 mb-4">
                 This report belongs to <span className="font-bold text-orange-400">{loadedReportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade,
-                but you're viewing <span className="font-bold text-orange-400">{currentTrade === \'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade.
+                but you are viewing <span className="font-bold text-orange-400">{currentTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade.
               </p>
               <p className="text-slate-300 font-semibold mb-6">
                 Data from different trades is isolated and cannot be displayed cross-trade.
@@ -998,9 +979,8 @@ export default function AwardReport({
           <>
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-white mb-3">Award Recommendation Report</h1>
-          <p className="text-xl text-slate-300 mb-6">Project Analysis & Supplier Evaluation</p>
+          <p className="text-xl text-slate-300 mb-6">Project Analysis &amp; Supplier Evaluation</p>
 
-          {/* Logo Section */}
           {organisationLogoUrl && (
             <div className="flex items-center justify-center gap-4 mb-6">
               <img
@@ -1037,7 +1017,6 @@ export default function AwardReport({
           </div>
         </div>
 
-        {/* Approval Status Banner */}
         {!approvalData && (
           <div className="mb-8 bg-gradient-to-r from-blue-900/30 to-blue-800/20 border-2 border-blue-600/40 rounded-xl p-6">
             <div className="flex items-start gap-4">
@@ -1181,14 +1160,13 @@ export default function AwardReport({
           </div>
         </div>
 
-        {/* Next Steps & Action Plan */}
         <div className="bg-gradient-to-br from-green-900/20 to-green-800/10 rounded-xl shadow-xl border-2 border-green-600/30 p-8 mb-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg">
               <CheckCircle className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-white">Next Steps & Action Plan</h3>
+              <h3 className="text-2xl font-bold text-white">Next Steps &amp; Action Plan</h3>
               <p className="text-sm text-green-300">Actionable steps for award finalization</p>
             </div>
           </div>
@@ -1281,7 +1259,6 @@ export default function AwardReport({
           </div>
         </div>
 
-        {/* Risk & Exceptions Table */}
         {(criticalGaps.length > 0 || nonCriticalGaps.length > 0) && (
           <div className="bg-slate-800/60 rounded-xl shadow-xl border border-slate-700 mb-8 overflow-hidden">
             <div className="bg-gradient-to-r from-red-900/40 to-red-800/20 px-8 py-6 border-b border-slate-700">
@@ -1290,7 +1267,7 @@ export default function AwardReport({
                   <AlertOctagon className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-white">Risk & Exceptions Register</h3>
+                  <h3 className="text-2xl font-bold text-white">Risk &amp; Exceptions Register</h3>
                   <p className="text-sm text-red-300">Issues requiring attention before final award</p>
                 </div>
               </div>
@@ -1592,7 +1569,7 @@ export default function AwardReport({
             onClick={() => setShowMethodology(!showMethodology)}
             className="w-full px-8 py-6 flex items-center justify-between hover:bg-slate-700/30 transition-colors"
           >
-            <h3 className="text-2xl font-bold text-white">Report Overview & Methodology</h3>
+            <h3 className="text-2xl font-bold text-white">Report Overview &amp; Methodology</h3>
             <ChevronDown
               size={24}
               className={`text-slate-400 transition-transform ${showMethodology ? 'rotate-180' : ''}`}
@@ -1615,7 +1592,7 @@ export default function AwardReport({
                   {[
                     { num: 1, title: 'Import & Validate', icon: '📥', color: 'from-blue-600 to-blue-700' },
                     { num: 2, title: 'Normalize Data', icon: '🔄', color: 'from-green-600 to-green-700' },
-                    { num: 3, title: 'Gap Analysis', icon: '🔍', color: 'from-purple-600 to-purple-700' },
+                    { num: 3, title: 'Gap Analysis', icon: '🔍', color: 'from-slate-600 to-slate-700' },
                     { num: 4, title: 'Risk Assessment', icon: '⚠️', color: 'from-orange-600 to-orange-700' },
                     { num: 5, title: 'Score & Rank', icon: '🎯', color: 'from-red-600 to-red-700' }
                   ].map((step, idx) => (
@@ -1681,7 +1658,6 @@ export default function AwardReport({
         )}
       </div>
 
-      {/* Approval Modal */}
       {showApprovalModal && currentReportId && awardSummary && currentProject && selectedSupplierForApproval && (
         <ApprovalModal
           isOpen={showApprovalModal}
