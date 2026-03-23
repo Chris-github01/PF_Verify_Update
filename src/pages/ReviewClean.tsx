@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { Trash2, CreditCard as Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckCircle, Shield } from 'lucide-react';
+import ClassificationAuditView from '../components/ClassificationAuditView';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import { normaliseUnit, normaliseNumber, deriveRate, deriveTotal } from '../lib/normaliser/unitNormaliser';
@@ -187,6 +188,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
   const [showIssues, setShowIssues] = useState<string | null>(null);
   const [showMatchDetails, setShowMatchDetails] = useState<string | null>(null);
   const [isTableExpanded, setIsTableExpanded] = useState(false);
+  const [showClassificationAudit, setShowClassificationAudit] = useState(false);
   const availableSystems = SYSTEM_TEMPLATES;
 
   const updateProjectTimestamp = async () => {
@@ -1230,6 +1232,19 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                   {smartCleaning ? 'Processing...' : 'Clean & Map Quote'}
                 </button>
                 <button
+                  onClick={() => setShowClassificationAudit(v => !v)}
+                  disabled={!selectedQuote}
+                  className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm ${
+                    showClassificationAudit
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'border-slate-600 text-slate-300 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed'
+                  }`}
+                  title="Open classification audit for this quote"
+                >
+                  <Shield size={14} />
+                  Classification Audit
+                </button>
+                <button
                   onClick={handleProcessAllPendingQuotes}
                   disabled={processingAllQuotes || normalising || mapping || smartCleaning || cleanableQuotes.length === 0}
                   className="flex items-center gap-2 px-3 py-2 border border-slate-600 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-sm"
@@ -1383,6 +1398,18 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
               </div>
             )}
           </div>
+
+          {/* Classification Audit Panel */}
+          {showClassificationAudit && selectedQuote && (
+            <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <ClassificationAuditView
+                quoteId={selectedQuote}
+                supplierName={selectedQuoteData?.supplier_name ?? ''}
+                documentTotal={selectedQuoteData?.quoted_total ?? null}
+                onClose={() => setShowClassificationAudit(false)}
+              />
+            </div>
+          )}
       </div>
       )}
 
