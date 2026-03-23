@@ -12,6 +12,7 @@ import WorkflowNav from '../components/WorkflowNav';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { exportScheduleOfRates } from '../lib/export/scheduleOfRatesExport';
+import { exportScheduleComparison } from '../lib/export/scheduleComparisonExport';
 import { useTrade } from '../lib/tradeContext';
 import EnhancedSupplierTable from '../components/award/EnhancedSupplierTable';
 import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdown';
@@ -958,6 +959,23 @@ export default function AwardReportEnhanced({
                       >
                         <FileSpreadsheet size={16} />
                         Export Schedule of Rates
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setShowExportDropdown(false);
+                          if (!currentProject) return;
+                          try {
+                            await exportScheduleComparison(projectId, currentProject.name, currentTrade);
+                            onToast?.('Schedule Comparison exported successfully', 'success');
+                          } catch (error) {
+                            console.error('Export comparison error:', error);
+                            onToast?.('Failed to export Schedule Comparison', 'error');
+                          }
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <FileSpreadsheet size={16} />
+                        Export Comparison
                       </button>
                     </div>
                   </div>
