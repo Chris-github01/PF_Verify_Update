@@ -102,9 +102,16 @@ function classifyRow(
   const summaryPhrases = options.summaryPhrases ?? DEFAULT_SUMMARY_PHRASES;
   const optionalFamilies = options.optionalFamilies ?? DEFAULT_OPTIONAL_FAMILIES;
 
+  // Pre-compute signals so phrase rules can be guarded by pricing structure
+  const signals = matchesDetailSignals(description, qty, rate, total);
+
   // RULE 1 — SUMMARY ONLY
+  // Guard: only apply if the row has no valid pricing structure.
+  // A row with qty > 0, rate > 0, total > 0 is a real priced line item and
+  // must not be excluded by a phrase match alone, even if the description
+  // happens to contain a summary keyword.
   const summaryMatch = matchesSummaryPhrase(description, summaryPhrases);
-  if (summaryMatch.matched) {
+  if (summaryMatch.matched && !signals.hasPricingStructure) {
     return {
       safe_classification_tag: 'summary_only',
       safe_counts_toward_total: false,
@@ -127,7 +134,6 @@ function classifyRow(
   }
 
   // RULE 3 — MAIN SCOPE (requires pricing + at least 2 non-pricing detail signals)
-  const signals = matchesDetailSignals(description, qty, rate, total);
   const nonPricingSignalCount = [
     signals.hasFRR,
     signals.hasSubstrate,
