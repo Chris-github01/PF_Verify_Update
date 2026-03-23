@@ -1173,7 +1173,7 @@ function generateSupplierComparisonPage(options: ModernPdfOptions): string {
         <thead>
           <tr>
             <th>Supplier</th>
-            <th>Total Price</th>
+            <th>Main Scope Total</th>
             <th>Systems Covered</th>
             <th>Coverage %</th>
             <th>Risk Score</th>

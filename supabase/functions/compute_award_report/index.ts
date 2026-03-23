@@ -53,6 +53,41 @@ interface ComparisonRow {
   notes?: string;
 }
 
+const FRR_PATTERN = /-\/\d+\/\d+|-\/-\/-|\d+\/\d+\/\d+|\(\d+\)\/\d+/i;
+const SUBSTRATE_KEYWORDS = ['gib wall','concrete wall','concrete floor','smoke wall','masonry wall','hebel wall','timber wall','steel deck','metal deck'];
+const MEASURABLE_ELEMENT_PATTERNS = [/\d+mm/i,/\d+x\d+/i,/cable bundle/i,/cable tray/i,/conduit/i,/pvc pipe/i,/copper pipe/i,/steel pipe/i,/duct/i];
+const SERVICE_TYPE_KEYWORDS = ['electrical','hydraulic','mechanical','fire protection','insulation wrap','batt patch','penetration'];
+const SUMMARY_PHRASES = ['extra over for fire stopping required not shown on layout','required to achieve compliance','required to achieve insulation rating','can be removed if insulation rating is not required'];
+const SUMMARY_PHRASES_ALWAYS_EXCLUDE = ['extra over for fire stopping required not shown on layout'];
+const OPTIONAL_KEYWORDS = ['door perimeter seal','lift door seal','flush box intumescent pad','flushbox intumescent pad','intumescent flushbox pad'];
+
+function isMainScopeItem(item: QuoteItem): boolean {
+  const desc = (item.description ?? '').toLowerCase();
+  const qty = Number(item.quantity ?? 0);
+  const rate = Number(item.unit_price ?? 0);
+  const total = Number(item.total_price ?? 0);
+  const hasPricing = qty > 0 && rate > 0 && total > 0;
+
+  for (const phrase of SUMMARY_PHRASES) {
+    if (desc.includes(phrase)) {
+      if (SUMMARY_PHRASES_ALWAYS_EXCLUDE.includes(phrase)) return false;
+      if (!hasPricing) return false;
+    }
+  }
+  for (const kw of OPTIONAL_KEYWORDS) {
+    if (desc.includes(kw)) return false;
+  }
+  if (!hasPricing) return false;
+
+  const hasFRR = FRR_PATTERN.test(item.description ?? '');
+  const hasSubstrate = SUBSTRATE_KEYWORDS.some(kw => desc.includes(kw));
+  const hasMeasurable = MEASURABLE_ELEMENT_PATTERNS.some(p => p.test(item.description ?? ''));
+  const hasService = SERVICE_TYPE_KEYWORDS.some(kw => desc.includes(kw));
+
+  const nonPricingSignals = [hasFRR, hasSubstrate, hasMeasurable, hasService].filter(Boolean).length;
+  return nonPricingSignals >= 2;
+}
+
 function normalizeUnitDisplay(unit: string | null | undefined): string {
   if (!unit) return "";
 
@@ -154,10 +189,13 @@ Deno.serve(async (req: Request) => {
 
       if (itemsError) throw itemsError;
 
+      const mainScopeItems = (items || []).filter(isMainScopeItem);
+      console.log(`📊 ${quote.supplier_name}: ${items?.length ?? 0} total items → ${mainScopeItems.length} main scope items`);
+
       quotesWithItems.push({
         id: quote.id,
         supplier_name: quote.supplier_name,
-        items: items || [],
+        items: mainScopeItems,
       });
     }
 

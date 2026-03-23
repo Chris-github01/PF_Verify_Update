@@ -8,6 +8,7 @@ import { buildEqualisation } from '../lib/equalisation/buildEqualisation';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { EqualisationMode, EqualisationResult } from '../types/equalisation.types';
 import WorkflowNav from '../components/WorkflowNav';
+import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
 
 interface EqualisationProps {
   projectId: string;
@@ -81,7 +82,21 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         return;
       }
 
-      const normalisedLines = itemsData.map(item => {
+      const { enrichedRows } = classifyParsedQuoteRows(itemsData.map(item => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+      })));
+      const mainScopeIds = new Set(
+        enrichedRows
+          .filter(r => r.safe_classification_tag === 'main_scope')
+          .map(r => r.id)
+      );
+      const mainScopeItems = itemsData.filter(item => mainScopeIds.has(item.id));
+
+      const normalisedLines = mainScopeItems.map(item => {
         const quote = quotesData.find(q => q.id === item.quote_id);
         return {
           quoteId: item.quote_id,
@@ -99,7 +114,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         };
       });
 
-      const mappings = itemsData.map(item => ({
+      const mappings = mainScopeItems.map(item => ({
         quoteItemId: item.id,
         systemId: item.system_id,
         systemLabel: item.system_label,
@@ -444,7 +459,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
                       Supplier
                     </th>
                     <th className="px-4 py-3 text-right font-medium text-slate-300 border border-slate-700">
-                      Original Total
+                      Main Scope Total
                     </th>
                     <th className="px-4 py-3 text-right font-medium text-slate-300 border border-slate-700">
                       Equalised Total

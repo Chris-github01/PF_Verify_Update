@@ -7,6 +7,7 @@ import { compareAgainstModelHybrid } from '../lib/comparison/hybridCompareAgains
 import type { ComparisonRow, MatrixRow, MatrixCell, MatrixFilters } from '../types/comparison.types';
 import WorkflowNav from '../components/WorkflowNav';
 import { needsQuantity } from '../lib/quoteUtils';
+import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
 import { useSuggestedSystems } from '../lib/useSuggestedSystems';
 import SuggestedSystemsPanel from '../components/SuggestedSystemsPanel';
 import { useOrganisation } from '../lib/organisationContext';
@@ -40,10 +41,11 @@ interface QuoteInfo {
   quote_reference?: string;
   total_amount?: number;
   items_count: number;
-  final_items_count?: number; // v3 parsing: source of truth
+  final_items_count?: number;
   mapped_items_count: number;
   parse_status?: 'completed' | 'failed' | 'partial' | 'pending' | 'processing';
   has_failed_chunks?: boolean;
+  main_scope_total?: number;
 }
 
 interface MatrixDiagnostics {
@@ -257,8 +259,27 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           })
         );
 
+        const qIds = quotesWithStatus.map(q => q.id);
+        let qItemsByQuote: Record<string, { id: string; description: string; quantity: number; unit_price: number; total_price: number }[]> = {};
+        if (qIds.length > 0) {
+          const { data: qItems } = await supabase
+            .from('quote_items')
+            .select('id, quote_id, description, quantity, unit_price, total_price')
+            .in('quote_id', qIds);
+          if (qItems) {
+            for (const item of qItems) {
+              if (!qItemsByQuote[item.quote_id]) qItemsByQuote[item.quote_id] = [];
+              qItemsByQuote[item.quote_id].push(item);
+            }
+          }
+        }
+        const quotesWithMainScope = quotesWithStatus.map(q => {
+          const { summary } = classifyParsedQuoteRows(qItemsByQuote[q.id] ?? []);
+          return { ...q, main_scope_total: summary.main_scope_total };
+        });
+
         console.log('=== LOADED QUOTES WITH STATUS ===');
-        quotesWithStatus.forEach(q => {
+        quotesWithMainScope.forEach(q => {
           console.log(`${q.supplier_name}:`, {
             items_count: q.items_count,
             mapped_items_count: q.mapped_items_count,
@@ -268,7 +289,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         });
         console.log('=================================');
 
-        setAvailableQuotes(quotesWithStatus);
+        setAvailableQuotes(quotesWithMainScope);
 
         // Auto-select ready quotes if none are selected yet
         if (selectedQuoteIds.length === 0) {
@@ -418,11 +439,25 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         return;
       }
 
-      const diag = buildMatrixDiagnostics(itemsData, quoteIds);
+      const { enrichedRows: classifiedItems } = classifyParsedQuoteRows(itemsData.map(item => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+      })));
+      const mainScopeItemIds = new Set(
+        classifiedItems
+          .filter(r => r.safe_classification_tag === 'main_scope')
+          .map(r => r.id)
+      );
+      const mainScopeItemsData = itemsData.filter(item => mainScopeItemIds.has(item.id));
+
+      const diag = buildMatrixDiagnostics(mainScopeItemsData, quoteIds);
       setDiagnostics(diag);
 
       console.log('=== SCOPE MATRIX DIAGNOSTICS ===');
-      console.log('Total Items:', diag.totalItems);
+      console.log('Total Items (Main Scope):', diag.totalItems);
       console.log('Items by Quote:', diag.itemsByQuote);
       console.log('Items with System by Quote:', diag.itemsWithSystemByQuote);
       console.log('Overlapping Systems Count:', diag.overlappingSystemsCount);
@@ -431,13 +466,13 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       console.log('================================');
 
       console.log('ScopeMatrix: Loading data for project', projectId);
-      console.log('ScopeMatrix: Found', quotesData.length, 'quotes and', itemsData.length, 'items');
+      console.log('ScopeMatrix: Found', quotesData.length, 'quotes and', mainScopeItemsData.length, 'main scope items (from', itemsData.length, 'total)');
 
-      const itemsWithSystemId = itemsData.filter(item => item.system_id);
+      const itemsWithSystemId = mainScopeItemsData.filter(item => item.system_id);
       console.log('ScopeMatrix: Items with system_id:', itemsWithSystemId.length);
 
-      if (itemsData.length > 0) {
-        const sampleItem = itemsData[0];
+      if (mainScopeItemsData.length > 0) {
+        const sampleItem = mainScopeItemsData[0];
         console.log('ScopeMatrix: Sample item data:', {
           id: sampleItem.id,
           description: sampleItem.description?.substring(0, 50),
@@ -465,13 +500,13 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       }
 
       const missingQtySet = new Set(
-        itemsData
+        mainScopeItemsData
           .filter(item => needsQuantity(item))
           .map(item => item.id)
       );
       setItemsWithMissingQty(missingQtySet);
 
-      const normalisedLines = itemsData.map(item => {
+      const normalisedLines = mainScopeItemsData.map(item => {
         const quote = quotesData.find(q => q.id === item.quote_id);
 
         const serviceType = (item as any).service || (item as any).mapped_service_type || (item as any).serviceType;
@@ -502,7 +537,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
       console.log('ScopeMatrix: Normalised', normalisedLines.length, 'lines');
       console.log('ScopeMatrix: Sample item:', normalisedLines[0]);
 
-      const mappings = itemsData.map(item => ({
+      const mappings = mainScopeItemsData.map(item => ({
         quoteItemId: item.id,
         systemId: item.system_id,
         systemLabel: item.system_label,
@@ -1122,7 +1157,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
                         ) : (
                           <span className="text-amber-600 font-medium"> 0 mapped (needs Review & Clean)</span>
                         )}
-                         • ${quote.total_amount?.toLocaleString() || '0'}
+                         • ${(quote.main_scope_total ?? quote.total_amount)?.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0'}
                         {quote.mapped_items_count > 0 ? (
                           <span className="text-green-600 font-medium ml-2">✓ Ready</span>
                         ) : (

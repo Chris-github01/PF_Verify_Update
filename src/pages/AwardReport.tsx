@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Download, MoreHorizontal, RefreshCw, ChevronDown, Award, Shield, TrendingUp, BarChart3, Printer, FileSpreadsheet, Trash2, Edit3, AlertCircle, CheckCircle, Scale, DollarSign, Activity, CheckSquare, Square, ArrowRight, ChevronRight, Target, FileText, AlertOctagon } from 'lucide-react';
+import { ArrowLeft, Download, MoreHorizontal, RefreshCw, ChevronDown, Award, Shield, TrendingUp, BarChart3, Printer, FileSpreadsheet, Trash2, CreditCard as Edit3, AlertCircle, CheckCircle, Scale, DollarSign, Activity, CheckSquare, Square, ArrowRight, ChevronRight, Target, FileText, AlertOctagon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import type { ComparisonRow } from '../types/comparison.types';
@@ -963,7 +963,7 @@ export default function AwardReport({
               <h3 className="text-2xl font-bold text-red-400 mb-2">🚫 Trade Mismatch Detected</h3>
               <p className="text-slate-400 mb-4">
                 This report belongs to <span className="font-bold text-orange-400">{loadedReportTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade,
-                but you're viewing <span className="font-bold text-orange-400">{currentTrade === 'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade.
+                but you're viewing <span className="font-bold text-orange-400">{currentTrade === \'passive_fire' ? 'Passive Fire' : 'Electrical'}</span> trade.
               </p>
               <p className="text-slate-300 font-semibold mb-6">
                 Data from different trades is isolated and cannot be displayed cross-trade.
@@ -1443,7 +1443,7 @@ export default function AwardReport({
               <thead className="bg-gradient-to-r from-slate-700 to-slate-800">
                 <tr>
                   <th className="text-left text-sm font-bold text-white uppercase tracking-wide px-6 py-4">Supplier</th>
-                  <th className="text-right text-sm font-bold text-white uppercase tracking-wide px-6 py-4">Total Price</th>
+                  <th className="text-right text-sm font-bold text-white uppercase tracking-wide px-6 py-4">Main Scope Total</th>
                   <th className="text-right text-sm font-bold text-white uppercase tracking-wide px-6 py-4">Systems Covered</th>
                   <th className="text-right text-sm font-bold text-white uppercase tracking-wide px-6 py-4">Coverage %</th>
                   <th className="text-right text-sm font-bold text-white uppercase tracking-wide px-6 py-4">Risk Score</th>
