@@ -106,12 +106,11 @@ function classifyRow(
   const signals = matchesDetailSignals(description, qty, rate, total);
 
   // RULE 1 — SUMMARY ONLY
-  // Guard: only apply if the row has no valid pricing structure.
-  // A row with qty > 0, rate > 0, total > 0 is a real priced line item and
-  // must not be excluded by a phrase match alone, even if the description
-  // happens to contain a summary keyword.
+  // Guard: skip phrase exclusion for priced rows UNLESS the phrase is marked
+  // excludeEvenWhenPriced (used for known rollup/double-count lines that carry
+  // their own price but still duplicate items already priced individually).
   const summaryMatch = matchesSummaryPhrase(description, summaryPhrases);
-  if (summaryMatch.matched && !signals.hasPricingStructure) {
+  if (summaryMatch.matched && (!signals.hasPricingStructure || summaryMatch.excludeEvenWhenPriced)) {
     return {
       safe_classification_tag: 'summary_only',
       safe_counts_toward_total: false,
@@ -138,6 +137,7 @@ function classifyRow(
     signals.hasFRR,
     signals.hasSubstrate,
     signals.hasMeasurableElement,
+    signals.hasServiceType,
   ].filter(Boolean).length;
 
   if (signals.hasPricingStructure && nonPricingSignalCount >= 2) {
@@ -146,6 +146,7 @@ function classifyRow(
       signals.hasFRR ? 'FRR pattern' : null,
       signals.hasSubstrate ? 'substrate' : null,
       signals.hasMeasurableElement ? 'measurable element' : null,
+      signals.hasServiceType ? 'service type' : null,
       'pricing structure',
     ]
       .filter(Boolean)
