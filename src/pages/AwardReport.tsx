@@ -10,6 +10,7 @@ import type { DashboardMode } from '../App';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import ApprovalModal from '../components/ApprovalModal';
 import type { EnhancedSupplierMetrics } from '../lib/reports/awardReportEnhancements';
+import { exportSupplierComparison } from '../lib/export/supplierComparisonExport';
 
 interface Project {
   id: string;
@@ -570,6 +571,22 @@ export default function AwardReport({
     }
   };
 
+  const handleExportSupplierComparison = async () => {
+    setShowExportDropdown(false);
+    if (!currentProject) {
+      onToast?.('Project not loaded', 'error');
+      return;
+    }
+    try {
+      onToast?.('Building supplier comparison export...', 'success');
+      await exportSupplierComparison(projectId, currentProject.name, currentTrade || undefined);
+      onToast?.('Supplier comparison exported successfully', 'success');
+    } catch (error: any) {
+      console.error('Error exporting supplier comparison:', error);
+      onToast?.(error.message || 'Failed to export supplier comparison', 'error');
+    }
+  };
+
   const handlePrint = async () => {
     setShowExportDropdown(false);
 
@@ -866,6 +883,13 @@ export default function AwardReport({
                       >
                         <Printer size={16} />
                         Export PDF
+                      </button>
+                      <button
+                        onClick={handleExportSupplierComparison}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <FileSpreadsheet size={16} />
+                        Export Supplier Comparison
                       </button>
                       <button
                         onClick={exportItemizedComparisonToExcel}
@@ -1508,6 +1532,13 @@ export default function AwardReport({
                 >
                   <FileSpreadsheet size={18} />
                   {showItemizedDetails ? 'Hide' : 'View'} Full Itemized Comparison
+                </button>
+                <button
+                  onClick={handleExportSupplierComparison}
+                  className="px-6 py-3 border-2 border-emerald-600 bg-emerald-900/30 text-emerald-200 rounded-lg hover:bg-emerald-800/40 transition-all text-sm font-semibold flex items-center gap-2"
+                >
+                  <FileSpreadsheet size={18} />
+                  Export Supplier Comparison
                 </button>
                 <button
                   onClick={exportItemizedComparisonToExcel}

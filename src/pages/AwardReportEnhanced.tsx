@@ -13,6 +13,7 @@ import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/mode
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { exportScheduleOfRates } from '../lib/export/scheduleOfRatesExport';
 import { exportScheduleComparison } from '../lib/export/scheduleComparisonExport';
+import { exportSupplierComparison } from '../lib/export/supplierComparisonExport';
 import { useTrade } from '../lib/tradeContext';
 import EnhancedSupplierTable from '../components/award/EnhancedSupplierTable';
 import WeightedScoringBreakdown from '../components/award/WeightedScoringBreakdown';
@@ -935,13 +936,31 @@ export default function AwardReportEnhanced({
                         Export Award Report
                       </button>
                       <button
+                        onClick={async () => {
+                          setShowExportDropdown(false);
+                          if (!currentProject) return;
+                          try {
+                            onToast?.('Building supplier comparison export...', 'success');
+                            await exportSupplierComparison(projectId, currentProject.name, currentTrade || undefined);
+                            onToast?.('Supplier comparison exported successfully', 'success');
+                          } catch (error: any) {
+                            console.error('Export supplier comparison error:', error);
+                            onToast?.(error.message || 'Failed to export supplier comparison', 'error');
+                          }
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <FileSpreadsheet size={16} />
+                        Export Supplier Comparison
+                      </button>
+                      <button
                         onClick={() => {
                           exportItemizedComparisonToExcel();
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
                       >
                         <FileSpreadsheet size={16} />
-                        Export Excel Supplier Comparison
+                        Export Excel Items
                       </button>
                       <button
                         onClick={async () => {
