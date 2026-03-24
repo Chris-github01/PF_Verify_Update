@@ -9,14 +9,14 @@ interface Quote {
 interface RawItem {
   id: string;
   description: string;
-  service: string;
-  material: string;
-  unit: string;
+  service: string | null;
+  material: string | null;
+  unit: string | null;
   unit_price: number | null;
   quantity: number | null;
-  size: string;
-  frr: string;
-  total: number | null;
+  size: string | null;
+  frr: string | null;
+  total_price: number | null;
 }
 
 interface SupplierData {
@@ -94,17 +94,50 @@ const ASSOC_MATERIAL_KEYWORDS: Record<string, string[]> = {
   Penetration: ['penetration', 'fire stop', 'firestop', 'through-wall', 'through wall', 'sealing system'],
 };
 
-function extractDiameter(size: string, description: string): string {
+/**
+ * For passive fire descriptions like "Cable Bundle 25mm -/30/30 GIB Wall ..."
+ * the diameter appears immediately after the item type name.
+ * We prefer the database column if populated, else parse the description.
+ */
+function extractDiameter(size: string | null, description: string): string {
   if (size && size.trim()) return normaliseDiameter(size.trim());
-  const mmMatch = description?.match(/(\d+)\s*mm/i);
+  const desc = description || '';
+  const mmMatch = desc.match(/\b(\d+)\s*mm\b/i);
   if (mmMatch) return `${mmMatch[1]}mm`;
-  const inchMatch = description?.match(/(\d+(?:\.\d+)?)\s*["']/);
+  const inchMatch = desc.match(/(\d+(?:\.\d+)?)\s*["']/);
   if (inchMatch) return `${inchMatch[1]}"`;
-  const dnMatch = description?.match(/\bDN\s*(\d+)/i);
+  const dnMatch = desc.match(/\bDN\s*(\d+)/i);
   if (dnMatch) return `DN${dnMatch[1]}`;
-  const nbMatch = description?.match(/\bNB\s*(\d+)/i);
+  const nbMatch = desc.match(/\bNB\s*(\d+)/i);
   if (nbMatch) return `NB${nbMatch[1]}`;
   return '';
+}
+
+/**
+ * Passive fire items embed FRR in the description: "... -/30/30 ..." or "-/-/-"
+ * Extract that pattern directly from description when the db column is empty.
+ */
+function extractFrrFromDescription(description: string): string {
+  const desc = description || '';
+  const frrMatch = desc.match(/(-?\/\d+\/\d+|-?\/-\/-|-\/\d+\/-|-\/-\/\d+)/);
+  if (frrMatch) return frrMatch[1];
+  return '';
+}
+
+/**
+ * Passive fire items start with the service/item type before the diameter.
+ * e.g. "Cable Bundle (Alarm) 15mm -/30/30 ..." → service = "Electrical" (from db)
+ * or we extract item type prefix as the grouping label.
+ */
+function extractServiceType(service: string | null, description: string): string {
+  if (service && service.trim()) return service.trim();
+  const desc = description || '';
+  const prefixMatch = desc.match(/^([A-Za-z][A-Za-z\s\(\)\/\*]+?)\s*\d+\s*mm/i);
+  if (prefixMatch) {
+    return prefixMatch[1].trim().replace(/\s+/g, ' ');
+  }
+  const firstWords = desc.split(/\s+/).slice(0, 3).join(' ');
+  return firstWords || 'Unclassified';
 }
 
 function normaliseDiameter(d: string): string {
@@ -116,9 +149,10 @@ function normaliseDiameter(d: string): string {
   return clean;
 }
 
-function normaliseFrr(frr: string): string {
+function normaliseFrr(frr: string | null): string {
   if (!frr || !frr.trim()) return '';
   const clean = frr.trim().toUpperCase().replace(/\s+/g, '');
+  if (clean === '-/-/-' || clean === '/-/-') return '-/-/-';
   if (clean.match(/^-\/\d+\/\d+$/)) return clean;
   if (clean.match(/^\/\d+\/\d+$/)) return `-${clean}`;
   const slashNums = clean.match(/(\d+)\/(\d+)/);
@@ -129,7 +163,7 @@ function normaliseFrr(frr: string): string {
   return clean;
 }
 
-function extractMaterial(material: string, description: string): string {
+function extractMaterial(material: string | null, description: string): string {
   if (material && material.trim()) return material.trim();
   const desc = description || '';
   const patterns: [RegExp, string][] = [
@@ -275,19 +309,22 @@ export async function exportSupplierComparison(
   for (const quote of quotes as Quote[]) {
     const { data: items, error } = await supabase
       .from('quote_items')
-      .select('id, description, service, material, unit, unit_price, quantity, size, frr, total')
+      .select('id, description, service, material, unit, unit_price, quantity, size, frr, total_price')
       .eq('quote_id', quote.id)
-      .order('service')
       .order('description');
 
     if (error || !items) continue;
 
     for (const raw of items as RawItem[]) {
-      const serviceType = raw.service || '';
-      const diameter = extractDiameter(raw.size, raw.description);
-      const frr = normaliseFrr(raw.frr);
-      const material = extractMaterial(raw.material, raw.description);
-      const associatedMaterials = extractAssociatedMaterials(raw.description);
+      const desc = raw.description || '';
+
+      const diameter = extractDiameter(raw.size, desc);
+      const frrFromCol = normaliseFrr(raw.frr);
+      const frrFromDesc = normaliseFrr(extractFrrFromDescription(desc));
+      const frr = frrFromCol || frrFromDesc;
+      const serviceType = extractServiceType(raw.service, desc);
+      const material = extractMaterial(raw.material, desc);
+      const associatedMaterials = extractAssociatedMaterials(desc);
 
       const key = buildGroupKey(serviceType, diameter, frr);
 
@@ -296,16 +333,16 @@ export async function exportSupplierComparison(
           serviceType,
           diameter,
           frr,
-          canonicalDescription: raw.description || '',
+          canonicalDescription: desc,
           suppliers: Object.fromEntries(supplierNames.map((n) => [n, emptySupplierData()])),
         };
       }
 
       const incomingTotal =
-        raw.total != null
-          ? raw.total
+        raw.total_price != null
+          ? Number(raw.total_price)
           : raw.unit_price != null && raw.quantity != null
-          ? raw.unit_price * raw.quantity
+          ? Number(raw.unit_price) * Number(raw.quantity)
           : null;
 
       const existing = groupIndex[key].suppliers[quote.supplier_name];
@@ -318,13 +355,13 @@ export async function exportSupplierComparison(
 
       if (shouldReplace) {
         groupIndex[key].suppliers[quote.supplier_name] = {
-          unitPrice: raw.unit_price ?? null,
-          quantity: raw.quantity ?? null,
+          unitPrice: raw.unit_price != null ? Number(raw.unit_price) : null,
+          quantity: raw.quantity != null ? Number(raw.quantity) : null,
           total: incomingTotal,
           unit: raw.unit || '',
           material,
           associatedMaterials,
-          originalDescription: raw.description || '',
+          originalDescription: desc,
           frr,
           size: diameter,
           hasData: true,
