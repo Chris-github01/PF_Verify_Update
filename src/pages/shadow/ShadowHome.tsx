@@ -167,6 +167,29 @@ export default function ShadowHome() {
             </section>
           </div>
 
+          {/* Phase 14 — Multi-Trade Intelligence Platform entry point */}
+          <section className="bg-teal-900/10 border border-teal-700/30 rounded-xl p-5">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-teal-400" />
+                  Multi-Trade Intelligence Platform
+                </h2>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Cross-trade learning, module health, pattern detection, and global optimization across all trade parsers.
+                </p>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <a href="/shadow/intelligence/dashboard" className="text-xs font-semibold px-3 py-2 rounded-lg bg-teal-700 hover:bg-teal-600 text-white transition-colors">
+                  Open platform dashboard →
+                </a>
+                <a href="/shadow/modules/plumbing_parser/optimization" className="text-xs px-3 py-2 rounded-lg border border-teal-700/40 text-teal-300 hover:bg-teal-900/30 transition-colors">
+                  Optimization engine →
+                </a>
+              </div>
+            </div>
+          </section>
+
           {/* Recent audit log */}
           <section className="bg-gray-900 border border-gray-800 rounded-xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">

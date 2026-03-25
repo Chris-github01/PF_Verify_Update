@@ -71,6 +71,8 @@ import PlumbingReviewDashboard from './pages/shadow/PlumbingReviewDashboard';
 import PlumbingReviewCaseDetail from './pages/shadow/PlumbingReviewCaseDetail';
 import PlumbingExecutiveDashboard from './pages/shadow/PlumbingExecutiveDashboard';
 import PlumbingOptimizationDashboard from './pages/shadow/PlumbingOptimizationDashboard';
+import GlobalIntelligenceDashboard from './pages/shadow/GlobalIntelligenceDashboard';
+import IntelligenceModuleDetail from './pages/shadow/IntelligenceModuleDetail';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1142,6 +1144,17 @@ function AppContent() {
     shadowPath === '/shadow/modules/plumbing_parser/optimization/rankings'
   ) {
     return <PlumbingOptimizationDashboard />;
+  }
+  if (
+    shadowPath === '/shadow/intelligence/dashboard' ||
+    shadowPath === '/shadow/intelligence/modules' ||
+    shadowPath === '/shadow/intelligence/cross-trade' ||
+    shadowPath === '/shadow/intelligence/onboarding'
+  ) {
+    return <GlobalIntelligenceDashboard />;
+  }
+  if (shadowPath.startsWith('/shadow/intelligence/modules/')) {
+    return <IntelligenceModuleDetail />;
   }
 
   if (!session) {
