@@ -59,7 +59,7 @@ const MEASURABLE_ELEMENT_PATTERNS = [/\d+mm/i,/\d+x\d+/i,/cable bundle/i,/cable 
 const SERVICE_TYPE_KEYWORDS = ['electrical','hydraulic','mechanical','fire protection','insulation wrap','batt patch','penetration'];
 const SUMMARY_PHRASES = ['extra over for fire stopping required not shown on layout','required to achieve compliance','required to achieve insulation rating','can be removed if insulation rating is not required'];
 const SUMMARY_PHRASES_ALWAYS_EXCLUDE = ['extra over for fire stopping required not shown on layout'];
-const OPTIONAL_KEYWORDS = ['door perimeter seal','lift door seal','flush box intumescent pad','flushbox intumescent pad','intumescent flushbox pad'];
+const OPTIONAL_KEYWORDS = ['door perimeter seal','lift door seal','flush box intumescent pad','flushbox intumescent pad','intumescent flushbox pad','intumescent flush box','intumescent flushbox','ryanfire power pad'];
 
 function isMainScopeItem(item: QuoteItem): boolean {
   const desc = (item.description ?? '').toLowerCase();

@@ -168,7 +168,7 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
 
       setTags(tagsData || []);
 
-      // Load tenderers - try with trade filter first, then without
+      // Load tenderers - only selected quotes, try with trade filter first, then without
       let quotesResult = await supabase
         .from('quotes')
         .select(`
@@ -181,6 +181,7 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
           )
         `)
         .eq('project_id', projectId)
+        .eq('is_selected', true)
         .eq('trade', moduleKey);
 
       let quotes = quotesResult.data;
@@ -198,7 +199,8 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
               name
             )
           `)
-          .eq('project_id', projectId);
+          .eq('project_id', projectId)
+          .eq('is_selected', true);
         quotes = fallbackResult.data;
       }
 

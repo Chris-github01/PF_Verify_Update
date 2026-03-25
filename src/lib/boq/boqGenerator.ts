@@ -220,6 +220,7 @@ export async function generateBaselineBOQ(
       )
     `)
     .eq('project_id', projectId)
+    .eq('is_selected', true)
     .eq('trade', moduleKey);
 
   quotes = result.data;
@@ -242,7 +243,8 @@ export async function generateBaselineBOQ(
           name
         )
       `)
-      .eq('project_id', projectId);
+      .eq('project_id', projectId)
+      .eq('is_selected', true);
 
     quotes = fallbackResult.data;
     quotesError = fallbackResult.error;
