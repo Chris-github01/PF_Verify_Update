@@ -24,6 +24,7 @@ import {
   Building2,
   ChevronDown,
   Check,
+  FlaskConical,
 } from 'lucide-react';
 import type { DashboardMode } from '../App';
 import { useOrganisation } from '../lib/organisationContext';
@@ -420,9 +421,9 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
         )}
       </nav>
 
-      {/* Admin Console Button */}
+      {/* Admin Console + Shadow Dashboard Buttons */}
       {isMasterAdmin && (
-        <div className="px-3 pb-3 border-t border-slate-800/80 pt-3">
+        <div className="px-3 pb-3 border-t border-slate-800/80 pt-3 space-y-1.5">
           <button
             onClick={() => window.location.href = '/admin'}
             className={`
@@ -436,6 +437,20 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
               <ShieldAlert size={16} />
             </span>
             {!collapsed && <span className="flex-1 text-left">Admin Console</span>}
+          </button>
+          <button
+            onClick={() => window.location.href = '/shadow'}
+            className={`
+              group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+              text-amber-500/80 hover:text-amber-400 hover:bg-amber-900/10 border border-amber-800/40
+              ${collapsed ? 'justify-center' : ''}
+            `}
+            title={collapsed ? 'Shadow Dashboard' : undefined}
+          >
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-amber-900/20 group-hover:bg-amber-900/30 flex-shrink-0">
+              <FlaskConical size={16} className="text-amber-500" />
+            </span>
+            {!collapsed && <span className="flex-1 text-left">Shadow Dashboard</span>}
           </button>
         </div>
       )}
