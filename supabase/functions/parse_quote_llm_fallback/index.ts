@@ -45,6 +45,57 @@ interface ParseResponse {
 }
 
 /**
+ * Regex fallback: extract level-based pricing table rows from plumbing quotes.
+ * Handles formats like:
+ *   "LOWER GROUND LEVEL  13800  15355  1760  7620  32000  70535"
+ *   "LEVEL 1  35020  43415  21760  28680  128875"
+ *   "ROOF  2200  4000  480  5420  63470  75570"
+ * The SUM column is always the last number on the row.
+ */
+function extractPlumbingLevelTable(text: string): LineItem[] {
+  const results: LineItem[] = [];
+  const lines = text.split('\n');
+
+  const LEVEL_PATTERN = /^(lower\s+ground(?:\s+level)?|upper\s+ground(?:\s+level)?|ground(?:\s+level)?|basement|level\s+\d+|floor\s+\d+|roof(?:\s+level)?|plant\s+room|car\s+park(?:\s+level)?|podium(?:\s+level)?)/i;
+  const SKIP_PATTERN = /^(total|sub\s*total|grand\s*total|items?|plumbing|description|levels?|sum|note)/i;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (SKIP_PATTERN.test(line)) continue;
+
+    const levelMatch = line.match(LEVEL_PATTERN);
+    if (!levelMatch) continue;
+
+    // Extract all numbers from the line — the last one is the SUM
+    const numbers = line.match(/[\d,]+(?:\.\d+)?/g);
+    if (!numbers || numbers.length < 1) continue;
+
+    const sumStr = numbers[numbers.length - 1].replace(/,/g, '');
+    const sumVal = parseFloat(sumStr);
+    if (!sumVal || sumVal <= 0 || sumVal < 1000) continue;
+
+    // Build a clean description from the level label
+    const rawLabel = levelMatch[0].trim();
+    const description = rawLabel
+      .replace(/\b(\w)/g, (c) => c.toUpperCase())
+      .replace(/\s+/g, ' ')
+      + ' - Plumbing Works';
+
+    results.push({
+      description,
+      qty: 1,
+      unit: 'LS',
+      rate: sumVal,
+      total: sumVal,
+      section: 'Main',
+    });
+  }
+
+  return results;
+}
+
+/**
  * Extract document totals from raw text
  */
 function extractDocumentTotals(text: string) {
@@ -508,6 +559,17 @@ Return JSON format:
 
     let items = allItems;
     console.log(`[DEBUG] LLM raw items count: ${items.length}`);
+
+    // Plumbing-only: if LLM returned 0 items, attempt regex extraction of level-based pricing table
+    if (isPlumbing && items.length === 0) {
+      console.log('[Plumbing fallback] LLM returned 0 items - attempting regex extraction of level-based table');
+      const levelItems = extractPlumbingLevelTable(text);
+      if (levelItems.length > 0) {
+        console.log(`[Plumbing fallback] Regex extracted ${levelItems.length} level rows from pricing table`);
+        items = levelItems;
+        allWarnings.push('Items extracted via regex level-table fallback (LLM returned 0 items)');
+      }
+    }
 
     // Plumbing-only: apply sanitizer to strip summary rows before any further processing
     let plumbingQuoteTotal: number | null = null;

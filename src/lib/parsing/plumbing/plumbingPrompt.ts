@@ -21,6 +21,17 @@ STRICT RULES
   - Rainwater Harvesting System
   - Installation of Sanitary Fittings
 
+IMPORTANT — LEVEL-BASED PRICING TABLE FORMAT:
+Some plumbing quotes price work by building level (floor-by-floor). If you see a table with rows like:
+  - Lower Ground Level / Lower Ground / LG / Basement
+  - Upper Ground Level / Ground Floor / Ground Level / UG
+  - Level 1, Level 2, Level 3 ... Level N
+  - Roof / Roof Level / Top Level / Plant Room
+Each of these rows with a dollar amount IS a genuine line item. Extract EVERY level row as a separate line item.
+Use the SUM column (or the rightmost dollar value) as the total for each row.
+Use qty=1, unit="LS" for each level row.
+Do NOT skip these rows — they ARE the priced scope, just structured by floor instead of by system.
+
 2. NEVER INCLUDE as line items — these are summary rows:
 - Total
 - Totals
