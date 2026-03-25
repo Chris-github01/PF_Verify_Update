@@ -337,6 +337,12 @@ export default function ShadowModuleDetail() {
                 {moduleKey === 'plumbing_parser' && (
                   <div className="flex items-center gap-3 flex-wrap">
                     <a
+                      href="/shadow/modules/plumbing_parser/optimization"
+                      className="text-xs text-teal-300 hover:text-teal-200 transition-colors font-semibold border border-teal-700/40 px-2 py-0.5 rounded-md"
+                    >
+                      Optimization engine →
+                    </a>
+                    <a
                       href="/shadow/modules/plumbing_parser/executive"
                       className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors font-medium"
                     >

@@ -70,6 +70,7 @@ import PlumbingPredictiveDashboard from './pages/shadow/PlumbingPredictiveDashbo
 import PlumbingReviewDashboard from './pages/shadow/PlumbingReviewDashboard';
 import PlumbingReviewCaseDetail from './pages/shadow/PlumbingReviewCaseDetail';
 import PlumbingExecutiveDashboard from './pages/shadow/PlumbingExecutiveDashboard';
+import PlumbingOptimizationDashboard from './pages/shadow/PlumbingOptimizationDashboard';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1133,6 +1134,14 @@ function AppContent() {
     shadowPath.startsWith('/shadow/modules/plumbing_parser/executive/orgs/')
   ) {
     return <PlumbingExecutiveDashboard />;
+  }
+  if (
+    shadowPath === '/shadow/modules/plumbing_parser/optimization' ||
+    shadowPath === '/shadow/modules/plumbing_parser/optimization/bundles' ||
+    shadowPath === '/shadow/modules/plumbing_parser/optimization/runs' ||
+    shadowPath === '/shadow/modules/plumbing_parser/optimization/rankings'
+  ) {
+    return <PlumbingOptimizationDashboard />;
   }
 
   if (!session) {
