@@ -335,7 +335,13 @@ export default function ShadowModuleDetail() {
                   <h2 className="text-sm font-semibold text-white">Regression Suites</h2>
                 </div>
                 {moduleKey === 'plumbing_parser' && (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <a
+                      href="/shadow/modules/plumbing_parser/beta"
+                      className="text-xs text-teal-400 hover:text-teal-300 transition-colors"
+                    >
+                      Beta intelligence →
+                    </a>
                     <a
                       href="/shadow/modules/plumbing_parser/rollout"
                       className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"

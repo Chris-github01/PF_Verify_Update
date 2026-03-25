@@ -2,11 +2,17 @@ import { resolveFlag } from '../../shadow/featureFlags';
 import { isInternalUser, getCurrentUserOrgId } from '../../auth/isInternalUser';
 
 export type PlumbingRouterDecision = 'live' | 'shadow';
+export type PlumbingRolloutContext = 'internal_beta' | 'org_beta' | 'percentage_beta';
 
-interface PlumbingRoutingContext {
+export interface PlumbingRoutingContext {
   userId?: string;
   orgId?: string;
   environment?: 'development' | 'staging' | 'production';
+}
+
+export interface PlumbingRouterResult {
+  decision: PlumbingRouterDecision;
+  rolloutContext?: PlumbingRolloutContext;
 }
 
 function simpleHash(str: string): number {
@@ -19,7 +25,7 @@ function simpleHash(str: string): number {
 
 export async function resolvePlumbingParser(
   ctx?: PlumbingRoutingContext
-): Promise<PlumbingRouterDecision> {
+): Promise<PlumbingRouterResult> {
   const env = ctx?.environment ?? 'production';
 
   const killSwitch = await resolveFlag('plumbing_parser.kill_switch', {
@@ -27,14 +33,14 @@ export async function resolvePlumbingParser(
     orgId: ctx?.orgId,
     environment: env,
   });
-  if (killSwitch.enabled) return 'live';
+  if (killSwitch.enabled) return { decision: 'live' };
 
   const betaEnabled = await resolveFlag('plumbing_parser.beta_enabled', {
     userId: ctx?.userId,
     orgId: ctx?.orgId,
     environment: env,
   });
-  if (!betaEnabled.enabled) return 'live';
+  if (!betaEnabled.enabled) return { decision: 'live' };
 
   const internalOnly = await resolveFlag('plumbing_parser.internal_only', {
     userId: ctx?.userId,
@@ -43,7 +49,9 @@ export async function resolvePlumbingParser(
   });
   if (internalOnly.enabled) {
     const internal = await isInternalUser();
-    return internal ? 'shadow' : 'live';
+    return internal
+      ? { decision: 'shadow', rolloutContext: 'internal_beta' }
+      : { decision: 'live' };
   }
 
   const allowedOrgs = await resolveFlag('plumbing_parser.allowed_orgs', {
@@ -54,7 +62,9 @@ export async function resolvePlumbingParser(
   if (allowedOrgs.enabled) {
     const orgIds = (allowedOrgs.config as { orgIds?: string[] }).orgIds ?? [];
     const orgId = ctx?.orgId ?? await getCurrentUserOrgId() ?? '';
-    if (orgIds.length > 0 && orgIds.includes(orgId)) return 'shadow';
+    if (orgIds.length > 0 && orgIds.includes(orgId)) {
+      return { decision: 'shadow', rolloutContext: 'org_beta' };
+    }
   }
 
   const pctFlag = await resolveFlag('plumbing_parser.rollout_percentage', {
@@ -67,11 +77,11 @@ export async function resolvePlumbingParser(
     if (pct > 0) {
       const basis = ctx?.orgId ?? ctx?.userId ?? '';
       const hash = simpleHash('plumbing_parser' + basis) % 100;
-      if (hash < pct) return 'shadow';
+      if (hash < pct) return { decision: 'shadow', rolloutContext: 'percentage_beta' };
     }
   }
 
-  return 'live';
+  return { decision: 'live' };
 }
 
 export async function isKillSwitchActive(): Promise<boolean> {
