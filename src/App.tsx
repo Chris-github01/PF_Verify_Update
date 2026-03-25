@@ -67,6 +67,8 @@ import PlumbingBetaAnomaliesPage from './pages/shadow/PlumbingBetaAnomaliesPage'
 import PlumbingReleaseDashboard from './pages/shadow/PlumbingReleaseDashboard';
 import PlumbingLearningDashboard from './pages/shadow/PlumbingLearningDashboard';
 import PlumbingPredictiveDashboard from './pages/shadow/PlumbingPredictiveDashboard';
+import PlumbingReviewDashboard from './pages/shadow/PlumbingReviewDashboard';
+import PlumbingReviewCaseDetail from './pages/shadow/PlumbingReviewCaseDetail';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1111,6 +1113,18 @@ function AppContent() {
     shadowPath.startsWith('/shadow/modules/plumbing_parser/predictive/orgs/')
   ) {
     return <PlumbingPredictiveDashboard />;
+  }
+  if (shadowPath.startsWith('/shadow/modules/plumbing_parser/review/cases/')) {
+    const caseId = shadowPath.split('/shadow/modules/plumbing_parser/review/cases/')[1];
+    return <PlumbingReviewCaseDetail caseId={caseId} onBack={() => { window.location.pathname = '/shadow/modules/plumbing_parser/review'; }} />;
+  }
+  if (
+    shadowPath === '/shadow/modules/plumbing_parser/review' ||
+    shadowPath === '/shadow/modules/plumbing_parser/review/queue' ||
+    shadowPath === '/shadow/modules/plumbing_parser/review/assignments' ||
+    shadowPath === '/shadow/modules/plumbing_parser/review/corrections'
+  ) {
+    return <PlumbingReviewDashboard />;
   }
 
   if (!session) {

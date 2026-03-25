@@ -337,6 +337,12 @@ export default function ShadowModuleDetail() {
                 {moduleKey === 'plumbing_parser' && (
                   <div className="flex items-center gap-3 flex-wrap">
                     <a
+                      href="/shadow/modules/plumbing_parser/review"
+                      className="text-xs text-teal-400 hover:text-teal-300 transition-colors font-medium"
+                    >
+                      Review operations →
+                    </a>
+                    <a
                       href="/shadow/modules/plumbing_parser/predictive"
                       className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
                     >
