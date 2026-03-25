@@ -228,27 +228,10 @@ export async function generateBaselineBOQ(
 
   console.log('Quotes with trade filter:', quotes?.length || 0);
 
-  // If no quotes found with trade filter, try without it (for backward compatibility)
+  // NOTE: We intentionally do NOT fall back to fetching all trades.
+  // Each module must only see its own trade's data.
   if (!quotesError && (!quotes || quotes.length === 0)) {
-    console.log('No quotes found with trade filter, trying without trade filter...');
-    const fallbackResult = await supabase
-      .from('quotes')
-      .select(`
-        id,
-        supplier_id,
-        supplier_name,
-        trade,
-        suppliers (
-          id,
-          name
-        )
-      `)
-      .eq('project_id', projectId)
-      .eq('is_selected', true);
-
-    quotes = fallbackResult.data;
-    quotesError = fallbackResult.error;
-    console.log('Quotes without trade filter:', quotes?.length || 0);
+    console.log('No quotes found with trade filter for moduleKey:', moduleKey);
   }
 
   // Debug: Log quote data
@@ -378,7 +361,7 @@ export async function generateBaselineBOQ(
   });
 
   if (tenderers.length === 0) {
-    throw new Error('No quotes with valid suppliers found for this project. Please check your quote imports.');
+    throw new Error(`No quotes found for the ${moduleKey} trade in this project. Please ensure quotes have been imported and selected for this trade module.`);
   }
 
   // Step 2: Get all quote items from all tenderers

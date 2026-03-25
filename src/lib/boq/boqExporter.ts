@@ -14,19 +14,21 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
     .eq('id', options.project_id)
     .single();
 
-  // Get tenderers and their quotes
+  // Get tenderers and their quotes - filtered by trade/module to ensure data isolation
   const { data: quotes } = await supabase
     .from('quotes')
     .select(`
       id,
       supplier_id,
       latest,
+      trade,
       suppliers (
         id,
         name
       )
     `)
     .eq('project_id', options.project_id)
+    .eq('trade', options.module_key)
     .eq('latest', true);
 
   const tenderers = quotes?.map(q => ({
