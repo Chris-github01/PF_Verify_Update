@@ -9,6 +9,7 @@ import {
   dedupeKey,
   addRemainderIfNeeded,
   extractFRRFromDescription,
+  filterTotalRows,
 } from "../_shared/itemNormalizer.ts";
 
 const corsHeaders = {
@@ -629,16 +630,21 @@ Deno.serve(async (req: Request) => {
         // Keep items that have a description AND a non-zero total (or can calculate one from qty*rate)
         // For plumbing, lump-sum items (qty=1, unit=LS, total>0) are always valid even without a rate
         const isPlumbingJob = (typedJob.trade || '') === 'plumbing';
-        const keptItems = parsedData.items.filter((item: any) => {
+        const basicFiltered = parsedData.items.filter((item: any) => {
           if (!hasDesc(item)) return false;
           const total = Number(item.total ?? item.total_price ?? item.amount ?? 0);
           if (total !== 0) return true;
-          if (isPlumbingJob) return false; // plumbing lump sums must have a total
+          if (isPlumbingJob) return false;
           const qty = Number(item.qty ?? item.quantity ?? 0);
           const rate = Number(item.rate ?? item.unit_price ?? 0);
           return qty > 0 && rate > 0;
         });
-        console.log(`After safe filter: ${keptItems.length} items (removed ${parsedData.items.length - keptItems.length} empty/zero rows)`);
+        console.log(`After safe filter: ${basicFiltered.length} items (removed ${parsedData.items.length - basicFiltered.length} empty/zero rows)`);
+
+        const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(basicFiltered);
+        if (totalRowsRemoved > 0) {
+          console.log(`Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
+        }
 
         // ✅ Normalize items to fill empty descriptions from raw_text
         const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));

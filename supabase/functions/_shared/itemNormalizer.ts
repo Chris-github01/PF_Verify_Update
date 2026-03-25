@@ -216,6 +216,100 @@ export function extractFRRFromDescription(text: string): string | null {
 }
 
 /**
+ * Detect if a line item is a total/summary row that should be excluded.
+ * Handles labeled totals ("Total:", "Grand Total:", etc.) AND
+ * arithmetic totals (value equals sum of all other items).
+ */
+const TOTAL_ROW_PATTERNS = [
+  /\b(sub[-\s]?total|subtotal)\b/i,
+  /\b(grand[-\s]?total)\b/i,
+  /\b(section[-\s]?total)\b/i,
+  /\b(block[-\s]?total)\b/i,
+  /\b(page[-\s]?total)\b/i,
+  /\b(carried[-\s]?forward)\b/i,
+  /\b(brought[-\s]?forward)\b/i,
+  /\b(c\/f|b\/f)\b/i,
+  /^total$/i,
+  /^totals$/i,
+  /\btotal\s*:/i,
+  /^total\s+\(excl/i,
+  /^total\s+\(inc/i,
+];
+
+export function isTotalRow(item: any): boolean {
+  const desc = cleanText(String(item.description ?? "")).toLowerCase();
+  if (!desc) return false;
+  return TOTAL_ROW_PATTERNS.some(p => p.test(desc));
+}
+
+/**
+ * Detect if one item is an arithmetic total of the others.
+ * Returns true if item.total ≈ sum of all other items' totals (within 0.5%).
+ * This catches unlabeled total rows where the LLM didn't flag them as "Total:".
+ */
+export function isArithmeticTotalRow(item: any, allItems: any[]): boolean {
+  const itemTotal = Number(item.total ?? item.total_price ?? item.amount ?? 0);
+  if (itemTotal <= 0) return false;
+
+  const othersSum = allItems.reduce((sum: number, other: any) => {
+    if (other === item) return sum;
+    return sum + Number(other.total ?? other.total_price ?? other.amount ?? 0);
+  }, 0);
+
+  if (othersSum <= 0) return false;
+
+  const diff = Math.abs(itemTotal - othersSum);
+  const tolerance = Math.max(othersSum * 0.005, 1);
+  return diff <= tolerance;
+}
+
+/**
+ * Filter total/summary rows from a list of parsed items.
+ * Uses both label detection AND arithmetic sum detection.
+ * Safe to call on any trade without breaking passive fire or other quote types.
+ */
+export function filterTotalRows(items: any[]): { kept: any[]; removedCount: number; removedDescriptions: string[] } {
+  if (!items || items.length === 0) return { kept: [], removedCount: 0, removedDescriptions: [] };
+
+  const removedDescriptions: string[] = [];
+
+  const labelFiltered = items.filter(item => {
+    if (isTotalRow(item)) {
+      removedDescriptions.push(cleanText(String(item.description ?? "")));
+      return false;
+    }
+    return true;
+  });
+
+  if (labelFiltered.length === items.length) {
+    const arithmeticRemoved: any[] = [];
+    const arithmeticKept = labelFiltered.filter(item => {
+      if (isArithmeticTotalRow(item, labelFiltered)) {
+        arithmeticRemoved.push(item);
+        return false;
+      }
+      return true;
+    });
+
+    if (arithmeticRemoved.length === 1) {
+      const desc = cleanText(String(arithmeticRemoved[0].description ?? ""));
+      removedDescriptions.push(`${desc} [arithmetic total detected]`);
+      return {
+        kept: arithmeticKept,
+        removedCount: arithmeticRemoved.length,
+        removedDescriptions,
+      };
+    }
+  }
+
+  return {
+    kept: labelFiltered,
+    removedCount: items.length - labelFiltered.length,
+    removedDescriptions,
+  };
+}
+
+/**
  * Add remainder adjustment item if document total doesn't match items sum
  */
 export function addRemainderIfNeeded(
