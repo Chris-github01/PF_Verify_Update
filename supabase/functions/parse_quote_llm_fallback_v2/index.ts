@@ -307,37 +307,52 @@ Return JSON: {"items": [{"description": "...", "qty": 10, "unit": "ea", "rate": 
 /**
  * Regex fallback: extract level-based pricing table rows from plumbing quotes.
  * Used when the LLM returns 0 items on a plumbing quote.
- * Handles formats like:
- *   "LOWER GROUND LEVEL  13800  15355  1760  7620  32000  70535"
- *   "LEVEL 1  35020  43415  21760  28680  128875"
- *   "ROOF  2200  4000  480  5420  63470  75570"
- * The SUM column is always the last number on the row.
+ *
+ * Handles PDFs where the text extractor splits each word onto its own line, e.g.:
+ *   "LOWER\n GROUND\n LEVEL\n 13800   15355   1760   7620   32000   70535"
+ *
+ * Strategy:
+ * 1. Join the entire text into one long string collapsing whitespace/newlines.
+ * 2. Use a regex to find "LEVEL N" or "LOWER GROUND LEVEL" etc. followed by numbers.
+ * 3. The last number in the sequence is the SUM column.
  */
 function extractPlumbingLevelTable(text: string): LineItem[] {
   const results: LineItem[] = [];
-  const lines = text.split('\n');
 
-  const LEVEL_PATTERN = /^(lower\s+ground(?:\s+level)?|upper\s+ground(?:\s+level)?|ground(?:\s+level)?|basement|level\s+\d+|floor\s+\d+|roof(?:\s+level)?|plant\s+room|car\s+park(?:\s+level)?|podium(?:\s+level)?)/i;
-  const SKIP_PATTERN = /^(total|sub\s*total|grand\s*total|items?|plumbing|description|levels?|sum\b|note|gst|margin|p\s*&\s*g)/i;
+  // Collapse the entire text: replace newlines with spaces, then collapse runs of spaces
+  const flat = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
 
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    if (SKIP_PATTERN.test(line)) continue;
+  // Match all known level label patterns followed by a sequence of numbers
+  // The last number in the run is the SUM column value
+  const LEVEL_RE = /(lower\s+ground(?:\s+level)?|upper\s+ground(?:\s+level)?|ground(?:\s+level)?|basement|level\s+\d+|floor\s+\d+|roof(?:\s+level)?|plant\s+room|car\s+park(?:\s+level)?|podium(?:\s+level)?)\s+((?:[\d,]+(?:\.\d+)?\s+){1,10}[\d,]+(?:\.\d+)?)/gi;
 
-    const levelMatch = line.match(LEVEL_PATTERN);
-    if (!levelMatch) continue;
+  const seen = new Set<string>();
+  let match: RegExpExecArray | null;
 
-    const numbers = line.match(/[\d,]+(?:\.\d+)?/g);
+  while ((match = LEVEL_RE.exec(flat)) !== null) {
+    const rawLabel = match[1].trim();
+    const numberStr = match[2].trim();
+
+    // Skip header rows like "LEVELS ITEMS SUM NOTE" — these have no large numbers
+    if (/^levels?\s*$/i.test(rawLabel)) continue;
+
+    // Extract all numbers from the sequence
+    const numbers = numberStr.match(/[\d,]+(?:\.\d+)?/g);
     if (!numbers || numbers.length < 1) continue;
 
+    // The last number is the SUM column
     const sumStr = numbers[numbers.length - 1].replace(/,/g, '');
     const sumVal = parseFloat(sumStr);
-    if (!sumVal || sumVal <= 0 || sumVal < 1000) continue;
+    if (!sumVal || sumVal < 1000) continue;
 
-    const rawLabel = levelMatch[0].trim();
+    // Deduplicate by label
+    const labelKey = rawLabel.toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(labelKey)) continue;
+    seen.add(labelKey);
+
     const description = rawLabel
-      .replace(/\b(\w)/g, (_: string, c: string) => c.toUpperCase())
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase())
       .replace(/\s+/g, ' ')
       + ' - Plumbing Works';
 
@@ -350,7 +365,7 @@ function extractPlumbingLevelTable(text: string): LineItem[] {
       section: 'Main',
       confidence: 0.9,
       source: 'regex_level_table',
-      raw_text: line,
+      raw_text: match[0].trim(),
       validation_flags: [],
     });
   }
