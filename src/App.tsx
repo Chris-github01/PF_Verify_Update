@@ -49,6 +49,7 @@ import OrganisationSettings from './pages/OrganisationSettings';
 import AdminApp from './pages/AdminApp';
 import DemoLogin from './pages/DemoLogin';
 import ShadowHome from './pages/shadow/ShadowHome';
+import ShadowLogin from './pages/shadow/ShadowLogin';
 import ShadowModulesPage from './pages/shadow/ShadowModulesPage';
 import ShadowModuleDetail from './pages/shadow/ShadowModuleDetail';
 import ShadowModuleRuns from './pages/shadow/ShadowModuleRuns';
@@ -1051,14 +1052,17 @@ function AppContent() {
   // calls getUser() before Supabase has restored the session and always gets null)
   const shadowPath = window.location.pathname;
   if (shadowPath.startsWith('/shadow') && !session) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto" />
-          <p className="text-gray-400 text-sm">Authenticating...</p>
+    if (authLoading) {
+      return (
+        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto" />
+            <p className="text-gray-400 text-sm">Authenticating...</p>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
+    return <ShadowLogin />;
   }
   if (shadowPath === '/shadow' || shadowPath === '/shadow/') {
     return <ShadowHome />;
