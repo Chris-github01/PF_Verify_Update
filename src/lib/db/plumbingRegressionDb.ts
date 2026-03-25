@@ -217,6 +217,24 @@ export async function dbGetPlumbingSuiteRuns(suiteId: string): Promise<Regressio
   return (data ?? []) as unknown as RegressionSuiteRunRecordExtended[];
 }
 
+export async function dbGetRecentPlumbingRuns(limit = 10): Promise<RegressionSuiteRunRecordExtended[]> {
+  const { data, error } = await supabase
+    .from('regression_suite_runs')
+    .select('*, regression_suites!inner(suite_name, module_key)')
+    .eq('module_key', 'plumbing_parser')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return ((data ?? []) as unknown[]).map((row) => {
+    const r = row as Record<string, unknown>;
+    const suite = r.regression_suites as Record<string, unknown> | null;
+    return {
+      ...r,
+      suite_name: suite?.suite_name ?? null,
+    } as unknown as RegressionSuiteRunRecordExtended;
+  });
+}
+
 export async function dbGetPlumbingSuiteRun(runId: string): Promise<RegressionSuiteRunRecordExtended | null> {
   const { data, error } = await supabase
     .from('regression_suite_runs')

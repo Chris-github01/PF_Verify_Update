@@ -335,12 +335,20 @@ export default function ShadowModuleDetail() {
                   <h2 className="text-sm font-semibold text-white">Regression Suites</h2>
                 </div>
                 {moduleKey === 'plumbing_parser' && (
-                  <a
-                    href="/shadow/modules/plumbing_parser/regression"
-                    className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
-                  >
-                    Manage suites →
-                  </a>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href="/shadow/modules/plumbing_parser/rollout"
+                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      Rollout controls →
+                    </a>
+                    <a
+                      href="/shadow/modules/plumbing_parser/regression"
+                      className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                    >
+                      Manage suites →
+                    </a>
+                  </div>
                 )}
               </div>
               {regressionSuites.length === 0 ? (

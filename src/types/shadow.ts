@@ -9,7 +9,15 @@ export type RolloutStatus =
   | 'org_beta'
   | 'partial_rollout'
   | 'global_live'
-  | 'rolled_back';
+  | 'rolled_back'
+  | 'idle'
+  | 'shadow_testing'
+  | 'regression_passed'
+  | 'regression_failed'
+  | 'approved_for_beta'
+  | 'beta_internal'
+  | 'beta_limited'
+  | 'full_release';
 
 export type RunMode = 'shadow_only' | 'live_vs_shadow' | 'regression_suite';
 
@@ -171,6 +179,30 @@ export interface RegressionSuiteRunRecord {
   started_at?: string;
   completed_at?: string;
   created_at: string;
+}
+
+export interface ModuleReleaseApprovalRecord {
+  id: string;
+  module_key: string;
+  version: string;
+  approved_by: string;
+  approval_type: 'beta' | 'full_release';
+  regression_suite_run_id?: string;
+  approval_notes?: string;
+  created_at: string;
+}
+
+export interface PlumbingRolloutState {
+  moduleVersion: ModuleVersionRecord | null;
+  latestApproval: ModuleReleaseApprovalRecord | null;
+  flags: {
+    killSwitch: boolean;
+    betaEnabled: boolean;
+    internalOnly: boolean;
+    allowedOrgs: string[];
+    rolloutPercentage: number;
+  };
+  flagRecords: FeatureFlagRecord[];
 }
 
 export interface ModuleExecutionContext {
