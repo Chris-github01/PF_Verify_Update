@@ -63,7 +63,7 @@ export function sanitizePlumbingItems(
     if (isNarrativeHeading(description)) continue;
     if (isSummaryLabel(description)) continue;
 
-    if (resolvedTotal != null) {
+    if (resolvedTotal != null && items.length > 1) {
       const descLower = description.toLowerCase();
       if (
         (roughlyEqual(itemTotal, resolvedTotal) || roughlyEqual(itemRate, resolvedTotal)) &&

@@ -98,6 +98,7 @@ export function sanitizePlumbingParsedQuote(input: ParsedPlumbingQuote): ParsedP
 
     if (
       resolvedQuoteTotal != null &&
+      originalItems.length > 1 &&
       (numbersRoughlyMatch(itemTotal, resolvedQuoteTotal) ||
         numbersRoughlyMatch(itemRate, resolvedQuoteTotal))
     ) {

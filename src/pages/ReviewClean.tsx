@@ -304,9 +304,21 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         }
       }
 
+      const isPassiveFire = currentTrade === 'passive_fire';
       const quotesWithScope = filteredQuotes.map(q => {
-        const { summary } = classifyParsedQuoteRows(itemsByQuote[q.id] ?? [], { trade: currentTrade });
-        return { ...q, main_scope_total: summary.main_scope_total, main_scope_count: summary.counts.main_scope };
+        const rawItems = itemsByQuote[q.id] ?? [];
+        let main_scope_total: number;
+        let main_scope_count: number;
+        if (isPassiveFire) {
+          const { summary } = classifyParsedQuoteRows(rawItems, { trade: currentTrade });
+          main_scope_total = summary.main_scope_total;
+          main_scope_count = summary.counts.main_scope;
+        } else {
+          const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0);
+          main_scope_total = priced.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
+          main_scope_count = priced.length;
+        }
+        return { ...q, main_scope_total, main_scope_count };
       });
 
       setQuotes(quotesWithScope);
