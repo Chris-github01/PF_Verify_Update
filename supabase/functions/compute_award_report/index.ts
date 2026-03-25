@@ -61,13 +61,16 @@ const SUMMARY_PHRASES = ['extra over for fire stopping required not shown on lay
 const SUMMARY_PHRASES_ALWAYS_EXCLUDE = ['extra over for fire stopping required not shown on layout'];
 const OPTIONAL_KEYWORDS = ['door perimeter seal','lift door seal','flush box intumescent pad','flushbox intumescent pad','intumescent flushbox pad','intumescent flush box','intumescent flushbox','ryanfire power pad'];
 
-function isMainScopeItem(item: QuoteItem): boolean {
+const PASSIVE_FIRE_TRADES = ['passive_fire', 'passive-fire', 'passive fire', 'fire stopping', 'firestopping'];
+
+function isMainScopeItem(item: QuoteItem, trade?: string): boolean {
   const desc = (item.description ?? '').toLowerCase();
   const qty = Number(item.quantity ?? 0);
   const rate = Number(item.unit_price ?? 0);
   const total = Number(item.total_price ?? 0);
   const hasPricing = qty > 0 && rate > 0 && total > 0;
 
+  // Shared exclusions for all trades
   for (const phrase of SUMMARY_PHRASES) {
     if (desc.includes(phrase)) {
       if (SUMMARY_PHRASES_ALWAYS_EXCLUDE.includes(phrase)) return false;
@@ -79,13 +82,24 @@ function isMainScopeItem(item: QuoteItem): boolean {
   }
   if (!hasPricing) return false;
 
-  const hasFRR = FRR_PATTERN.test(item.description ?? '');
-  const hasSubstrate = SUBSTRATE_KEYWORDS.some(kw => desc.includes(kw));
-  const hasMeasurable = MEASURABLE_ELEMENT_PATTERNS.some(p => p.test(item.description ?? ''));
-  const hasService = SERVICE_TYPE_KEYWORDS.some(kw => desc.includes(kw));
+  // For passive fire: require passive-fire-specific content signals
+  const tradeLower = (trade ?? '').toLowerCase();
+  const isPassiveFire = PASSIVE_FIRE_TRADES.some(t => tradeLower.includes(t)) || tradeLower === '';
+  if (isPassiveFire) {
+    const hasFRR = FRR_PATTERN.test(item.description ?? '');
+    const hasSubstrate = SUBSTRATE_KEYWORDS.some(kw => desc.includes(kw));
+    const hasMeasurable = MEASURABLE_ELEMENT_PATTERNS.some(p => p.test(item.description ?? ''));
+    const hasService = SERVICE_TYPE_KEYWORDS.some(kw => desc.includes(kw));
+    const nonPricingSignals = [hasFRR, hasSubstrate, hasMeasurable, hasService].filter(Boolean).length;
+    return nonPricingSignals >= 2;
+  }
 
-  const nonPricingSignals = [hasFRR, hasSubstrate, hasMeasurable, hasService].filter(Boolean).length;
-  return nonPricingSignals >= 2;
+  // For all other trades (plumbing, HVAC, electrical, etc.):
+  // Any priced item that is not a grand-total summary line is main scope
+  const isSummaryTotal = /^\s*(total|grand total|sub.?total|contract sum|lump sum price)\b/i.test(desc) && qty === 1 && rate === total;
+  if (isSummaryTotal) return false;
+
+  return true;
 }
 
 function normalizeUnitDisplay(unit: string | null | undefined): string {
@@ -189,7 +203,7 @@ Deno.serve(async (req: Request) => {
 
       if (itemsError) throw itemsError;
 
-      const mainScopeItems = (items || []).filter(isMainScopeItem);
+      const mainScopeItems = (items || []).filter((item) => isMainScopeItem(item, trade));
       console.log(`📊 ${quote.supplier_name}: ${items?.length ?? 0} total items → ${mainScopeItems.length} main scope items`);
 
       quotesWithItems.push({
