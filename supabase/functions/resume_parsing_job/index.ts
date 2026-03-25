@@ -8,6 +8,7 @@ import {
   extractDocumentTotal,
   dedupeKey,
   addRemainderIfNeeded,
+  filterTotalRows,
 } from "../_shared/itemNormalizer.ts";
 
 const corsHeaders = {
@@ -249,8 +250,14 @@ Deno.serve(async (req: Request) => {
     console.log(`[Resume] Total items after retry: ${allItems.length}`);
 
     // ✅ Keep items if they have description OR money
-    const keptItems = allItems.filter(item => hasDesc(item) || hasMoney(item));
-    console.log(`[Resume] After safe filter: ${keptItems.length} items (removed ${allItems.length - keptItems.length} empty rows)`);
+    const safeItems = allItems.filter(item => hasDesc(item) || hasMoney(item));
+    console.log(`[Resume] After safe filter: ${safeItems.length} items (removed ${allItems.length - safeItems.length} empty rows)`);
+
+    // ✅ Remove total/summary rows (Total, Grand Total, Sub Total, etc.)
+    const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(safeItems);
+    if (totalRowsRemoved > 0) {
+      console.log(`[Resume] Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
+    }
 
     // ✅ Normalize items to fill empty descriptions from raw_text
     const normalizedItems = keptItems.map((item, index) => normalizeLine(item, index));
