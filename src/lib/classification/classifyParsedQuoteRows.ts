@@ -66,6 +66,26 @@ export interface ClassificationResult {
   summary: ClassificationSummary;
 }
 
+// Patterns that identify a rollup/total row in lump-sum (non-passive-fire) quotes.
+// These rows duplicate the sum of the individual breakdown items and must be excluded.
+const LUMP_SUM_TOTAL_PATTERNS: RegExp[] = [
+  /^total$/i,
+  /^grand total$/i,
+  /^sub.?total$/i,
+  /^total price$/i,
+  /^total amount$/i,
+  /^contract sum$/i,
+  /^final contract sum/i,
+  /^total contract/i,
+  /^total \(excl/i,
+  /^total \(inc/i,
+  /^total ex gst$/i,
+  /^total incl\.? gst$/i,
+  /^lump sum total$/i,
+  /^quote total$/i,
+  /^project total$/i,
+];
+
 export const GFLOBAL_KNOWN_MISSING_LINES: MissingExtractedLine[] = [
   {
     type: 'missing_extracted_line',
@@ -106,8 +126,8 @@ function classifyRow(
   const optionalFamilies = options.optionalFamilies ?? DEFAULT_OPTIONAL_FAMILIES;
 
   // For non-passive-fire trades (plumbing, HVAC, active fire, etc.) use a
-  // simpler lump-sum classification: any item with a total price is main scope,
-  // provided it does not match a known summary/total phrase.
+  // simpler lump-sum classification: any priced item is main scope unless
+  // it is a known rollup/total row that would double-count the breakdown.
   if (trade !== PASSIVE_FIRE_TRADE) {
     if (total <= 0) {
       return {
@@ -118,8 +138,19 @@ function classifyRow(
         safe_rule_applied: 'no_price',
       };
     }
+    const lower = description.toLowerCase().trim();
+    const isTotalRow = LUMP_SUM_TOTAL_PATTERNS.some(p => p.test(lower));
+    if (isTotalRow) {
+      return {
+        safe_classification_tag: 'summary_only',
+        safe_counts_toward_total: false,
+        safe_classification_reason: `Matches total/rollup pattern: "${description}"`,
+        safe_classification_confidence: 'high',
+        safe_rule_applied: 'lump_sum_total_pattern',
+      };
+    }
     const summaryMatch = matchesSummaryPhrase(description, summaryPhrases);
-    if (summaryMatch.matched && summaryMatch.excludeEvenWhenPriced) {
+    if (summaryMatch.matched) {
       return {
         safe_classification_tag: 'summary_only',
         safe_counts_toward_total: false,
