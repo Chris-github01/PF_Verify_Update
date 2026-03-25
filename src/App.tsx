@@ -57,6 +57,7 @@ import ShadowVersionsPage from './pages/shadow/ShadowVersionsPage';
 import ShadowAuditLogPage from './pages/shadow/ShadowAuditLogPage';
 import ShadowRolloutPage from './pages/shadow/ShadowRolloutPage';
 import ShadowKillSwitchPage from './pages/shadow/ShadowKillSwitchPage';
+import PlumbingCompareView from './pages/shadow/PlumbingCompareView';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1058,6 +1059,9 @@ function AppContent() {
   }
   if (shadowPath === '/shadow/admin/kill-switch') {
     return <ShadowKillSwitchPage />;
+  }
+  if (shadowPath.match(/^\/shadow\/plumbing\/compare\/([^/]+)$/)) {
+    return <PlumbingCompareView />;
   }
 
   if (!session) {

@@ -1,0 +1,133 @@
+export type RowClassification =
+  | 'line_item'
+  | 'summary_total'
+  | 'subtotal'
+  | 'header'
+  | 'note'
+  | 'unclassified';
+
+export type ReviewStatus =
+  | 'unreviewed'
+  | 'reviewed_ok'
+  | 'reviewed_needs_changes'
+  | 'reviewed_blocked';
+
+export type RecommendedOutcome =
+  | 'shadow_better'
+  | 'needs_review'
+  | 'live_better'
+  | 'inconclusive';
+
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
+
+export interface ClassifiedRow {
+  rowIndex: number;
+  rawText: string;
+  normalizedDescription: string;
+  quantity: number | null;
+  unit: string | null;
+  rate: number | null;
+  amount: number | null;
+  classification: RowClassification;
+  includedInParsedTotal: boolean;
+  exclusionReason: string | null;
+  detectionSignals: string[];
+  confidenceScore: number;
+  matchesDocumentTotal: boolean;
+  sumsPriorRows: boolean;
+}
+
+export interface TotalRowDetectionResult {
+  classification: RowClassification;
+  exclusionReason: string | null;
+  detectionSignals: string[];
+  confidenceScore: number;
+  shouldExcludeFromItems: boolean;
+  shouldExcludeFromParsedTotal: boolean;
+  matchesDocumentTotal: boolean;
+  sumsPriorRows: boolean;
+}
+
+export interface PlumbingRunLevelSummary {
+  parsedValue: number;
+  detectedDocumentTotal: number | null;
+  differenceToDocumentTotal: number | null;
+  includedLineCount: number;
+  excludedLineCount: number;
+  excludedSummaryRows: ClassifiedRow[];
+  suspiciousRows: ClassifiedRow[];
+  hasTotalMismatch: boolean;
+  hasLikelyFinalTotalAsLineItem: boolean;
+  hasDuplicateValueRisk: boolean;
+  parserWarnings: string[];
+  ruleHitsSummary: Record<string, number>;
+}
+
+export interface PlumbingNormalizedOutput {
+  rows: ClassifiedRow[];
+  summary: PlumbingRunLevelSummary;
+  includedRows: ClassifiedRow[];
+  excludedRows: ClassifiedRow[];
+}
+
+export interface RiskFlag {
+  id: string;
+  severity: RiskLevel;
+  title: string;
+  explanation: string;
+  suggestedAction: string;
+}
+
+export interface TotalsComparison {
+  liveParsedTotal: number;
+  shadowParsedTotal: number;
+  detectedDocumentTotal: number | null;
+  liveDiffToDocument: number | null;
+  shadowDiffToDocument: number | null;
+  shadowIsBetter: boolean;
+  shadowTotalDelta: number;
+}
+
+export interface RowClassificationChange {
+  rowIndex: number;
+  rawText: string;
+  amount: number | null;
+  liveClassification: RowClassification;
+  shadowClassification: RowClassification;
+  liveIncluded: boolean;
+  shadowIncluded: boolean;
+  exclusionReason: string | null;
+  detectionSignals: string[];
+  confidenceScore: number;
+}
+
+export interface PlumbingDiff {
+  totalsComparison: TotalsComparison;
+  rowClassificationChanges: RowClassificationChange[];
+  addedRows: ClassifiedRow[];
+  removedRows: ClassifiedRow[];
+  changedRows: RowClassificationChange[];
+  riskFlags: RiskFlag[];
+  recommendedOutcome: RecommendedOutcome;
+  adjudicationSummary: string;
+  liveExcludedRows: ClassifiedRow[];
+  shadowExcludedRows: ClassifiedRow[];
+  liveSuspiciousRows: ClassifiedRow[];
+  shadowSuspiciousRows: ClassifiedRow[];
+}
+
+export interface PlumbingAdjudicationDraft {
+  moduleKey: 'plumbing_parser';
+  sourceType: string;
+  sourceId: string;
+  runId: string;
+  compareSummary: string;
+  totalsComparison: TotalsComparison;
+  rowChanges: RowClassificationChange[];
+  excludedRows: ClassifiedRow[];
+  suspiciousRows: ClassifiedRow[];
+  riskFlags: RiskFlag[];
+  recommendedOutcome: RecommendedOutcome;
+  reviewStatus: ReviewStatus;
+  adminNote?: string;
+}

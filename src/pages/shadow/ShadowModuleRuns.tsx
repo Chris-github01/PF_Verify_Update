@@ -208,7 +208,17 @@ export default function ShadowModuleRuns() {
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-white">Run Detail</h2>
-                    <span className="text-xs text-gray-500 font-mono">{selectedRun.id.slice(0, 8)}...</span>
+                    <div className="flex items-center gap-2">
+                      {selectedRun.module_key === 'plumbing_parser' && selectedRun.status === 'completed' && (
+                        <a
+                          href={`/shadow/plumbing/compare/${selectedRun.id}`}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:text-amber-300 rounded-lg transition-colors"
+                        >
+                          Discrepancy Review
+                        </a>
+                      )}
+                      <span className="text-xs text-gray-500 font-mono">{selectedRun.id.slice(0, 8)}...</span>
+                    </div>
                   </div>
 
                   <div className="grid sm:grid-cols-4 gap-3">
