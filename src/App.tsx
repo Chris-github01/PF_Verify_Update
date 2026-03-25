@@ -1048,10 +1048,10 @@ function AppContent() {
   }
 
   // Shadow Admin routes — completely isolated, never visible to normal users
-  // Must have an active session before rendering shadow routes (otherwise ShadowGuard
-  // calls getUser() before Supabase has restored the session and always gets null)
+  // ShadowLogin handles both unauthenticated users and authenticated non-admins.
+  // ShadowGuard (wrapping each page) re-checks on every render and falls back to ShadowLogin.
   const shadowPath = window.location.pathname;
-  if (shadowPath.startsWith('/shadow') && !session) {
+  if (shadowPath.startsWith('/shadow')) {
     if (authLoading) {
       return (
         <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -1062,7 +1062,9 @@ function AppContent() {
         </div>
       );
     }
-    return <ShadowLogin />;
+    if (!session) {
+      return <ShadowLogin />;
+    }
   }
   if (shadowPath === '/shadow' || shadowPath === '/shadow/') {
     return <ShadowHome />;

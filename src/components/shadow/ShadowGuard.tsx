@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Shield, Lock } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { isAdminUser, isGodMode } from '../../lib/shadow/shadowAccess';
+import ShadowLogin from '../../pages/shadow/ShadowLogin';
 
 interface Props {
   children: React.ReactNode;
@@ -34,21 +35,7 @@ export default function ShadowGuard({ children, requireGodMode = false }: Props)
   }
 
   if (!allowed) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-red-950 border border-red-800 flex items-center justify-center mx-auto">
-            <Lock className="w-8 h-8 text-red-400" />
-          </div>
-          <h1 className="text-xl font-semibold text-white">Access Denied</h1>
-          <p className="text-gray-400 text-sm max-w-sm">
-            {requireGodMode
-              ? 'This area requires god_mode privileges.'
-              : 'This area requires god_mode or internal_admin privileges.'}
-          </p>
-        </div>
-      </div>
-    );
+    return <ShadowLogin />;
   }
 
   return <>{children}</>;
