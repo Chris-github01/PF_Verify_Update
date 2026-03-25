@@ -161,26 +161,6 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
 
     const normalizedSupplier = supplierName.trim();
 
-    const { data: existingQuotes } = await supabase
-      .from('quotes')
-      .select('id, supplier_name, total_amount, items_count')
-      .eq('project_id', projectId)
-      .eq('trade', currentTrade)
-      .ilike('supplier_name', `${normalizedSupplier}%`);
-
-    if (existingQuotes && existingQuotes.length > 0) {
-      const supplierList = existingQuotes.map(q => `${q.supplier_name} ($${q.total_amount?.toLocaleString()})`).join(', ');
-      const confirmed = window.confirm(
-        `Warning: Found ${existingQuotes.length} existing quote(s) from similar supplier: ${supplierList}.\n\n` +
-        `This will create a NEW quote. To update an existing quote, delete the old one first.\n\n` +
-        `Continue with upload?`
-      );
-
-      if (!confirmed) {
-        return;
-      }
-    }
-
     setParsing(true);
     setMessage(null);
 
