@@ -95,6 +95,13 @@ Your task:
 
 INCLUDE as line items only:
 - genuine priced scope/package lines (e.g. Sanitary Sewer Above ground, Hot & Cold-Water Main, Gas System, Plant & Valve, Acoustic Lagging, Rainwater Harvesting System, Installation of Sanitary Fittings)
+- floor/level breakdown rows from a pricing table (e.g. "Lower Ground Level", "Level 1", "Level 2", "Roof") — use the SUM column as the total value
+
+IMPORTANT — numbers without dollar signs are still prices:
+- NZ plumbing quotes often use plain numbers in tables (e.g. 70535, 128875) without $ symbols
+- If a table has a SUM or TOTAL column, use that column's value as the line item total
+- If a row has "Lower Ground Level ... 70535", extract total = 70535
+- NEVER output "Included" or text strings as a rate or total — only numbers
 
 NEVER INCLUDE as line items — these are summary rows, capture in quoteTotal instead:
 - Total, Totals, Sub Total, Subtotal, Grand Total, Estimated Grand Total
@@ -103,13 +110,14 @@ NEVER INCLUDE as line items — these are summary rows, capture in quoteTotal in
 - GST, P&G, Margin, price rollups, page totals, section totals
 
 NEVER extract narrative/heading sections as line items:
-- Documents Used, Scope of Works, General Inclusions, General Exclusions
+- Documents Used, Scope of Works, General Inclusions, General Exclusions, Price included, Price not included
 - Commercial Terms, Tender Qualifications, Tender Exclusions, Notes, Assumptions
+- Item NO.X descriptions without prices — these are scope clarifications, not priced line items
 
-If a cover-page has breakdown rows followed by a final Total row:
-- extract the breakdown rows as line items
-- place the Total value in quoteTotal
-- DO NOT include Total as a line item
+If a quote has BOTH a level-by-level pricing table AND item description pages:
+- extract the PRICING TABLE rows as line items (these have numeric values)
+- IGNORE the "Item NO.X / Price included / Price not included" description pages (these have no prices)
+- place the TOTAL row value in quoteTotal
 
 Return JSON:
 {
@@ -119,4 +127,4 @@ Return JSON:
   "warnings": ["string"]
 }
 
-Critical: Never include Total/Sub Total/Grand Total rows inside items. When in doubt, exclude a summary row from items and place its value in quoteTotal.`;
+Critical: Never include Total/Sub Total/Grand Total rows inside items. When in doubt, exclude a summary row from items and place its value in quoteTotal. Never use text like "Included" as a numeric value — if no price is found, omit the item.`;
