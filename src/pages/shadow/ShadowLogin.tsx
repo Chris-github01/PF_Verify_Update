@@ -17,6 +17,7 @@ export default function ShadowLogin() {
         clearRoleCache();
         const admin = await isAdminUser();
         if (admin) {
+          localStorage.setItem('shadow_admin_session', '1');
           window.location.replace('/shadow');
         }
       }
@@ -29,22 +30,33 @@ export default function ShadowLogin() {
     setLoading(true);
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError || !data.session) {
         setError('Invalid email or password.');
         setLoading(false);
         return;
       }
 
-      clearRoleCache();
-      const admin = await isAdminUser();
-      if (!admin) {
+      // Verify admin role using the user id from the sign-in response directly,
+      // bypassing the cache entirely to avoid stale-cache race conditions.
+      const userId = data.session.user.id;
+      const { data: roleData, error: roleError } = await supabase
+        .from('admin_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .in('role', ['god_mode', 'internal_admin'])
+        .limit(1)
+        .maybeSingle();
+
+      if (roleError || !roleData) {
         await supabase.auth.signOut();
         setError('Your account does not have shadow admin access.');
         setLoading(false);
         return;
       }
 
+      clearRoleCache();
+      localStorage.setItem('shadow_admin_session', '1');
       window.location.replace('/shadow');
     } catch {
       setError('An unexpected error occurred. Please try again.');

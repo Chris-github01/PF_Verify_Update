@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Shield } from 'lucide-react';
-import { isAdminUser, isGodMode } from '../../lib/shadow/shadowAccess';
+import { clearRoleCache, isAdminUser, isGodMode } from '../../lib/shadow/shadowAccess';
 import ShadowLogin from '../../pages/shadow/ShadowLogin';
 
 interface Props {
@@ -13,6 +13,8 @@ export default function ShadowGuard({ children, requireGodMode = false }: Props)
 
   useEffect(() => {
     (async () => {
+      // Always clear cache on mount so a fresh sign-in is reflected immediately
+      clearRoleCache();
       if (requireGodMode) {
         const god = await isGodMode();
         setAllowed(god);

@@ -1047,11 +1047,12 @@ function AppContent() {
     return <VideoPage />;
   }
 
-  // Shadow Admin routes — completely isolated, never visible to normal users
-  // ShadowLogin handles both unauthenticated users and authenticated non-admins.
-  // ShadowGuard (wrapping each page) re-checks on every render and falls back to ShadowLogin.
+  // Shadow Admin routes — completely isolated, never visible to normal users.
+  // We check the path early so the main app never intercepts shadow sessions.
   const shadowPath = window.location.pathname;
-  if (shadowPath.startsWith('/shadow')) {
+  const isShadowRoute = shadowPath.startsWith('/shadow');
+
+  if (isShadowRoute) {
     if (authLoading) {
       return (
         <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -1065,6 +1066,8 @@ function AppContent() {
     if (!session) {
       return <ShadowLogin />;
     }
+    // Session exists — let ShadowGuard verify admin role on each page below.
+    // Fall through to the shadow route matchers.
   }
   if (shadowPath === '/shadow' || shadowPath === '/shadow/') {
     return <ShadowHome />;
