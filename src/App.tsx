@@ -66,6 +66,7 @@ import PlumbingBetaDashboard from './pages/shadow/PlumbingBetaDashboard';
 import PlumbingBetaAnomaliesPage from './pages/shadow/PlumbingBetaAnomaliesPage';
 import PlumbingReleaseDashboard from './pages/shadow/PlumbingReleaseDashboard';
 import PlumbingLearningDashboard from './pages/shadow/PlumbingLearningDashboard';
+import PlumbingPredictiveDashboard from './pages/shadow/PlumbingPredictiveDashboard';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1102,6 +1103,14 @@ function AppContent() {
     shadowPath === '/shadow/modules/plumbing_parser/learning/rules'
   ) {
     return <PlumbingLearningDashboard />;
+  }
+  if (
+    shadowPath === '/shadow/modules/plumbing_parser/predictive' ||
+    shadowPath === '/shadow/modules/plumbing_parser/predictive/risk-events' ||
+    shadowPath === '/shadow/modules/plumbing_parser/predictive/policies' ||
+    shadowPath.startsWith('/shadow/modules/plumbing_parser/predictive/orgs/')
+  ) {
+    return <PlumbingPredictiveDashboard />;
   }
 
   if (!session) {
