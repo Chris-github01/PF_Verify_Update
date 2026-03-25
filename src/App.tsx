@@ -1047,7 +1047,19 @@ function AppContent() {
   }
 
   // Shadow Admin routes — completely isolated, never visible to normal users
+  // Must have an active session before rendering shadow routes (otherwise ShadowGuard
+  // calls getUser() before Supabase has restored the session and always gets null)
   const shadowPath = window.location.pathname;
+  if (shadowPath.startsWith('/shadow') && !session) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto" />
+          <p className="text-gray-400 text-sm">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
   if (shadowPath === '/shadow' || shadowPath === '/shadow/') {
     return <ShadowHome />;
   }
