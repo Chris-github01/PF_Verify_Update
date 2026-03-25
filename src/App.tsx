@@ -1066,8 +1066,13 @@ function AppContent() {
     if (!session) {
       return <ShadowLogin />;
     }
-    // Session exists — let ShadowGuard verify admin role on each page below.
-    // Fall through to the shadow route matchers.
+    // Check that the verified flag matches the current session user.
+    // This flag is written by ShadowLogin only after confirming admin_roles.
+    const verifiedUserId = localStorage.getItem('shadow_admin_verified');
+    if (verifiedUserId !== session.user.id) {
+      return <ShadowLogin />;
+    }
+    // Verified admin — fall through to shadow route matchers below.
   }
   if (shadowPath === '/shadow' || shadowPath === '/shadow/') {
     return <ShadowHome />;

@@ -1,13 +1,11 @@
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import KillSwitchPanel from '../../components/shadow/KillSwitchPanel';
 import { AlertTriangle } from 'lucide-react';
 
 export default function ShadowKillSwitchPage() {
   return (
-    <ShadowGuard requireGodMode>
-      <ShadowLayout>
-        <div className="max-w-3xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-3xl mx-auto space-y-6">
           <div>
             <h1 className="text-xl font-bold text-white">Kill Switch Panel</h1>
             <p className="text-gray-400 text-sm mt-0.5">Emergency module override — forces all traffic to live version instantly</p>
@@ -25,8 +23,7 @@ export default function ShadowKillSwitchPage() {
           </div>
 
           <KillSwitchPanel />
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

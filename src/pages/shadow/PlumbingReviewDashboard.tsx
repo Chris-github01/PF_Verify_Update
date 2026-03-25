@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ClipboardList, RefreshCw, AlertOctagon, Clock, CheckCircle2, Users, Sparkles } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingReviewQueueTable from '../../components/plumbing/review/PlumbingReviewQueueTable';
 import PlumbingReviewerWorkloadTable from '../../components/plumbing/review/PlumbingReviewerWorkloadTable';
@@ -73,20 +72,17 @@ export default function PlumbingReviewDashboard() {
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-sm text-gray-500">Loading review operations...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-sm text-gray-500">Loading review operations...</div>
+      </ShadowLayout>
     );
   }
 
   const decisionEntries = Object.entries(metrics?.decisionDistribution ?? {}) as [DecisionType, number][];
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -205,9 +201,8 @@ export default function PlumbingReviewDashboard() {
               Module overview →
             </a>
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Cpu, RefreshCw, Plus, Layers, Play, BarChart2, Trophy, Rocket, Info } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingCandidateTable from '../../components/plumbing/optimization/PlumbingCandidateTable';
 import PlumbingBundleBuilder from '../../components/plumbing/optimization/PlumbingBundleBuilder';
@@ -160,18 +159,15 @@ export default function PlumbingOptimizationDashboard() {
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-sm text-gray-500">Loading optimization engine...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-sm text-gray-500">Loading optimization engine...</div>
+      </ShadowLayout>
     );
   }
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -386,9 +382,8 @@ export default function PlumbingOptimizationDashboard() {
             <a href="/shadow/modules/plumbing_parser/review" className="text-cyan-400 hover:text-cyan-300 transition-colors">Review ops →</a>
             <a href="/shadow/modules/plumbing_parser" className="text-gray-400 hover:text-white transition-colors">Module overview →</a>
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

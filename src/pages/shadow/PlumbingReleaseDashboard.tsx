@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, Rocket, AlertTriangle } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingReadinessScoreCard from '../../components/shadow/release/PlumbingReadinessScoreCard';
 import PlumbingReleaseChecklist from '../../components/shadow/release/PlumbingReleaseChecklist';
@@ -120,11 +119,9 @@ export default function PlumbingReleaseDashboard() {
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-sm text-gray-500">Loading release system...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-sm text-gray-500">Loading release system...</div>
+      </ShadowLayout>
     );
   }
 
@@ -135,9 +132,8 @@ export default function PlumbingReleaseDashboard() {
   const hasApproval = !!rolloutState?.latestApproval;
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -271,9 +267,8 @@ export default function PlumbingReleaseDashboard() {
               </div>
             </>
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

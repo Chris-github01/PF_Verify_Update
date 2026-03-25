@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, Brain, Sparkles, Layers, GitCompare, PlusCircle } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingPatternClusterTable from '../../components/plumbing/learning/PlumbingPatternClusterTable';
 import PlumbingRuleSuggestionPanel from '../../components/plumbing/learning/PlumbingRuleSuggestionPanel';
@@ -107,17 +106,14 @@ export default function PlumbingLearningDashboard() {
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-sm text-gray-500">Loading learning system...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-sm text-gray-500">Loading learning system...</div>
+      </ShadowLayout>
     );
   }
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
+    <ShadowLayout>
         <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
@@ -268,9 +264,8 @@ export default function PlumbingLearningDashboard() {
               Regression suites →
             </a>
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

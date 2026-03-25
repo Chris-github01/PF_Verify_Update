@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingAnomalyTable from '../../components/plumbing/beta/PlumbingAnomalyTable';
 import PlumbingAnomalyDetail from '../../components/plumbing/beta/PlumbingAnomalyDetail';
@@ -58,8 +57,7 @@ export default function PlumbingBetaAnomaliesPage() {
   }
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
+    <ShadowLayout>
         <div className="max-w-6xl mx-auto space-y-5">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -104,6 +102,5 @@ export default function PlumbingBetaAnomaliesPage() {
           )}
         </div>
       </ShadowLayout>
-    </ShadowGuard>
   );
 }

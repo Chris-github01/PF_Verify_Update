@@ -4,7 +4,6 @@ import {
   CheckCircle, Flag, Calendar, Activity
 } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowRunHistoryTable from '../../components/shadow/ShadowRunHistoryTable';
 import ModuleVersionBadge from '../../components/shadow/ModuleVersionBadge';
 import {
@@ -126,21 +125,20 @@ export default function ShadowModuleDetail() {
   }
 
   if (loading) return (
-    <ShadowGuard><ShadowLayout>
+    <ShadowLayout>
       <div className="text-center py-20 text-gray-500 text-sm">Loading module...</div>
-    </ShadowLayout></ShadowGuard>
+    </ShadowLayout>
   );
 
   if (error || !module) return (
-    <ShadowGuard><ShadowLayout>
+    <ShadowLayout>
       <div className="text-center py-20 text-red-400 text-sm">{error ?? 'Module not found'}</div>
-    </ShadowLayout></ShadowGuard>
+    </ShadowLayout>
   );
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-5xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
           <a href="/shadow/modules" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" /> All Modules
           </a>
@@ -431,8 +429,7 @@ export default function ShadowModuleDetail() {
             </div>
             <ShadowRunHistoryTable runs={runs} />
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

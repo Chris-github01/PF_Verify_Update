@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Filter, RefreshCw, X } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowRunHistoryTable from '../../components/shadow/ShadowRunHistoryTable';
 import { dbGetShadowRuns, dbGetShadowRunResults } from '../../lib/db/shadowRuns';
 import ShadowDiffSummary from '../../components/shadow/ShadowDiffSummary';
@@ -97,9 +96,8 @@ export default function ShadowModuleRuns() {
   };
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-5xl mx-auto space-y-5">
+    <ShadowLayout>
+      <div className="max-w-5xl mx-auto space-y-5">
           <div className="flex items-center gap-3">
             <a href={`/shadow/modules/${moduleKey}`} className="text-gray-400 hover:text-white transition-colors">
               <ArrowLeft className="w-4 h-4" />
@@ -280,8 +278,7 @@ export default function ShadowModuleRuns() {
               )}
             </div>
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

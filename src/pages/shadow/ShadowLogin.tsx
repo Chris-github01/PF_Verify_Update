@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Shield, Eye, EyeOff, Lock, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { clearRoleCache, isAdminUser } from '../../lib/shadow/shadowAccess';
 
 export default function ShadowLogin() {
   const [email, setEmail] = useState('');
@@ -9,20 +8,6 @@ export default function ShadowLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        clearRoleCache();
-        const admin = await isAdminUser();
-        if (admin) {
-          localStorage.setItem('shadow_admin_session', '1');
-          window.location.replace('/shadow');
-        }
-      }
-    })();
-  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,8 +22,6 @@ export default function ShadowLogin() {
         return;
       }
 
-      // Query admin_roles using the access_token from sign-in directly so RLS
-      // auth.uid() is correct — the default client session may not be committed yet.
       const accessToken = data.session.access_token;
       const userId = data.session.user.id;
 
@@ -61,8 +44,7 @@ export default function ShadowLogin() {
         return;
       }
 
-      clearRoleCache();
-      localStorage.setItem('shadow_admin_session', '1');
+      localStorage.setItem('shadow_admin_verified', userId);
       window.location.replace('/shadow');
     } catch {
       setError('An unexpected error occurred. Please try again.');

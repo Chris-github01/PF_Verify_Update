@@ -4,7 +4,6 @@ import {
   Users, Building2, RotateCcw, ChevronDown, ChevronUp,
   ClipboardCheck, Clock, Info, Activity,
 } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import {
   dbGetPlumbingRolloutState,
@@ -124,11 +123,9 @@ export default function PlumbingRolloutPage() {
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-gray-500 text-sm">Loading rollout state...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-gray-500 text-sm">Loading rollout state...</div>
+      </ShadowLayout>
     );
   }
 
@@ -146,9 +143,8 @@ export default function PlumbingRolloutPage() {
     : true;
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-5xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
 
           {/* Page header */}
           <div className="flex items-start justify-between gap-4">
@@ -274,9 +270,8 @@ export default function PlumbingRolloutPage() {
               </div>
             </div>
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

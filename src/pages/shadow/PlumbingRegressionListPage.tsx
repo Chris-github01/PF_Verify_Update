@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, ArrowLeft, Play, AlertTriangle } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import {
   dbGetPlumbingSuites,
   dbCreatePlumbingSuite,
@@ -76,9 +75,8 @@ export default function PlumbingRegressionListPage() {
   }
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-5xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <a href="/shadow/modules/plumbing_parser" className="text-gray-400 hover:text-white transition-colors">
@@ -167,8 +165,7 @@ export default function PlumbingRegressionListPage() {
               ))}
             </div>
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

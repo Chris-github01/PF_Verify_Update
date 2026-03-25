@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ScrollText, Search, Filter, RefreshCw, X } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import { dbGetAuditLog } from '../../lib/db/auditLogs';
 import type { AdminAuditLogRecord } from '../../types/shadow';
 
@@ -82,9 +81,8 @@ export default function ShadowAuditLogPage() {
   };
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto space-y-5">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-5">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-xl font-bold text-white">Audit Log</h1>
@@ -278,8 +276,7 @@ export default function ShadowAuditLogPage() {
               )}
             </div>
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

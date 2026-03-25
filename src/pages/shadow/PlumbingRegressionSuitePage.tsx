@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, AlertTriangle, Star, Trash2, CreditCard as Edit2, ChevronDown, ChevronUp } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import PlumbingRegressionSuiteHeader from '../../components/regression/PlumbingRegressionSuiteHeader';
 import PlumbingRegressionCaseEditor from '../../components/regression/PlumbingRegressionCaseEditor';
 import {
@@ -181,18 +180,15 @@ export default function PlumbingRegressionSuitePage() {
 
   if (!suiteId) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-red-400 text-sm">Invalid URL</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-red-400 text-sm">Invalid URL</div>
+      </ShadowLayout>
     );
   }
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-5xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
           {loading ? (
             <div className="text-center py-12 text-gray-500 text-sm">Loading...</div>
           ) : !suite ? (
@@ -370,8 +366,7 @@ export default function PlumbingRegressionSuitePage() {
               </div>
             </>
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

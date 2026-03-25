@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, Brain, Shield, AlertTriangle, FileSearch, Settings, TrendingUp } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingRiskDistributionCards from '../../components/plumbing/predictive/PlumbingRiskDistributionCards';
 import PlumbingHighRiskQuotesTable from '../../components/plumbing/predictive/PlumbingHighRiskQuotesTable';
@@ -81,18 +80,15 @@ export default function PlumbingPredictiveDashboard() {
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-sm text-gray-500">Loading predictive intelligence...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-sm text-gray-500">Loading predictive intelligence...</div>
+      </ShadowLayout>
     );
   }
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -235,9 +231,8 @@ export default function PlumbingPredictiveDashboard() {
               Release system →
             </a>
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingReviewCaseHeader from '../../components/plumbing/review/PlumbingReviewCaseHeader';
 import PlumbingReviewDecisionPanel from '../../components/plumbing/review/PlumbingReviewDecisionPanel';
@@ -111,30 +110,25 @@ export default function PlumbingReviewCaseDetail({ caseId, onBack }: PlumbingRev
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-sm text-gray-500">Loading review case...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-sm text-gray-500">Loading review case...</div>
+      </ShadowLayout>
     );
   }
 
   if (!reviewCase) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-sm text-red-400">Review case not found</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-sm text-red-400">Review case not found</div>
+      </ShadowLayout>
     );
   }
 
   const isTerminal = reviewCase.case_status === 'completed' || reviewCase.case_status === 'dismissed';
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-5xl mx-auto space-y-5">
+    <ShadowLayout>
+      <div className="max-w-5xl mx-auto space-y-5">
           <PlumbingReviewCaseHeader
             reviewCase={reviewCase}
             onBack={onBack}
@@ -207,8 +201,7 @@ export default function PlumbingReviewCaseDetail({ caseId, onBack }: PlumbingRev
               </div>
             </div>
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

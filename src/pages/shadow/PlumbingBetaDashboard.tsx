@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, Activity } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingBetaWarningsBanner from '../../components/plumbing/beta/PlumbingBetaWarningsBanner';
 import PlumbingBetaHealthCard, { TrendIcon } from '../../components/plumbing/beta/PlumbingBetaHealthCard';
@@ -129,11 +128,9 @@ export default function PlumbingBetaDashboard() {
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-gray-500 text-sm">Loading beta intelligence...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-gray-500 text-sm">Loading beta intelligence...</div>
+      </ShadowLayout>
     );
   }
 
@@ -151,9 +148,8 @@ export default function PlumbingBetaDashboard() {
     : false;
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -274,9 +270,8 @@ export default function PlumbingBetaDashboard() {
               onRefresh={() => reload(period, anomalyFilters, anomalyPage)}
             />
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

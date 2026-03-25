@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Save, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import PlumbingDiscrepancySummaryCards from '../../components/plumbing/PlumbingDiscrepancySummaryCards';
 import PlumbingRiskFlagsBanner from '../../components/plumbing/PlumbingRiskFlagsBanner';
 import PlumbingRowDiffTable from '../../components/plumbing/PlumbingRowDiffTable';
@@ -131,17 +130,14 @@ export default function PlumbingCompareView() {
 
   if (!runId) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-red-400 text-sm">Invalid URL — no run ID found</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-red-400 text-sm">Invalid URL — no run ID found</div>
+      </ShadowLayout>
     );
   }
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
+    <ShadowLayout>
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
@@ -311,6 +307,5 @@ export default function PlumbingCompareView() {
           ) : null}
         </div>
       </ShadowLayout>
-    </ShadowGuard>
   );
 }

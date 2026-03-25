@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ModuleVersionBadge from '../../components/shadow/ModuleVersionBadge';
 import { getAllModules } from '../../lib/shadow/moduleRegistry';
 import type { ModuleRegistryRecord, ModuleVersionRecord } from '../../types/shadow';
@@ -17,9 +16,8 @@ export default function ShadowVersionsPage() {
   }, []);
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-5xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
           <div>
             <h1 className="text-xl font-bold text-white">Module Versions</h1>
             <p className="text-gray-400 text-sm mt-0.5">Live, shadow, candidate and rollback versions for all modules</p>
@@ -65,8 +63,7 @@ export default function ShadowVersionsPage() {
               </table>
             </div>
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

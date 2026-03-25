@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { BarChart2, RefreshCw, DollarSign, Building2, HelpCircle } from 'lucide-react';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import PlumbingFinancialImpactCards from '../../components/plumbing/executive/PlumbingFinancialImpactCards';
 import PlumbingRiskTrendChart from '../../components/plumbing/executive/PlumbingRiskTrendChart';
@@ -121,20 +120,17 @@ export default function PlumbingExecutiveDashboard() {
 
   if (loading) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-sm text-gray-500">Loading executive intelligence...</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-sm text-gray-500">Loading executive intelligence...</div>
+      </ShadowLayout>
     );
   }
 
   const selectedOrg = selectedOrgId ? orgs.find((o) => o.orgId === selectedOrgId) : null;
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -325,8 +321,7 @@ export default function PlumbingExecutiveDashboard() {
             <a href="/shadow/modules/plumbing_parser/predictive" className="text-cyan-400 hover:text-cyan-300 transition-colors">Predictive intelligence →</a>
             <a href="/shadow/modules/plumbing_parser" className="text-gray-400 hover:text-white transition-colors">Module overview →</a>
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

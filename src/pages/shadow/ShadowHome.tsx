@@ -4,7 +4,6 @@ import {
   AlertTriangle, CheckCircle, Clock, ArrowRight
 } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import { getAllModules } from '../../lib/shadow/moduleRegistry';
 import { getShadowRuns } from '../../lib/shadow/shadowRunner';
 import { getAuditLog } from '../../lib/shadow/auditLogger';
@@ -47,9 +46,8 @@ export default function ShadowHome() {
   const failedRuns = recentRuns.filter((r) => r.status === 'failed');
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-7xl mx-auto space-y-8">
+    <ShadowLayout>
+      <div className="max-w-7xl mx-auto space-y-8">
           {/* Header */}
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
@@ -216,9 +214,8 @@ export default function ShadowHome() {
               ))}
             </div>
           </section>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

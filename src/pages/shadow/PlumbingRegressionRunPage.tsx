@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import PlumbingRegressionRecommendationBanner from '../../components/regression/PlumbingRegressionRecommendationBanner';
 import PlumbingRegressionSummaryCards from '../../components/regression/PlumbingRegressionSummaryCards';
 import PlumbingRegressionCaseTable from '../../components/regression/PlumbingRegressionCaseTable';
@@ -92,11 +91,9 @@ export default function PlumbingRegressionRunPage() {
 
   if (!runId) {
     return (
-      <ShadowGuard>
-        <ShadowLayout>
-          <div className="text-center py-16 text-red-400 text-sm">Invalid URL — no run ID</div>
-        </ShadowLayout>
-      </ShadowGuard>
+      <ShadowLayout>
+        <div className="text-center py-16 text-red-400 text-sm">Invalid URL — no run ID</div>
+      </ShadowLayout>
     );
   }
 
@@ -110,9 +107,8 @@ export default function PlumbingRegressionRunPage() {
   const failedAssertions = allAssertions.filter((a) => !a.passed);
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-6">
           {selectedCase ? (
             <PlumbingRegressionCaseResultDetail
               result={selectedCase}
@@ -217,8 +213,7 @@ export default function PlumbingRegressionRunPage() {
               )}
             </>
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }

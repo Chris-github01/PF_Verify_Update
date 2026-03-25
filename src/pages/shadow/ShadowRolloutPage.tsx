@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Zap, GitBranch, Users, Globe, ChevronRight, Clock, ArrowRight } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ModuleVersionBadge from '../../components/shadow/ModuleVersionBadge';
 import { getAllModules, updateModuleVersion } from '../../lib/shadow/moduleRegistry';
 import { dbGetRecentRolloutEvents } from '../../lib/db/rolloutEvents';
@@ -60,15 +59,14 @@ export default function ShadowRolloutPage() {
   }
 
   if (loading) return (
-    <ShadowGuard><ShadowLayout>
+    <ShadowLayout>
       <div className="text-center py-16 text-gray-500 text-sm">Loading...</div>
-    </ShadowLayout></ShadowGuard>
+    </ShadowLayout>
   );
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-6xl mx-auto">
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto">
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-8">
               <div>
@@ -169,9 +167,8 @@ export default function ShadowRolloutPage() {
               </div>
             </div>
           </div>
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
 

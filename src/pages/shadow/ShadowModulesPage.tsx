@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
-import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowModuleCard from '../../components/shadow/ShadowModuleCard';
 import { getAllModules, promoteModule, rollbackModule, setKillSwitch } from '../../lib/shadow/moduleRegistry';
 import { resolveFlag } from '../../lib/shadow/featureFlags';
@@ -52,9 +51,8 @@ export default function ShadowModulesPage() {
   );
 
   return (
-    <ShadowGuard>
-      <ShadowLayout>
-        <div className="max-w-7xl mx-auto space-y-6">
+    <ShadowLayout>
+      <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-xl font-bold text-white">Module Control Center</h1>
@@ -93,8 +91,7 @@ export default function ShadowModulesPage() {
               )}
             </div>
           )}
-        </div>
-      </ShadowLayout>
-    </ShadowGuard>
+      </div>
+    </ShadowLayout>
   );
 }
