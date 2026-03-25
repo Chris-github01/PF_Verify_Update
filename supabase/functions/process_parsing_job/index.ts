@@ -251,7 +251,25 @@ Deno.serve(async (req: Request) => {
             // CRITICAL: Only use external parser if confidence >= 0.7
             // This promotes high-quality structured data to "source of truth"
             if (bestResult && bestResult.success && bestResult.items && bestResult.items.length > 0 && overallConfidence >= 0.7) {
-              structuredItems = bestResult.items.map((item: any) => ({
+              const SUMMARY_ROW_LABELS = new Set([
+                'total', 'totals', 'total:', 'grand total', 'grandtotal',
+                'quote total', 'contract sum', 'lump sum total', 'overall total',
+                'subtotal', 'sub-total', 'sub total', 'net total', 'project total',
+                'tender total', 'tender sum', 'contract value', 'total price',
+                'total cost', 'total amount', 'total sum', 'contract total',
+                'contract price', 'price total',
+              ]);
+
+              const isSummaryRow = (desc: string): boolean => {
+                const d = desc.replace(/[:\s]+$/, '').trim().toLowerCase();
+                if (SUMMARY_ROW_LABELS.has(d)) return true;
+                if (/^(grand\s+)?total(\s*(excl|incl|ex|inc)\.?.*)?$/i.test(d)) return true;
+                if (/^sub[-\s]?total/i.test(d)) return true;
+                if (/^contract\s+(sum|total|value|price)$/i.test(d)) return true;
+                return false;
+              };
+
+              const allMapped = bestResult.items.map((item: any) => ({
                 description: item.description || item.item_description || '',
                 qty: parseFloat(item.quantity) || 0,
                 unit: item.unit || item.unit_of_measure || '',
@@ -265,8 +283,17 @@ Deno.serve(async (req: Request) => {
                 validation_flags: []
               }));
 
+              structuredItems = allMapped.filter((item: any) => {
+                const desc = String(item.description ?? '').trim();
+                if (isSummaryRow(desc)) {
+                  console.log(`Filtered summary row from external extractor: "${desc}" ($${item.total})`);
+                  return false;
+                }
+                return true;
+              });
+
               useExternalExtractor = true;
-              console.log(`✓ Using external extractor (confidence ${(overallConfidence * 100).toFixed(1)}%) from ${bestResult.parser_name}, ${structuredItems.length} items extracted`);
+              console.log(`✓ Using external extractor (confidence ${(overallConfidence * 100).toFixed(1)}%) from ${bestResult.parser_name}, ${structuredItems.length} items extracted (${allMapped.length - structuredItems.length} summary rows removed)`);
 
               await supabase
                 .from("parsing_jobs")
