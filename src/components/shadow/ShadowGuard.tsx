@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Shield } from 'lucide-react';
-import { clearRoleCache, isAdminUser, isGodMode } from '../../lib/shadow/shadowAccess';
+import { supabase } from '../../lib/supabase';
 import ShadowLogin from '../../pages/shadow/ShadowLogin';
 
 interface Props {
@@ -8,21 +8,31 @@ interface Props {
   requireGodMode?: boolean;
 }
 
+async function checkAdminAccess(requireGodMode: boolean): Promise<boolean> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return false;
+
+  const rolesFilter = requireGodMode ? 'god_mode' : 'god_mode,internal_admin';
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/admin_roles?user_id=eq.${session.user.id}&role=in.(${rolesFilter})&limit=1`,
+    {
+      headers: {
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    }
+  );
+
+  if (!response.ok) return false;
+  const roles = await response.json();
+  return Array.isArray(roles) && roles.length > 0;
+}
+
 export default function ShadowGuard({ children, requireGodMode = false }: Props) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    (async () => {
-      // Always clear cache on mount so a fresh sign-in is reflected immediately
-      clearRoleCache();
-      if (requireGodMode) {
-        const god = await isGodMode();
-        setAllowed(god);
-      } else {
-        const admin = await isAdminUser();
-        setAllowed(admin);
-      }
-    })();
+    checkAdminAccess(requireGodMode).then(setAllowed);
   }, [requireGodMode]);
 
   if (allowed === null) {
