@@ -8,6 +8,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const TOTAL_ROW_PATTERNS = [
+  /^total$/i,
+  /^grand total$/i,
+  /^sub.?total$/i,
+  /^total price$/i,
+  /^total amount$/i,
+  /^contract sum$/i,
+  /^final contract sum/i,
+  /^total contract/i,
+  /^total \(excl/i,
+  /^total \(inc/i,
+  /^total ex\.? gst$/i,
+  /^total incl\.? gst$/i,
+  /^lump sum total$/i,
+  /^quote total$/i,
+  /^project total$/i,
+];
+
+function isTotalRow(description: string): boolean {
+  const trimmed = (description ?? '').trim();
+  return TOTAL_ROW_PATTERNS.some(p => p.test(trimmed));
+}
+
 /**
  * Extract document totals deterministically from raw text using regex
  * VERSION: 2026-02-20-A (Document total reconciliation)
@@ -513,10 +536,14 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[Atomic Write] Step 1: Quote created with ID ${quote.id}, status=processing`);
 
-    if (items.length > 0) {
-      console.log(`PREPARING TO INSERT ${items.length} ITEMS INTO DATABASE`);
+    const nonTotalItems = items.filter((item: any) =>
+      !isTotalRow(String(item.description ?? item.desc ?? ''))
+    );
 
-      const quoteItems = items.map((item: any, index: number) => {
+    if (nonTotalItems.length > 0) {
+      console.log(`PREPARING TO INSERT ${nonTotalItems.length} ITEMS INTO DATABASE (filtered ${items.length - nonTotalItems.length} total/rollup rows)`);
+
+      const quoteItems = nonTotalItems.map((item: any, index: number) => {
         // For lump sum items, preserve null values for rate/total
         const unitPrice = item.unit_price ?? item.unitPrice ?? item.rate;
         const totalPrice = item.total ?? item.amount;
@@ -552,7 +579,7 @@ Deno.serve(async (req: Request) => {
         };
 
         // Log first and last few items
-        if (index < 3 || index >= items.length - 3) {
+        if (index < 3 || index >= nonTotalItems.length - 3) {
           console.log(`Item ${index + 1}:`, {
             desc: dbItem.description.substring(0, 50),
             qty: dbItem.quantity,

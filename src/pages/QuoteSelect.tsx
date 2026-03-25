@@ -95,7 +95,11 @@ export default function QuoteSelect({
           main_scope_total = summary.main_scope_total;
           main_scope_count = summary.counts.main_scope;
         } else {
-          const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0);
+          const TOTAL_ROW = /^(total|grand total|sub.?total|total price|total amount|contract sum|final contract sum.*|total contract.*|total \(excl.*|total \(inc.*|total ex\.? gst|total incl\.? gst|lump sum total|quote total|project total)$/i;
+          const priced = rawItems.filter(item =>
+            Number(item.total_price ?? 0) > 0 &&
+            !TOTAL_ROW.test(String(item.description ?? '').trim())
+          );
           main_scope_total = priced.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
           main_scope_count = priced.length;
         }

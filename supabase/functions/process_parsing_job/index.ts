@@ -20,6 +20,31 @@ const corsHeaders = {
 const PDF_EXTRACTOR_BASE_URL = Deno.env.get("PDF_EXTRACTOR_BASE_URL") || "https://verify-pdf-extractor.onrender.com";
 const PYTHON_PARSER_API_KEY = Deno.env.get("PYTHON_PARSER_API_KEY");
 
+// Descriptions that are rollup/total rows — must never be stored as line items
+// because they duplicate the sum of the breakdown items beneath them.
+const TOTAL_ROW_PATTERNS = [
+  /^total$/i,
+  /^grand total$/i,
+  /^sub.?total$/i,
+  /^total price$/i,
+  /^total amount$/i,
+  /^contract sum$/i,
+  /^final contract sum/i,
+  /^total contract/i,
+  /^total \(excl/i,
+  /^total \(inc/i,
+  /^total ex\.? gst$/i,
+  /^total incl\.? gst$/i,
+  /^lump sum total$/i,
+  /^quote total$/i,
+  /^project total$/i,
+];
+
+function isTotalRow(description: string): boolean {
+  const trimmed = (description ?? '').trim();
+  return TOTAL_ROW_PATTERNS.some(p => p.test(trimmed));
+}
+
 interface ParsingJob {
   id: string;
   project_id: string;
@@ -631,6 +656,8 @@ Deno.serve(async (req: Request) => {
         const isPlumbingJob = (typedJob.trade || '') === 'plumbing';
         const keptItems = parsedData.items.filter((item: any) => {
           if (!hasDesc(item)) return false;
+          const desc = String(item.description ?? item.desc ?? '');
+          if (isTotalRow(desc)) return false; // exclude rollup/total rows to prevent double-counting
           const total = Number(item.total ?? item.total_price ?? item.amount ?? 0);
           if (total !== 0) return true;
           if (isPlumbingJob) return false; // plumbing lump sums must have a total

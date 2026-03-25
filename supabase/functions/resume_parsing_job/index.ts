@@ -16,6 +16,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const TOTAL_ROW_PATTERNS = [
+  /^total$/i,
+  /^grand total$/i,
+  /^sub.?total$/i,
+  /^total price$/i,
+  /^total amount$/i,
+  /^contract sum$/i,
+  /^final contract sum/i,
+  /^total contract/i,
+  /^total \(excl/i,
+  /^total \(inc/i,
+  /^total ex\.? gst$/i,
+  /^total incl\.? gst$/i,
+  /^lump sum total$/i,
+  /^quote total$/i,
+  /^project total$/i,
+];
+
+function isTotalRow(description: string): boolean {
+  const trimmed = (description ?? '').trim();
+  return TOTAL_ROW_PATTERNS.some(p => p.test(trimmed));
+}
+
 /**
  * Resume/Retry a stuck or partially completed parsing job
  * Retries only the failed chunks instead of reprocessing the entire file
@@ -331,8 +354,8 @@ Deno.serve(async (req: Request) => {
         .delete()
         .eq("quote_id", quoteId);
 
-      // ✅ Insert ALL items (no filter on description)
-      const quoteItems = finalItems.map((line: any) => ({
+      // ✅ Insert items — exclude rollup/total rows that would double-count breakdown lines
+      const quoteItems = finalItems.filter((line: any) => !isTotalRow(String(line.description ?? ''))).map((line: any) => ({
         quote_id: quoteId,
         description: cleanText(line.description) || 'No description',
         quantity: parseFloat(line.qty) || 0,
