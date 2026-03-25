@@ -48,6 +48,15 @@ import OrganisationPicker from './pages/OrganisationPicker';
 import OrganisationSettings from './pages/OrganisationSettings';
 import AdminApp from './pages/AdminApp';
 import DemoLogin from './pages/DemoLogin';
+import ShadowHome from './pages/shadow/ShadowHome';
+import ShadowModulesPage from './pages/shadow/ShadowModulesPage';
+import ShadowModuleDetail from './pages/shadow/ShadowModuleDetail';
+import ShadowModuleRuns from './pages/shadow/ShadowModuleRuns';
+import ShadowFeatureFlagsPage from './pages/shadow/ShadowFeatureFlagsPage';
+import ShadowVersionsPage from './pages/shadow/ShadowVersionsPage';
+import ShadowAuditLogPage from './pages/shadow/ShadowAuditLogPage';
+import ShadowRolloutPage from './pages/shadow/ShadowRolloutPage';
+import ShadowKillSwitchPage from './pages/shadow/ShadowKillSwitchPage';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1019,6 +1028,36 @@ function AppContent() {
 
   if (window.location.pathname === '/video') {
     return <VideoPage />;
+  }
+
+  // Shadow Admin routes — completely isolated, never visible to normal users
+  const shadowPath = window.location.pathname;
+  if (shadowPath === '/shadow' || shadowPath === '/shadow/') {
+    return <ShadowHome />;
+  }
+  if (shadowPath === '/shadow/modules') {
+    return <ShadowModulesPage />;
+  }
+  if (shadowPath.match(/^\/shadow\/modules\/([^/]+)\/runs$/)) {
+    return <ShadowModuleRuns />;
+  }
+  if (shadowPath.match(/^\/shadow\/modules\/([^/]+)$/)) {
+    return <ShadowModuleDetail />;
+  }
+  if (shadowPath === '/shadow/admin/flags') {
+    return <ShadowFeatureFlagsPage />;
+  }
+  if (shadowPath === '/shadow/admin/versions') {
+    return <ShadowVersionsPage />;
+  }
+  if (shadowPath === '/shadow/admin/audit-log') {
+    return <ShadowAuditLogPage />;
+  }
+  if (shadowPath === '/shadow/admin/rollout') {
+    return <ShadowRolloutPage />;
+  }
+  if (shadowPath === '/shadow/admin/kill-switch') {
+    return <ShadowKillSwitchPage />;
   }
 
   if (!session) {
