@@ -89,6 +89,38 @@ export function isJunkRow(item: any): boolean {
   return true;
 }
 
+const SUMMARY_ROW_SET = new Set([
+  'total', 'totals', 'grand total', 'grandtotal',
+  'quote total', 'contract sum', 'lump sum total', 'overall total',
+  'subtotal', 'sub-total', 'sub total', 'net total', 'project total',
+  'tender total', 'tender sum', 'contract value', 'total price',
+  'total cost', 'total amount', 'total sum', 'contract total',
+  'contract price', 'price total',
+]);
+
+export function isSummaryRow(item: any): boolean {
+  const raw = String(item.description ?? '').trim();
+  const d = raw.replace(/[:\s]+$/, '').trim().toLowerCase();
+  if (!d) return false;
+  if (SUMMARY_ROW_SET.has(d)) return true;
+  if (/^(grand\s+)?total(\s*(excl|incl|ex|inc)\.?.*)?$/i.test(d)) return true;
+  if (/^sub[-\s]?total/i.test(d)) return true;
+  if (/^contract\s+(sum|total|value|price)$/i.test(d)) return true;
+  return false;
+}
+
+export function isArithmeticTotal(item: any, allItems: any[]): boolean {
+  const itemTotal = Number(item.total ?? 0);
+  if (itemTotal <= 0) return false;
+  const othersSum = allItems.reduce((s, other) => {
+    if (other === item) return s;
+    return s + Number(other.total ?? 0);
+  }, 0);
+  if (othersSum <= 0) return false;
+  const tolerance = Math.max(othersSum * 0.005, 1);
+  return Math.abs(itemTotal - othersSum) <= tolerance;
+}
+
 export function isOptional(desc: string): boolean {
   const d = desc.toLowerCase();
   return d.includes("optional") || d.includes("option ") || d.includes("(opt)");
@@ -201,7 +233,28 @@ export function processParsingPipeline(
   const cleanedItems = normalizedItems.filter(item => !isJunkRow(item));
   console.log(`[Parsing v3] Cleaned to ${cleanedItems.length} items`);
 
-  const taggedItems = tagItems(cleanedItems);
+  // Remove labeled summary rows (Total, Grand Total, Contract Sum, etc.)
+  const labelFiltered = cleanedItems.filter(item => {
+    if (isSummaryRow(item)) {
+      console.log(`[Parsing v3] Removed summary row: "${item.description}" ($${item.total})`);
+      return false;
+    }
+    return true;
+  });
+
+  // If no label match removed anything, also try arithmetic total detection
+  let afterSummaryFilter = labelFiltered;
+  if (labelFiltered.length === cleanedItems.length && cleanedItems.length > 1) {
+    const arithmeticTotals = cleanedItems.filter(item => isArithmeticTotal(item, cleanedItems));
+    if (arithmeticTotals.length === 1) {
+      console.log(`[Parsing v3] Removed arithmetic total row: "${arithmeticTotals[0].description}" ($${arithmeticTotals[0].total})`);
+      afterSummaryFilter = cleanedItems.filter(item => item !== arithmeticTotals[0]);
+    }
+  }
+
+  console.log(`[Parsing v3] After summary filter: ${afterSummaryFilter.length} items`);
+
+  const taggedItems = tagItems(afterSummaryFilter);
   const reconciliation = reconcileToDocumentTotal(taggedItems, documentTotal);
 
   const finalTotalAmount = documentTotal ?? reconciliation.itemsTotal;
