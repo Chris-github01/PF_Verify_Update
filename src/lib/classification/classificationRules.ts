@@ -49,8 +49,15 @@ export const DEFAULT_OPTIONAL_FAMILIES: OptionalFamily[] = [
     matchKeywords: ['lift door seal'],
   },
   {
-    familyName: 'Flush Box Intumescent Pad',
-    matchKeywords: ['flush box intumescent pad', 'flushbox intumescent pad', 'intumescent flushbox pad'],
+    familyName: 'Intumescent Flush Box',
+    matchKeywords: [
+      'intumescent flush box',
+      'flush box intumescent pad',
+      'flushbox intumescent pad',
+      'intumescent flushbox pad',
+      'intumescent flushbox',
+      'ryanfire power pad',
+    ],
   },
 ];
 
