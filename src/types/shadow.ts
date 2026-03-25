@@ -17,7 +17,62 @@ export type RolloutStatus =
   | 'approved_for_beta'
   | 'beta_internal'
   | 'beta_limited'
+  | 'beta_expanded'
+  | 'release_candidate'
+  | 'production_live'
   | 'full_release';
+
+export type VersionHistoryEventType =
+  | 'promoted_to_rc'
+  | 'promoted_to_production'
+  | 'rolled_back'
+  | 'beta_started'
+  | 'beta_expanded'
+  | 'beta_paused'
+  | 'version_set';
+
+export type ChecklistStatus = 'incomplete' | 'ready' | 'blocked';
+
+export interface ChecklistItemDef {
+  key: string;
+  label: string;
+  description: string;
+  required: boolean;
+  category: 'regression' | 'anomaly' | 'approval' | 'beta_coverage' | 'manual';
+}
+
+export interface ChecklistItemResult {
+  passed: boolean;
+  notes?: string;
+  checked_at?: string;
+  auto?: boolean;
+}
+
+export interface ModuleReleaseChecklistRecord {
+  id: string;
+  module_key: string;
+  version: string;
+  checklist_items_json: ChecklistItemDef[];
+  completed_items_json: Record<string, ChecklistItemResult>;
+  status: ChecklistStatus;
+  blocked_reasons_json: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModuleVersionHistoryRecord {
+  id: string;
+  module_key: string;
+  event_type: VersionHistoryEventType;
+  from_version?: string;
+  to_version: string;
+  from_rollout_status?: string;
+  to_rollout_status?: string;
+  actor_user_id?: string;
+  notes?: string;
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+}
 
 export type RunMode = 'shadow_only' | 'live_vs_shadow' | 'regression_suite';
 

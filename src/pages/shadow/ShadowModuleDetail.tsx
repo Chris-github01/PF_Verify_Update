@@ -337,14 +337,20 @@ export default function ShadowModuleDetail() {
                 {moduleKey === 'plumbing_parser' && (
                   <div className="flex items-center gap-3 flex-wrap">
                     <a
+                      href="/shadow/modules/plumbing_parser/release"
+                      className="text-xs text-teal-400 hover:text-teal-300 transition-colors font-medium"
+                    >
+                      Release system →
+                    </a>
+                    <a
                       href="/shadow/modules/plumbing_parser/beta"
-                      className="text-xs text-teal-400 hover:text-teal-300 transition-colors"
+                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
                     >
                       Beta intelligence →
                     </a>
                     <a
                       href="/shadow/modules/plumbing_parser/rollout"
-                      className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                      className="text-xs text-gray-400 hover:text-white transition-colors"
                     >
                       Rollout controls →
                     </a>
@@ -352,7 +358,7 @@ export default function ShadowModuleDetail() {
                       href="/shadow/modules/plumbing_parser/regression"
                       className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
                     >
-                      Manage suites →
+                      Regression suites →
                     </a>
                   </div>
                 )}

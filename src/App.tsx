@@ -64,6 +64,7 @@ import PlumbingRegressionRunPage from './pages/shadow/PlumbingRegressionRunPage'
 import PlumbingRolloutPage from './pages/shadow/PlumbingRolloutPage';
 import PlumbingBetaDashboard from './pages/shadow/PlumbingBetaDashboard';
 import PlumbingBetaAnomaliesPage from './pages/shadow/PlumbingBetaAnomaliesPage';
+import PlumbingReleaseDashboard from './pages/shadow/PlumbingReleaseDashboard';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1086,6 +1087,13 @@ function AppContent() {
   }
   if (shadowPath === '/shadow/modules/plumbing_parser/beta/anomalies') {
     return <PlumbingBetaAnomaliesPage />;
+  }
+  if (
+    shadowPath === '/shadow/modules/plumbing_parser/release' ||
+    shadowPath === '/shadow/modules/plumbing_parser/release/checklist' ||
+    shadowPath === '/shadow/modules/plumbing_parser/release/timeline'
+  ) {
+    return <PlumbingReleaseDashboard />;
   }
 
   if (!session) {
