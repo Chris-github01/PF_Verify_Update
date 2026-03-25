@@ -626,10 +626,13 @@ Deno.serve(async (req: Request) => {
         const rawItemsCount = parsedData.items.length;
 
         // Keep items that have a description AND a non-zero total (or can calculate one from qty*rate)
+        // For plumbing, lump-sum items (qty=1, unit=LS, total>0) are always valid even without a rate
+        const isPlumbingJob = (typedJob.trade || '') === 'plumbing';
         const keptItems = parsedData.items.filter((item: any) => {
           if (!hasDesc(item)) return false;
           const total = Number(item.total ?? item.total_price ?? item.amount ?? 0);
           if (total !== 0) return true;
+          if (isPlumbingJob) return false; // plumbing lump sums must have a total
           const qty = Number(item.qty ?? item.quantity ?? 0);
           const rate = Number(item.rate ?? item.unit_price ?? 0);
           return qty > 0 && rate > 0;

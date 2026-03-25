@@ -23,6 +23,7 @@ interface ParseRequest {
   text?: string;
   supplierName?: string;
   phase?: 'detect' | 'normalize' | 'full';
+  trade?: string;
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = 45000): Promise<Response> {
@@ -118,8 +119,36 @@ function chunkByLineItems(text: string, maxLinesPerChunk: number = 30): { sectio
   return chunks;
 }
 
-async function detectCandidateRows(text: string, openaiApiKey: string): Promise<{ rows: string[]; confidence: number }> {
-  const systemPrompt = `You are a line item detector for construction quotes.
+async function detectCandidateRows(text: string, openaiApiKey: string, trade?: string): Promise<{ rows: string[]; confidence: number }> {
+  const isPlumbing = trade === 'plumbing';
+
+  const systemPrompt = isPlumbing
+    ? `You are a line item detector for plumbing construction quotes.
+
+Plumbing quotes are often presented as LUMP SUM items — a section or work package description paired with a single total price, without individual quantities or unit rates.
+
+A valid plumbing line item can be ANY of these formats:
+1. LUMP SUM: A description of a scope of work with a total price (e.g. "Item NO. 3 - Sanitary fixtures - $250,000 + GST")
+2. ITEMISED: Description + quantity + unit + rate + total (e.g. "HWC 450L storage vessel 2 ea $1,200 $2,400")
+3. NUMBERED SCOPE: Numbered work items with a price (e.g. "6. Non-Potable Cold Water system $85,000")
+4. SUMMARY LINE: A single price covering the whole quote (e.g. "Total Price: $1,511,338 + GST")
+
+INCLUDE:
+- Any line that contains a description of plumbing/drainage/gas work AND a dollar amount
+- Item numbers with descriptions and prices (e.g. "Item NO. 6", "Item 3", "6.")
+- Lump sum work packages even if no qty or rate is visible
+- Section totals that represent a discrete scope (e.g. "Sanitary Fixtures $250,000")
+- The overall quote total if no individual items are broken out
+
+DO NOT extract:
+- Pure header lines with no dollar amount (e.g. "Price included:", "Price not included:")
+- Bullet point inclusions/exclusions lists with no price
+- Payment terms, conditions, warranty text
+- GST lines, subtotals that are clearly summations of already-listed items
+- Supplier contact details, dates, project addresses
+
+Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`
+    : `You are a line item detector for construction quotes.
 
 Your ONLY job is to identify which lines are PRICED line items — items that have an actual quantity AND a line total.
 
@@ -180,10 +209,36 @@ Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`;
   };
 }
 
-async function normalizeRows(rows: string[], section: string, openaiApiKey: string): Promise<LineItem[]> {
+async function normalizeRows(rows: string[], section: string, openaiApiKey: string, trade?: string): Promise<LineItem[]> {
   if (rows.length === 0) return [];
 
-  const systemPrompt = `You are a line item normalizer for construction quotes.
+  const isPlumbing = trade === 'plumbing';
+
+  const systemPrompt = isPlumbing
+    ? `You are a line item normalizer for plumbing construction quotes.
+
+For each raw text line, extract:
+- description: The scope of work or product/service name (clean, concise)
+- qty: Quantity as a number. For lump sum items use 1. If a real quantity is present, use it.
+- unit: Unit of measure. Use "LS" for lump sum items, "ea" for each, "m" for metres, etc.
+- rate: Unit price as a number. For lump sums where only a total is given, set rate equal to the total.
+- total: The total dollar amount for this line item.
+
+CRITICAL RULES:
+1. NUMBER FORMAT: Commas are THOUSAND separators, NOT decimal separators
+   - "$1,511,338" = 1511338 (NOT 1511.338)
+   - "$250,000" = 250000
+2. Lump sum items are VALID — if a line has a description and a dollar amount, extract it as qty=1, unit="LS", rate=total.
+3. If a line says "Item NO. X" or "Item X", include the item number in the description.
+4. SKIP pure contact details, addresses, dates, payment terms with no dollar amount.
+5. SKIP lines that are clearly inclusions/exclusions bullet points with no price.
+6. If only one grand total is found for the whole quote, return it as a single lump sum item.
+
+Example: "Item NO. 3 - Sanitary fixtures Total Price: $250,000 + GST" → description="Item NO. 3 - Sanitary fixtures", qty=1, unit="LS", rate=250000, total=250000, confidence=0.9
+Example: "Non-Potable Cold Water system $85,000" → description="Non-Potable Cold Water system", qty=1, unit="LS", rate=85000, total=85000, confidence=0.85
+
+Return JSON: {"items": [{"description": "...", "qty": 1, "unit": "LS", "rate": 250000, "total": 250000, "confidence": 0.9}]}`
+    : `You are a line item normalizer for construction quotes.
 
 For each raw text line, extract:
 - description: Product/service name
@@ -249,21 +304,24 @@ Return JSON: {"items": [{"description": "...", "qty": 10, "unit": "ea", "rate": 
   }));
 }
 
-function validateAndFixItem(item: LineItem): LineItem {
+function validateAndFixItem(item: LineItem, trade?: string): LineItem {
   const flags: string[] = [];
+  const isLumpSum = item.unit === 'LS' || item.qty === 1;
+  const isPlumbing = trade === 'plumbing';
 
   if (!item.total && item.qty && item.rate) {
     item.total = Math.round(item.qty * item.rate * 100) / 100;
     flags.push('CALCULATED_TOTAL');
   }
 
-  const expectedTotal = Math.round(item.qty * item.rate * 100) / 100;
-  const actualTotal = Math.round(item.total * 100) / 100;
-  const diff = Math.abs(expectedTotal - actualTotal);
-
-  if (diff > 0.5) {
-    flags.push('MISMATCH');
-    item.confidence = Math.max(0.3, item.confidence - 0.2);
+  if (!isLumpSum) {
+    const expectedTotal = Math.round(item.qty * item.rate * 100) / 100;
+    const actualTotal = Math.round(item.total * 100) / 100;
+    const diff = Math.abs(expectedTotal - actualTotal);
+    if (diff > 0.5) {
+      flags.push('MISMATCH');
+      item.confidence = Math.max(0.3, item.confidence - 0.2);
+    }
   }
 
   if (!item.description || item.description.length < 3) {
@@ -271,12 +329,12 @@ function validateAndFixItem(item: LineItem): LineItem {
     item.confidence = Math.max(0.2, item.confidence - 0.3);
   }
 
-  if (item.qty <= 0) {
+  if (item.qty <= 0 && !isPlumbing) {
     flags.push('INVALID_QTY');
     item.confidence = Math.max(0.2, item.confidence - 0.3);
   }
 
-  if (item.rate <= 0) {
+  if (item.rate <= 0 && !isPlumbing) {
     flags.push('INVALID_RATE');
     item.confidence = Math.max(0.2, item.confidence - 0.3);
   }
@@ -324,7 +382,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { text, supplierName, phase }: ParseRequest = await req.json();
+    const { text, supplierName, phase, trade }: ParseRequest = await req.json();
 
     if (!text || text.trim().length === 0) {
       return new Response(
@@ -343,11 +401,11 @@ Deno.serve(async (req: Request) => {
 
     if (needsChunking) {
       const chunks = chunkByLineItems(text, 30);
-      console.log(`[LLM v2] Processing ${chunks.length} chunks in parallel...`);
+      console.log(`[LLM v2] Processing ${chunks.length} chunks in parallel (trade: ${trade || 'default'})...`);
 
       const chunkPromises = chunks.map(async (chunk) => {
         try {
-          const detectionResult = await detectCandidateRows(chunk.content, openaiApiKey);
+          const detectionResult = await detectCandidateRows(chunk.content, openaiApiKey, trade);
 
           if (detectionResult.rows.length === 0) {
             console.log(`[LLM v2] Chunk "${chunk.section}" - no candidate rows found`);
@@ -356,11 +414,11 @@ Deno.serve(async (req: Request) => {
 
           console.log(`[LLM v2] Chunk "${chunk.section}" - detected ${detectionResult.rows.length} candidate rows`);
 
-          const normalizedItems = await normalizeRows(detectionResult.rows, chunk.section, openaiApiKey);
+          const normalizedItems = await normalizeRows(detectionResult.rows, chunk.section, openaiApiKey, trade);
 
           console.log(`[LLM v2] Chunk "${chunk.section}" - normalized ${normalizedItems.length} items`);
 
-          return normalizedItems.map(validateAndFixItem);
+          return normalizedItems.map(item => validateAndFixItem(item, trade));
         } catch (error) {
           console.error(`[LLM v2] Chunk "${chunk.section}" failed:`, error);
           return [];
@@ -370,14 +428,14 @@ Deno.serve(async (req: Request) => {
       const results = await Promise.all(chunkPromises);
       allItems = results.flat();
     } else {
-      console.log('[LLM v2] Processing entire document (no chunking)...');
+      console.log(`[LLM v2] Processing entire document (no chunking, trade: ${trade || 'default'})...`);
 
-      const detectionResult = await detectCandidateRows(text, openaiApiKey);
+      const detectionResult = await detectCandidateRows(text, openaiApiKey, trade);
       console.log(`[LLM v2] Detected ${detectionResult.rows.length} candidate rows`);
 
       if (detectionResult.rows.length > 0) {
-        const normalizedItems = await normalizeRows(detectionResult.rows, 'Main', openaiApiKey);
-        allItems = normalizedItems.map(validateAndFixItem);
+        const normalizedItems = await normalizeRows(detectionResult.rows, 'Main', openaiApiKey, trade);
+        allItems = normalizedItems.map(item => validateAndFixItem(item, trade));
       }
     }
 

@@ -157,6 +157,7 @@ Deno.serve(async (req: Request) => {
                 text: chunk.chunk_text,
                 supplierName: job.supplier_name,
                 phase: 'full',
+                trade: job.trade,
               }),
               signal: controller.signal,
             });
