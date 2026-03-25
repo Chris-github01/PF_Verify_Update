@@ -274,7 +274,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           }
         }
         const quotesWithMainScope = quotesWithStatus.map(q => {
-          const { summary } = classifyParsedQuoteRows(qItemsByQuote[q.id] ?? []);
+          const { summary } = classifyParsedQuoteRows(qItemsByQuote[q.id] ?? [], { trade: currentTrade });
           return { ...q, main_scope_total: summary.main_scope_total };
         });
 
@@ -445,7 +445,7 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: item.total_price,
-      })));
+      })), { trade: currentTrade });
       const mainScopeItemIds = new Set(
         classifiedItems
           .filter(r => r.safe_classification_tag === 'main_scope')

@@ -82,9 +82,24 @@ export default function QuoteSelect({
         }
       }
 
+      const isPassiveFire = currentTrade === 'passive_fire';
+
       const quotesWithCounts = filteredQuotes.map(quote => {
         const rawItems = itemsByQuote[quote.id] ?? [];
-        const { summary } = classifyParsedQuoteRows(rawItems);
+
+        let main_scope_total: number;
+        let main_scope_count: number;
+
+        if (isPassiveFire) {
+          const { summary } = classifyParsedQuoteRows(rawItems);
+          main_scope_total = summary.main_scope_total;
+          main_scope_count = summary.counts.main_scope;
+        } else {
+          const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0);
+          main_scope_total = priced.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
+          main_scope_count = priced.length;
+        }
+
         return {
           ...quote,
           items_count: (quote.inserted_items_count && quote.inserted_items_count > 0)
@@ -92,8 +107,8 @@ export default function QuoteSelect({
             : (quote.final_items_count && quote.final_items_count > 0)
             ? quote.final_items_count
             : quote.items_count ?? 0,
-          main_scope_total: summary.main_scope_total,
-          main_scope_count: summary.counts.main_scope,
+          main_scope_total,
+          main_scope_count,
         };
       });
 

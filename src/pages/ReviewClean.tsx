@@ -305,7 +305,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
       }
 
       const quotesWithScope = filteredQuotes.map(q => {
-        const { summary } = classifyParsedQuoteRows(itemsByQuote[q.id] ?? []);
+        const { summary } = classifyParsedQuoteRows(itemsByQuote[q.id] ?? [], { trade: currentTrade });
         return { ...q, main_scope_total: summary.main_scope_total, main_scope_count: summary.counts.main_scope };
       });
 

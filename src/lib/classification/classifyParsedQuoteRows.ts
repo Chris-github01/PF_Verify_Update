@@ -90,6 +90,8 @@ export const GFLOBAL_KNOWN_MISSING_LINES: MissingExtractedLine[] = [
   },
 ];
 
+const PASSIVE_FIRE_TRADE = 'passive_fire';
+
 function classifyRow(
   row: ParsedQuoteRow,
   options: ClassificationOptions
@@ -98,17 +100,47 @@ function classifyRow(
   const qty = Number(row.quantity ?? 0);
   const rate = Number(row.unit_price ?? 0);
   const total = Number(row.total_price ?? 0);
+  const trade = options.trade ?? PASSIVE_FIRE_TRADE;
 
   const summaryPhrases = options.summaryPhrases ?? DEFAULT_SUMMARY_PHRASES;
   const optionalFamilies = options.optionalFamilies ?? DEFAULT_OPTIONAL_FAMILIES;
 
-  // Pre-compute signals so phrase rules can be guarded by pricing structure
+  // For non-passive-fire trades (plumbing, HVAC, active fire, etc.) use a
+  // simpler lump-sum classification: any item with a total price is main scope,
+  // provided it does not match a known summary/total phrase.
+  if (trade !== PASSIVE_FIRE_TRADE) {
+    if (total <= 0) {
+      return {
+        safe_classification_tag: 'review_required',
+        safe_counts_toward_total: false,
+        safe_classification_reason: 'No total price — cannot classify',
+        safe_classification_confidence: 'low',
+        safe_rule_applied: 'no_price',
+      };
+    }
+    const summaryMatch = matchesSummaryPhrase(description, summaryPhrases);
+    if (summaryMatch.matched && summaryMatch.excludeEvenWhenPriced) {
+      return {
+        safe_classification_tag: 'summary_only',
+        safe_counts_toward_total: false,
+        safe_classification_reason: `Matches summary phrase: "${summaryMatch.phrase}"`,
+        safe_classification_confidence: 'high',
+        safe_rule_applied: 'summary_phrase_match',
+      };
+    }
+    return {
+      safe_classification_tag: 'main_scope',
+      safe_counts_toward_total: true,
+      safe_classification_reason: 'Priced line item for non-passive-fire trade',
+      safe_classification_confidence: 'high',
+      safe_rule_applied: 'trade_lump_sum',
+    };
+  }
+
+  // Passive fire classification — strict signal-based rules follow
   const signals = matchesDetailSignals(description, qty, rate, total);
 
   // RULE 1 — SUMMARY ONLY
-  // Guard: skip phrase exclusion for priced rows UNLESS the phrase is marked
-  // excludeEvenWhenPriced (used for known rollup/double-count lines that carry
-  // their own price but still duplicate items already priced individually).
   const summaryMatch = matchesSummaryPhrase(description, summaryPhrases);
   if (summaryMatch.matched && (!signals.hasPricingStructure || summaryMatch.excludeEvenWhenPriced)) {
     return {

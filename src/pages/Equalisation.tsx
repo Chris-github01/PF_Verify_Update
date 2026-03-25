@@ -88,7 +88,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: item.total_price,
-      })));
+      })), { trade: currentTrade });
       const mainScopeIds = new Set(
         enrichedRows
           .filter(r => r.safe_classification_tag === 'main_scope')

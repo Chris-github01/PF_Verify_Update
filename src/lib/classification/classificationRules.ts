@@ -26,6 +26,7 @@ export interface OptionalFamily {
 export interface ClassificationOptions {
   summaryPhrases?: SummaryPhrase[];
   optionalFamilies?: OptionalFamily[];
+  trade?: string;
 }
 
 export const DEFAULT_SUMMARY_PHRASES: SummaryPhrase[] = [
