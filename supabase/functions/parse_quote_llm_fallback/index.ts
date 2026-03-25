@@ -340,10 +340,11 @@ You MUST extract individual line items. An item is valid if it has:
 1. A description (product/service name)
 2. A quantity AND a unit rate AND a total
 
-SKIP ONLY these:
-- Lines with ONLY a description and total (no qty or rate at all)
-- Lines with "Sub-Total", "Grand Total", "Subtotal", "P&G", "Margin"
+SKIP ALL of these — NEVER include them as line items:
+- Any row where the description is "Total", "Totals", "Grand Total", "Sub-Total", "Subtotal", "Net Total", "Contract Sum", "Project Total", "Quote Total", "Tender Total", "Contract Value", "Overall Total", "Lump Sum Total", "Total Price", "Total Cost", "Total Amount"
+- Lines with "P&G", "Margin", "GST"
 - Section header lines that aggregate other items
+- Any row whose value equals the sum of all other rows (arithmetic total row)
 
 Extract each valid line item with:
 - description: Full item description including product name and specifications

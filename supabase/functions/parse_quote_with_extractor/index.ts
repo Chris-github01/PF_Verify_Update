@@ -447,7 +447,37 @@ Deno.serve(async (req: Request) => {
     console.log(`[Parsing v3] Final total amount: $${parsingResult.finalTotalAmount.toFixed(2)}`);
     console.log(`[Parsing v3] Has adjustment: ${parsingResult.hasAdjustment}`);
 
-    const items = parsingResult.finalItems;
+    // Hard safety filter: remove any remaining summary/total rows before DB insert
+    const SUMMARY_LABELS = new Set([
+      'total', 'totals', 'grand total', 'grandtotal', 'quote total',
+      'contract sum', 'lump sum total', 'overall total', 'subtotal',
+      'sub-total', 'sub total', 'net total', 'project total', 'tender total',
+      'tender sum', 'contract value', 'total price', 'total cost',
+      'total amount', 'total sum', 'contract total', 'contract price', 'price total',
+    ]);
+    const isSummaryLabel = (desc: string): boolean => {
+      const d = desc.replace(/[:\s]+$/, '').trim().toLowerCase();
+      if (SUMMARY_LABELS.has(d)) return true;
+      if (/^(grand\s+)?total(\s*(excl|incl|ex|inc)\.?.*)?$/i.test(d)) return true;
+      if (/^sub[-\s]?total/i.test(d)) return true;
+      if (/^contract\s+(sum|total|value|price)$/i.test(d)) return true;
+      return false;
+    };
+
+    const preFilterCount = parsingResult.finalItems.length;
+    const filteredItems = parsingResult.finalItems.filter((item: any) => {
+      const desc = String(item.description ?? '').trim();
+      if (isSummaryLabel(desc)) {
+        console.log(`[Safety filter] Removed summary row: "${desc}" ($${item.total ?? item.total_price ?? 0})`);
+        return false;
+      }
+      return true;
+    });
+    if (filteredItems.length < preFilterCount) {
+      console.log(`[Safety filter] Removed ${preFilterCount - filteredItems.length} summary rows, kept ${filteredItems.length} items`);
+    }
+
+    const items = filteredItems;
     const totalAmount = parsingResult.finalTotalAmount;
     const quotedTotal = parsingResult.documentTotal;
     const contingencyAmount = 0;
