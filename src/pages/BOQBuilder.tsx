@@ -616,7 +616,7 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         ) : (
           <>
             {activeTab === 'baseline' && (
-              <BaselineBOQPanel lines={boqLines} tenderers={tenderers} mappings={mappings} />
+              <BaselineBOQPanel lines={boqLines} tenderers={tenderers} mappings={mappings} moduleKey={moduleKey} />
             )}
             {activeTab === 'mapping' && (
               <TendererMappingPanel lines={boqLines} tenderers={tenderers} mappings={mappings} />
@@ -734,7 +734,8 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
   );
 }
 
-function BaselineBOQPanel({ lines, tenderers, mappings }: { lines: BOQLine[]; tenderers: any[]; mappings: BOQTendererMap[] }) {
+function BaselineBOQPanel({ lines, tenderers, mappings, moduleKey }: { lines: BOQLine[]; tenderers: any[]; mappings: BOQTendererMap[]; moduleKey: ModuleKey }) {
+  const showFRR = moduleKey === 'passive_fire';
   return (
     <div className="bg-slate-800 rounded-lg shadow-xl overflow-hidden">
       <div className="overflow-x-auto">
@@ -746,7 +747,7 @@ function BaselineBOQPanel({ lines, tenderers, mappings }: { lines: BOQLine[]; te
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Location</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Qty</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Unit</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">FRR</th>
+              {showFRR && <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">FRR</th>}
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">Tenderer Coverage</th>
             </tr>
           </thead>
@@ -762,7 +763,7 @@ function BaselineBOQPanel({ lines, tenderers, mappings }: { lines: BOQLine[]; te
                   <td className="px-4 py-3 text-sm text-slate-300">{line.location_zone || '-'}</td>
                   <td className="px-4 py-3 text-sm text-white">{line.quantity}</td>
                   <td className="px-4 py-3 text-sm text-slate-300">{line.unit}</td>
-                  <td className="px-4 py-3 text-sm text-slate-300">{line.frr_rating || '-'}</td>
+                  {showFRR && <td className="px-4 py-3 text-sm text-slate-300">{line.frr_rating || '-'}</td>}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="text-sm text-white">{includedCount}/{tenderers.length}</div>

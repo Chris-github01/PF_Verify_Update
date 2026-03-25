@@ -128,7 +128,7 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
 
   // Tab 3: TENDERER_MAPPING - How tenderer items map to baseline
   console.log('[exportBOQPack] Creating tenderer mapping tab...');
-  await createTendererMappingTab(workbook, tenderers || [], allQuoteItems || [], boqLines || [], mappings || []);
+  await createTendererMappingTab(workbook, tenderers || [], allQuoteItems || [], boqLines || [], mappings || [], options);
 
   // Tab 4: SCOPE_GAPS_REGISTER
   console.log('[exportBOQPack] Creating scope gaps tab with', gaps?.length, 'gaps...');
@@ -138,9 +138,11 @@ export async function exportBOQPack(options: ExportOptions): Promise<Blob> {
   console.log('[exportBOQPack] Creating tags tab...');
   createTagsTab(workbook, tags || [], boqLines || []);
 
-  // Tab 6: FIRE_ENGINEER_SCHEDULE
-  console.log('[exportBOQPack] Creating fire schedule tab...');
-  createFireScheduleTab(workbook, fireScheduleItems || []);
+  // Tab 6: FIRE_ENGINEER_SCHEDULE (passive fire only)
+  if (options.module_key === 'passive_fire') {
+    console.log('[exportBOQPack] Creating fire schedule tab...');
+    createFireScheduleTab(workbook, fireScheduleItems || []);
+  }
 
   // Generate buffer
   console.log('[exportBOQPack] Generating Excel buffer...');
@@ -259,9 +261,10 @@ function createBOQBaselineTab(
   options: ExportOptions
 ): void {
   const sheet = workbook.addWorksheet('BOQ_OWNER_BASELINE');
+  const isPassiveFire = options.module_key === 'passive_fire';
 
   // Define columns
-  const baseColumns = [
+  const baseColumns: any[] = [
     { header: 'Trade', key: 'trade', width: 15 },
     { header: 'System Group', key: 'system_group', width: 20 },
     { header: 'System', key: 'system_name', width: 30 },
@@ -269,7 +272,7 @@ function createBOQBaselineTab(
     { header: 'Drawing / Spec Ref', key: 'drawing_spec_ref', width: 20 },
     { header: 'Location / Zone', key: 'location_zone', width: 20 },
     { header: 'Element / Asset', key: 'element_asset', width: 20 },
-    { header: 'FRR / Rating', key: 'frr_rating', width: 15 },
+    ...(isPassiveFire ? [{ header: 'FRR / Rating', key: 'frr_rating', width: 15 }] : []),
     { header: 'Substrate', key: 'substrate', width: 15 },
     { header: 'Service Type', key: 'service_type', width: 15 },
     { header: 'Penetration Size / Opening', key: 'penetration_size_opening', width: 20 },
@@ -326,7 +329,7 @@ function createBOQBaselineTab(
       drawing_spec_ref: line.drawing_spec_ref,
       location_zone: line.location_zone,
       element_asset: line.element_asset,
-      frr_rating: line.frr_rating,
+      ...(isPassiveFire ? { frr_rating: line.frr_rating } : {}),
       substrate: line.substrate,
       service_type: line.service_type,
       penetration_size_opening: line.penetration_size_opening,
@@ -385,12 +388,13 @@ function createBaselineFromQuotesTab(
   options: ExportOptions
 ): void {
   const sheet = workbook.addWorksheet('BASELINE_BOQ_LINES');
+  const isPassiveFire = options.module_key === 'passive_fire';
 
   sheet.columns = [
     { header: 'BOQ Line ID', key: 'boq_line_id', width: 12 },
     { header: 'System', key: 'system_name', width: 40 },
     { header: 'Location', key: 'location', width: 20 },
-    { header: 'FRR Rating', key: 'frr_rating', width: 12 },
+    ...(isPassiveFire ? [{ header: 'FRR Rating', key: 'frr_rating', width: 12 }] : []),
     { header: 'Substrate', key: 'substrate', width: 15 },
     { header: 'Service Type', key: 'service_type', width: 15 },
     { header: 'Size/Opening', key: 'size_opening', width: 15 },
@@ -441,7 +445,7 @@ function createBaselineFromQuotesTab(
       boq_line_id: `BOQ-${String(lineNumber).padStart(4, '0')}`,
       system_name: item.system_name || '',
       location: item.location || '',
-      frr_rating: item.frr_rating || '',
+      ...(isPassiveFire ? { frr_rating: item.frr_rating || '' } : {}),
       substrate: item.substrate || '',
       service_type: item.service_type || '',
       size_opening: item.size_opening || '',
@@ -469,9 +473,11 @@ async function createTendererMappingTab(
   tenderers: any[],
   allQuoteItems: any[],
   boqLines: BOQLine[],
-  mappings: any[]
+  mappings: any[],
+  options: ExportOptions
 ): Promise<void> {
   const sheet = workbook.addWorksheet('TENDERER_MAPPING');
+  const isPassiveFire = options.module_key === 'passive_fire';
 
   sheet.columns = [
     { header: 'Tenderer', key: 'tenderer', width: 25 },
@@ -486,7 +492,7 @@ async function createTendererMappingTab(
     { header: 'Tenderer Rate', key: 'tenderer_rate', width: 15 },
     { header: 'Tenderer Amount', key: 'tenderer_amount', width: 15 },
     { header: 'Status', key: 'status', width: 15 },
-    { header: 'FRR Rating', key: 'frr_rating', width: 12 },
+    ...(isPassiveFire ? [{ header: 'FRR Rating', key: 'frr_rating', width: 12 }] : []),
     { header: 'Substrate', key: 'substrate', width: 15 },
     { header: 'Service Type', key: 'service_type', width: 15 },
     { header: 'Product / System Variant', key: 'product', width: 30 },
@@ -519,7 +525,7 @@ async function createTendererMappingTab(
       tenderer_rate: '',
       tenderer_amount: '',
       status: '',
-      frr_rating: '',
+      ...(isPassiveFire ? { frr_rating: '' } : {}),
       substrate: '',
       service_type: '',
       product: 'Generate baseline BOQ to see tenderer mapping',
@@ -541,7 +547,7 @@ async function createTendererMappingTab(
       tenderer_rate: '',
       tenderer_amount: '',
       status: '',
-      frr_rating: '',
+      ...(isPassiveFire ? { frr_rating: '' } : {}),
       substrate: '',
       service_type: '',
       product: 'Mappings are created when BOQ is generated',
@@ -590,7 +596,7 @@ async function createTendererMappingTab(
           tenderer_rate: mapping.tenderer_rate || '',
           tenderer_amount: mapping.tenderer_amount || '',
           status: mapping.included_status || 'missing',
-          frr_rating: boqLine.frr_rating || '',
+          ...(isPassiveFire ? { frr_rating: boqLine.frr_rating || '' } : {}),
           substrate: boqLine.substrate || '',
           service_type: boqLine.service_type || '',
           product: boqLine.system_variant_product || '',

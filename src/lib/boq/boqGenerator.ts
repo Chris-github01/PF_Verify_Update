@@ -610,7 +610,9 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
       drawing_spec_ref: representative.drawing_ref || null,
       location_zone: representative.location || null,
       element_asset: representative.element || null,
-      frr_rating: representative.frr_rating || representative.frr || parseFRRFromDescription(itemDescription),
+      frr_rating: moduleKey === 'passive_fire'
+        ? (representative.frr_rating || representative.frr || parseFRRFromDescription(itemDescription))
+        : null,
       substrate: representative.substrate || null,
       service_type: representative.service_type || representative.service || null,
       penetration_size_opening: representative.size_opening || representative.size || null,
@@ -959,7 +961,7 @@ async function detectScopeGaps(
       const itemFrr = matchingItem.frr_rating || matchingItem.frr;
       const itemServiceType = matchingItem.service_type || matchingItem.service;
 
-      if (boqLine.frr_rating && !itemFrr) missingAttributes.push('FRR Rating');
+      if (moduleKey === 'passive_fire' && boqLine.frr_rating && !itemFrr) missingAttributes.push('FRR Rating');
       if (boqLine.substrate && !matchingItem.substrate) missingAttributes.push('Substrate');
       if (boqLine.service_type && !itemServiceType) missingAttributes.push('Service Type');
 
