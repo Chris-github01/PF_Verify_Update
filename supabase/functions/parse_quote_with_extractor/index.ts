@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { getUserIdFromRequest } from "./_shared/auth.ts";
+import { sanitizePlumbingItems } from "../_shared/plumbingSanitizer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -477,9 +478,23 @@ Deno.serve(async (req: Request) => {
       console.log(`[Safety filter] Removed ${preFilterCount - filteredItems.length} summary rows, kept ${filteredItems.length} items`);
     }
 
-    const items = filteredItems;
+    // Plumbing-only: apply sanitizer to strip any remaining summary rows
+    let finalItemsForSave = filteredItems;
+    let plumbingExtractedTotal: number | null = null;
+    if (trade.toLowerCase() === "plumbing") {
+      const { cleanedItems, quoteTotalFound } = sanitizePlumbingItems(
+        filteredItems as unknown as Record<string, unknown>[],
+        parsingResult.documentTotal ?? null
+      );
+      const before = filteredItems.length;
+      finalItemsForSave = cleanedItems as unknown as typeof filteredItems;
+      plumbingExtractedTotal = quoteTotalFound;
+      console.log(`[Plumbing sanitizer] ${before} → ${finalItemsForSave.length} items, quoteTotal=${quoteTotalFound}`);
+    }
+
+    const items = finalItemsForSave;
     const totalAmount = parsingResult.finalTotalAmount;
-    const quotedTotal = parsingResult.documentTotal;
+    const quotedTotal = parsingResult.documentTotal ?? plumbingExtractedTotal;
     const contingencyAmount = 0;
 
     let revisionNumber = 1;

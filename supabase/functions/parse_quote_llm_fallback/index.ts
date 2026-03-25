@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { sanitizePlumbingItems, PLUMBING_SYSTEM_PROMPT } from "../_shared/plumbingSanitizer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +23,7 @@ interface ParseRequest {
   supplierName?: string;
   documentType?: string;
   chunkInfo?: string;
+  trade?: string;
 }
 
 interface ParseResponse {
@@ -306,7 +308,8 @@ Deno.serve(async (req: Request) => {
 
     console.log('[LLM Fallback] OpenAI API key found, parsing quote...');
 
-    const { text, supplierName }: ParseRequest = await req.json();
+    const { text, supplierName, trade }: ParseRequest = await req.json();
+    const isPlumbing = (trade ?? "").toLowerCase() === "plumbing";
 
     if (!text || text.trim().length === 0) {
       return new Response(
@@ -328,8 +331,8 @@ Deno.serve(async (req: Request) => {
     const needsChunking = shouldChunkQuote(text);
     console.log(`[LLM Fallback] Quote needs chunking: ${needsChunking}`);
 
-    // Create extraction prompt
-    const systemPrompt = `You are an expert at extracting line items from construction quotes with hierarchical structures.
+    // Create extraction prompt — use plumbing-specific prompt for plumbing trade
+    const systemPrompt = isPlumbing ? PLUMBING_SYSTEM_PROMPT : `You are an expert at extracting line items from construction quotes with hierarchical structures.
 
 CRITICAL: Quotes often have a hierarchical structure:
 - Section summaries (e.g., "Greenhouse $21,964.00") - DO NOT EXTRACT
@@ -506,6 +509,19 @@ Return JSON format:
     let items = allItems;
     console.log(`[DEBUG] LLM raw items count: ${items.length}`);
 
+    // Plumbing-only: apply sanitizer to strip summary rows before any further processing
+    let plumbingQuoteTotal: number | null = null;
+    if (isPlumbing) {
+      const { cleanedItems, quoteTotalFound } = sanitizePlumbingItems(
+        items as unknown as Record<string, unknown>[],
+        null
+      );
+      const beforeCount = items.length;
+      items = cleanedItems as unknown as LineItem[];
+      plumbingQuoteTotal = quoteTotalFound;
+      console.log(`[Plumbing sanitizer] ${beforeCount} → ${items.length} items (removed ${beforeCount - items.length} summary rows), quoteTotal=${quoteTotalFound}`);
+    }
+
     // Extract document totals from raw text
     const docTotals = extractDocumentTotals(text);
     console.log(`[DEBUG] docTotal extracted:`, docTotals);
@@ -543,8 +559,9 @@ Return JSON format:
     const itemsSubtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
 
     // Use document total if available, otherwise use items subtotal
-    const finalTotal = docTotals.grand_total_excl_gst ?? itemsSubtotal;
-    const quotedTotal = docTotals.grand_total_excl_gst;
+    // For plumbing, also consider the total extracted by the sanitizer
+    const quotedTotal = docTotals.grand_total_excl_gst ?? plumbingQuoteTotal;
+    const finalTotal = quotedTotal ?? itemsSubtotal;
 
     console.log(`[LLM Fallback] Items subtotal: $${itemsSubtotal.toFixed(2)}`);
     console.log(`[LLM Fallback] Document total: $${quotedTotal?.toFixed(2) || 'N/A'}`);
