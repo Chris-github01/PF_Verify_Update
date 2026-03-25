@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Play, RotateCcw, ArrowUpCircle, Zap, GitBranch, CheckCircle } from 'lucide-react';
+import {
+  ArrowLeft, Play, RotateCcw, ArrowUpCircle, Zap, GitBranch,
+  CheckCircle, Flag, Calendar, Activity
+} from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import ShadowGuard from '../../components/shadow/ShadowGuard';
 import ShadowRunHistoryTable from '../../components/shadow/ShadowRunHistoryTable';
@@ -13,22 +16,46 @@ import {
 } from '../../lib/shadow/moduleRegistry';
 import { getShadowRuns } from '../../lib/shadow/shadowRunner';
 import { resolveFlag } from '../../lib/shadow/featureFlags';
-import type { ModuleRegistryRecord, ModuleVersionRecord, ShadowRunRecord } from '../../types/shadow';
+import { dbGetModuleRolloutEvents } from '../../lib/db/rolloutEvents';
+import { dbGetAllFlags } from '../../lib/db/featureFlags';
+import { dbGetRegressionSuites } from '../../lib/db/regressionSuites';
+import type {
+  ModuleRegistryRecord,
+  ModuleVersionRecord,
+  ShadowRunRecord,
+  RolloutEventRecord,
+  FeatureFlagRecord,
+  RegressionSuiteRecord,
+} from '../../types/shadow';
 
 function getModuleKeyFromPath(): string | undefined {
   const m = window.location.pathname.match(/^\/shadow\/modules\/([^/]+)$/);
   return m ? m[1] : undefined;
 }
 
+const EVENT_COLORS: Record<string, string> = {
+  global_promoted: 'text-green-400',
+  rollback_triggered: 'text-red-400',
+  kill_switch_enabled: 'text-red-400',
+  kill_switch_disabled: 'text-green-400',
+  shadow_enabled: 'text-blue-400',
+  beta_enabled: 'text-cyan-400',
+  org_rollout_enabled: 'text-teal-400',
+};
+
 export default function ShadowModuleDetail() {
   const moduleKey = getModuleKeyFromPath();
   const [module, setModule] = useState<ModuleRegistryRecord | null>(null);
   const [version, setVersion] = useState<ModuleVersionRecord | null>(null);
   const [runs, setRuns] = useState<ShadowRunRecord[]>([]);
+  const [rolloutEvents, setRolloutEvents] = useState<RolloutEventRecord[]>([]);
+  const [moduleFlags, setModuleFlags] = useState<FeatureFlagRecord[]>([]);
+  const [regressionSuites, setRegressionSuites] = useState<RegressionSuiteRecord[]>([]);
   const [killActive, setKillActive] = useState(false);
   const [shadowVersionInput, setShadowVersionInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!moduleKey) return;
@@ -37,17 +64,37 @@ export default function ShadowModuleDetail() {
 
   async function load() {
     setLoading(true);
-    const [{ module: mod, version: ver }, runList, kill] = await Promise.all([
-      getModuleWithVersion(moduleKey!),
-      getShadowRuns(moduleKey, 30),
-      resolveFlag(`kill_switch.${moduleKey}`),
-    ]);
-    setModule(mod);
-    setVersion(ver);
-    setRuns(runList);
-    setKillActive(kill.enabled);
-    setShadowVersionInput(ver?.shadow_version ?? '');
-    setLoading(false);
+    setError(null);
+    try {
+      const [
+        { module: mod, version: ver },
+        runList,
+        kill,
+        events,
+        allFlags,
+        suites,
+      ] = await Promise.all([
+        getModuleWithVersion(moduleKey!),
+        getShadowRuns(moduleKey, 30),
+        resolveFlag(`kill_switch.${moduleKey}`),
+        dbGetModuleRolloutEvents(moduleKey!, 20),
+        dbGetAllFlags({ moduleKey }),
+        dbGetRegressionSuites(moduleKey),
+      ]);
+      setModule(mod);
+      setVersion(ver);
+      setRuns(runList);
+      setKillActive(kill.enabled);
+      setRolloutEvents(events);
+      setModuleFlags(allFlags);
+      setRegressionSuites(suites);
+      setShadowVersionInput(ver?.shadow_version ?? '');
+    } catch (e) {
+      console.error(e);
+      setError('Failed to load module data.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSetShadowVersion() {
@@ -60,7 +107,7 @@ export default function ShadowModuleDetail() {
 
   async function handlePromote() {
     if (!moduleKey) return;
-    if (!confirm(`Promote to global live?`)) return;
+    if (!confirm('Promote candidate version to global live?')) return;
     await promoteModule(moduleKey);
     load();
   }
@@ -80,13 +127,13 @@ export default function ShadowModuleDetail() {
 
   if (loading) return (
     <ShadowGuard><ShadowLayout>
-      <div className="text-center py-20 text-gray-500">Loading module...</div>
+      <div className="text-center py-20 text-gray-500 text-sm">Loading module...</div>
     </ShadowLayout></ShadowGuard>
   );
 
-  if (!module) return (
+  if (error || !module) return (
     <ShadowGuard><ShadowLayout>
-      <div className="text-center py-20 text-gray-500">Module not found</div>
+      <div className="text-center py-20 text-red-400 text-sm">{error ?? 'Module not found'}</div>
     </ShadowLayout></ShadowGuard>
   );
 
@@ -94,7 +141,6 @@ export default function ShadowModuleDetail() {
     <ShadowGuard>
       <ShadowLayout>
         <div className="max-w-5xl mx-auto space-y-6">
-          {/* Back */}
           <a href="/shadow/modules" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" /> All Modules
           </a>
@@ -105,6 +151,7 @@ export default function ShadowModuleDetail() {
               <h1 className="text-2xl font-bold text-white">{module.module_name}</h1>
               <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                 <span className="text-sm font-mono text-gray-500">{module.module_key}</span>
+                <span className="text-xs text-gray-600 capitalize">{module.module_type}</span>
                 {version && <ModuleVersionBadge status={version.rollout_status} size="md" />}
                 {killActive && (
                   <span className="flex items-center gap-1 text-xs bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded-full font-medium">
@@ -141,10 +188,10 @@ export default function ShadowModuleDetail() {
           {/* Version cards */}
           <div className="grid sm:grid-cols-4 gap-4">
             {[
-              { label: 'Live Version',      value: version?.live_version ?? 'v1',            color: 'green' },
-              { label: 'Shadow Version',    value: version?.shadow_version ?? '—',           color: 'blue' },
-              { label: 'Candidate',         value: version?.promoted_candidate_version ?? '—', color: 'amber' },
-              { label: 'Rollback Version',  value: version?.rollback_version ?? '—',         color: 'gray' },
+              { label: 'Live Version',     value: version?.live_version ?? 'v1',                color: 'green' },
+              { label: 'Shadow Version',   value: version?.shadow_version ?? '—',               color: 'blue' },
+              { label: 'Candidate',        value: version?.promoted_candidate_version ?? '—',   color: 'amber' },
+              { label: 'Rollback Version', value: version?.rollback_version ?? '—',             color: 'gray' },
             ].map((v) => (
               <div key={v.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <div className="text-xs text-gray-500 mb-1">{v.label}</div>
@@ -181,7 +228,7 @@ export default function ShadowModuleDetail() {
             </div>
           </div>
 
-          {/* Promotion actions */}
+          {/* Promotion controls */}
           {(version?.promoted_candidate_version || version?.rollback_version) && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
               <h2 className="text-sm font-semibold text-white">Promotion Controls</h2>
@@ -208,16 +255,17 @@ export default function ShadowModuleDetail() {
             </div>
           )}
 
-          {/* Promotion readiness checklist */}
+          {/* Readiness checklist */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
             <h2 className="text-sm font-semibold text-white">Promotion Readiness</h2>
-            <div className="space-y-2">
+            <div className="grid sm:grid-cols-2 gap-2">
               {[
-                { label: 'Shadow version set', ok: !!version?.shadow_version },
-                { label: 'Kill switch disabled', ok: !killActive },
-                { label: 'Rollback version available', ok: !!version?.rollback_version },
-                { label: 'Module shadow-enabled', ok: !!module.is_shadow_enabled },
-                { label: 'Recent shadow runs completed', ok: runs.filter((r) => r.status === 'completed').length > 0 },
+                { label: 'Shadow version set',           ok: !!version?.shadow_version },
+                { label: 'Kill switch disabled',         ok: !killActive },
+                { label: 'Rollback version available',   ok: !!version?.rollback_version },
+                { label: 'Module shadow-enabled',        ok: !!module.is_shadow_enabled },
+                { label: 'Recent completed shadow runs', ok: runs.filter((r) => r.status === 'completed').length > 0 },
+                { label: 'No recent failures',           ok: runs.filter((r) => r.status === 'failed').length === 0 },
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-3">
                   <CheckCircle className={`w-4 h-4 flex-shrink-0 ${item.ok ? 'text-green-400' : 'text-gray-700'}`} />
@@ -227,9 +275,96 @@ export default function ShadowModuleDetail() {
             </div>
           </div>
 
+          {/* Active flags for this module */}
+          {moduleFlags.length > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Flag className="w-4 h-4 text-amber-400" />
+                <h2 className="text-sm font-semibold text-white">Active Flags</h2>
+                <span className="text-xs text-gray-600">({moduleFlags.length})</span>
+              </div>
+              <div className="divide-y divide-gray-800/60">
+                {moduleFlags.map((flag) => (
+                  <div key={flag.id} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                    <div>
+                      <span className="font-mono text-xs text-amber-300">{flag.flag_key}</span>
+                      <span className="text-xs text-gray-600 ml-2">{flag.target_type} · {flag.environment}</span>
+                    </div>
+                    <span className={`text-xs font-medium ${flag.enabled ? 'text-green-400' : 'text-gray-600'}`}>
+                      {flag.enabled ? 'ON' : 'OFF'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <a href="/shadow/admin/flags" className="text-xs text-amber-400 hover:text-amber-300">
+                Manage all flags →
+              </a>
+            </div>
+          )}
+
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Rollout event history */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <h2 className="text-sm font-semibold text-white">Rollout History</h2>
+              </div>
+              {rolloutEvents.length === 0 ? (
+                <p className="text-xs text-gray-600 py-4 text-center">No rollout events yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {rolloutEvents.slice(0, 8).map((ev) => (
+                    <div key={ev.id} className="flex items-start justify-between gap-3">
+                      <span className={`text-xs font-mono font-medium ${EVENT_COLORS[ev.event_type] ?? 'text-gray-400'}`}>
+                        {ev.event_type}
+                      </span>
+                      <span className="text-xs text-gray-600 whitespace-nowrap">
+                        {new Date(ev.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Regression suites */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-gray-400" />
+                <h2 className="text-sm font-semibold text-white">Regression Suites</h2>
+              </div>
+              {regressionSuites.length === 0 ? (
+                <p className="text-xs text-gray-600 py-4 text-center">No regression suites defined</p>
+              ) : (
+                <div className="space-y-2">
+                  {regressionSuites.map((suite) => (
+                    <div key={suite.id} className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm text-white">{suite.suite_name}</div>
+                        {suite.description && (
+                          <div className="text-xs text-gray-600">{suite.description}</div>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-600 whitespace-nowrap">
+                        {new Date(suite.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Run history */}
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-white">Run History</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-white">Run History</h2>
+              {runs.length > 0 && (
+                <a href={`/shadow/modules/${moduleKey}/runs`} className="text-xs text-amber-400 hover:text-amber-300">
+                  View all runs →
+                </a>
+              )}
+            </div>
             <ShadowRunHistoryTable runs={runs} />
           </div>
         </div>

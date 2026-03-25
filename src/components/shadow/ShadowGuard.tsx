@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Shield, Lock } from 'lucide-react';
-import { isAdminUser } from '../../lib/shadow/shadowAccess';
+import { isAdminUser, isGodMode } from '../../lib/shadow/shadowAccess';
 
 interface Props {
   children: React.ReactNode;
   requireGodMode?: boolean;
 }
 
-export default function ShadowGuard({ children, requireGodMode: _ = false }: Props) {
+export default function ShadowGuard({ children, requireGodMode = false }: Props) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    isAdminUser().then(setAllowed);
-  }, []);
+    (async () => {
+      if (requireGodMode) {
+        const god = await isGodMode();
+        setAllowed(god);
+      } else {
+        const admin = await isAdminUser();
+        setAllowed(admin);
+      }
+    })();
+  }, [requireGodMode]);
 
   if (allowed === null) {
     return (
@@ -34,7 +42,9 @@ export default function ShadowGuard({ children, requireGodMode: _ = false }: Pro
           </div>
           <h1 className="text-xl font-semibold text-white">Access Denied</h1>
           <p className="text-gray-400 text-sm max-w-sm">
-            This area requires god_mode or internal_admin privileges.
+            {requireGodMode
+              ? 'This area requires god_mode privileges.'
+              : 'This area requires god_mode or internal_admin privileges.'}
           </p>
         </div>
       </div>
