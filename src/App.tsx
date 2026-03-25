@@ -65,6 +65,7 @@ import PlumbingRolloutPage from './pages/shadow/PlumbingRolloutPage';
 import PlumbingBetaDashboard from './pages/shadow/PlumbingBetaDashboard';
 import PlumbingBetaAnomaliesPage from './pages/shadow/PlumbingBetaAnomaliesPage';
 import PlumbingReleaseDashboard from './pages/shadow/PlumbingReleaseDashboard';
+import PlumbingLearningDashboard from './pages/shadow/PlumbingLearningDashboard';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1094,6 +1095,13 @@ function AppContent() {
     shadowPath === '/shadow/modules/plumbing_parser/release/timeline'
   ) {
     return <PlumbingReleaseDashboard />;
+  }
+  if (
+    shadowPath === '/shadow/modules/plumbing_parser/learning' ||
+    shadowPath === '/shadow/modules/plumbing_parser/learning/suggestions' ||
+    shadowPath === '/shadow/modules/plumbing_parser/learning/rules'
+  ) {
+    return <PlumbingLearningDashboard />;
   }
 
   if (!session) {
