@@ -18,6 +18,58 @@ const corsHeaders = {
 };
 
 /**
+ * Regex extraction of level-based pricing table from Hippo-style plumbing PDFs.
+ * The PDF text extractor splits each word onto its own line, so we collapse the
+ * entire text first and scan for level patterns followed by a run of numbers.
+ * The last number in each run is the SUM column (total for that level).
+ */
+function extractPlumbingLevelTable(text: string): any[] {
+  const flat = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
+
+  const LEVEL_RE = /(lower\s+ground(?:\s+level)?|upper\s+ground(?:\s+level)?|ground(?:\s+level)?|basement|level\s+\d+|floor\s+\d+|roof(?:\s+level)?|plant\s+room|car\s+park(?:\s+level)?|podium(?:\s+level)?)\s+((?:[\d,]+(?:\.\d+)?\s+){1,10}[\d,]+(?:\.\d+)?)/gi;
+
+  const results: any[] = [];
+  const seen = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = LEVEL_RE.exec(flat)) !== null) {
+    const rawLabel = match[1].trim();
+    if (/^levels?\s*$/i.test(rawLabel)) continue;
+
+    const numbers = match[2].trim().match(/[\d,]+(?:\.\d+)?/g);
+    if (!numbers || numbers.length < 1) continue;
+
+    const sumVal = parseFloat(numbers[numbers.length - 1].replace(/,/g, ''));
+    if (!sumVal || sumVal < 1000) continue;
+
+    const labelKey = rawLabel.toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(labelKey)) continue;
+    seen.add(labelKey);
+
+    const description = rawLabel
+      .toLowerCase()
+      .replace(/\b\w/g, (c: string) => c.toUpperCase())
+      .replace(/\s+/g, ' ')
+      + ' - Plumbing Works';
+
+    results.push({
+      description,
+      qty: 1,
+      unit: 'LS',
+      rate: sumVal,
+      total: sumVal,
+      section: 'Main',
+      confidence: 0.9,
+      source: 'regex_level_table',
+      raw_text: match[0].trim(),
+      validation_flags: [],
+    });
+  }
+
+  return results;
+}
+
+/**
  * Resume/Retry a stuck or partially completed parsing job
  * Retries only the failed chunks instead of reprocessing the entire file
  */
@@ -236,18 +288,38 @@ Deno.serve(async (req: Request) => {
     // Aggregate ALL items (previously completed + newly recovered)
     const allCompletedChunks = await supabase
       .from("parsing_chunks")
-      .select("parsed_items")
+      .select("parsed_items, chunk_text")
       .eq("job_id", jobId)
       .eq("status", "completed");
 
     const allItems: any[] = [];
+    const allChunkTexts: string[] = [];
     for (const chunk of allCompletedChunks.data || []) {
       if (chunk.parsed_items) {
         allItems.push(...chunk.parsed_items);
       }
+      if (chunk.chunk_text) {
+        allChunkTexts.push(chunk.chunk_text);
+      }
     }
 
     console.log(`[Resume] Total items after retry: ${allItems.length}`);
+
+    // For plumbing quotes: if LLM missed the level-table rows, inject them from raw text
+    const isPlumbing = (job.trade ?? '').toLowerCase() === 'plumbing';
+    if (isPlumbing) {
+      const combinedText = allChunkTexts.join('\n');
+      const levelItems = extractPlumbingLevelTable(combinedText);
+      if (levelItems.length > 0) {
+        const hasLevelItems = allItems.some((item: any) =>
+          /level|ground|roof|basement|floor/i.test(item.description || '')
+        );
+        if (!hasLevelItems) {
+          console.log(`[Resume] Plumbing: injecting ${levelItems.length} level-table rows from regex fallback`);
+          allItems.push(...levelItems);
+        }
+      }
+    }
 
     // ✅ Keep items if they have description OR money
     const safeItems = allItems.filter(item => hasDesc(item) || hasMoney(item));
