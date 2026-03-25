@@ -329,16 +329,30 @@ export default function ShadowModuleDetail() {
 
             {/* Regression suites */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-gray-400" />
-                <h2 className="text-sm font-semibold text-white">Regression Suites</h2>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-gray-400" />
+                  <h2 className="text-sm font-semibold text-white">Regression Suites</h2>
+                </div>
+                {moduleKey === 'plumbing_parser' && (
+                  <a
+                    href="/shadow/modules/plumbing_parser/regression"
+                    className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                  >
+                    Manage suites →
+                  </a>
+                )}
               </div>
               {regressionSuites.length === 0 ? (
                 <p className="text-xs text-gray-600 py-4 text-center">No regression suites defined</p>
               ) : (
                 <div className="space-y-2">
                   {regressionSuites.map((suite) => (
-                    <div key={suite.id} className="flex items-start justify-between gap-3">
+                    <a
+                      key={suite.id}
+                      href={moduleKey === 'plumbing_parser' ? `/shadow/modules/plumbing_parser/regression/${suite.id}` : '#'}
+                      className="flex items-start justify-between gap-3 hover:bg-gray-800/30 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                    >
                       <div>
                         <div className="text-sm text-white">{suite.suite_name}</div>
                         {suite.description && (
@@ -348,7 +362,7 @@ export default function ShadowModuleDetail() {
                       <span className="text-xs text-gray-600 whitespace-nowrap">
                         {new Date(suite.created_at).toLocaleDateString()}
                       </span>
-                    </div>
+                    </a>
                   ))}
                 </div>
               )}

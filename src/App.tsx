@@ -58,6 +58,9 @@ import ShadowAuditLogPage from './pages/shadow/ShadowAuditLogPage';
 import ShadowRolloutPage from './pages/shadow/ShadowRolloutPage';
 import ShadowKillSwitchPage from './pages/shadow/ShadowKillSwitchPage';
 import PlumbingCompareView from './pages/shadow/PlumbingCompareView';
+import PlumbingRegressionListPage from './pages/shadow/PlumbingRegressionListPage';
+import PlumbingRegressionSuitePage from './pages/shadow/PlumbingRegressionSuitePage';
+import PlumbingRegressionRunPage from './pages/shadow/PlumbingRegressionRunPage';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1062,6 +1065,15 @@ function AppContent() {
   }
   if (shadowPath.match(/^\/shadow\/plumbing\/compare\/([^/]+)$/)) {
     return <PlumbingCompareView />;
+  }
+  if (shadowPath === '/shadow/modules/plumbing_parser/regression') {
+    return <PlumbingRegressionListPage />;
+  }
+  if (shadowPath.match(/^\/shadow\/modules\/plumbing_parser\/regression\/runs\/([^/]+)$/)) {
+    return <PlumbingRegressionRunPage />;
+  }
+  if (shadowPath.match(/^\/shadow\/modules\/plumbing_parser\/regression\/([^/]+)$/)) {
+    return <PlumbingRegressionSuitePage />;
   }
 
   if (!session) {
