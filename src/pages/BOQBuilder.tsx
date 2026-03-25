@@ -5,6 +5,7 @@ import { generateBaselineBOQ } from '../lib/boq/boqGenerator';
 import { exportBOQPack, exportTagsClarifications } from '../lib/boq/boqExporter';
 import TagLibraryModal from '../components/TagLibraryModal';
 import FireScheduleImport from '../components/FireScheduleImport';
+import { useTrade } from '../lib/tradeContext';
 import type { BOQLine, BOQTendererMap, ScopeGap, ProjectTag, ModuleKey } from '../types/boq.types';
 
 type TabType = 'baseline' | 'mapping' | 'gaps' | 'tags' | 'fire-schedule';
@@ -15,8 +16,10 @@ interface BOQBuilderProps {
 
 export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
 
+  const { currentTrade } = useTrade();
+  const moduleKey = currentTrade as ModuleKey;
+
   const [project, setProject] = useState<any>(null);
-  const [moduleKey, setModuleKey] = useState<ModuleKey>('passive_fire');
   const [activeTab, setActiveTab] = useState<TabType>('baseline');
 
   const [boqLines, setBoqLines] = useState<BOQLine[]>([]);
@@ -59,7 +62,6 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
     }
 
     setProject(data);
-    setModuleKey((data.trade as ModuleKey) || 'passive_fire');
   };
 
   const loadBOQData = async () => {
