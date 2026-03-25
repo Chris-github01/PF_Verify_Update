@@ -37,18 +37,24 @@ export default function ShadowLogin() {
         return;
       }
 
-      // Verify admin role using the user id from the sign-in response directly,
-      // bypassing the cache entirely to avoid stale-cache race conditions.
+      // Query admin_roles using the access_token from sign-in directly so RLS
+      // auth.uid() is correct — the default client session may not be committed yet.
+      const accessToken = data.session.access_token;
       const userId = data.session.user.id;
-      const { data: roleData, error: roleError } = await supabase
-        .from('admin_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .in('role', ['god_mode', 'internal_admin'])
-        .limit(1)
-        .maybeSingle();
 
-      if (roleError || !roleData) {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/admin_roles?user_id=eq.${userId}&role=in.(god_mode,internal_admin)&limit=1`,
+        {
+          headers: {
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      const roles = await response.json();
+
+      if (!Array.isArray(roles) || roles.length === 0) {
         await supabase.auth.signOut();
         setError('Your account does not have shadow admin access.');
         setLoading(false);
