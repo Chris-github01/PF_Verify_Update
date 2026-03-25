@@ -234,6 +234,19 @@ const TOTAL_ROW_PATTERNS = [
   /\btotal\s*:/i,
   /^total\s+\(excl/i,
   /^total\s+\(inc/i,
+  /^total\s+price$/i,
+  /^total\s+cost$/i,
+  /^total\s+amount$/i,
+  /^total\s+sum$/i,
+  /^quote\s+total$/i,
+  /^contract\s+(sum|total|price)$/i,
+  /^lump\s+sum\s+total$/i,
+  /^overall\s+total$/i,
+  /^net\s+total$/i,
+  /^project\s+total$/i,
+  /^tender\s+total$/i,
+  /^tender\s+sum$/i,
+  /^contract\s+value$/i,
 ];
 
 export function isTotalRow(item: any): boolean {

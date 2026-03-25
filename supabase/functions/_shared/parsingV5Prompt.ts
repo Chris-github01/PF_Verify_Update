@@ -27,6 +27,8 @@ SKIP summary/subtotal lines such as:
 - "New Building $1,580,700.00" (section header)
 - "TOTAL $..." / "Subtotal" / "Grand Total" / "P&G" / "GST"
 - Any line that aggregates other lines
+- Lines where the description is ONLY "Total", "Totals", "Total:", "Grand Total", "Contract Sum", "Quote Total", "Tender Sum", "Net Total", "Overall Total", "Project Total", "Contract Value" — these are summary rows, NOT line items
+- CRITICAL: If a line's value equals the sum of all other lines, it is a total row — SKIP IT
 
 IMPORTANT:
 - Multi-line descriptions are common: join lines when numbers appear on the next line
@@ -73,6 +75,8 @@ Rules:
 2. Remove duplicates (keep the most detailed version)
 3. Validate totals where rate exists: abs(qty * rate - total) should be < 5% of total
 4. Flag suspicious items in warnings
+5. CRITICAL: Remove any item whose description is only "Total", "Totals", "Total:", "Grand Total", "Contract Sum", "Quote Total", "Tender Sum", "Net Total", "Overall Total", "Project Total", or "Contract Value" — these are document summary rows, not real line items
+6. CRITICAL: If any item's value equals the arithmetic sum of all other items, remove it — it is a grand total row disguised as a line item
 
 Return cleaned items in same JSON format.`;
 
