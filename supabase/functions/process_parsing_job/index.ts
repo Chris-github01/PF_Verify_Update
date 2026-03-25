@@ -511,6 +511,7 @@ Deno.serve(async (req: Request) => {
               text: fullText,
               supplierName: typedJob.supplier_name,
               phase: 'full',
+              trade: typedJob.trade,
             }),
             signal: controller.signal,
           });
