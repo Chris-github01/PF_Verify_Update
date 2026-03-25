@@ -138,7 +138,9 @@ DO NOT extract:
 - Subtotals / Grand Totals / Summary lines / P&G lines
 - GST / tax lines
 - Rate schedule / price list rows — these have a description and unit rate but NO quantity column and NO line total (e.g. "Linear seals per m $22.00", "Cavity barriers per m $89.90", "Intumescent Flushbox ea $20.50")
-- Any section labelled "Excluded", "Exclusions", "Optional", or "General" that lists rates without quantities
+- Any section labelled "Excluded" or "Exclusions" that lists rates without quantities
+- Rate-only rows with no quantity and no line total (e.g. "Linear seals per m $22.00")
+- IMPORTANT: Do NOT skip rows just because they appear under a section called "Optional Extras" or similar — if a row has a real quantity AND a real line total, INCLUDE it regardless of its section heading.
 
 INCLUDE all rows that have: a description + a numeric quantity + a line total.
 

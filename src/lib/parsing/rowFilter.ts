@@ -23,7 +23,7 @@ const HEADER_PATTERNS = [
 
 const EXCLUSION_PATTERNS = [
   /\b(excluded|omitted|not[-\s]?included)\b/i,
-  /\b(alternate|alternative|option)\b/i,
+  /\b(alternate|alternative)\b/i,
 ];
 
 const CONTINGENCY_PATTERNS = [
