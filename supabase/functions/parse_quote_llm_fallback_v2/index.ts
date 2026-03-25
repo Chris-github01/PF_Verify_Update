@@ -304,6 +304,60 @@ Return JSON: {"items": [{"description": "...", "qty": 10, "unit": "ea", "rate": 
   }));
 }
 
+/**
+ * Regex fallback: extract level-based pricing table rows from plumbing quotes.
+ * Used when the LLM returns 0 items on a plumbing quote.
+ * Handles formats like:
+ *   "LOWER GROUND LEVEL  13800  15355  1760  7620  32000  70535"
+ *   "LEVEL 1  35020  43415  21760  28680  128875"
+ *   "ROOF  2200  4000  480  5420  63470  75570"
+ * The SUM column is always the last number on the row.
+ */
+function extractPlumbingLevelTable(text: string): LineItem[] {
+  const results: LineItem[] = [];
+  const lines = text.split('\n');
+
+  const LEVEL_PATTERN = /^(lower\s+ground(?:\s+level)?|upper\s+ground(?:\s+level)?|ground(?:\s+level)?|basement|level\s+\d+|floor\s+\d+|roof(?:\s+level)?|plant\s+room|car\s+park(?:\s+level)?|podium(?:\s+level)?)/i;
+  const SKIP_PATTERN = /^(total|sub\s*total|grand\s*total|items?|plumbing|description|levels?|sum\b|note|gst|margin|p\s*&\s*g)/i;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (SKIP_PATTERN.test(line)) continue;
+
+    const levelMatch = line.match(LEVEL_PATTERN);
+    if (!levelMatch) continue;
+
+    const numbers = line.match(/[\d,]+(?:\.\d+)?/g);
+    if (!numbers || numbers.length < 1) continue;
+
+    const sumStr = numbers[numbers.length - 1].replace(/,/g, '');
+    const sumVal = parseFloat(sumStr);
+    if (!sumVal || sumVal <= 0 || sumVal < 1000) continue;
+
+    const rawLabel = levelMatch[0].trim();
+    const description = rawLabel
+      .replace(/\b(\w)/g, (_: string, c: string) => c.toUpperCase())
+      .replace(/\s+/g, ' ')
+      + ' - Plumbing Works';
+
+    results.push({
+      description,
+      qty: 1,
+      unit: 'LS',
+      rate: sumVal,
+      total: sumVal,
+      section: 'Main',
+      confidence: 0.9,
+      source: 'regex_level_table',
+      raw_text: line,
+      validation_flags: [],
+    });
+  }
+
+  return results;
+}
+
 function validateAndFixItem(item: LineItem, trade?: string): LineItem {
   const flags: string[] = [];
   const isLumpSum = item.unit === 'LS' || item.qty === 1;
@@ -436,6 +490,17 @@ Deno.serve(async (req: Request) => {
       if (detectionResult.rows.length > 0) {
         const normalizedItems = await normalizeRows(detectionResult.rows, 'Main', openaiApiKey, trade);
         allItems = normalizedItems.map(item => validateAndFixItem(item, trade));
+      }
+    }
+
+    // Plumbing fallback: if LLM returned 0 items, try regex level-table extraction
+    const isPlumbing = (trade ?? '').toLowerCase() === 'plumbing';
+    if (isPlumbing && allItems.length === 0) {
+      console.log('[LLM v2] Plumbing: LLM returned 0 items, attempting regex level-table fallback...');
+      const levelItems = extractPlumbingLevelTable(text);
+      if (levelItems.length > 0) {
+        console.log(`[LLM v2] Regex fallback extracted ${levelItems.length} level rows`);
+        allItems = levelItems;
       }
     }
 
