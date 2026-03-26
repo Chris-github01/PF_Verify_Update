@@ -22,22 +22,16 @@ export default function ShadowLogin() {
         return;
       }
 
-      const accessToken = data.session.access_token;
       const userId = data.session.user.id;
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/admin_roles?user_id=eq.${userId}&role=in.(god_mode,internal_admin)&limit=1`,
-        {
-          headers: {
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        }
-      );
+      const { data: adminCheck, error: adminError } = await supabase
+        .from('platform_admins')
+        .select('is_active')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .maybeSingle();
 
-      const roles = await response.json();
-
-      if (!Array.isArray(roles) || roles.length === 0) {
+      if (adminError || !adminCheck) {
         await supabase.auth.signOut();
         setError('Your account does not have shadow admin access.');
         setLoading(false);
