@@ -1022,7 +1022,45 @@ function AppContent() {
     }
   };
 
+  // Shadow Admin routes — completely isolated from the main app loading cycle.
+  // Must be checked BEFORE authLoading/orgLoading gates so org context never interferes.
+  const shadowPath = window.location.pathname;
+  const isShadowRoute = shadowPath.startsWith('/shadow');
+
+  if (isShadowRoute) {
+    if (authLoading) {
+      return (
+        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto" />
+            <p className="text-gray-400 text-sm">Authenticating...</p>
+          </div>
+        </div>
+      );
+    }
+    if (!session) {
+      return <ShadowLogin />;
+    }
+    // Check that the verified flag matches the current session user.
+    // This flag is written by ShadowLogin only after confirming admin_roles via REST fetch.
+    const verifiedUserId = localStorage.getItem('shadow_admin_verified');
+    if (verifiedUserId !== session.user.id) {
+      return <ShadowLogin />;
+    }
+    // Verified admin — fall through to shadow route matchers below.
+  }
+
   if (authLoading || orgLoading) {
+    if (isShadowRoute) {
+      return (
+        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto" />
+            <p className="text-gray-400 text-sm">Loading...</p>
+          </div>
+        </div>
+      );
+    }
     console.log('🔄 [App] Loading states:', { authLoading, orgLoading, adminLoading });
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -1045,34 +1083,6 @@ function AppContent() {
 
   if (window.location.pathname === '/video') {
     return <VideoPage />;
-  }
-
-  // Shadow Admin routes — completely isolated, never visible to normal users.
-  // We check the path early so the main app never intercepts shadow sessions.
-  const shadowPath = window.location.pathname;
-  const isShadowRoute = shadowPath.startsWith('/shadow');
-
-  if (isShadowRoute) {
-    if (authLoading) {
-      return (
-        <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto" />
-            <p className="text-gray-400 text-sm">Authenticating...</p>
-          </div>
-        </div>
-      );
-    }
-    if (!session) {
-      return <ShadowLogin />;
-    }
-    // Check that the verified flag matches the current session user.
-    // This flag is written by ShadowLogin only after confirming admin_roles.
-    const verifiedUserId = localStorage.getItem('shadow_admin_verified');
-    if (verifiedUserId !== session.user.id) {
-      return <ShadowLogin />;
-    }
-    // Verified admin — fall through to shadow route matchers below.
   }
   if (shadowPath === '/shadow' || shadowPath === '/shadow/') {
     return <ShadowHome />;
