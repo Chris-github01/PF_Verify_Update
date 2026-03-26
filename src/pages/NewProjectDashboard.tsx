@@ -52,6 +52,7 @@ interface ProjectStats {
   hasSelectedQuotes: boolean;
   hasReviewedItems: boolean;
   hasScopeMatrix: boolean;
+  hasIntelligence: boolean;
   hasEqualisation: boolean;
   hasBOQ: boolean;
   hasReports: boolean;
@@ -91,6 +92,7 @@ export default function NewProjectDashboard({
     hasSelectedQuotes: false,
     hasReviewedItems: false,
     hasScopeMatrix: false,
+    hasIntelligence: false,
     hasEqualisation: false,
     hasBOQ: false,
     hasReports: false,
@@ -215,7 +217,7 @@ export default function NewProjectDashboard({
 
       const { data: projectRecord } = await supabase
         .from('projects')
-        .select('boq_builder_completed')
+        .select('boq_builder_completed, scope_matrix_completed')
         .eq('id', projectId)
         .maybeSingle();
 
@@ -229,16 +231,17 @@ export default function NewProjectDashboard({
 
       // Better detection of completed steps
       const hasLineItems = lineItems.length > 0;
-      const hasMappedItems = lineItems.filter(item => item.system_id).length > 0;
       const hasQuotesForTrade = quoteCount > 0;
 
+      // Explicit flags — only true when the user has actually completed each step
+      const hasReviewCleanCompleted = !!settings?.settings?.review_clean_completed;
+      const hasQuoteIntelligenceCompleted = !!settings?.settings?.quote_intelligence_completed;
+      const hasScopeMatrixCompleted = !!(projectRecord as any)?.scope_matrix_completed;
+
       // For trade isolation: only show equalisation and reports as complete if THIS TRADE has quotes
-      // This prevents cross-trade contamination of workflow status
       const hasEqualisation = hasQuotesForTrade && !!settings?.settings?.last_equalisation_run;
       const hasReports = hasQuotesForTrade && (reportsList?.length || 0) > 0;
       const hasBOQ = !!(projectRecord as any)?.boq_builder_completed;
-
-      const hasReviewCleanCompleted = !!settings?.settings?.review_clean_completed;
 
       const newStats: ProjectStats = {
         quoteCount,
@@ -251,11 +254,9 @@ export default function NewProjectDashboard({
         totalSteps: TOTAL_WORKFLOW_STEPS,
         hasQuotes: quoteCount > 0,
         hasSelectedQuotes: selectedQuoteCount > 0,
-        // Review & Clean is complete only if the user has explicitly completed the review step
         hasReviewedItems: hasLineItems && hasReviewCleanCompleted,
-        // Scope Matrix is complete if items have been mapped to systems or coverage is 100% FOR THIS TRADE
-        hasScopeMatrix: hasMappedItems || coveragePercent === 100,
-        // Equalisation and Reports only complete if THIS TRADE has quotes
+        hasScopeMatrix: hasScopeMatrixCompleted,
+        hasIntelligence: hasQuoteIntelligenceCompleted,
         hasEqualisation,
         hasBOQ,
         hasReports,
@@ -288,12 +289,10 @@ export default function NewProjectDashboard({
           status = projectStats.hasReviewedItems ? 'completed' : projectStats.hasSelectedQuotes ? 'in_progress' : 'not_started';
           break;
         case 'intelligence':
-          // Completed if scope matrix is done (prerequisite for intelligence analysis)
-          status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
+          status = projectStats.hasIntelligence ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
           break;
         case 'matrix':
-          // Completed if systems have been mapped
-          status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasReviewedItems ? 'in_progress' : 'not_started';
+          status = projectStats.hasScopeMatrix ? 'completed' : projectStats.hasIntelligence ? 'in_progress' : 'not_started';
           break;
         case 'equalisation':
           // Completed if equalisation analysis has been run

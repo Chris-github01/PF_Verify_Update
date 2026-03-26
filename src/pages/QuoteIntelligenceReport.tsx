@@ -51,6 +51,36 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
     }
   }, [selectedOriginalQuotes]);
 
+  const markIntelligenceCompleted = async () => {
+    try {
+      const { data: existing } = await supabase
+        .from('project_settings')
+        .select('settings')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      const currentSettings = existing?.settings || {};
+
+      await supabase
+        .from('project_settings')
+        .upsert({
+          project_id: projectId,
+          settings: {
+            ...currentSettings,
+            quote_intelligence_completed: true,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'project_id' });
+    } catch (err) {
+      console.error('Error marking Quote Intelligence as complete:', err);
+    }
+  };
+
+  const handleNavigateNext = async () => {
+    await markIntelligenceCompleted();
+    if (onNavigateNext) onNavigateNext();
+  };
+
   const loadOriginalQuotes = async () => {
     try {
       const { data, error } = await supabase
@@ -795,7 +825,7 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
         currentStep={workflowStep}
         totalSteps={workflowTotal}
         onBack={onNavigateBack}
-        onNext={onNavigateNext}
+        onNext={handleNavigateNext}
         backLabel={backLabel}
         nextLabel={nextLabel}
       />
