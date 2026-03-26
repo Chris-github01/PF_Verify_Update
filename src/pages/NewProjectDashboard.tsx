@@ -238,6 +238,8 @@ export default function NewProjectDashboard({
       const hasReports = hasQuotesForTrade && (reportsList?.length || 0) > 0;
       const hasBOQ = !!(projectRecord as any)?.boq_builder_completed;
 
+      const hasReviewCleanCompleted = !!settings?.settings?.review_clean_completed;
+
       const newStats: ProjectStats = {
         quoteCount,
         selectedQuoteCount,
@@ -249,8 +251,8 @@ export default function NewProjectDashboard({
         totalSteps: TOTAL_WORKFLOW_STEPS,
         hasQuotes: quoteCount > 0,
         hasSelectedQuotes: selectedQuoteCount > 0,
-        // Review & Clean is complete if there are line items with data FOR THIS TRADE
-        hasReviewedItems: hasLineItems,
+        // Review & Clean is complete only if the user has explicitly completed the review step
+        hasReviewedItems: hasLineItems && hasReviewCleanCompleted,
         // Scope Matrix is complete if items have been mapped to systems or coverage is 100% FOR THIS TRADE
         hasScopeMatrix: hasMappedItems || coveragePercent === 100,
         // Equalisation and Reports only complete if THIS TRADE has quotes
