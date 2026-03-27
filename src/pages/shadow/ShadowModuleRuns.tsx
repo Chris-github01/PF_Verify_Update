@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Filter, RefreshCw, X } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { ArrowLeft, Filter, RefreshCw, X, CheckCircle, Database } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import ShadowRunHistoryTable from '../../components/shadow/ShadowRunHistoryTable';
 import { dbGetShadowRuns, dbGetShadowRunResults } from '../../lib/db/shadowRuns';
@@ -9,6 +9,10 @@ import type { ShadowRunRecord, ShadowRunResultRecord, ModuleDiff, RunStatus, Run
 function getModuleKeyFromPath(): string | undefined {
   const m = window.location.pathname.match(/^\/shadow\/modules\/([^/]+)\/runs$/);
   return m ? m[1] : undefined;
+}
+
+function getRunIdFromSearch(): string | undefined {
+  return new URLSearchParams(window.location.search).get('run') ?? undefined;
 }
 
 const STATUS_OPTIONS: { value: RunStatus | ''; label: string }[] = [
@@ -29,6 +33,7 @@ const MODE_OPTIONS: { value: RunMode | ''; label: string }[] = [
 
 export default function ShadowModuleRuns() {
   const moduleKey = getModuleKeyFromPath();
+  const highlightRunId = getRunIdFromSearch();
   const [runs, setRuns] = useState<ShadowRunRecord[]>([]);
   const [selectedRun, setSelectedRun] = useState<ShadowRunRecord | null>(null);
   const [runResults, setRunResults] = useState<ShadowRunResultRecord[]>([]);
@@ -36,6 +41,8 @@ export default function ShadowModuleRuns() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const autoSelectedRef = useRef(false);
 
   const [statusFilter, setStatusFilter] = useState<RunStatus | ''>('');
   const [modeFilter, setModeFilter] = useState<RunMode | ''>('');
@@ -65,6 +72,19 @@ export default function ShadowModuleRuns() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (autoSelectedRef.current || !highlightRunId || loading || runs.length === 0) return;
+    const target = runs.find((r) => r.id === highlightRunId);
+    if (target) {
+      autoSelectedRef.current = true;
+      handleSelectRun(target).then(() => {
+        setTimeout(() => {
+          detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
+      });
+    }
+  }, [highlightRunId, loading, runs]);
+
   async function handleSelectRun(run: ShadowRunRecord) {
     setSelectedRun(run);
     setDiff(null);
@@ -76,6 +96,26 @@ export default function ShadowModuleRuns() {
     } catch {
       setRunResults([]);
     }
+  }
+
+  function getPassthroughMetrics(results: ShadowRunResultRecord[]): {
+    itemCount: number | null;
+    parsedValue: number | null;
+    resolvedVia: string | null;
+    note: string | null;
+  } | null {
+    const liveResult = results.find((r) => r.result_type === 'live');
+    if (!liveResult?.metrics_json) return null;
+    const m = liveResult.metrics_json as Record<string, unknown>;
+    if (!m.passthrough) return null;
+    return {
+      itemCount: typeof m.itemCount === 'number' ? m.itemCount : null,
+      parsedValue: typeof m.parsedValue === 'number' ? m.parsedValue : null,
+      resolvedVia: typeof m.resolvedVia === 'string' ? m.resolvedVia : null,
+      note: typeof (liveResult.output_json as Record<string, unknown>)?.note === 'string'
+        ? String((liveResult.output_json as Record<string, unknown>).note)
+        : null,
+    };
   }
 
   function clearFilters() {
@@ -202,10 +242,23 @@ export default function ShadowModuleRuns() {
 
               <ShadowRunHistoryTable runs={runs} onSelect={handleSelectRun} />
 
-              {selectedRun && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+              {selectedRun && (() => {
+                const passthroughMetrics = getPassthroughMetrics(runResults);
+                const isHighlighted = selectedRun.id === highlightRunId;
+                return (
+                <div
+                  ref={detailRef}
+                  className={`bg-gray-900 border rounded-xl p-5 space-y-4 transition-colors ${isHighlighted ? 'border-amber-500/40' : 'border-gray-800'}`}
+                >
                   <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-white">Run Detail</h2>
+                    <h2 className="text-sm font-semibold text-white">
+                      Run Detail
+                      {isHighlighted && (
+                        <span className="ml-2 text-[10px] font-normal bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded">
+                          latest run
+                        </span>
+                      )}
+                    </h2>
                     <div className="flex items-center gap-2">
                       {selectedRun.module_key === 'plumbing_parser' && selectedRun.status === 'completed' && (
                         <a
@@ -254,14 +307,47 @@ export default function ShadowModuleRuns() {
                     </>
                   )}
 
-                  {runResults.filter((r) => r.result_type !== 'diff').length > 0 && (
+                  {passthroughMetrics && selectedRun.status === 'completed' && (
+                    <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                        <span className="text-sm font-medium text-green-300">Passthrough Snapshot Completed</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="bg-gray-900 rounded-lg p-3">
+                          <div className="text-xs text-gray-500 mb-1">Line Items</div>
+                          <div className="text-lg font-bold text-white">{passthroughMetrics.itemCount ?? '—'}</div>
+                        </div>
+                        <div className="bg-gray-900 rounded-lg p-3">
+                          <div className="text-xs text-gray-500 mb-1">Parsed Value</div>
+                          <div className="text-sm font-semibold text-white">
+                            {passthroughMetrics.parsedValue != null
+                              ? new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 }).format(passthroughMetrics.parsedValue)
+                              : '—'}
+                          </div>
+                        </div>
+                        <div className="bg-gray-900 rounded-lg p-3">
+                          <div className="text-xs text-gray-500 mb-1">Resolved Via</div>
+                          <div className="text-xs font-mono text-amber-400">{passthroughMetrics.resolvedVia ?? '—'}</div>
+                        </div>
+                      </div>
+                      {passthroughMetrics.note && (
+                        <div className="flex items-start gap-2 text-xs text-gray-500">
+                          <Database className="w-3.5 h-3.5 shrink-0 mt-0.5 text-gray-600" />
+                          <span>{passthroughMetrics.note}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!diff && !passthroughMetrics && runResults.filter((r) => r.result_type !== 'diff').length > 0 && (
                     <div>
                       <div className="text-xs font-medium text-gray-400 mb-2">Result Records</div>
                       <div className="space-y-1.5 max-h-48 overflow-y-auto">
                         {runResults.filter((r) => r.result_type !== 'diff').map((r) => (
                           <div key={r.id} className="flex items-center justify-between bg-gray-950 rounded px-3 py-2 text-xs">
                             <span className="font-mono text-gray-400">{r.result_type}</span>
-                            <span className="text-gray-600">{r.output_json ? JSON.stringify(r.output_json).slice(0, 40) : '—'}</span>
+                            <span className="text-gray-600">{r.output_json ? JSON.stringify(r.output_json).slice(0, 60) : '—'}</span>
                           </div>
                         ))}
                       </div>
@@ -275,7 +361,8 @@ export default function ShadowModuleRuns() {
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
             </div>
           )}
       </div>

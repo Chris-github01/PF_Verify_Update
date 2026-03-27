@@ -47,8 +47,10 @@ function getTradeName(moduleKey: string): string {
 }
 
 function getComparePath(moduleKey: string, runId: string): string {
-  const trade = getTradeCategory(moduleKey).replace('_', '-');
-  return `/shadow/${trade}/compare/${runId}`;
+  if (moduleKey === 'plumbing_parser') {
+    return `/shadow/plumbing/compare/${runId}`;
+  }
+  return `/shadow/modules/${moduleKey}/runs?run=${runId}`;
 }
 
 export default function NewRunPanel({ moduleKey, onRunComplete }: NewRunPanelProps) {
