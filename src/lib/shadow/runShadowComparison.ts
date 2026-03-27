@@ -209,10 +209,14 @@ export interface QuoteOption {
 }
 
 export async function fetchPlumbingQuotes(limit = 80, includeEmpty = false): Promise<QuoteOption[]> {
+  return fetchQuotesByTrade('plumbing', limit, includeEmpty);
+}
+
+export async function fetchQuotesByTrade(trade: string, limit = 80, includeEmpty = false): Promise<QuoteOption[]> {
   let query = supabase
     .from('quotes')
     .select('id, supplier_name, total_price, trade, parse_status, inserted_items_count, line_item_count, final_items_count')
-    .eq('trade', 'plumbing')
+    .eq('trade', trade)
     .eq('parse_status', 'success')
     .order('created_at', { ascending: false })
     .limit(limit);

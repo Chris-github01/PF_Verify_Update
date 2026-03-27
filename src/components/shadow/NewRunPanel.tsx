@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Play, RefreshCw, ChevronDown, AlertTriangle, CheckCircle, XCircle, Database, Eye } from 'lucide-react';
-import { fetchPlumbingQuotes, runShadowComparison, type QuoteOption } from '../../lib/shadow/runShadowComparison';
+import { fetchQuotesByTrade, runShadowComparison, type QuoteOption } from '../../lib/shadow/runShadowComparison';
+import { TRADE_MODULES } from '../../lib/modules/tradeRegistry';
 import type { RunMode } from '../../types/shadow';
 
 interface NewRunPanelProps {
@@ -28,6 +29,28 @@ function formatCurrency(n: number | null): string {
   return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 }).format(n);
 }
 
+function getDatasetLabel(moduleKey: string): string {
+  const mod = TRADE_MODULES[moduleKey];
+  if (!mod) return 'Select dataset';
+  const tradeName = mod.module_name.replace(' Parser', '').trim().toLowerCase();
+  return `Select ${tradeName} dataset`;
+}
+
+function getTradeCategory(moduleKey: string): string {
+  return TRADE_MODULES[moduleKey]?.trade_category ?? 'plumbing';
+}
+
+function getTradeName(moduleKey: string): string {
+  const mod = TRADE_MODULES[moduleKey];
+  if (!mod) return 'trade';
+  return mod.module_name.replace(' Parser', '').trim().toLowerCase();
+}
+
+function getComparePath(moduleKey: string, runId: string): string {
+  const trade = getTradeCategory(moduleKey).replace('_', '-');
+  return `/shadow/${trade}/compare/${runId}`;
+}
+
 export default function NewRunPanel({ moduleKey, onRunComplete }: NewRunPanelProps) {
   const [status, setStatus] = useState<PanelStatus>('idle');
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
@@ -38,18 +61,22 @@ export default function NewRunPanel({ moduleKey, onRunComplete }: NewRunPanelPro
   const [expanded, setExpanded] = useState(false);
   const [showIncomplete, setShowIncomplete] = useState(false);
 
+  const datasetLabel = getDatasetLabel(moduleKey);
+  const tradeCategory = getTradeCategory(moduleKey);
+  const tradeName = getTradeName(moduleKey);
+
   useEffect(() => {
     if (expanded) {
       loadQuotes();
     }
-  }, [expanded, showIncomplete]);
+  }, [expanded, showIncomplete, moduleKey]);
 
   async function loadQuotes() {
     setStatus('loading_quotes');
     setErrorMsg(null);
     setSelectedQuoteId('');
     try {
-      const data = await fetchPlumbingQuotes(80, showIncomplete);
+      const data = await fetchQuotesByTrade(tradeCategory, 80, showIncomplete);
       setQuotes(data);
       setStatus('ready');
     } catch (e) {
@@ -111,7 +138,7 @@ export default function NewRunPanel({ moduleKey, onRunComplete }: NewRunPanelPro
           {/* Dataset selector */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-gray-400">Select plumbing dataset</label>
+              <label className="text-xs font-medium text-gray-400">{datasetLabel}</label>
               <button
                 onClick={() => setShowIncomplete((v) => !v)}
                 className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border transition-colors ${
@@ -138,7 +165,7 @@ export default function NewRunPanel({ moduleKey, onRunComplete }: NewRunPanelPro
                   disabled={isRunning}
                   className="w-full appearance-none bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50 disabled:opacity-50 pr-8"
                 >
-                  <option value="">-- Select a parsed plumbing dataset --</option>
+                  <option value="">-- {datasetLabel} --</option>
                   {dataQuotes.map((q) => (
                     <option key={q.id} value={q.id}>
                       {q.supplierName ?? 'Unknown supplier'} · {formatCurrency(q.totalPrice)} · {q.itemCount} items
@@ -163,7 +190,7 @@ export default function NewRunPanel({ moduleKey, onRunComplete }: NewRunPanelPro
             {status === 'ready' && dataQuotes.length === 0 && (
               <p className="text-xs text-amber-400/80 flex items-start gap-1.5 mt-1">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                No plumbing quotes with parsed items found. Import and parse a plumbing quote first.
+                No {tradeName} quotes with parsed items found. Import and parse a {tradeName} quote first.
               </p>
             )}
 
@@ -215,7 +242,7 @@ export default function NewRunPanel({ moduleKey, onRunComplete }: NewRunPanelPro
               <span>Run completed — <span className="font-mono">{lastRunId.slice(0, 8)}</span> — scroll down to view results</span>
               {mode === 'live_vs_shadow' && (
                 <a
-                  href={`/shadow/plumbing/compare/${lastRunId}`}
+                  href={getComparePath(moduleKey, lastRunId)}
                   className="ml-auto text-blue-400 hover:text-blue-300 underline whitespace-nowrap"
                 >
                   View Diff
