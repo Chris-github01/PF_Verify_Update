@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Play, Clock, CheckCircle, XCircle, AlertTriangle, RefreshCw, GitCompare } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
+import NewRunPanel from '../../components/shadow/NewRunPanel';
 import { dbGetShadowRuns } from '../../lib/db/shadowRuns';
 import type { ShadowRunRecord, RunStatus } from '../../types/shadow';
 
@@ -64,23 +65,30 @@ export default function ShadowModuleCompare() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<RunStatus | 'all'>('all');
+  const [highlightedRunId, setHighlightedRunId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!moduleKey) return;
-    load();
-  }, [moduleKey]);
-
-  async function load() {
     setLoading(true);
     setError(null);
     try {
-      const data = await dbGetShadowRuns({ moduleKey: moduleKey!, limit: 50 });
+      const data = await dbGetShadowRuns({ moduleKey, limit: 50 });
       setRuns(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load shadow runs');
     } finally {
       setLoading(false);
     }
+  }, [moduleKey]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function handleRunComplete(runId: string) {
+    setHighlightedRunId(runId);
+    setFilter('all');
+    load();
   }
 
   const filtered = filter === 'all' ? runs : runs.filter((r) => r.status === filter);
@@ -97,6 +105,7 @@ export default function ShadowModuleCompare() {
   return (
     <ShadowLayout>
       <div className="max-w-5xl mx-auto space-y-6">
+
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
@@ -123,6 +132,9 @@ export default function ShadowModuleCompare() {
             Refresh
           </button>
         </div>
+
+        {/* Run trigger panel */}
+        <NewRunPanel moduleKey={moduleKey} onRunComplete={handleRunComplete} />
 
         {/* Info banner for non-plumbing modules */}
         {moduleKey !== 'plumbing_parser' && (
@@ -174,58 +186,70 @@ export default function ShadowModuleCompare() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 space-y-2">
             <GitCompare className="w-8 h-8 text-gray-700 mx-auto" />
-            <p className="text-sm text-gray-500">No shadow runs found for this module</p>
+            <p className="text-sm text-gray-500">No shadow runs yet</p>
             <p className="text-xs text-gray-600">
-              Runs are created when the shadow executor processes a quote through both live and shadow parsers.
+              Use the panel above to trigger a comparison run against a parsed plumbing quote.
             </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((run) => (
-              <div
-                key={run.id}
-                className={`bg-gray-900 border rounded-xl px-4 py-3 flex items-center justify-between gap-4 transition-all ${
-                  canCompare(run) ? 'border-gray-800 hover:border-gray-700' : 'border-gray-800/50 opacity-70'
-                }`}
-              >
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-white truncate">
-                      {run.source_label ?? run.source_id.slice(0, 24)}
-                    </span>
-                    <RunStatusBadge status={run.status} />
-                    <span className={`text-xs px-1.5 py-0.5 rounded border font-mono ${
-                      run.run_mode === 'live_vs_shadow'
-                        ? 'text-blue-400 bg-blue-950/30 border-blue-800'
-                        : 'text-gray-500 bg-gray-800 border-gray-700'
-                    }`}>
-                      {run.run_mode}
-                    </span>
+            {filtered.map((run) => {
+              const isNew = run.id === highlightedRunId;
+              return (
+                <div
+                  key={run.id}
+                  className={`border rounded-xl px-4 py-3 flex items-center justify-between gap-4 transition-all ${
+                    isNew
+                      ? 'border-blue-500/50 bg-blue-950/20 ring-1 ring-blue-500/20'
+                      : canCompare(run)
+                        ? 'bg-gray-900 border-gray-800 hover:border-gray-700'
+                        : 'bg-gray-900 border-gray-800/50 opacity-70'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isNew && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-semibold">
+                          NEW
+                        </span>
+                      )}
+                      <span className="text-sm font-medium text-white truncate">
+                        {run.source_label ?? run.source_id.slice(0, 24)}
+                      </span>
+                      <RunStatusBadge status={run.status} />
+                      <span className={`text-xs px-1.5 py-0.5 rounded border font-mono ${
+                        run.run_mode === 'live_vs_shadow'
+                          ? 'text-blue-400 bg-blue-950/30 border-blue-800'
+                          : 'text-gray-500 bg-gray-800 border-gray-700'
+                      }`}>
+                        {run.run_mode}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
+                      <span className="font-mono">{run.id.slice(0, 8)}…</span>
+                      {run.live_version && <span>live: <span className="text-gray-400">{run.live_version}</span></span>}
+                      {run.shadow_version && <span>shadow: <span className="text-gray-400">{run.shadow_version}</span></span>}
+                      <span>{formatRelative(run.created_at)}</span>
+                      {run.error_message && (
+                        <span className="text-red-400 truncate max-w-[200px]">{run.error_message}</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
-                    <span className="font-mono">{run.id.slice(0, 8)}…</span>
-                    {run.live_version && <span>live: <span className="text-gray-400">{run.live_version}</span></span>}
-                    {run.shadow_version && <span>shadow: <span className="text-gray-400">{run.shadow_version}</span></span>}
-                    <span>{formatRelative(run.created_at)}</span>
-                    {run.error_message && (
-                      <span className="text-red-400 truncate max-w-[200px]">{run.error_message}</span>
-                    )}
-                  </div>
-                </div>
 
-                {canCompare(run) && moduleKey === 'plumbing_parser' ? (
-                  <a
-                    href={`/shadow/plumbing/compare/${run.id}`}
-                    className="flex items-center gap-1.5 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0"
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                    View Diff
-                  </a>
-                ) : canCompare(run) ? (
-                  <span className="text-xs text-gray-600 shrink-0">Diff not available</span>
-                ) : null}
-              </div>
-            ))}
+                  {canCompare(run) && moduleKey === 'plumbing_parser' ? (
+                    <a
+                      href={`/shadow/plumbing/compare/${run.id}`}
+                      className="flex items-center gap-1.5 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      View Diff
+                    </a>
+                  ) : canCompare(run) ? (
+                    <span className="text-xs text-gray-600 shrink-0">Diff not available</span>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
