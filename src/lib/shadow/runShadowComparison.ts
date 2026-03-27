@@ -336,28 +336,30 @@ export async function runShadowComparison(
             runRateIntelligence(runId, resolvedDataset),
           ]);
 
+          const parsedVal = typeof liveMetrics.parsedValue === 'number' ? liveMetrics.parsedValue : 0;
+
           const leakageSummary = await runRevenueLeakageDetection(
             runId,
             resolvedDataset,
-            liveOutputJson,
             scopeSummary,
             rateSummary,
+            parsedVal,
           );
 
           const riskProfile = computeCommercialRiskProfile(
             runId,
-            liveOutputJson,
             scopeSummary,
             rateSummary,
             leakageSummary,
+            parsedVal,
           );
 
           if (import.meta.env.DEV) {
             console.log('[Phase3] Commercial risk profile computed:', {
               runId: runId.slice(0, 8),
               overallScore: riskProfile.overallScore,
-              overallRating: riskProfile.overallRating,
-              estimatedExposure: riskProfile.estimatedExposure,
+              riskLevel: riskProfile.riskLevel,
+              factors: riskProfile.factors.length,
             });
           }
         } catch (err) {

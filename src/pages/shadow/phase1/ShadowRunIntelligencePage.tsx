@@ -256,12 +256,7 @@ export default function ShadowRunIntelligencePage() {
               )}
 
               {tab === 'risk' && runId && (
-                <CommercialRiskPanel
-                  runId={runId}
-                  liveOutputJson={
-                    results.find((r) => r.result_type === 'live')?.output_json ?? null
-                  }
-                />
+                <CommercialRiskPanel runId={runId} />
               )}
             </div>
           </>
