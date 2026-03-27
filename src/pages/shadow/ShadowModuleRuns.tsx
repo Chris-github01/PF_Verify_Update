@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { ArrowLeft, Filter, RefreshCw, X, CheckCircle, Database } from 'lucide-react';
+import { ArrowLeft, Filter, RefreshCw, X, CheckCircle, Database, Activity } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import ShadowRunHistoryTable from '../../components/shadow/ShadowRunHistoryTable';
 import { dbGetShadowRuns, dbGetShadowRunResults } from '../../lib/db/shadowRuns';
@@ -268,6 +268,13 @@ export default function ShadowModuleRuns() {
                           Discrepancy Review
                         </a>
                       )}
+                      <a
+                        href={`/shadow/runs/${selectedRun.id}/intelligence`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
+                      >
+                        <Activity className="w-3 h-3" />
+                        Intelligence
+                      </a>
                       <span className="text-xs text-gray-500 font-mono">{selectedRun.id.slice(0, 8)}...</span>
                     </div>
                   </div>

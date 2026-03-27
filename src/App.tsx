@@ -75,6 +75,9 @@ import PlumbingExecutiveDashboard from './pages/shadow/PlumbingExecutiveDashboar
 import PlumbingOptimizationDashboard from './pages/shadow/PlumbingOptimizationDashboard';
 import GlobalIntelligenceDashboard from './pages/shadow/GlobalIntelligenceDashboard';
 import IntelligenceModuleDetail from './pages/shadow/IntelligenceModuleDetail';
+import ShadowBenchmarksPage from './pages/shadow/phase1/ShadowBenchmarksPage';
+import ShadowFailureTypesPage from './pages/shadow/phase1/ShadowFailureTypesPage';
+import ShadowRunIntelligencePage from './pages/shadow/phase1/ShadowRunIntelligencePage';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1195,6 +1198,16 @@ function AppContent() {
   }
   if (shadowPath.startsWith('/shadow/intelligence/modules/')) {
     return <IntelligenceModuleDetail />;
+  }
+
+  if (shadowPath === '/shadow/intelligence/failures') {
+    return <ShadowFailureTypesPage />;
+  }
+  if (shadowPath === '/shadow/intelligence/benchmarks') {
+    return <ShadowBenchmarksPage />;
+  }
+  if (shadowPath.match(/^\/shadow\/runs\/([^/]+)\/intelligence$/)) {
+    return <ShadowRunIntelligencePage />;
   }
 
   if (!session) {

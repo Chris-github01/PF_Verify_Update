@@ -5,6 +5,10 @@ import { LIVE_PARSER_VERSION, SHADOW_PARSER_VERSION } from '../modules/parsers/p
 import type { PlumbingSourceRow, PlumbingParserOutput } from '../modules/parsers/plumbing/types';
 import { TRADE_MODULES } from '../modules/tradeRegistry';
 import type { RunMode } from '../../types/shadow';
+import { buildAndSaveDiagnostics } from './phase1/runDiagnosticsBuilder';
+import { classifyAndSaveFailures } from './phase1/failureClassifier';
+import { resolveDocumentTruth } from './phase1/shadowDocumentTruth';
+import type { ResolvedDataset } from './phase1/sourceAdapters';
 
 export interface RunShadowComparisonInput {
   moduleKey: string;
@@ -304,6 +308,45 @@ export async function runShadowComparison(
         completed_at: new Date().toISOString(),
       })
       .eq('id', runId);
+
+    const resolvedDataset: ResolvedDataset = {
+      quoteId: input.quoteId,
+      supplierName,
+      documentTotal,
+      parsedTotal: documentTotal,
+      itemCount,
+      lineItems: rows.map((r) => ({
+        description: r.description,
+        qty: r.qty,
+        unit: r.unit,
+        rate: r.rate,
+        total: r.total,
+      })),
+      resolvedVia,
+      trade: TRADE_MODULES[input.moduleKey]?.trade_category ?? null,
+    };
+
+    Promise.allSettled([
+      buildAndSaveDiagnostics({
+        runId,
+        dataset: resolvedDataset,
+        moduleKey: input.moduleKey,
+        liveOutputJson,
+        shadowOutputJson,
+      }),
+      resolveDocumentTruth(runId, liveOutputJson, resolvedDataset),
+    ]).then(async ([diagResult]) => {
+      if (diagResult.status === 'fulfilled') {
+        const diagnostics = diagResult.value;
+        await classifyAndSaveFailures(
+          runId,
+          resolvedDataset,
+          liveOutputJson,
+          shadowOutputJson,
+          diagnostics,
+        ).catch(() => {});
+      }
+    }).catch(() => {});
 
     return { runId, status: 'completed' };
   } catch (err) {

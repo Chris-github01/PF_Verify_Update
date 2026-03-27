@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
   Shield, Layers, Flag, GitBranch, ScrollText,
-  Zap, FlaskConical, ChevronLeft, Menu, X
+  Zap, FlaskConical, ChevronLeft, Menu, X,
+  Activity, ShieldAlert, FileSearch, PlaySquare
 } from 'lucide-react';
 import { getAdminRole } from '../../lib/shadow/shadowAccess';
 import type { AdminRole } from '../../types/shadow';
 
-const NAV = [
+const NAV_CORE = [
   { label: 'Shadow Home', href: '/shadow', icon: Shield, exact: true },
   { label: 'Modules', href: '/shadow/modules', icon: Layers },
   { label: 'Feature Flags', href: '/shadow/admin/flags', icon: Flag },
@@ -14,6 +15,11 @@ const NAV = [
   { label: 'Audit Log', href: '/shadow/admin/audit-log', icon: ScrollText },
   { label: 'Rollout Manager', href: '/shadow/admin/rollout', icon: Zap },
   { label: 'Kill Switch', href: '/shadow/admin/kill-switch', icon: FlaskConical },
+];
+
+const NAV_INTELLIGENCE = [
+  { label: 'Failure Taxonomy', href: '/shadow/intelligence/failures', icon: ShieldAlert },
+  { label: 'Benchmarks', href: '/shadow/intelligence/benchmarks', icon: PlaySquare },
 ];
 
 interface Props {
@@ -61,7 +67,7 @@ export default function ShadowLayout({ children }: Props) {
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {NAV.map((item) => {
+          {NAV_CORE.map((item) => {
             const active = isActive(item.href, item.exact);
             return (
               <a
@@ -81,6 +87,33 @@ export default function ShadowLayout({ children }: Props) {
               </a>
             );
           })}
+
+          <div className="pt-3 pb-1">
+            <div className="flex items-center gap-2 px-3 mb-1">
+              <Activity className="w-3 h-3 text-gray-600" />
+              <span className="text-[10px] font-semibold tracking-widest text-gray-600 uppercase">Intelligence</span>
+            </div>
+            {NAV_INTELLIGENCE.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`
+                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all
+                    ${active
+                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }
+                  `}
+                >
+                  <item.icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-amber-400' : ''}`} />
+                  {item.label}
+                </a>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Back to app */}
