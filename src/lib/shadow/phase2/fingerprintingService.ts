@@ -134,12 +134,16 @@ async function createOrUpdateFingerprint(
   failureCodes: string[],
   diagnosticConfidenceScore: number,
 ): Promise<SupplierFingerprint> {
+  // Always fetch by fingerprint_hash (which now has a UNIQUE constraint)
+  // to guarantee we find the canonical row even if template_family_id differs.
   const existing = await findExistingFingerprint(hash);
 
   if (existing) {
     const newRunCount = existing.historical_run_count + 1;
-    const proxyAccuracy = diagnosticConfidenceScore / 100;
-    const newAccuracy = (existing.historical_accuracy * existing.historical_run_count + proxyAccuracy) / newRunCount;
+    const proxyAccuracy = Math.min(1, Math.max(0, diagnosticConfidenceScore / 100));
+    // Running weighted average: keeps historical accuracy stable as run count grows
+    const newAccuracy =
+      (existing.historical_accuracy * existing.historical_run_count + proxyAccuracy) / newRunCount;
 
     const mergedFailures = Array.from(
       new Set([...existing.common_failure_modes_json, ...failureCodes]),
@@ -154,7 +158,7 @@ async function createOrUpdateFingerprint(
         confidence: computeConfidence(markers, newRunCount),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', existing.id)
+      .eq('fingerprint_hash', hash)
       .select('*')
       .single();
 
@@ -162,7 +166,7 @@ async function createOrUpdateFingerprint(
     return data as SupplierFingerprint;
   }
 
-  const initialAccuracy = diagnosticConfidenceScore / 100;
+  const initialAccuracy = Math.min(1, Math.max(0, diagnosticConfidenceScore / 100));
   const { data, error } = await supabase
     .from('supplier_fingerprints')
     .insert({
@@ -192,14 +196,15 @@ async function linkRunToFingerprint(
   markers: FingerprintMarkers,
   matchedMarkers: string[],
 ): Promise<RunFingerprintLink> {
-  const existing = await supabase
+  // Select full row so existing link can be returned with correct shape
+  const { data: existingLink } = await supabase
     .from('run_fingerprint_links')
-    .select('id')
+    .select('*')
     .eq('run_id', runId)
     .maybeSingle();
 
-  if (existing.data) {
-    return existing.data as unknown as RunFingerprintLink;
+  if (existingLink) {
+    return existingLink as RunFingerprintLink;
   }
 
   const { data, error } = await supabase

@@ -51,10 +51,23 @@ interface FingerprintAggregation {
 }
 
 async function aggregateFailures(moduleKey: string): Promise<FailureAggregation[]> {
+  // Step 1: fetch run IDs for this module (avoids relying on PostgREST embedded join
+  // which requires the FK to be in the schema cache — safe regardless of FK state)
+  const { data: runs, error: runsErr } = await supabase
+    .from('shadow_runs')
+    .select('id')
+    .eq('module_key', moduleKey)
+    .eq('status', 'completed');
+
+  if (runsErr || !runs || runs.length === 0) return [];
+
+  const runIds = runs.map((r) => String(r.id));
+
+  // Step 2: fetch all failures for those run IDs
   const { data, error } = await supabase
     .from('shadow_run_failures')
-    .select('failure_code, financial_impact_estimate, run_id, shadow_runs!inner(module_key)')
-    .eq('shadow_runs.module_key', moduleKey);
+    .select('failure_code, financial_impact_estimate, run_id')
+    .in('run_id', runIds);
 
   if (error || !data) return [];
 
@@ -170,7 +183,7 @@ function buildRecommendations(
 
   const topFailures = failures.slice(0, 5);
   for (const f of topFailures) {
-    if (f.count < 2) continue;
+    if (f.count < 1) continue;
 
     const avgImpact = f.count > 0 ? f.total_financial_impact / f.count : 0;
     const affectedFamilies = fingerprints.filter((fp) =>
@@ -298,19 +311,50 @@ export async function generateRecommendations(moduleKey: string): Promise<Improv
   const saved: ImprovementRecommendation[] = [];
 
   for (const rec of recs) {
-    const { data, error } = await supabase
+    // Look up existing recommendation by module_key + target_failure_code
+    // to prevent duplicate rows on repeated generate() calls.
+    const existingQuery = supabase
       .from('improvement_recommendations')
-      .insert({
-        ...rec,
-        status: 'open',
-      })
-      .select('*')
-      .single();
+      .select('id, status')
+      .eq('module_key', rec.module_key);
 
-    if (!error && data) {
-      saved.push(data as ImprovementRecommendation);
-    } else if (error && import.meta.env.DEV) {
-      console.warn('[recommendationEngine] insert failed:', error.message);
+    const { data: existing } = rec.target_failure_code != null
+      ? await existingQuery.eq('target_failure_code', rec.target_failure_code).maybeSingle()
+      : await existingQuery.is('target_failure_code', null).maybeSingle();
+
+    if (existing) {
+      const { data, error } = await supabase
+        .from('improvement_recommendations')
+        .update({
+          title: rec.title,
+          evidence_count: rec.evidence_count,
+          expected_impact_score: rec.expected_impact_score,
+          recommendation_text: rec.recommendation_text,
+          supporting_run_ids_json: rec.supporting_run_ids_json,
+          target_supplier_family: rec.target_supplier_family,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+
+      if (!error && data) {
+        saved.push(data as ImprovementRecommendation);
+      } else if (error && import.meta.env.DEV) {
+        console.warn('[recommendationEngine] update failed:', error.message);
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('improvement_recommendations')
+        .insert({ ...rec, status: 'open' })
+        .select('*')
+        .single();
+
+      if (!error && data) {
+        saved.push(data as ImprovementRecommendation);
+      } else if (error && import.meta.env.DEV) {
+        console.warn('[recommendationEngine] insert failed:', error.message);
+      }
     }
   }
 

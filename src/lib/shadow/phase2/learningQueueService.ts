@@ -127,7 +127,7 @@ export async function evaluateAndEnqueueRun(
     supabase.from('shadow_run_failures').select('failure_code').eq('run_id', runId),
     supabase.from('shadow_run_diagnostics').select('confidence_score').eq('run_id', runId).maybeSingle(),
     supabase.from('document_truth_validations').select('true_missing_value, validated_document_total').eq('run_id', runId).maybeSingle(),
-    supabase.from('shadow_run_results').select('metrics_json').eq('run_id', runId).eq('result_type', 'live').maybeSingle(),
+    supabase.from('shadow_run_results').select('metrics_json').eq('shadow_run_id', runId).eq('result_type', 'live').maybeSingle(),
   ]);
 
   const failureCodes = (failureRes.data ?? []).map((r) => String(r.failure_code));

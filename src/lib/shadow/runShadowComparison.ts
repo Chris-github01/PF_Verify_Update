@@ -266,72 +266,69 @@ export async function runShadowComparison(
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', runId);
 
-    Promise.allSettled([
-      buildAndSaveDiagnostics({
-        runId,
-        dataset: resolvedDataset,
-        moduleKey: input.moduleKey,
-        liveOutputJson,
-        shadowOutputJson,
-      }),
-      resolveDocumentTruth({
-        runId,
-        dataset: resolvedDataset,
-        liveOutput: liveOutputJson,
-        shadowOutput: shadowOutputJson,
-      }),
-    ]).then(async ([diagResult, truthResult]) => {
-      if (diagResult.status === 'rejected') {
-        if (import.meta.env.DEV) {
+    (async () => {
+      try {
+        const [diagResult, truthResult] = await Promise.allSettled([
+          buildAndSaveDiagnostics({
+            runId,
+            dataset: resolvedDataset,
+            moduleKey: input.moduleKey,
+            liveOutputJson,
+            shadowOutputJson,
+          }),
+          resolveDocumentTruth({
+            runId,
+            dataset: resolvedDataset,
+            liveOutput: liveOutputJson,
+            shadowOutput: shadowOutputJson,
+          }),
+        ]);
+
+        if (diagResult.status === 'rejected' && import.meta.env.DEV) {
           console.warn('[Phase1] buildAndSaveDiagnostics failed:', diagResult.reason);
         }
-      }
-      if (truthResult.status === 'rejected') {
-        if (import.meta.env.DEV) {
+        if (truthResult.status === 'rejected' && import.meta.env.DEV) {
           console.warn('[Phase1] resolveDocumentTruth failed:', truthResult.reason);
         }
-      }
-      if (diagResult.status === 'fulfilled') {
-        const diagnostics = diagResult.value;
-        await classifyAndSaveFailures(
-          runId,
-          resolvedDataset,
-          liveOutputJson,
-          shadowOutputJson,
-          diagnostics,
-        ).catch((err) => {
-          if (import.meta.env.DEV) {
-            console.warn('[Phase1] classifyAndSaveFailures failed:', err);
-          }
-        });
-      }
 
-      Promise.allSettled([
-        fingerprintRun(runId, resolvedDataset),
-      ]).then(async ([fpResult]) => {
-        const isNewFingerprint = fpResult.status === 'fulfilled'
-          ? fpResult.value.fingerprint.historical_run_count === 1
-          : false;
+        if (diagResult.status === 'fulfilled') {
+          const diagnostics = diagResult.value;
+          await classifyAndSaveFailures(
+            runId,
+            resolvedDataset,
+            liveOutputJson,
+            shadowOutputJson,
+            diagnostics,
+          ).catch((err) => {
+            if (import.meta.env.DEV) {
+              console.warn('[Phase1] classifyAndSaveFailures failed:', err);
+            }
+          });
+        }
+
+        // Phase 2 hooks run strictly after Phase 1 classification is committed
+        // This guarantees failure codes are readable by the queue scorer and fingerprinter
+        let isNewFingerprint = false;
+        try {
+          const fpResult = await fingerprintRun(runId, resolvedDataset);
+          isNewFingerprint = fpResult.fingerprint.historical_run_count === 1;
+        } catch (err) {
+          if (import.meta.env.DEV) {
+            console.warn('[Phase2] fingerprintRun failed:', err);
+          }
+        }
 
         await evaluateAndEnqueueRun(runId, input.moduleKey, isNewFingerprint).catch((err) => {
           if (import.meta.env.DEV) {
             console.warn('[Phase2] evaluateAndEnqueueRun failed:', err);
           }
         });
-
-        if (fpResult.status === 'rejected' && import.meta.env.DEV) {
-          console.warn('[Phase2] fingerprintRun failed:', fpResult.reason);
-        }
-      }).catch((err) => {
+      } catch (err) {
         if (import.meta.env.DEV) {
-          console.warn('[Phase2] post-run hooks failed:', err);
+          console.warn('[Phase1/Phase2] post-run hook chain failed:', err);
         }
-      });
-    }).catch((err) => {
-      if (import.meta.env.DEV) {
-        console.warn('[Phase1] Promise.allSettled wrapper failed:', err);
       }
-    });
+    })();
 
     return { runId, status: 'completed' };
   } catch (err) {
