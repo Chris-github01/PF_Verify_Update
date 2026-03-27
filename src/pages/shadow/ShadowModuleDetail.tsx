@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Play, RotateCcw, ArrowUpCircle, Zap, GitBranch,
-  CheckCircle, Flag, Calendar, Activity
+  CheckCircle, Flag, Calendar, Activity, Loader2, X, Database, FileText
 } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import ShadowRunHistoryTable from '../../components/shadow/ShadowRunHistoryTable';
@@ -18,6 +18,8 @@ import { resolveFlag } from '../../lib/shadow/featureFlags';
 import { dbGetModuleRolloutEvents } from '../../lib/db/rolloutEvents';
 import { dbGetAllFlags } from '../../lib/db/featureFlags';
 import { dbGetRegressionSuites } from '../../lib/db/regressionSuites';
+import { executeModuleRun } from '../../lib/modules/execution/moduleExecutor';
+import { listRecentPlumbingQuotes } from '../../lib/modules/parsers/plumbing/loadSource';
 import type {
   ModuleRegistryRecord,
   ModuleVersionRecord,
@@ -26,6 +28,15 @@ import type {
   FeatureFlagRecord,
   RegressionSuiteRecord,
 } from '../../types/shadow';
+
+interface RecentQuote {
+  id: string;
+  supplier_name: string | null;
+  total_amount: number | null;
+  status: string;
+  project_id: string;
+  created_at: string;
+}
 
 function getModuleKeyFromPath(): string | undefined {
   const m = window.location.pathname.match(/^\/shadow\/modules\/([^/]+)$/);
@@ -55,6 +66,15 @@ export default function ShadowModuleDetail() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [showRunModal, setShowRunModal] = useState(false);
+  const [runMode, setRunMode] = useState<'live_vs_shadow' | 'shadow_only'>('live_vs_shadow');
+  const [sourceType, setSourceType] = useState<'quote' | 'parsing_job'>('quote');
+  const [sourceId, setSourceId] = useState('');
+  const [recentQuotes, setRecentQuotes] = useState<RecentQuote[]>([]);
+  const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!moduleKey) return;
@@ -124,6 +144,56 @@ export default function ShadowModuleDetail() {
     load();
   }
 
+  async function openRunModal() {
+    setShowRunModal(true);
+    setRunError(null);
+    setSourceId('');
+    if (moduleKey === 'plumbing_parser') {
+      setLoadingQuotes(true);
+      try {
+        const quotes = await listRecentPlumbingQuotes(25);
+        setRecentQuotes(quotes);
+      } catch {
+        setRecentQuotes([]);
+      } finally {
+        setLoadingQuotes(false);
+      }
+    }
+  }
+
+  async function handleRunExecution() {
+    if (!moduleKey || !sourceId.trim()) {
+      setRunError('Please select or enter a source ID.');
+      return;
+    }
+    setRunning(true);
+    setRunError(null);
+    try {
+      const result = await executeModuleRun({
+        moduleKey,
+        sourceType,
+        sourceId: sourceId.trim(),
+        runMode,
+      });
+
+      if (!result.success) {
+        setRunError(result.error ?? 'Run failed — unknown error');
+        return;
+      }
+
+      setShowRunModal(false);
+      await load();
+
+      if (runMode === 'live_vs_shadow' && result.runId) {
+        window.location.href = `/shadow/plumbing/compare/${result.runId}`;
+      }
+    } catch (e) {
+      setRunError(e instanceof Error ? e.message : 'Run failed');
+    } finally {
+      setRunning(false);
+    }
+  }
+
   if (loading) return (
     <ShadowLayout>
       <div className="text-center py-20 text-gray-500 text-sm">Loading module...</div>
@@ -163,12 +233,14 @@ export default function ShadowModuleDetail() {
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <a
-                href={`/shadow/modules/${moduleKey}/compare`}
-                className="flex items-center gap-1.5 text-sm bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-lg transition-colors font-medium"
-              >
-                <Play className="w-4 h-4" /> Run Comparison
-              </a>
+              {module.is_shadow_enabled && (
+                <button
+                  onClick={openRunModal}
+                  className="flex items-center gap-1.5 text-sm bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-lg transition-colors font-medium"
+                >
+                  <Play className="w-4 h-4" /> Run Shadow
+                </button>
+              )}
               <button
                 onClick={handleKillSwitch}
                 className={`flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border font-medium transition-colors ${
@@ -430,6 +502,164 @@ export default function ShadowModuleDetail() {
             <ShadowRunHistoryTable runs={runs} />
           </div>
       </div>
+
+      {showRunModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+              <div>
+                <h2 className="text-base font-semibold text-white">Run Shadow Execution</h2>
+                <p className="text-xs text-gray-500 mt-0.5 font-mono">{moduleKey}</p>
+              </div>
+              <button
+                onClick={() => setShowRunModal(false)}
+                className="text-gray-500 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              <div>
+                <label className="text-xs font-medium text-gray-400 mb-2 block">Run Mode</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['live_vs_shadow', 'shadow_only'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setRunMode(mode)}
+                      className={`px-3 py-2.5 text-xs rounded-lg border font-medium transition-colors text-left ${
+                        runMode === mode
+                          ? 'bg-blue-500/15 border-blue-500/50 text-blue-300'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="font-semibold mb-0.5">
+                        {mode === 'live_vs_shadow' ? 'Live vs Shadow' : 'Shadow Only'}
+                      </div>
+                      <div className="text-gray-500 font-normal">
+                        {mode === 'live_vs_shadow' ? 'Runs both — compares results' : 'Shadow parser only'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-gray-400 mb-2 block">Source Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['quote', 'parsing_job'] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => { setSourceType(type); setSourceId(''); }}
+                      className={`flex items-center gap-2 px-3 py-2.5 text-xs rounded-lg border font-medium transition-colors ${
+                        sourceType === type
+                          ? 'bg-blue-500/15 border-blue-500/50 text-blue-300'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                      }`}
+                    >
+                      {type === 'quote' ? <Database className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                      {type === 'quote' ? 'Quote' : 'Parsing Job'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {sourceType === 'quote' && moduleKey === 'plumbing_parser' ? (
+                <div>
+                  <label className="text-xs font-medium text-gray-400 mb-2 block">Select Quote</label>
+                  {loadingQuotes ? (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 py-3">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading recent quotes...
+                    </div>
+                  ) : recentQuotes.length === 0 ? (
+                    <div className="text-xs text-gray-500 py-3">No plumbing quotes found</div>
+                  ) : (
+                    <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                      {recentQuotes.map((q) => (
+                        <button
+                          key={q.id}
+                          onClick={() => setSourceId(q.id)}
+                          className={`w-full text-left px-3 py-2 text-xs rounded-lg border transition-colors ${
+                            sourceId === q.id
+                              ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                              : 'bg-gray-800 border-gray-700/50 text-gray-300 hover:border-gray-600'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium truncate">{q.supplier_name ?? 'Unnamed supplier'}</span>
+                            {q.total_amount != null && (
+                              <span className="text-gray-500 whitespace-nowrap">
+                                ${q.total_amount.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-gray-600 font-mono mt-0.5">{q.id.slice(0, 16)}...</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-2">
+                    <input
+                      value={sourceId}
+                      onChange={(e) => setSourceId(e.target.value)}
+                      placeholder="Or paste quote ID directly..."
+                      className="w-full px-3 py-2 text-xs bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-medium text-gray-400 mb-2 block">
+                    {sourceType === 'quote' ? 'Quote ID' : 'Parsing Job ID'}
+                  </label>
+                  <input
+                    value={sourceId}
+                    onChange={(e) => setSourceId(e.target.value)}
+                    placeholder={sourceType === 'quote' ? 'Enter quote UUID...' : 'Enter parsing job UUID...'}
+                    className="w-full px-3 py-2 text-xs bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50"
+                  />
+                </div>
+              )}
+
+              {runError && (
+                <div className="bg-red-950/40 border border-red-800 rounded-lg px-3 py-2 text-xs text-red-300">
+                  {runError}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-800 flex items-center justify-between gap-3">
+              <p className="text-[10px] text-gray-600">Writes only to shadow tables. No customer data affected.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowRunModal(false)}
+                  className="px-4 py-2 text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRunExecution}
+                  disabled={running || !sourceId.trim()}
+                  className="flex items-center gap-2 px-5 py-2 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold disabled:opacity-50 transition-colors"
+                >
+                  {running ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5" />
+                      Execute Run
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </ShadowLayout>
   );
 }
