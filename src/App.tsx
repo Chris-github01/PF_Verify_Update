@@ -82,6 +82,10 @@ import ShadowReviewQueuePage from './pages/shadow/phase2/ShadowReviewQueuePage';
 import ShadowRecommendationsPage from './pages/shadow/phase2/ShadowRecommendationsPage';
 import ShadowSupplierIntelligencePage from './pages/shadow/phase2/ShadowSupplierIntelligencePage';
 import ShadowTemplateFamiliesPage from './pages/shadow/phase2/ShadowTemplateFamiliesPage';
+import ShadowVersionsV4Page from './pages/shadow/phase4/ShadowVersionsV4Page';
+import ShadowPromotionDecisionsPage from './pages/shadow/phase4/ShadowPromotionDecisionsPage';
+import ShadowRolloutPlansPage from './pages/shadow/phase4/ShadowRolloutPlansPage';
+import ShadowBenchmarkEvaluationPage from './pages/shadow/phase4/ShadowBenchmarkEvaluationPage';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1112,6 +1116,18 @@ function AppContent() {
   }
   if (shadowPath === '/shadow/admin/versions') {
     return <ShadowVersionsPage />;
+  }
+  if (shadowPath === '/shadow/admin/versions-v4') {
+    return <ShadowVersionsV4Page />;
+  }
+  if (shadowPath === '/shadow/admin/promotion-decisions') {
+    return <ShadowPromotionDecisionsPage />;
+  }
+  if (shadowPath === '/shadow/admin/rollout-plans') {
+    return <ShadowRolloutPlansPage />;
+  }
+  if (shadowPath === '/shadow/admin/benchmark-evaluation') {
+    return <ShadowBenchmarkEvaluationPage />;
   }
   if (shadowPath === '/shadow/admin/audit-log') {
     return <ShadowAuditLogPage />;

@@ -3,7 +3,8 @@ import {
   Shield, Layers, Flag, GitBranch, ScrollText,
   Zap, FlaskConical, ChevronLeft, Menu, X,
   Activity, ShieldAlert, FileSearch, PlaySquare,
-  BookOpen, Lightbulb, Fingerprint, LayoutTemplate
+  BookOpen, Lightbulb, Fingerprint, LayoutTemplate,
+  ShieldCheck, BarChart2, GitCompare,
 } from 'lucide-react';
 import { getAdminRole } from '../../lib/shadow/shadowAccess';
 import type { AdminRole } from '../../types/shadow';
@@ -16,6 +17,13 @@ const NAV_CORE = [
   { label: 'Audit Log', href: '/shadow/admin/audit-log', icon: ScrollText },
   { label: 'Rollout Manager', href: '/shadow/admin/rollout', icon: Zap },
   { label: 'Kill Switch', href: '/shadow/admin/kill-switch', icon: FlaskConical },
+];
+
+const NAV_PHASE4 = [
+  { label: 'Versioning (v4)', href: '/shadow/admin/versions-v4', icon: GitCompare },
+  { label: 'Benchmarks', href: '/shadow/admin/benchmark-evaluation', icon: BarChart2 },
+  { label: 'Promotion Decisions', href: '/shadow/admin/promotion-decisions', icon: ShieldCheck },
+  { label: 'Rollout Plans', href: '/shadow/admin/rollout-plans', icon: Zap },
 ];
 
 const NAV_INTELLIGENCE = [
@@ -92,6 +100,33 @@ export default function ShadowLayout({ children }: Props) {
               </a>
             );
           })}
+
+          <div className="pt-3 pb-1">
+            <div className="flex items-center gap-2 px-3 mb-1">
+              <GitCompare className="w-3 h-3 text-gray-600" />
+              <span className="text-[10px] font-semibold tracking-widest text-gray-600 uppercase">Phase 4</span>
+            </div>
+            {NAV_PHASE4.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`
+                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all
+                    ${active
+                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }
+                  `}
+                >
+                  <item.icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-amber-400' : ''}`} />
+                  {item.label}
+                </a>
+              );
+            })}
+          </div>
 
           <div className="pt-3 pb-1">
             <div className="flex items-center gap-2 px-3 mb-1">

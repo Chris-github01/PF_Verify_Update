@@ -16,6 +16,8 @@ import { runRateIntelligence } from './phase3/rateIntelligenceService';
 import { runRevenueLeakageDetection } from './phase3/revenueLeakageService';
 import { computeCommercialRiskProfile, persistCommercialRiskProfile } from './phase3/commercialRiskEngine';
 import { runConsistencyCheck } from './phase3/consistencyChecker';
+import { getActiveVersionForModule, linkRunToVersion } from './phase4/shadowVersioningService';
+import { evaluateRunForVersion } from './phase4/benchmarkEvaluationEngine';
 
 export interface RunShadowComparisonInput {
   moduleKey: string;
@@ -402,6 +404,22 @@ export async function runShadowComparison(
         } catch (err) {
           if (import.meta.env.DEV) {
             console.warn('[Phase3] commercial intelligence failed:', err);
+          }
+        }
+
+        // Phase 4 — versioning hook: link run to active version and score it
+        try {
+          const activeVersion = await getActiveVersionForModule(input.moduleKey);
+          if (activeVersion) {
+            await linkRunToVersion(runId, activeVersion.id);
+            await evaluateRunForVersion(runId, activeVersion.id);
+            if (import.meta.env.DEV) {
+              console.log(`[Phase4] Run linked to version ${activeVersion.version_name} and scored.`);
+            }
+          }
+        } catch (err) {
+          if (import.meta.env.DEV) {
+            console.warn('[Phase4] versioning hook failed:', err);
           }
         }
       } catch (err) {
