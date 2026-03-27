@@ -14,7 +14,7 @@ import { evaluateAndEnqueueRun } from './phase2/learningQueueService';
 import { runScopeIntelligence } from './phase3/scopeIntelligenceService';
 import { runRateIntelligence } from './phase3/rateIntelligenceService';
 import { runRevenueLeakageDetection } from './phase3/revenueLeakageService';
-import { computeCommercialRiskProfile } from './phase3/commercialRiskEngine';
+import { computeCommercialRiskProfile, persistCommercialRiskProfile } from './phase3/commercialRiskEngine';
 
 export interface RunShadowComparisonInput {
   moduleKey: string;
@@ -354,8 +354,10 @@ export async function runShadowComparison(
             parsedVal,
           );
 
+          await persistCommercialRiskProfile(input.moduleKey, riskProfile);
+
           if (import.meta.env.DEV) {
-            console.log('[Phase3] Commercial risk profile computed:', {
+            console.log('[Phase3] Commercial risk profile persisted:', {
               runId: runId.slice(0, 8),
               overallScore: riskProfile.overallScore,
               riskLevel: riskProfile.riskLevel,

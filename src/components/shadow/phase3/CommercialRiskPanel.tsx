@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getScopeIntelligenceForRun } from '../../../lib/shadow/phase3/scopeIntelligenceService';
-import { getRateIntelligenceForRun } from '../../../lib/shadow/phase3/rateIntelligenceService';
-import { getRevenueLeakageForRun } from '../../../lib/shadow/phase3/revenueLeakageService';
-import { computeCommercialRiskProfile } from '../../../lib/shadow/phase3/commercialRiskEngine';
+import { getCommercialRiskProfile } from '../../../lib/shadow/phase3/commercialRiskEngine';
 import type { CommercialRiskProfile, CommercialRiskLevel } from '../../../lib/shadow/phase3/commercialRiskEngine';
 
 interface Props {
@@ -49,26 +46,21 @@ function ScoreMeter({ score, label }: { score: number; label: string }) {
 export default function CommercialRiskPanel({ runId }: Props) {
   const [profile, setProfile] = useState<CommercialRiskProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
+      setNotFound(false);
       try {
-        const [scope, rates, leakage] = await Promise.all([
-          getScopeIntelligenceForRun(runId),
-          getRateIntelligenceForRun(runId),
-          getRevenueLeakageForRun(runId),
-        ]);
-
-        const parsedValue = rates.records.reduce(
-          (sum, r) => sum + (r.rate != null ? r.rate : 0),
-          0,
-        );
-
-        const computed = computeCommercialRiskProfile(runId, scope, rates, leakage, parsedValue);
-        setProfile(computed);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to compute risk profile');
+        const result = await getCommercialRiskProfile(runId);
+        if (result) {
+          setProfile(result);
+        } else {
+          setNotFound(true);
+        }
+      } catch {
+        setNotFound(true);
       } finally {
         setLoading(false);
       }
@@ -76,9 +68,24 @@ export default function CommercialRiskPanel({ runId }: Props) {
     load();
   }, [runId]);
 
-  if (loading) return <div className="text-gray-500 text-sm py-8 text-center">Computing commercial risk profile...</div>;
-  if (error) return <div className="text-red-400 text-sm py-4">{error}</div>;
-  if (!profile) return null;
+  if (loading) {
+    return (
+      <div className="text-gray-500 text-sm py-8 text-center">
+        Loading commercial risk profile...
+      </div>
+    );
+  }
+
+  if (notFound || !profile) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-6 text-center">
+        <div className="text-gray-500 text-sm font-medium">No risk profile stored for this run</div>
+        <div className="text-gray-700 text-xs mt-1">
+          Risk profiles are generated on new runs. Re-run shadow comparison to generate one.
+        </div>
+      </div>
+    );
+  }
 
   const noRisk = profile.overallScore === 0 && profile.factors.length === 0;
 
@@ -87,7 +94,9 @@ export default function CommercialRiskPanel({ runId }: Props) {
       <div className={`rounded-xl border px-5 py-4 ${levelBg(profile.riskLevel)}`}>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs text-gray-400 uppercase tracking-wider font-medium">Overall Risk Level</div>
+            <div className="text-xs text-gray-400 uppercase tracking-wider font-medium">
+              Overall Risk Level
+            </div>
             <div className={`text-2xl font-bold mt-0.5 ${levelColor(profile.riskLevel)}`}>
               {profile.riskLevel.toUpperCase()}
             </div>
@@ -109,19 +118,25 @@ export default function CommercialRiskPanel({ runId }: Props) {
 
       {noRisk ? (
         <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-6 text-center">
-          <div className="text-teal-400 text-sm font-medium">No commercial risk factors detected</div>
+          <div className="text-teal-400 text-sm font-medium">
+            No commercial risk factors detected
+          </div>
           <div className="text-gray-600 text-xs mt-1">
             This run produced no scope gaps, rate anomalies, or leakage events.
           </div>
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="text-xs font-medium text-gray-400">Risk Factors (highest impact first)</div>
+          <div className="text-xs font-medium text-gray-400">
+            Risk Factors (highest impact first)
+          </div>
           {profile.factors.map((factor, i) => (
             <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className={`text-xs font-semibold uppercase tracking-wider ${levelColor(factor.severity)}`}>
+                  <div
+                    className={`text-xs font-semibold uppercase tracking-wider ${levelColor(factor.severity)}`}
+                  >
                     {factor.severity}
                   </div>
                   <div className="text-sm text-gray-200 mt-0.5">{factor.description}</div>
@@ -136,8 +151,9 @@ export default function CommercialRiskPanel({ runId }: Props) {
         </div>
       )}
 
-      <div className="text-xs text-gray-700 text-right">
-        Generated: {new Date(profile.generatedAt).toLocaleString()}
+      <div className="flex items-center justify-between text-xs text-gray-700">
+        <span>{profile.fromDb ? 'Read from database' : 'Computed live'}</span>
+        <span>Generated: {new Date(profile.generatedAt).toLocaleString()}</span>
       </div>
     </div>
   );

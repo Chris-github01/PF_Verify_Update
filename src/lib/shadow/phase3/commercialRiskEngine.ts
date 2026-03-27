@@ -1,3 +1,4 @@
+import { supabase } from '../../supabase';
 import type { ScopeIntelligenceResult } from './scopeIntelligenceService';
 import type { RateIntelligenceResult } from './rateIntelligenceService';
 import type { RevenueLeakageSummary } from './revenueLeakageService';
@@ -21,6 +22,7 @@ export interface CommercialRiskProfile {
   leakageScore: number;
   recommendation: string;
   generatedAt: string;
+  fromDb?: boolean;
 }
 
 function scoreToLevel(score: number): CommercialRiskLevel {
@@ -47,18 +49,18 @@ function buildRecommendation(level: CommercialRiskLevel, factors: CommercialRisk
   return 'Commercial risk profile appears normal. Standard QA procedures apply.';
 }
 
-export function computeCommercialRiskProfile(
-  runId: string,
+function buildFactors(
   scope: ScopeIntelligenceResult,
   rates: RateIntelligenceResult,
   leakage: RevenueLeakageSummary,
   parsedValue: number,
-): CommercialRiskProfile {
+): { factors: CommercialRiskFactor[]; scopeScore: number; rateScore: number; leakageScore: number } {
   const factors: CommercialRiskFactor[] = [];
   let scopeScore = 0;
   let rateScore = 0;
   let leakageScore = 0;
 
+  // --- Scope pillar (max 40pts raw) ---
   const highRiskGaps = scope.gaps.filter((g) => g.risk_level === 'high');
   const mediumRiskGaps = scope.gaps.filter((g) => g.risk_level === 'medium');
   if (highRiskGaps.length > 0) {
@@ -106,9 +108,9 @@ export function computeCommercialRiskProfile(
     });
   }
 
-  const anomalyRate = rates.records.length > 0
-    ? (rates.anomalyCount / rates.records.length) * 100
-    : 0;
+  // --- Rate pillar (max 40pts raw) ---
+  const anomalyRate =
+    rates.records.length > 0 ? (rates.anomalyCount / rates.records.length) * 100 : 0;
 
   if (rates.anomalyCount > 0) {
     const s = Math.min(40, rates.anomalyCount * 8);
@@ -132,19 +134,24 @@ export function computeCommercialRiskProfile(
     });
   }
 
+  // --- Leakage pillar (max 30pts raw) ---
+  // Critical rule: leakage score must be proportional to actual leakage events.
+  // High leakage → high leakage score. Zero leakage → zero leakage score.
   if (leakage.events.length > 0) {
     const totalMismatch = leakage.events.find((e) => e.leakage_type === 'total_mismatch');
     if (totalMismatch) {
-      const mismatchPercent =
-        parsedValue > 0 ? ((totalMismatch.estimated_value ?? 0) / parsedValue) * 100 : 0;
-      const s = Math.min(30, mismatchPercent * 2);
-      leakageScore += s;
-      factors.push({
-        factor: 'document_total_mismatch',
-        description: totalMismatch.description,
-        severity: mismatchPercent > 10 ? 'high' : 'medium',
-        score: s,
-      });
+      const mismatchAmount = totalMismatch.estimated_value ?? 0;
+      const mismatchPercent = parsedValue > 0 ? (mismatchAmount / parsedValue) * 100 : 0;
+      const s = Math.min(30, Math.round(mismatchPercent * 2));
+      if (s > 0) {
+        leakageScore += s;
+        factors.push({
+          factor: 'document_total_mismatch',
+          description: totalMismatch.description,
+          severity: mismatchPercent > 10 ? 'high' : 'medium',
+          score: s,
+        });
+      }
     }
 
     const highConfEvents = leakage.events.filter(
@@ -160,11 +167,50 @@ export function computeCommercialRiskProfile(
         score: s,
       });
     }
-  }
 
+    // Low-confidence events still contribute a small signal
+    const lowConfEvents = leakage.events.filter(
+      (e) => e.confidence < 0.75 && e.leakage_type !== 'total_mismatch',
+    );
+    if (lowConfEvents.length > 2) {
+      const s = Math.min(10, lowConfEvents.length * 2);
+      leakageScore += s;
+      factors.push({
+        factor: 'low_confidence_leakage_signals',
+        description: `${lowConfEvents.length} low-confidence leakage signals — warrants monitoring`,
+        severity: 'low',
+        score: s,
+      });
+    }
+  }
+  // If leakage.events.length === 0 → leakageScore stays 0. No contradiction possible.
+
+  return {
+    factors: factors.sort((a, b) => b.score - a.score),
+    scopeScore: Math.min(100, scopeScore),
+    rateScore: Math.min(100, rateScore),
+    leakageScore: Math.min(100, leakageScore),
+  };
+}
+
+export function computeCommercialRiskProfile(
+  runId: string,
+  scope: ScopeIntelligenceResult,
+  rates: RateIntelligenceResult,
+  leakage: RevenueLeakageSummary,
+  parsedValue: number,
+): CommercialRiskProfile {
+  const { factors, scopeScore, rateScore, leakageScore } = buildFactors(
+    scope,
+    rates,
+    leakage,
+    parsedValue,
+  );
+
+  // Weighted sum: scope 40%, rate 35%, leakage 25%
   const overallScore = Math.min(
     100,
-    Math.round((scopeScore * 0.4) + (rateScore * 0.35) + (leakageScore * 0.25)),
+    Math.round(scopeScore * 0.4 + rateScore * 0.35 + leakageScore * 0.25),
   );
 
   const riskLevel = scoreToLevel(overallScore);
@@ -174,11 +220,63 @@ export function computeCommercialRiskProfile(
     runId,
     overallScore,
     riskLevel,
-    factors: factors.sort((a, b) => b.score - a.score),
-    scopeScore: Math.min(100, scopeScore),
-    rateScore: Math.min(100, rateScore),
-    leakageScore: Math.min(100, leakageScore),
+    factors,
+    scopeScore,
+    rateScore,
+    leakageScore,
     recommendation,
     generatedAt: new Date().toISOString(),
+  };
+}
+
+export async function persistCommercialRiskProfile(
+  moduleKey: string,
+  profile: CommercialRiskProfile,
+): Promise<void> {
+  const { error } = await supabase
+    .from('commercial_risk_profiles')
+    .upsert(
+      {
+        run_id: profile.runId,
+        module_key: moduleKey,
+        total_risk_score: profile.overallScore,
+        scope_risk_score: profile.scopeScore,
+        rate_risk_score: profile.rateScore,
+        leakage_risk_score: profile.leakageScore,
+        risk_level: profile.riskLevel,
+        risk_flags_json: profile.factors,
+        recommendation: profile.recommendation,
+      },
+      { onConflict: 'run_id' },
+    );
+
+  if (error) {
+    console.warn('[Phase3] persistCommercialRiskProfile failed:', error.message);
+    throw error;
+  }
+}
+
+export async function getCommercialRiskProfile(
+  runId: string,
+): Promise<CommercialRiskProfile | null> {
+  const { data, error } = await supabase
+    .from('commercial_risk_profiles')
+    .select('*')
+    .eq('run_id', runId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    runId: data.run_id as string,
+    overallScore: data.total_risk_score as number,
+    riskLevel: data.risk_level as CommercialRiskLevel,
+    factors: (data.risk_flags_json ?? []) as CommercialRiskFactor[],
+    scopeScore: data.scope_risk_score as number,
+    rateScore: data.rate_risk_score as number,
+    leakageScore: data.leakage_risk_score as number,
+    recommendation: data.recommendation as string,
+    generatedAt: data.created_at as string,
+    fromDb: true,
   };
 }

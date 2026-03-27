@@ -57,6 +57,105 @@ export interface ScopeIntelligenceResult {
   exclusions: ShadowScopeExclusion[];
 }
 
+// ---------------------------------------------------------------------------
+// Per-trade gap patterns: tied to fingerprint expectations, not generic words
+// ---------------------------------------------------------------------------
+interface GapCheck {
+  type: string;
+  keywords: string[];
+  description: string;
+  expected: string;
+  risk: string;
+  trades: string[];
+}
+
+const TRADE_GAP_PATTERNS: GapCheck[] = [
+  // Plumbing
+  {
+    type: 'commissioning_hydraulic',
+    keywords: ['commission', 'test', 'flush', 'purge', 'pressure test', 'hydrostatic'],
+    description: 'No hydraulic commissioning or pressure testing scope detected',
+    expected: 'always_present',
+    risk: 'high',
+    trades: ['plumbing_parser', 'plumbing'],
+  },
+  {
+    type: 'pipe_insulation',
+    keywords: ['insul', 'lagg', 'thermal wrap', 'vapour barrier'],
+    description: 'No pipe insulation scope detected — common omission in plumbing quotes',
+    expected: 'likely_present',
+    risk: 'high',
+    trades: ['plumbing_parser', 'plumbing'],
+  },
+  {
+    type: 'backflow_prevention',
+    keywords: ['backflow', 'rpz', 'dca', 'testable', 'non-return'],
+    description: 'No backflow prevention devices detected — typically code-mandated',
+    expected: 'likely_present',
+    risk: 'medium',
+    trades: ['plumbing_parser', 'plumbing'],
+  },
+  {
+    type: 'drainage_stormwater',
+    keywords: ['stormwater', 'drainage', 'grate', 'pit', 'sump', 'overflow'],
+    description: 'No stormwater or drainage scope detected',
+    expected: 'sometimes_present',
+    risk: 'medium',
+    trades: ['plumbing_parser', 'plumbing'],
+  },
+  // HVAC
+  {
+    type: 'commissioning_air',
+    keywords: ['commission', 'balance', 'tab ', 'test and balance', 'air balance'],
+    description: 'No HVAC commissioning or air balancing scope detected',
+    expected: 'always_present',
+    risk: 'high',
+    trades: ['hvac', 'hvac_parser'],
+  },
+  {
+    type: 'ductwork_insulation',
+    keywords: ['duct insul', 'duct wrap', 'thermal duct', 'insulated duct'],
+    description: 'No ductwork insulation scope detected',
+    expected: 'likely_present',
+    risk: 'medium',
+    trades: ['hvac', 'hvac_parser'],
+  },
+  // Fire (active)
+  {
+    type: 'commissioning_fire',
+    keywords: ['commission', 'witness test', 'annual test', 'acceptance test', 'flow test'],
+    description: 'No fire system commissioning or acceptance testing scope detected',
+    expected: 'always_present',
+    risk: 'high',
+    trades: ['active_fire', 'active_fire_parser'],
+  },
+  {
+    type: 'hydraulic_calcs',
+    keywords: ['hydraulic calc', 'hydraulic design', 'design cert'],
+    description: 'No hydraulic calculations or design certification scope detected',
+    expected: 'likely_present',
+    risk: 'medium',
+    trades: ['active_fire', 'active_fire_parser'],
+  },
+  // Electrical
+  {
+    type: 'commissioning_electrical',
+    keywords: ['commission', 'test and tag', 'megger', 'earth test', 'pat test'],
+    description: 'No electrical commissioning or testing scope detected',
+    expected: 'always_present',
+    risk: 'high',
+    trades: ['electrical', 'electrical_parser'],
+  },
+  {
+    type: 'as_built_drawings',
+    keywords: ['as built', 'as-built', 'record draw', 'o&m', 'operation manual', 'maintenance manual'],
+    description: 'No as-built drawings or O&M documentation scope detected',
+    expected: 'sometimes_present',
+    risk: 'medium',
+    trades: ['plumbing_parser', 'hvac', 'active_fire', 'electrical', 'plumbing', 'comparison_engine'],
+  },
+];
+
 function normalizeDescription(desc: string): string {
   return desc.trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -80,45 +179,38 @@ function detectItemType(desc: string): string {
   return 'general';
 }
 
-function detectGaps(items: { description: string; total: number }[], moduleKey: string): ShadowScopeGap[] {
-  const gaps: ShadowScopeGap[] = [];
+function detectGaps(
+  items: { description: string; total: number }[],
+  moduleKey: string,
+): Omit<ShadowScopeGap, 'id' | 'run_id' | 'created_at'>[] {
+  const gaps: Omit<ShadowScopeGap, 'id' | 'run_id' | 'created_at'>[] = [];
+  if (items.length === 0) return gaps;
+
   const descs = items.map((i) => i.description.toLowerCase()).join(' ');
 
-  const checks: { type: string; keywords: string[]; description: string; expected: string; risk: string }[] = [
-    {
-      type: 'commissioning',
-      keywords: ['test', 'commission', 'flush', 'purge'],
-      description: 'No commissioning or testing scope detected',
-      expected: 'always_present',
-      risk: 'medium',
-    },
-    {
-      type: 'insulation',
-      keywords: ['insul', 'lagg'],
-      description: 'No pipe insulation scope detected',
-      expected: 'likely_present',
-      risk: 'low',
-    },
-    {
-      type: 'as_built',
-      keywords: ['as built', 'as-built', 'record draw', 'o&m', 'manual'],
-      description: 'No as-built drawings or O&M documentation scope detected',
-      expected: 'sometimes_present',
-      risk: 'low',
-    },
-  ];
+  // Only apply patterns that are relevant to this trade module.
+  // Falls back to all cross-trade patterns when module is unknown.
+  const applicable = TRADE_GAP_PATTERNS.filter(
+    (p) =>
+      p.trades.includes(moduleKey) ||
+      p.trades.includes('comparison_engine') ||
+      p.trades.some((t) => moduleKey.includes(t)),
+  );
 
-  for (const check of checks) {
+  // If no specific trade match, apply universal cross-trade patterns only
+  const patterns =
+    applicable.length > 0
+      ? applicable
+      : TRADE_GAP_PATTERNS.filter((p) => p.trades.includes('comparison_engine'));
+
+  for (const check of patterns) {
     const found = check.keywords.some((kw) => descs.includes(kw));
     if (!found) {
       gaps.push({
-        id: crypto.randomUUID(),
-        run_id: '',
         missing_scope_type: check.type,
         description: check.description,
         expected_presence: check.expected,
         risk_level: check.risk,
-        created_at: new Date().toISOString(),
       });
     }
   }
@@ -126,68 +218,84 @@ function detectGaps(items: { description: string; total: number }[], moduleKey: 
   return gaps;
 }
 
-function detectQualifications(items: { description: string }[]): ShadowScopeQualification[] {
-  const quals: ShadowScopeQualification[] = [];
+function detectQualifications(
+  items: { description: string }[],
+): Omit<ShadowScopeQualification, 'id' | 'run_id' | 'created_at'>[] {
+  const quals: Omit<ShadowScopeQualification, 'id' | 'run_id' | 'created_at'>[] = [];
   const qualKeywords = [
-    { kw: 'allow', impact: 'provisional_sum' },
+    { kw: 'allow for', impact: 'provisional_sum' },
+    { kw: 'allowance', impact: 'provisional_sum' },
     { kw: 'provisional', impact: 'provisional_sum' },
+    { kw: 'ps item', impact: 'provisional_sum' },
     { kw: 'by others', impact: 'exclusion' },
     { kw: 'not included', impact: 'exclusion' },
     { kw: 'subject to', impact: 'conditional' },
     { kw: 'pending', impact: 'conditional' },
+    { kw: 'tbc', impact: 'conditional' },
+    { kw: 'to be confirmed', impact: 'conditional' },
   ];
 
+  const seen = new Set<string>();
   for (const item of items) {
+    if (!item.description) continue;
     const d = item.description.toLowerCase();
     for (const { kw, impact } of qualKeywords) {
       if (d.includes(kw)) {
-        quals.push({
-          id: crypto.randomUUID(),
-          run_id: '',
-          description: item.description.slice(0, 200),
-          normalized_description: normalizeDescription(item.description.slice(0, 200)),
-          source_text: item.description,
-          impact_type: impact,
-          created_at: new Date().toISOString(),
-        });
+        const key = `${impact}:${normalizeDescription(item.description.slice(0, 80))}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          quals.push({
+            description: item.description.slice(0, 200),
+            normalized_description: normalizeDescription(item.description.slice(0, 200)),
+            source_text: item.description,
+            impact_type: impact,
+          });
+        }
         break;
       }
     }
   }
 
-  return quals.slice(0, 20);
+  return quals.slice(0, 30);
 }
 
-function detectExclusions(items: { description: string }[]): ShadowScopeExclusion[] {
-  const exclusions: ShadowScopeExclusion[] = [];
+function detectExclusions(
+  items: { description: string }[],
+): Omit<ShadowScopeExclusion, 'id' | 'run_id' | 'created_at'>[] {
+  const exclusions: Omit<ShadowScopeExclusion, 'id' | 'run_id' | 'created_at'>[] = [];
   const exclusionKeywords = [
     { kw: 'by others', risk: 'medium' },
     { kw: 'not included', risk: 'high' },
     { kw: 'excluded', risk: 'high' },
     { kw: 'not in scope', risk: 'high' },
+    { kw: 'not in contract', risk: 'high' },
     { kw: 'n/a', risk: 'low' },
+    { kw: 'nil', risk: 'low' },
   ];
 
+  const seen = new Set<string>();
   for (const item of items) {
+    if (!item.description) continue;
     const d = item.description.toLowerCase();
     for (const { kw, risk } of exclusionKeywords) {
       if (d.includes(kw)) {
-        exclusions.push({
-          id: crypto.randomUUID(),
-          run_id: '',
-          description: item.description.slice(0, 200),
-          normalized_description: normalizeDescription(item.description.slice(0, 200)),
-          section: null,
-          source_text: item.description,
-          risk_level: risk,
-          created_at: new Date().toISOString(),
-        });
+        const key = `${risk}:${normalizeDescription(item.description.slice(0, 80))}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          exclusions.push({
+            description: item.description.slice(0, 200),
+            normalized_description: normalizeDescription(item.description.slice(0, 200)),
+            section: null,
+            source_text: item.description,
+            risk_level: risk,
+          });
+        }
         break;
       }
     }
   }
 
-  return exclusions.slice(0, 20);
+  return exclusions.slice(0, 30);
 }
 
 export async function runScopeIntelligence(
@@ -197,7 +305,13 @@ export async function runScopeIntelligence(
 ): Promise<ScopeIntelligenceResult> {
   const items = dataset.lineItems.slice(0, 300);
 
-  const scopeItems: Omit<ShadowScopeItem, 'id' | 'created_at'>[] = items
+  if (items.length === 0) {
+    console.warn(`[Phase3/Scope] runId=${runId.slice(0, 8)} — zero line items, skipping scope write`);
+    return { items: [], gaps: [], qualifications: [], exclusions: [] };
+  }
+
+  // --- Scope items ---
+  const scopeItemRows: Omit<ShadowScopeItem, 'id' | 'created_at'>[] = items
     .filter((i) => i.description && i.description.trim().length > 3)
     .map((i) => ({
       run_id: runId,
@@ -215,45 +329,64 @@ export async function runScopeIntelligence(
       confidence: 0.75,
     }));
 
-  if (scopeItems.length > 0) {
-    await supabase.from('shadow_scope_items').insert(scopeItems);
+  if (scopeItemRows.length > 0) {
+    const { error } = await supabase.from('shadow_scope_items').insert(scopeItemRows);
+    if (error) {
+      console.warn(`[Phase3/Scope] shadow_scope_items insert failed: ${error.message}`);
+    } else {
+      console.log(`[Phase3/Scope] Wrote ${scopeItemRows.length} scope items for run ${runId.slice(0, 8)}`);
+    }
+  } else {
+    console.warn(`[Phase3/Scope] runId=${runId.slice(0, 8)} — zero valid scope items after filter`);
   }
 
+  // --- Gaps (trade-aware) ---
   const itemsForGap = items.map((i) => ({
     description: i.description ?? '',
     total: typeof i.total === 'number' ? i.total : 0,
   }));
 
-  const gaps = detectGaps(itemsForGap, moduleKey).map((g) => ({ ...g, run_id: runId }));
-  if (gaps.length > 0) {
-    await supabase.from('shadow_scope_gaps').insert(
-      gaps.map(({ id: _id, created_at: _ca, ...rest }) => rest),
-    );
+  const gapRows = detectGaps(itemsForGap, moduleKey).map((g) => ({ ...g, run_id: runId }));
+  if (gapRows.length > 0) {
+    const { error } = await supabase.from('shadow_scope_gaps').insert(gapRows);
+    if (error) {
+      console.warn(`[Phase3/Scope] shadow_scope_gaps insert failed: ${error.message}`);
+    } else {
+      console.log(`[Phase3/Scope] Wrote ${gapRows.length} scope gaps for run ${runId.slice(0, 8)}`);
+    }
+  } else {
+    console.log(`[Phase3/Scope] No scope gaps detected for module=${moduleKey} run=${runId.slice(0, 8)}`);
   }
 
-  const quals = detectQualifications(items.map((i) => ({ description: i.description ?? '' }))).map(
-    (q) => ({ ...q, run_id: runId }),
-  );
-  if (quals.length > 0) {
-    await supabase.from('shadow_scope_qualifications').insert(
-      quals.map(({ id: _id, created_at: _ca, ...rest }) => rest),
-    );
+  // --- Qualifications ---
+  const qualRows = detectQualifications(
+    items.map((i) => ({ description: i.description ?? '' })),
+  ).map((q) => ({ ...q, run_id: runId }));
+
+  if (qualRows.length > 0) {
+    const { error } = await supabase.from('shadow_scope_qualifications').insert(qualRows);
+    if (error) {
+      console.warn(`[Phase3/Scope] shadow_scope_qualifications insert failed: ${error.message}`);
+    }
   }
 
-  const exclusions = detectExclusions(items.map((i) => ({ description: i.description ?? '' }))).map(
-    (e) => ({ ...e, run_id: runId }),
-  );
-  if (exclusions.length > 0) {
-    await supabase.from('shadow_scope_exclusions').insert(
-      exclusions.map(({ id: _id, created_at: _ca, ...rest }) => rest),
-    );
+  // --- Exclusions ---
+  const exclusionRows = detectExclusions(
+    items.map((i) => ({ description: i.description ?? '' })),
+  ).map((e) => ({ ...e, run_id: runId }));
+
+  if (exclusionRows.length > 0) {
+    const { error } = await supabase.from('shadow_scope_exclusions').insert(exclusionRows);
+    if (error) {
+      console.warn(`[Phase3/Scope] shadow_scope_exclusions insert failed: ${error.message}`);
+    }
   }
 
   return {
-    items: scopeItems as ShadowScopeItem[],
-    gaps: gaps as ShadowScopeGap[],
-    qualifications: quals as ShadowScopeQualification[],
-    exclusions: exclusions as ShadowScopeExclusion[],
+    items: scopeItemRows as ShadowScopeItem[],
+    gaps: gapRows as ShadowScopeGap[],
+    qualifications: qualRows as ShadowScopeQualification[],
+    exclusions: exclusionRows as ShadowScopeExclusion[],
   };
 }
 

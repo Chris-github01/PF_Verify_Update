@@ -37,19 +37,33 @@ function normalizeItem(desc: string): string {
   return desc
     .trim()
     .toLowerCase()
-    .replace(/\d+mm/g, 'NNmm')
-    .replace(/\d+dn/g, 'DNnn')
+    .replace(/\d+\s*mm/g, 'NNmm')
+    .replace(/\d+\s*dn/gi, 'DNnn')
+    .replace(/\d+\s*nb/gi, 'NNnb')
     .replace(/\d+\s*l\/s/gi, 'NNL/s')
     .replace(/no\.\s*\d+/gi, 'no.N')
+    .replace(/\d+\s*kw/gi, 'NNkw')
+    .replace(/\d+\s*kva/gi, 'NNkva')
     .replace(/\s+/g, ' ')
     .slice(0, 120);
+}
+
+function normalizeUnit(unit: string | undefined | null): string {
+  if (!unit) return 'ea';
+  const u = unit.trim().toLowerCase();
+  if (u === 'each' || u === 'no' || u === 'no.' || u === 'nr' || u === 'item') return 'ea';
+  if (u === 'lm' || u === 'lin m' || u === 'lineal m' || u === 'linear m') return 'lm';
+  if (u === 'm2' || u === 'sqm' || u === 'm²') return 'm2';
+  if (u === 'm3' || u === 'cum' || u === 'm³') return 'm3';
+  if (u === 'ls' || u === 'l/s' || u === 'lump sum' || u === 'lumpsum') return 'ls';
+  return u.slice(0, 10);
 }
 
 function classifyVariance(
   rate: number,
   benchmarkRate: number | null,
 ): { variancePercent: number | null; varianceType: string; anomalyFlag: boolean } {
-  if (benchmarkRate == null || benchmarkRate === 0 || rate == null || rate === 0) {
+  if (benchmarkRate == null || benchmarkRate <= 0 || rate <= 0) {
     return { variancePercent: null, varianceType: 'no_benchmark', anomalyFlag: false };
   }
 
@@ -75,16 +89,24 @@ async function fetchBenchmarksForItems(
 ): Promise<Map<string, ShadowRateBenchmark>> {
   if (normalizedItems.length === 0) return new Map();
 
+  const unique = [...new Set(normalizedItems)].slice(0, 100);
   const { data, error } = await supabase
     .from('shadow_rate_benchmarks')
     .select('*')
-    .in('normalized_item', normalizedItems.slice(0, 100));
+    .in('normalized_item', unique);
 
-  if (error || !data) return new Map();
+  if (error || !data) {
+    console.warn('[Phase3/Rates] fetchBenchmarksForItems failed:', error?.message);
+    return new Map();
+  }
 
   const map = new Map<string, ShadowRateBenchmark>();
   for (const b of data) {
-    map.set(b.normalized_item, b as ShadowRateBenchmark);
+    // Invariant: median_rate must be > 0 when sample_size > 0.
+    // If somehow a bad row exists, skip it to avoid polluting variance.
+    if ((b.sample_size as number) > 0 && (b.median_rate as number) > 0) {
+      map.set(b.normalized_item as string, b as ShadowRateBenchmark);
+    }
   }
   return map;
 }
@@ -94,23 +116,46 @@ async function upsertBenchmarks(
 ): Promise<void> {
   if (items.length === 0) return;
 
+  // Deduplicate: if the same normalizedItem+unit appears multiple times in this batch,
+  // aggregate before writing so we don't create duplicate benchmark rows per run.
+  const aggregated = new Map<string, { sum: number; count: number; min: number; max: number }>();
   for (const item of items) {
+    const key = `${item.normalizedItem}||${item.unit}`;
+    const existing = aggregated.get(key);
+    if (existing) {
+      existing.sum += item.rate;
+      existing.count += 1;
+      existing.min = Math.min(existing.min, item.rate);
+      existing.max = Math.max(existing.max, item.rate);
+    } else {
+      aggregated.set(key, { sum: item.rate, count: 1, min: item.rate, max: item.rate });
+    }
+  }
+
+  for (const [key, agg] of aggregated.entries()) {
+    const [normalizedItem, unit] = key.split('||');
+    const batchMean = agg.sum / agg.count;
+
     const { data: existing } = await supabase
       .from('shadow_rate_benchmarks')
       .select('id, median_rate, p25_rate, p75_rate, sample_size')
-      .eq('normalized_item', item.normalizedItem)
-      .eq('unit', item.unit)
+      .eq('normalized_item', normalizedItem)
+      .eq('unit', unit)
       .maybeSingle();
 
     if (existing) {
-      const n = existing.sample_size + 1;
-      const newMedian = (existing.median_rate * existing.sample_size + item.rate) / n;
-      const newP25 = Math.min(existing.p25_rate, item.rate);
-      const newP75 = Math.max(existing.p75_rate, item.rate);
+      const prevN = existing.sample_size as number;
+      const prevMean = existing.median_rate as number;
+      const n = prevN + agg.count;
+      // Incremental mean — guaranteed > 0 when inputs are > 0
+      const newMean = (prevMean * prevN + agg.sum) / n;
+      const newP25 = Math.min(existing.p25_rate as number, agg.min);
+      const newP75 = Math.max(existing.p75_rate as number, agg.max);
+
       await supabase
         .from('shadow_rate_benchmarks')
         .update({
-          median_rate: newMedian,
+          median_rate: newMean,
           p25_rate: newP25,
           p75_rate: newP75,
           sample_size: n,
@@ -118,13 +163,14 @@ async function upsertBenchmarks(
         })
         .eq('id', existing.id);
     } else {
+      // First observation: median_rate = batchMean (always > 0 because we filter rate > 0 upstream)
       await supabase.from('shadow_rate_benchmarks').insert({
-        normalized_item: item.normalizedItem,
-        unit: item.unit,
-        median_rate: item.rate,
-        p25_rate: item.rate,
-        p75_rate: item.rate,
-        sample_size: 1,
+        normalized_item: normalizedItem,
+        unit,
+        median_rate: batchMean,
+        p25_rate: agg.min,
+        p75_rate: agg.max,
+        sample_size: agg.count,
         last_updated: new Date().toISOString(),
       });
     }
@@ -143,13 +189,23 @@ export async function runRateIntelligence(
       i.rate > 0,
   );
 
+  if (itemsWithRates.length === 0) {
+    console.warn(`[Phase3/Rates] runId=${runId.slice(0, 8)} — no items with rates, skipping rate intelligence`);
+    return { records: [], anomalyCount: 0, underPricedCount: 0, overPricedCount: 0 };
+  }
+
   const benchmarkItems = itemsWithRates.map((i) => ({
     normalizedItem: normalizeItem(i.description),
-    unit: (i.unit ?? 'ea').toLowerCase(),
+    unit: normalizeUnit(i.unit),
     rate: i.rate as number,
   }));
 
-  await upsertBenchmarks(benchmarkItems);
+  // Upsert benchmarks first so the fetch immediately after has current data
+  try {
+    await upsertBenchmarks(benchmarkItems);
+  } catch (err) {
+    console.warn('[Phase3/Rates] upsertBenchmarks failed:', err);
+  }
 
   const normalizedKeys = benchmarkItems.map((b) => b.normalizedItem);
   const benchmarkMap = await fetchBenchmarksForItems(normalizedKeys);
@@ -158,17 +214,22 @@ export async function runRateIntelligence(
     (item, idx) => {
       const normalizedItem = benchmarkItems[idx].normalizedItem;
       const benchmark = benchmarkMap.get(normalizedItem) ?? null;
+
+      // benchmark_rate is never null when sample_size > 0 — enforced in fetchBenchmarksForItems
+      const benchmarkRate = benchmark ? benchmark.median_rate : null;
+
       const { variancePercent, varianceType, anomalyFlag } = classifyVariance(
         item.rate as number,
-        benchmark ? benchmark.median_rate : null,
+        benchmarkRate,
       );
+
       return {
         run_id: runId,
         item_description: item.description.slice(0, 500),
         normalized_item: normalizedItem,
         unit: item.unit ?? null,
         rate: item.rate as number,
-        benchmark_rate: benchmark ? benchmark.median_rate : null,
+        benchmark_rate: benchmarkRate,
         variance_percent: variancePercent,
         variance_type: varianceType,
         anomaly_flag: anomalyFlag,
@@ -177,7 +238,15 @@ export async function runRateIntelligence(
   );
 
   if (rateRecords.length > 0) {
-    await supabase.from('shadow_rate_intelligence').insert(rateRecords);
+    const { error } = await supabase.from('shadow_rate_intelligence').insert(rateRecords);
+    if (error) {
+      console.warn(`[Phase3/Rates] shadow_rate_intelligence insert failed: ${error.message}`);
+    } else {
+      const anomCount = rateRecords.filter((r) => r.anomaly_flag).length;
+      console.log(
+        `[Phase3/Rates] Wrote ${rateRecords.length} rate records (${anomCount} anomalies) for run ${runId.slice(0, 8)}`,
+      );
+    }
   }
 
   const anomalyCount = rateRecords.filter((r) => r.anomaly_flag).length;
@@ -204,7 +273,9 @@ export async function getRateIntelligenceForRun(runId: string): Promise<RateInte
     .order('anomaly_flag', { ascending: false })
     .order('variance_percent', { ascending: true });
 
-  if (error) return { records: [], anomalyCount: 0, underPricedCount: 0, overPricedCount: 0 };
+  if (error) {
+    return { records: [], anomalyCount: 0, underPricedCount: 0, overPricedCount: 0 };
+  }
 
   const records = (data ?? []) as ShadowRateIntelligence[];
   const anomalyCount = records.filter((r) => r.anomaly_flag).length;
