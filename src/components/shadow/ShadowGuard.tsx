@@ -9,23 +9,29 @@ interface Props {
 }
 
 async function checkAdminAccess(requireGodMode: boolean): Promise<boolean> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return false;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return false;
 
-  const rolesFilter = requireGodMode ? 'god_mode' : 'god_mode,internal_admin';
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/admin_roles?user_id=eq.${session.user.id}&role=in.(${rolesFilter})&limit=1`,
-    {
-      headers: {
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-      },
+    const { data, error } = await supabase
+      .from('admin_roles')
+      .select('role')
+      .eq('user_id', session.user.id)
+      .in('role', requireGodMode ? ['god_mode'] : ['god_mode', 'internal_admin'])
+      .limit(1);
+
+    if (error) {
+      console.error('[shadow] checkAdminAccess error:', error);
+      return false;
     }
-  );
 
-  if (!response.ok) return false;
-  const roles = await response.json();
-  return Array.isArray(roles) && roles.length > 0;
+    const hasAccess = Array.isArray(data) && data.length > 0;
+    console.debug(`[shadow] checkAdminAccess: user=${session.user.id} hasAccess=${hasAccess} roles=${JSON.stringify(data)}`);
+    return hasAccess;
+  } catch (err) {
+    console.error('[shadow] checkAdminAccess exception:', err);
+    return false;
+  }
 }
 
 export default function ShadowGuard({ children, requireGodMode = false }: Props) {

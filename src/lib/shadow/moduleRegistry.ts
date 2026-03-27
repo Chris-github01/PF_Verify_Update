@@ -3,17 +3,34 @@ import type { ModuleRegistryRecord, ModuleVersionRecord, RolloutStatus } from '.
 import { logAdminAction } from './auditLogger';
 
 export async function getAllModules(): Promise<(ModuleRegistryRecord & { version?: ModuleVersionRecord })[]> {
-  const [{ data: modules }, { data: versions }] = await Promise.all([
+  const [modulesResult, versionsResult] = await Promise.all([
     supabase.from('module_registry').select('*').order('module_name'),
-    supabase.from('module_versions').select('*'),
+    supabase.from('module_versions').select('*').order('updated_at', { ascending: false }),
   ]);
 
-  const versionMap = new Map<string, ModuleVersionRecord>();
-  for (const v of versions ?? []) {
-    versionMap.set(v.module_key, v as ModuleVersionRecord);
+  if (modulesResult.error) {
+    console.error('[shadow] getAllModules: module_registry query failed', modulesResult.error);
+    throw modulesResult.error;
+  }
+  if (versionsResult.error) {
+    console.error('[shadow] getAllModules: module_versions query failed', versionsResult.error);
   }
 
-  return (modules ?? []).map((m) => ({
+  const versionMap = new Map<string, ModuleVersionRecord>();
+  for (const v of versionsResult.data ?? []) {
+    if (!versionMap.has(v.module_key)) {
+      versionMap.set(v.module_key, v as ModuleVersionRecord);
+    }
+  }
+
+  const seenKeys = new Set<string>();
+  const deduped = (modulesResult.data ?? []).filter((m) => {
+    if (seenKeys.has(m.module_key)) return false;
+    seenKeys.add(m.module_key);
+    return true;
+  });
+
+  return deduped.map((m) => ({
     ...(m as ModuleRegistryRecord),
     version: versionMap.get(m.module_key),
   }));
