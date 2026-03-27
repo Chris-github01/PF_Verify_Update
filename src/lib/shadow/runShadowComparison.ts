@@ -22,6 +22,7 @@ async function fetchQuoteRows(quoteId: string): Promise<{
   documentTotal: number | null;
   supplierName: string | null;
   sourceLabel: string;
+  itemCount: number;
 }> {
   const { data: quote, error: qErr } = await supabase
     .from('quotes')
@@ -34,18 +35,18 @@ async function fetchQuoteRows(quoteId: string): Promise<{
 
   const { data: items, error: iErr } = await supabase
     .from('quote_items')
-    .select('description, quantity, unit, rate, total_price, classification, amount')
+    .select('description, raw_description, quantity, unit, unit_price, total_price')
     .eq('quote_id', quoteId)
-    .order('id');
+    .order('created_at');
 
   if (iErr) throw new Error(iErr.message);
 
   const rows: PlumbingSourceRow[] = (items ?? []).map((item) => ({
-    description: item.description ?? null,
+    description: item.description ?? item.raw_description ?? null,
     qty: item.quantity ?? null,
     unit: item.unit ?? null,
-    rate: item.rate ?? null,
-    total: item.total_price ?? item.amount ?? null,
+    rate: item.unit_price ?? null,
+    total: item.total_price ?? null,
   }));
 
   return {
@@ -53,6 +54,7 @@ async function fetchQuoteRows(quoteId: string): Promise<{
     documentTotal: quote.document_total ?? quote.total_price ?? null,
     supplierName: quote.supplier_name ?? null,
     sourceLabel: `${quote.supplier_name ?? 'Quote'} (${quoteId.slice(0, 8)})`,
+    itemCount: rows.length,
   };
 }
 
@@ -103,10 +105,10 @@ export async function runShadowComparison(
   const runId = runRecord.id as string;
 
   try {
-    const { rows, documentTotal, supplierName, sourceLabel } = await fetchQuoteRows(input.quoteId);
+    const { rows, documentTotal, supplierName, sourceLabel, itemCount } = await fetchQuoteRows(input.quoteId);
 
-    if (rows.length === 0) {
-      throw new Error('Quote has no parsed line items. Import the quote first.');
+    if (itemCount === 0) {
+      throw new Error('Quote has no parsed line items. Import and parse the quote first.');
     }
 
     const parserInput = {
@@ -139,6 +141,7 @@ export async function runShadowComparison(
           itemCount: liveOutput.includedLineCount,
           excludedCount: liveOutput.excludedLineCount,
           totalMismatch: liveOutput.hasTotalMismatch,
+          sourceItemCount: itemCount,
         },
       },
     ];
@@ -160,6 +163,7 @@ export async function runShadowComparison(
           totalMismatch: shadowOutput.hasTotalMismatch,
           deltaVsLive: delta,
           deltaPercentVsLive: deltaPercent,
+          sourceItemCount: itemCount,
         },
       });
     }
@@ -201,25 +205,39 @@ export interface QuoteOption {
   trade: string | null;
   parseStatus: string | null;
   itemCount: number;
+  hasItems: boolean;
 }
 
-export async function fetchPlumbingQuotes(limit = 60): Promise<QuoteOption[]> {
-  const { data, error } = await supabase
+export async function fetchPlumbingQuotes(limit = 80, includeEmpty = false): Promise<QuoteOption[]> {
+  let query = supabase
     .from('quotes')
-    .select('id, supplier_name, total_price, trade, parse_status, final_items_count')
+    .select('id, supplier_name, total_price, trade, parse_status, inserted_items_count, line_item_count, final_items_count')
     .eq('trade', 'plumbing')
     .eq('parse_status', 'success')
     .order('created_at', { ascending: false })
     .limit(limit);
 
+  if (!includeEmpty) {
+    query = query.or('inserted_items_count.gt.0,line_item_count.gt.0');
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((q) => ({
-    id: q.id,
-    supplierName: q.supplier_name ?? null,
-    totalPrice: q.total_price ?? null,
-    trade: q.trade ?? null,
-    parseStatus: q.parse_status ?? null,
-    itemCount: q.final_items_count ?? 0,
-  }));
+  return (data ?? []).map((q) => {
+    const itemCount =
+      (q.inserted_items_count ?? 0) > 0 ? (q.inserted_items_count as number) :
+      (q.line_item_count ?? 0) > 0 ? (q.line_item_count as number) :
+      (q.final_items_count ?? 0) as number;
+
+    return {
+      id: q.id,
+      supplierName: q.supplier_name ?? null,
+      totalPrice: q.total_price ?? null,
+      trade: q.trade ?? null,
+      parseStatus: q.parse_status ?? null,
+      itemCount,
+      hasItems: itemCount > 0,
+    };
+  });
 }
