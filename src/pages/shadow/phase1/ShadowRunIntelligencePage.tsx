@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Activity, ShieldAlert, FileSearch, RefreshCw, CreditCard as Edit3, Fingerprint } from 'lucide-react';
+import { ArrowLeft, Activity, ShieldAlert, FileSearch, RefreshCw, CreditCard as Edit3, Fingerprint, List, TrendingUp, DollarSign, Shield } from 'lucide-react';
 import ShadowLayout from '../../../components/shadow/ShadowLayout';
 import ShadowDiffSummary from '../../../components/shadow/ShadowDiffSummary';
 import RunDiagnosticsPanel from '../../../components/shadow/phase1/RunDiagnosticsPanel';
@@ -7,6 +7,10 @@ import RunFailuresPanel from '../../../components/shadow/phase1/RunFailuresPanel
 import RunDocumentTruthPanel from '../../../components/shadow/phase1/RunDocumentTruthPanel';
 import RunAdjudicationPanel from '../../../components/shadow/phase2/RunAdjudicationPanel';
 import SupplierFingerprintPanel from '../../../components/shadow/phase2/SupplierFingerprintPanel';
+import ScopeIntelligencePanel from '../../../components/shadow/phase3/ScopeIntelligencePanel';
+import RateIntelligencePanel from '../../../components/shadow/phase3/RateIntelligencePanel';
+import RevenueLeakagePanel from '../../../components/shadow/phase3/RevenueLeakagePanel';
+import CommercialRiskPanel from '../../../components/shadow/phase3/CommercialRiskPanel';
 import { dbGetShadowRun, dbGetShadowRunResults } from '../../../lib/db/shadowRuns';
 import type { ShadowRunRecord, ShadowRunResultRecord, ModuleDiff } from '../../../types/shadow';
 
@@ -15,15 +19,29 @@ function getRunIdFromPath(): string | undefined {
   return m ? m[1] : undefined;
 }
 
-type Tab = 'overview' | 'diagnostics' | 'failures' | 'document_truth' | 'adjudication' | 'fingerprint';
+type Tab =
+  | 'overview'
+  | 'diagnostics'
+  | 'failures'
+  | 'document_truth'
+  | 'adjudication'
+  | 'fingerprint'
+  | 'scope'
+  | 'rates'
+  | 'leakage'
+  | 'risk';
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+const TABS: { id: Tab; label: string; icon: React.ReactNode; phase?: number }[] = [
   { id: 'overview', label: 'Overview', icon: <RefreshCw className="w-3.5 h-3.5" /> },
-  { id: 'diagnostics', label: 'Diagnostics', icon: <Activity className="w-3.5 h-3.5" /> },
-  { id: 'failures', label: 'Failures', icon: <ShieldAlert className="w-3.5 h-3.5" /> },
-  { id: 'document_truth', label: 'Document Truth', icon: <FileSearch className="w-3.5 h-3.5" /> },
-  { id: 'adjudication', label: 'Adjudication', icon: <Edit3 className="w-3.5 h-3.5" /> },
-  { id: 'fingerprint', label: 'Fingerprint', icon: <Fingerprint className="w-3.5 h-3.5" /> },
+  { id: 'diagnostics', label: 'Diagnostics', icon: <Activity className="w-3.5 h-3.5" />, phase: 1 },
+  { id: 'failures', label: 'Failures', icon: <ShieldAlert className="w-3.5 h-3.5" />, phase: 1 },
+  { id: 'document_truth', label: 'Document Truth', icon: <FileSearch className="w-3.5 h-3.5" />, phase: 1 },
+  { id: 'adjudication', label: 'Adjudication', icon: <Edit3 className="w-3.5 h-3.5" />, phase: 2 },
+  { id: 'fingerprint', label: 'Fingerprint', icon: <Fingerprint className="w-3.5 h-3.5" />, phase: 2 },
+  { id: 'scope', label: 'Scope', icon: <List className="w-3.5 h-3.5" />, phase: 3 },
+  { id: 'rates', label: 'Rates', icon: <TrendingUp className="w-3.5 h-3.5" />, phase: 3 },
+  { id: 'leakage', label: 'Leakage', icon: <DollarSign className="w-3.5 h-3.5" />, phase: 3 },
+  { id: 'risk', label: 'Risk Profile', icon: <Shield className="w-3.5 h-3.5" />, phase: 3 },
 ];
 
 function statusColor(s: string): string {
@@ -167,11 +185,11 @@ export default function ShadowRunIntelligencePage() {
 
                   <div className="flex gap-2 pt-2 flex-wrap">
                     <button onClick={() => setTab('diagnostics')} className="text-xs text-amber-400 hover:text-amber-300 underline">
-                      View Diagnostics
+                      Diagnostics
                     </button>
                     <span className="text-gray-700">·</span>
                     <button onClick={() => setTab('failures')} className="text-xs text-amber-400 hover:text-amber-300 underline">
-                      View Failures
+                      Failures
                     </button>
                     <span className="text-gray-700">·</span>
                     <button onClick={() => setTab('document_truth')} className="text-xs text-amber-400 hover:text-amber-300 underline">
@@ -184,6 +202,22 @@ export default function ShadowRunIntelligencePage() {
                     <span className="text-gray-700">·</span>
                     <button onClick={() => setTab('fingerprint')} className="text-xs text-amber-400 hover:text-amber-300 underline">
                       Fingerprint
+                    </button>
+                    <span className="text-gray-700">·</span>
+                    <button onClick={() => setTab('scope')} className="text-xs text-teal-400 hover:text-teal-300 underline">
+                      Scope Intel
+                    </button>
+                    <span className="text-gray-700">·</span>
+                    <button onClick={() => setTab('rates')} className="text-xs text-teal-400 hover:text-teal-300 underline">
+                      Rates Intel
+                    </button>
+                    <span className="text-gray-700">·</span>
+                    <button onClick={() => setTab('leakage')} className="text-xs text-teal-400 hover:text-teal-300 underline">
+                      Leakage
+                    </button>
+                    <span className="text-gray-700">·</span>
+                    <button onClick={() => setTab('risk')} className="text-xs text-teal-400 hover:text-teal-300 underline">
+                      Risk Profile
                     </button>
                   </div>
                 </div>
@@ -207,6 +241,27 @@ export default function ShadowRunIntelligencePage() {
 
               {tab === 'fingerprint' && runId && (
                 <SupplierFingerprintPanel runId={runId} />
+              )}
+
+              {tab === 'scope' && runId && (
+                <ScopeIntelligencePanel runId={runId} />
+              )}
+
+              {tab === 'rates' && runId && (
+                <RateIntelligencePanel runId={runId} />
+              )}
+
+              {tab === 'leakage' && runId && (
+                <RevenueLeakagePanel runId={runId} />
+              )}
+
+              {tab === 'risk' && runId && (
+                <CommercialRiskPanel
+                  runId={runId}
+                  liveOutputJson={
+                    results.find((r) => r.result_type === 'live')?.output_json ?? null
+                  }
+                />
               )}
             </div>
           </>

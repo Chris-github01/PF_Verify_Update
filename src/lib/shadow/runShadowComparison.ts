@@ -11,6 +11,10 @@ import { classifyAndSaveFailures } from './phase1/failureClassifier';
 import { resolveDocumentTruth } from './phase1/shadowDocumentTruth';
 import { fingerprintRun } from './phase2/fingerprintingService';
 import { evaluateAndEnqueueRun } from './phase2/learningQueueService';
+import { runScopeIntelligence } from './phase3/scopeIntelligenceService';
+import { runRateIntelligence } from './phase3/rateIntelligenceService';
+import { runRevenueLeakageDetection } from './phase3/revenueLeakageService';
+import { computeCommercialRiskProfile } from './phase3/commercialRiskEngine';
 
 export interface RunShadowComparisonInput {
   moduleKey: string;
@@ -323,9 +327,47 @@ export async function runShadowComparison(
             console.warn('[Phase2] evaluateAndEnqueueRun failed:', err);
           }
         });
+
+        // Phase 3 hooks — commercial intelligence layer
+        // Runs strictly after Phase 2 to ensure fingerprint and queue data are committed
+        try {
+          const [scopeSummary, rateSummary] = await Promise.all([
+            runScopeIntelligence(runId, input.moduleKey, resolvedDataset),
+            runRateIntelligence(runId, resolvedDataset),
+          ]);
+
+          const leakageSummary = await runRevenueLeakageDetection(
+            runId,
+            resolvedDataset,
+            liveOutputJson,
+            scopeSummary,
+            rateSummary,
+          );
+
+          const riskProfile = computeCommercialRiskProfile(
+            runId,
+            liveOutputJson,
+            scopeSummary,
+            rateSummary,
+            leakageSummary,
+          );
+
+          if (import.meta.env.DEV) {
+            console.log('[Phase3] Commercial risk profile computed:', {
+              runId: runId.slice(0, 8),
+              overallScore: riskProfile.overallScore,
+              overallRating: riskProfile.overallRating,
+              estimatedExposure: riskProfile.estimatedExposure,
+            });
+          }
+        } catch (err) {
+          if (import.meta.env.DEV) {
+            console.warn('[Phase3] commercial intelligence failed:', err);
+          }
+        }
       } catch (err) {
         if (import.meta.env.DEV) {
-          console.warn('[Phase1/Phase2] post-run hook chain failed:', err);
+          console.warn('[Phase1/Phase2/Phase3] post-run hook chain failed:', err);
         }
       }
     })();
