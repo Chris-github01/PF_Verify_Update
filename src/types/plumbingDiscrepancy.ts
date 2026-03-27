@@ -79,12 +79,32 @@ export interface RiskFlag {
   suggestedAction: string;
 }
 
+export interface DocumentTotalValidation {
+  /** Raw total extracted from the document (may be from a summary row) */
+  detectedDocumentTotal: number | null;
+  /** Best-anchored total after cross-checking candidates (explicit "Total Price" label, final TOTAL row, etc.) */
+  validatedDocumentTotal: number | null;
+  /** True when detected and validated totals differ beyond tolerance */
+  extractionMismatch: boolean;
+  /** Human-readable reason for any mismatch */
+  mismatchReason: string | null;
+  /** All candidate totals found during extraction with their anchor strength */
+  candidates: Array<{ value: number; anchorType: string; confidence: number }>;
+}
+
 export interface TotalsComparison {
   liveParsedTotal: number;
   shadowParsedTotal: number;
+  /** Raw detected document total (may be incorrect) */
   detectedDocumentTotal: number | null;
+  /** Validated document total — preferred anchor for gap calculations */
+  validatedDocumentTotal: number | null;
+  /** True when detected !== validated totals beyond tolerance */
+  documentTotalExtractionMismatch: boolean;
   liveDiffToDocument: number | null;
   shadowDiffToDocument: number | null;
+  /** Gap calculated against the validated total (positive = under-counted) */
+  validatedDocumentGap: number | null;
   shadowIsBetter: boolean;
   shadowTotalDelta: number;
   /** True when live === shadow but both diverge from document_total beyond tolerance */
@@ -108,6 +128,7 @@ export interface RowClassificationChange {
 
 export interface PlumbingDiff {
   totalsComparison: TotalsComparison;
+  documentTotalValidation: DocumentTotalValidation;
   rowClassificationChanges: RowClassificationChange[];
   addedRows: ClassifiedRow[];
   removedRows: ClassifiedRow[];

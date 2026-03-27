@@ -54,19 +54,43 @@ export default function PlumbingAdjudicationSummary({ diff }: Props) {
             if (line.startsWith('PLUMBING PARSER')) {
               return <div key={i} className="text-amber-400 font-bold text-[11px] tracking-wider">{line}</div>;
             }
+            if (line.startsWith('DOCUMENT TOTAL EXTRACTION')) {
+              return <div key={i} className="text-gray-300 font-semibold mt-1">{line}</div>;
+            }
+            if (line.startsWith('  Detected document total:')) {
+              return <div key={i} className="text-gray-400 pl-2">{line}</div>;
+            }
+            if (line.startsWith('  Validated document total:')) {
+              return <div key={i} className="text-cyan-300 pl-2">{line}</div>;
+            }
+            if (line.startsWith('  True missing value')) {
+              return <div key={i} className="text-red-300 pl-2">{line}</div>;
+            }
+            if (line.startsWith('⚠ DOCUMENT TOTAL EXTRACTION MISMATCH')) {
+              return <div key={i} className="text-amber-400 font-bold">{line}</div>;
+            }
+            if (line.startsWith('  The detected') || line.startsWith('  Discrepancy analysis') || line.startsWith('  Detected total')) {
+              return <div key={i} className="text-amber-500/80 pl-2 italic">{line}</div>;
+            }
             if (line.startsWith('⚠ SYSTEMIC FAILURE')) {
               return <div key={i} className="text-red-400 font-bold">{line}</div>;
             }
             if (line.startsWith('FINDING:') || line.startsWith('LIKELY ROOT CAUSE:')) {
               return <div key={i} className="text-cyan-300">{line}</div>;
             }
-            if (line.startsWith('Do not promote') || line.startsWith('Recommended action:')) {
+            if (line.startsWith('Do not promote') || line.startsWith('Recommended action:') || line.startsWith('Note: even after')) {
               return <div key={i} className="text-orange-300 italic">{line}</div>;
             }
             if (line.startsWith('Recommended outcome:')) {
               return <div key={i} className={`font-bold ${outcome.color}`}>{line}</div>;
             }
-            if (line.startsWith('Shadow parser appears') || line.startsWith('Live parser performs') || line.startsWith('Insufficient evidence') || line.startsWith('Manual review') || line.startsWith('Parser logic is likely')) {
+            if (
+              line.startsWith('Shadow parser appears') ||
+              line.startsWith('Live parser performs') ||
+              line.startsWith('Insufficient evidence') ||
+              line.startsWith('Manual review') ||
+              line.startsWith('Parser logic is likely')
+            ) {
               return <div key={i} className="text-gray-300 italic">{line}</div>;
             }
             if (line === '') {

@@ -1,4 +1,4 @@
-import { TrendingDown, TrendingUp, Minus, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { TrendingDown, TrendingUp, Minus, AlertTriangle, CheckCircle, XCircle, ShieldAlert } from 'lucide-react';
 import type { PlumbingDiff } from '../../types/plumbingDiscrepancy';
 
 interface Props {
@@ -44,17 +44,24 @@ function fmtDiff(n: number | null | undefined): string {
 }
 
 export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
-  const { totalsComparison: tc } = diff;
+  const { totalsComparison: tc, documentTotalValidation: dtv } = diff;
   const riskLevel = deriveRiskLevel(diff);
   const riskConfig = RISK_CONFIG[riskLevel];
   const RiskIcon = riskConfig.icon;
 
   const parsersAgreeButWrong = tc.isSystemicMiss;
+  const hasMismatch = tc.documentTotalExtractionMismatch;
+
   const deltaSub = parsersAgreeButWrong
-    ? 'Live and shadow match — both diverge from document total'
+    ? 'Live and shadow match — both diverge from anchor total'
     : Math.abs(tc.shadowTotalDelta) < 1
       ? 'Totals match'
       : undefined;
+
+  const trueMissingValue = tc.validatedDocumentGap != null ? Math.abs(tc.validatedDocumentGap) : null;
+  const trueMissingDirection = tc.validatedDocumentGap != null
+    ? (tc.validatedDocumentGap > 0 ? 'under-counted' : 'over-counted')
+    : null;
 
   const cards = [
     {
@@ -74,9 +81,34 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
     {
       label: 'Detected Document Total',
       value: fmt(tc.detectedDocumentTotal),
-      sub: tc.detectedDocumentTotal ? undefined : 'Not detected',
-      highlight: !tc.detectedDocumentTotal || parsersAgreeButWrong,
-      highlightColor: parsersAgreeButWrong ? 'text-red-400' : 'text-amber-400',
+      sub: hasMismatch
+        ? 'Extraction mismatch'
+        : tc.detectedDocumentTotal
+          ? 'Raw extracted'
+          : 'Not detected',
+      subColor: hasMismatch ? 'text-amber-400' : undefined,
+      highlight: !tc.detectedDocumentTotal || parsersAgreeButWrong || hasMismatch,
+      highlightColor: hasMismatch ? 'text-amber-400' : parsersAgreeButWrong ? 'text-red-400' : 'text-amber-400',
+    },
+    {
+      label: 'Validated Document Total',
+      value: fmt(tc.validatedDocumentTotal),
+      sub: dtv?.candidates[0] ? `anchor: ${dtv.candidates[0].anchorType}` : undefined,
+      subColor: 'text-cyan-700',
+      highlight: hasMismatch,
+      highlightColor: 'text-cyan-300',
+    },
+    {
+      label: 'True Missing Value',
+      value: trueMissingValue != null ? fmt(trueMissingValue) : '—',
+      sub: trueMissingDirection ?? (trueMissingValue == null ? 'No anchor total' : undefined),
+      subColor: trueMissingDirection === 'under-counted'
+        ? 'text-red-500'
+        : trueMissingDirection === 'over-counted'
+          ? 'text-amber-400'
+          : undefined,
+      highlight: trueMissingValue != null && trueMissingValue > 500,
+      highlightColor: 'text-red-400',
     },
     {
       label: 'Shadow vs Live Delta',
@@ -87,29 +119,6 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
       highlightColor: parsersAgreeButWrong ? 'text-orange-400' : tc.shadowTotalDelta < 0 ? 'text-green-400' : 'text-red-400',
       Icon: Math.abs(tc.shadowTotalDelta) < 1 ? Minus : tc.shadowTotalDelta < 0 ? TrendingDown : TrendingUp,
     },
-    {
-      label: 'Included Lines (Shadow)',
-      value: '',
-      valueAlt: () => {
-        const included = diff.rowClassificationChanges.filter((r) => r.shadowIncluded).length;
-        const total = diff.rowClassificationChanges.length;
-        return total > 0 ? `${included} of ${total} changed` : 'No changes';
-      },
-      highlight: false,
-      highlightColor: 'text-gray-300',
-    },
-    {
-      label: 'Excluded Summary Rows',
-      value: String(diff.shadowExcludedRows.length),
-      sub: diff.liveExcludedRows.length !== diff.shadowExcludedRows.length
-        ? `vs ${diff.liveExcludedRows.length} in live`
-        : parsersAgreeButWrong
-          ? 'Both exclude same rows'
-          : 'Same as live',
-      subColor: parsersAgreeButWrong ? 'text-orange-400' : undefined,
-      highlight: diff.shadowExcludedRows.length > diff.liveExcludedRows.length || parsersAgreeButWrong,
-      highlightColor: parsersAgreeButWrong ? 'text-orange-400' : 'text-cyan-400',
-    },
   ];
 
   const outcomeLabel = diff.recommendedOutcome === 'systemic_failure'
@@ -118,6 +127,21 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
 
   return (
     <div className="space-y-3">
+      {hasMismatch && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl border bg-amber-950/30 border-amber-700">
+          <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-bold text-amber-300">Document total extraction mismatch detected</span>
+            {dtv?.mismatchReason && (
+              <p className="text-xs text-amber-500 mt-0.5 leading-relaxed">{dtv.mismatchReason}</p>
+            )}
+            <p className="text-xs text-amber-600 mt-0.5">
+              Discrepancy analysis is anchored to the validated total. Review extraction candidates before drawing parser conclusions.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {cards.map((card) => (
           <div
@@ -126,8 +150,8 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
           >
             <div className="text-xs text-gray-500 mb-1 leading-tight">{card.label}</div>
             <div className={`text-lg font-bold tabular-nums ${card.highlight ? card.highlightColor : 'text-white'}`}>
-              {card.valueAlt ? card.valueAlt() : card.value}
-              {card.Icon && <card.Icon className="inline w-4 h-4 ml-1" />}
+              {card.value}
+              {'Icon' in card && card.Icon && <card.Icon className="inline w-4 h-4 ml-1" />}
             </div>
             {card.sub && (
               <div className={`text-xs mt-0.5 truncate ${card.subColor ?? 'text-gray-600'}`}>{card.sub}</div>
