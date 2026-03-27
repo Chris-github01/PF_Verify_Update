@@ -26,6 +26,10 @@ function confidenceColor(confidence: number): string {
 
 function sourceLabel(source: string): string {
   const labels: Record<string, string> = {
+    document_truth: 'Document Truth',
+    rate: 'Rate Analysis',
+    scope: 'Scope Analysis',
+    failure: 'Parser Failure',
     parser_comparison: 'Parser',
     rate_intelligence: 'Rate Analysis',
     scope_intelligence: 'Scope Analysis',
@@ -54,7 +58,12 @@ function EventCard({ event }: { event: ShadowRevenueLeakageEvent }) {
           </div>
         </div>
       </div>
-      <div className="text-xs text-gray-600">Source: {sourceLabel(event.source)}</div>
+      <div className="flex items-center gap-3 text-xs text-gray-600">
+        <span>Source: {sourceLabel(event.source)}</span>
+        {event.reference_id && (
+          <span className="font-mono text-gray-700">ref: {event.reference_id.slice(0, 8)}</span>
+        )}
+      </div>
     </div>
   );
 }
