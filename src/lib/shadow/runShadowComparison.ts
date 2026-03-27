@@ -3,6 +3,7 @@ import { runLiveParser } from '../modules/parsers/plumbing/live';
 import { runShadowParser } from '../modules/parsers/plumbing/shadow';
 import { LIVE_PARSER_VERSION, SHADOW_PARSER_VERSION } from '../modules/parsers/plumbing/shared';
 import type { PlumbingSourceRow, PlumbingParserOutput } from '../modules/parsers/plumbing/types';
+import { TRADE_MODULES } from '../modules/tradeRegistry';
 import type { RunMode } from '../../types/shadow';
 
 export interface RunShadowComparisonInput {
@@ -17,16 +18,19 @@ export interface RunShadowComparisonResult {
   error?: string;
 }
 
-async function fetchQuoteRows(quoteId: string): Promise<{
+interface QuoteRowsResult {
   rows: PlumbingSourceRow[];
   documentTotal: number | null;
   supplierName: string | null;
   sourceLabel: string;
   itemCount: number;
-}> {
+  resolvedVia: string;
+}
+
+async function fetchQuoteRows(quoteId: string): Promise<QuoteRowsResult> {
   const { data: quote, error: qErr } = await supabase
     .from('quotes')
-    .select('id, supplier_name, document_total, total_price')
+    .select('id, supplier_name, document_total, total_price, inserted_items_count, line_item_count, final_items_count, trade')
     .eq('id', quoteId)
     .maybeSingle();
 
@@ -49,12 +53,28 @@ async function fetchQuoteRows(quoteId: string): Promise<{
     total: item.total_price ?? null,
   }));
 
+  const resolvedItemCount = rows.length;
+
+  const metaItemCount =
+    (quote.inserted_items_count ?? 0) > 0 ? (quote.inserted_items_count as number) :
+    (quote.line_item_count ?? 0) > 0 ? (quote.line_item_count as number) :
+    (quote.final_items_count ?? 0) as number;
+
+  console.log('[ShadowComparison] Source resolution', {
+    moduleKey: quote.trade,
+    quoteId: quoteId.slice(0, 8),
+    resolvedFromQuoteItems: resolvedItemCount,
+    metaItemCountFromQuotes: metaItemCount,
+    resolvedVia: resolvedItemCount > 0 ? 'quote_items' : 'quote_items_empty',
+  });
+
   return {
     rows,
     documentTotal: quote.document_total ?? quote.total_price ?? null,
     supplierName: quote.supplier_name ?? null,
     sourceLabel: `${quote.supplier_name ?? 'Quote'} (${quoteId.slice(0, 8)})`,
-    itemCount: rows.length,
+    itemCount: resolvedItemCount > 0 ? resolvedItemCount : metaItemCount,
+    resolvedVia: resolvedItemCount > 0 ? 'quote_items' : 'meta_count_fallback',
   };
 }
 
@@ -78,11 +98,53 @@ function buildRunOutput(output: PlumbingParserOutput): Record<string, unknown> {
   };
 }
 
+function buildPassthroughOutput(
+  moduleKey: string,
+  quoteId: string,
+  rows: PlumbingSourceRow[],
+  documentTotal: number | null,
+  itemCount: number,
+): Record<string, unknown> {
+  const parsedValue = rows.reduce((sum, r) => {
+    const t = typeof r.total === 'number' ? r.total : parseFloat(String(r.total ?? '0')) || 0;
+    return sum + t;
+  }, 0);
+
+  return {
+    parserVersion: 'passthrough-v1',
+    moduleKey,
+    sourceId: quoteId,
+    sourceType: 'quote',
+    parsedValue,
+    detectedDocumentTotal: documentTotal,
+    differenceToDocumentTotal: documentTotal != null ? parsedValue - documentTotal : null,
+    includedLineCount: itemCount,
+    excludedLineCount: 0,
+    totalRowCount: itemCount,
+    parserWarnings: [],
+    hasTotalMismatch: false,
+    hasLikelyFinalTotalAsLineItem: false,
+    hasDuplicateValueRisk: false,
+    ruleHitsSummary: {},
+    rows: [],
+    items: [],
+    executedAt: new Date().toISOString(),
+    note: `Passthrough snapshot for ${moduleKey} — deep diff not available for this trade module`,
+  };
+}
+
+function isPlumbingModule(moduleKey: string): boolean {
+  const mod = TRADE_MODULES[moduleKey];
+  return mod?.trade_category === 'plumbing';
+}
+
 export async function runShadowComparison(
   input: RunShadowComparisonInput
 ): Promise<RunShadowComparisonResult> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+
+  const usePlumbingParser = isPlumbingModule(input.moduleKey);
 
   const { data: runRecord, error: insertErr } = await supabase
     .from('shadow_runs')
@@ -93,10 +155,10 @@ export async function runShadowComparison(
       initiated_by: user.id,
       run_mode: input.mode,
       status: 'running',
-      live_version: LIVE_PARSER_VERSION,
-      shadow_version: SHADOW_PARSER_VERSION,
+      live_version: usePlumbingParser ? LIVE_PARSER_VERSION : 'passthrough-v1',
+      shadow_version: usePlumbingParser ? SHADOW_PARSER_VERSION : 'passthrough-v1',
       started_at: new Date().toISOString(),
-      metadata_json: { triggered_from: 'shadow_compare_ui' },
+      metadata_json: { triggered_from: 'shadow_compare_ui', trade_module: input.moduleKey },
     })
     .select('id')
     .single();
@@ -105,25 +167,31 @@ export async function runShadowComparison(
   const runId = runRecord.id as string;
 
   try {
-    const { rows, documentTotal, supplierName, sourceLabel, itemCount } = await fetchQuoteRows(input.quoteId);
+    const { rows, documentTotal, supplierName, sourceLabel, itemCount, resolvedVia } =
+      await fetchQuoteRows(input.quoteId);
+
+    console.log('[ShadowComparison] Preflight', {
+      moduleKey: input.moduleKey,
+      quoteId: input.quoteId.slice(0, 8),
+      resolvedLineItems: rows.length,
+      itemCount,
+      resolvedVia,
+      usePlumbingParser,
+    });
 
     if (itemCount === 0) {
-      throw new Error('Quote has no parsed line items. Import and parse the quote first.');
+      throw new Error(
+        usePlumbingParser
+          ? 'Quote has no parsed line items. Import and parse the quote first.'
+          : `Parsed dataset record found, but no executable row payload could be resolved for ${input.moduleKey}. Ensure the quote was successfully parsed and items were saved.`
+      );
     }
 
-    const parserInput = {
-      sourceType: 'quote' as const,
-      sourceId: input.quoteId,
-      rows,
-      documentTotal,
-      supplierName,
-    };
-
-    const liveOutput = runLiveParser(parserInput);
-
-    let shadowOutput: PlumbingParserOutput | null = null;
-    if (input.mode === 'live_vs_shadow') {
-      shadowOutput = runShadowParser(parserInput);
+    if (!usePlumbingParser && rows.length === 0) {
+      console.warn(
+        `[ShadowComparison] ${input.moduleKey}: quote_items returned 0 rows but meta count is ${itemCount}. ` +
+        `Using passthrough snapshot with meta count. resolvedVia=${resolvedVia}`
+      );
     }
 
     await supabase
@@ -131,32 +199,38 @@ export async function runShadowComparison(
       .update({ source_label: sourceLabel })
       .eq('id', runId);
 
-    const resultRows = [
-      {
-        shadow_run_id: runId,
-        result_type: 'live',
-        output_json: buildRunOutput(liveOutput),
-        metrics_json: {
-          parsedValue: liveOutput.parsedValue,
-          itemCount: liveOutput.includedLineCount,
-          excludedCount: liveOutput.excludedLineCount,
-          totalMismatch: liveOutput.hasTotalMismatch,
-          sourceItemCount: itemCount,
-        },
-      },
-    ];
+    let liveOutputJson: Record<string, unknown>;
+    let shadowOutputJson: Record<string, unknown> | null = null;
+    let liveMetrics: Record<string, unknown>;
+    let shadowMetrics: Record<string, unknown> | null = null;
 
-    if (shadowOutput) {
-      const delta = Math.abs(liveOutput.parsedValue - shadowOutput.parsedValue);
-      const deltaPercent = liveOutput.parsedValue > 0
-        ? (delta / liveOutput.parsedValue) * 100
-        : 0;
+    if (usePlumbingParser) {
+      const parserInput = {
+        sourceType: 'quote' as const,
+        sourceId: input.quoteId,
+        rows,
+        documentTotal,
+        supplierName,
+      };
 
-      resultRows.push({
-        shadow_run_id: runId,
-        result_type: 'shadow',
-        output_json: buildRunOutput(shadowOutput),
-        metrics_json: {
+      const liveOutput = runLiveParser(parserInput);
+      liveOutputJson = buildRunOutput(liveOutput);
+      liveMetrics = {
+        parsedValue: liveOutput.parsedValue,
+        itemCount: liveOutput.includedLineCount,
+        excludedCount: liveOutput.excludedLineCount,
+        totalMismatch: liveOutput.hasTotalMismatch,
+        sourceItemCount: itemCount,
+      };
+
+      if (input.mode === 'live_vs_shadow') {
+        const shadowOutput = runShadowParser(parserInput);
+        shadowOutputJson = buildRunOutput(shadowOutput);
+        const delta = Math.abs(liveOutput.parsedValue - shadowOutput.parsedValue);
+        const deltaPercent = liveOutput.parsedValue > 0
+          ? (delta / liveOutput.parsedValue) * 100
+          : 0;
+        shadowMetrics = {
           parsedValue: shadowOutput.parsedValue,
           itemCount: shadowOutput.includedLineCount,
           excludedCount: shadowOutput.excludedLineCount,
@@ -164,7 +238,56 @@ export async function runShadowComparison(
           deltaVsLive: delta,
           deltaPercentVsLive: deltaPercent,
           sourceItemCount: itemCount,
-        },
+        };
+      }
+    } else {
+      liveOutputJson = buildPassthroughOutput(
+        input.moduleKey, input.quoteId, rows, documentTotal, itemCount
+      );
+      liveMetrics = {
+        parsedValue: liveOutputJson.parsedValue,
+        itemCount,
+        excludedCount: 0,
+        totalMismatch: false,
+        sourceItemCount: itemCount,
+        resolvedVia,
+        passthrough: true,
+      };
+
+      if (input.mode === 'live_vs_shadow') {
+        shadowOutputJson = {
+          ...liveOutputJson,
+          parserVersion: 'passthrough-shadow-v1',
+          note: `Shadow passthrough snapshot for ${input.moduleKey}`,
+        };
+        shadowMetrics = {
+          ...liveMetrics,
+          deltaVsLive: 0,
+          deltaPercentVsLive: 0,
+        };
+      }
+    }
+
+    const resultRows: {
+      shadow_run_id: string;
+      result_type: string;
+      output_json: Record<string, unknown>;
+      metrics_json: Record<string, unknown>;
+    }[] = [
+      {
+        shadow_run_id: runId,
+        result_type: 'live',
+        output_json: liveOutputJson,
+        metrics_json: liveMetrics,
+      },
+    ];
+
+    if (shadowOutputJson && shadowMetrics) {
+      resultRows.push({
+        shadow_run_id: runId,
+        result_type: 'shadow',
+        output_json: shadowOutputJson,
+        metrics_json: shadowMetrics,
       });
     }
 
