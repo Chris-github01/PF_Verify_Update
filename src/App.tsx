@@ -59,6 +59,7 @@ import ShadowAuditLogPage from './pages/shadow/ShadowAuditLogPage';
 import ShadowRolloutPage from './pages/shadow/ShadowRolloutPage';
 import ShadowKillSwitchPage from './pages/shadow/ShadowKillSwitchPage';
 import PlumbingCompareView from './pages/shadow/PlumbingCompareView';
+import ShadowModuleCompare from './pages/shadow/ShadowModuleCompare';
 import PlumbingRegressionListPage from './pages/shadow/PlumbingRegressionListPage';
 import PlumbingRegressionSuitePage from './pages/shadow/PlumbingRegressionSuitePage';
 import PlumbingRegressionRunPage from './pages/shadow/PlumbingRegressionRunPage';
@@ -1092,6 +1093,9 @@ function AppContent() {
   }
   if (shadowPath.match(/^\/shadow\/modules\/([^/]+)\/runs$/)) {
     return <ShadowModuleRuns />;
+  }
+  if (shadowPath.match(/^\/shadow\/modules\/([^/]+)\/compare$/)) {
+    return <ShadowModuleCompare />;
   }
   if (shadowPath.match(/^\/shadow\/modules\/([^/]+)$/)) {
     return <ShadowModuleDetail />;
