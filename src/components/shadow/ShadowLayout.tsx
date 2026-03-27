@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   Shield, Layers, Flag, GitBranch, ScrollText,
   Zap, FlaskConical, ChevronLeft, Menu, X,
-  Activity, ShieldAlert, FileSearch, PlaySquare
+  Activity, ShieldAlert, FileSearch, PlaySquare,
+  BookOpen, Lightbulb, Fingerprint, LayoutTemplate
 } from 'lucide-react';
 import { getAdminRole } from '../../lib/shadow/shadowAccess';
 import type { AdminRole } from '../../types/shadow';
@@ -20,6 +21,10 @@ const NAV_CORE = [
 const NAV_INTELLIGENCE = [
   { label: 'Failure Taxonomy', href: '/shadow/intelligence/failures', icon: ShieldAlert },
   { label: 'Benchmarks', href: '/shadow/intelligence/benchmarks', icon: PlaySquare },
+  { label: 'Review Queue', href: '/shadow/intelligence/queue', icon: BookOpen },
+  { label: 'Recommendations', href: '/shadow/intelligence/recommendations', icon: Lightbulb },
+  { label: 'Supplier Intelligence', href: '/shadow/intelligence/suppliers', icon: Fingerprint },
+  { label: 'Template Families', href: '/shadow/intelligence/template-families', icon: LayoutTemplate },
 ];
 
 interface Props {

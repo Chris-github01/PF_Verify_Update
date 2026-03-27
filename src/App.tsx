@@ -78,6 +78,10 @@ import IntelligenceModuleDetail from './pages/shadow/IntelligenceModuleDetail';
 import ShadowBenchmarksPage from './pages/shadow/phase1/ShadowBenchmarksPage';
 import ShadowFailureTypesPage from './pages/shadow/phase1/ShadowFailureTypesPage';
 import ShadowRunIntelligencePage from './pages/shadow/phase1/ShadowRunIntelligencePage';
+import ShadowReviewQueuePage from './pages/shadow/phase2/ShadowReviewQueuePage';
+import ShadowRecommendationsPage from './pages/shadow/phase2/ShadowRecommendationsPage';
+import ShadowSupplierIntelligencePage from './pages/shadow/phase2/ShadowSupplierIntelligencePage';
+import ShadowTemplateFamiliesPage from './pages/shadow/phase2/ShadowTemplateFamiliesPage';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1205,6 +1209,18 @@ function AppContent() {
   }
   if (shadowPath === '/shadow/intelligence/benchmarks') {
     return <ShadowBenchmarksPage />;
+  }
+  if (shadowPath === '/shadow/intelligence/queue') {
+    return <ShadowReviewQueuePage />;
+  }
+  if (shadowPath === '/shadow/intelligence/recommendations') {
+    return <ShadowRecommendationsPage />;
+  }
+  if (shadowPath === '/shadow/intelligence/suppliers') {
+    return <ShadowSupplierIntelligencePage />;
+  }
+  if (shadowPath === '/shadow/intelligence/template-families') {
+    return <ShadowTemplateFamiliesPage />;
   }
   if (shadowPath.match(/^\/shadow\/runs\/([^/]+)\/intelligence$/)) {
     return <ShadowRunIntelligencePage />;

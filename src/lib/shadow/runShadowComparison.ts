@@ -9,6 +9,8 @@ import { resolveDataset } from './phase1/sourceAdapters';
 import { buildAndSaveDiagnostics } from './phase1/runDiagnosticsBuilder';
 import { classifyAndSaveFailures } from './phase1/failureClassifier';
 import { resolveDocumentTruth } from './phase1/shadowDocumentTruth';
+import { fingerprintRun } from './phase2/fingerprintingService';
+import { evaluateAndEnqueueRun } from './phase2/learningQueueService';
 
 export interface RunShadowComparisonInput {
   moduleKey: string;
@@ -303,6 +305,28 @@ export async function runShadowComparison(
           }
         });
       }
+
+      Promise.allSettled([
+        fingerprintRun(runId, resolvedDataset),
+      ]).then(async ([fpResult]) => {
+        const isNewFingerprint = fpResult.status === 'fulfilled'
+          ? fpResult.value.fingerprint.historical_run_count === 1
+          : false;
+
+        await evaluateAndEnqueueRun(runId, input.moduleKey, isNewFingerprint).catch((err) => {
+          if (import.meta.env.DEV) {
+            console.warn('[Phase2] evaluateAndEnqueueRun failed:', err);
+          }
+        });
+
+        if (fpResult.status === 'rejected' && import.meta.env.DEV) {
+          console.warn('[Phase2] fingerprintRun failed:', fpResult.reason);
+        }
+      }).catch((err) => {
+        if (import.meta.env.DEV) {
+          console.warn('[Phase2] post-run hooks failed:', err);
+        }
+      });
     }).catch((err) => {
       if (import.meta.env.DEV) {
         console.warn('[Phase1] Promise.allSettled wrapper failed:', err);

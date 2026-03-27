@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Activity, ShieldAlert, FileSearch, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Activity, ShieldAlert, FileSearch, RefreshCw, CreditCard as Edit3, Fingerprint } from 'lucide-react';
 import ShadowLayout from '../../../components/shadow/ShadowLayout';
 import ShadowDiffSummary from '../../../components/shadow/ShadowDiffSummary';
 import RunDiagnosticsPanel from '../../../components/shadow/phase1/RunDiagnosticsPanel';
 import RunFailuresPanel from '../../../components/shadow/phase1/RunFailuresPanel';
 import RunDocumentTruthPanel from '../../../components/shadow/phase1/RunDocumentTruthPanel';
+import RunAdjudicationPanel from '../../../components/shadow/phase2/RunAdjudicationPanel';
+import SupplierFingerprintPanel from '../../../components/shadow/phase2/SupplierFingerprintPanel';
 import { dbGetShadowRun, dbGetShadowRunResults } from '../../../lib/db/shadowRuns';
 import type { ShadowRunRecord, ShadowRunResultRecord, ModuleDiff } from '../../../types/shadow';
 
@@ -13,13 +15,15 @@ function getRunIdFromPath(): string | undefined {
   return m ? m[1] : undefined;
 }
 
-type Tab = 'overview' | 'diagnostics' | 'failures' | 'document_truth';
+type Tab = 'overview' | 'diagnostics' | 'failures' | 'document_truth' | 'adjudication' | 'fingerprint';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <RefreshCw className="w-3.5 h-3.5" /> },
   { id: 'diagnostics', label: 'Diagnostics', icon: <Activity className="w-3.5 h-3.5" /> },
   { id: 'failures', label: 'Failures', icon: <ShieldAlert className="w-3.5 h-3.5" /> },
   { id: 'document_truth', label: 'Document Truth', icon: <FileSearch className="w-3.5 h-3.5" /> },
+  { id: 'adjudication', label: 'Adjudication', icon: <Edit3 className="w-3.5 h-3.5" /> },
+  { id: 'fingerprint', label: 'Fingerprint', icon: <Fingerprint className="w-3.5 h-3.5" /> },
 ];
 
 function statusColor(s: string): string {
@@ -99,7 +103,7 @@ export default function ShadowRunIntelligencePage() {
 
         {!loading && run && (
           <>
-            <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1">
+            <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 flex-wrap">
               {TABS.map((t) => (
                 <button
                   key={t.id}
@@ -161,7 +165,7 @@ export default function ShadowRunIntelligencePage() {
                     </div>
                   )}
 
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2 flex-wrap">
                     <button onClick={() => setTab('diagnostics')} className="text-xs text-amber-400 hover:text-amber-300 underline">
                       View Diagnostics
                     </button>
@@ -172,6 +176,14 @@ export default function ShadowRunIntelligencePage() {
                     <span className="text-gray-700">·</span>
                     <button onClick={() => setTab('document_truth')} className="text-xs text-amber-400 hover:text-amber-300 underline">
                       Document Truth
+                    </button>
+                    <span className="text-gray-700">·</span>
+                    <button onClick={() => setTab('adjudication')} className="text-xs text-amber-400 hover:text-amber-300 underline">
+                      Adjudication
+                    </button>
+                    <span className="text-gray-700">·</span>
+                    <button onClick={() => setTab('fingerprint')} className="text-xs text-amber-400 hover:text-amber-300 underline">
+                      Fingerprint
                     </button>
                   </div>
                 </div>
@@ -187,6 +199,14 @@ export default function ShadowRunIntelligencePage() {
 
               {tab === 'document_truth' && runId && (
                 <RunDocumentTruthPanel runId={runId} />
+              )}
+
+              {tab === 'adjudication' && runId && run && (
+                <RunAdjudicationPanel runId={runId} moduleKey={run.module_key} />
+              )}
+
+              {tab === 'fingerprint' && runId && (
+                <SupplierFingerprintPanel runId={runId} />
               )}
             </div>
           </>
