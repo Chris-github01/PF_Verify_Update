@@ -16,7 +16,8 @@ export type RecommendedOutcome =
   | 'shadow_better'
   | 'needs_review'
   | 'live_better'
-  | 'inconclusive';
+  | 'inconclusive'
+  | 'systemic_failure';
 
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
@@ -86,6 +87,10 @@ export interface TotalsComparison {
   shadowDiffToDocument: number | null;
   shadowIsBetter: boolean;
   shadowTotalDelta: number;
+  /** True when live === shadow but both diverge from document_total beyond tolerance */
+  isSystemicMiss: boolean;
+  /** The absolute gap: document_total - parsed_total (positive = under-counted) */
+  documentGap: number | null;
 }
 
 export interface RowClassificationChange {
@@ -114,6 +119,8 @@ export interface PlumbingDiff {
   shadowExcludedRows: ClassifiedRow[];
   liveSuspiciousRows: ClassifiedRow[];
   shadowSuspiciousRows: ClassifiedRow[];
+  /** Set when both parsers agree but both diverge from document total */
+  systemicFailure: boolean;
 }
 
 export interface PlumbingAdjudicationDraft {

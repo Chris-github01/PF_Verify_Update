@@ -8,6 +8,12 @@ interface Props {
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 function deriveRiskLevel(diff: PlumbingDiff): RiskLevel {
+  if (diff.systemicFailure) {
+    const gapAmt = diff.totalsComparison.documentGap != null
+      ? Math.abs(diff.totalsComparison.documentGap)
+      : 0;
+    return gapAmt > 50000 ? 'critical' : 'high';
+  }
   const critical = diff.riskFlags.some((f) => f.severity === 'critical');
   if (critical) return 'critical';
   const high = diff.riskFlags.filter((f) => f.severity === 'high').length;
@@ -43,6 +49,13 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
   const riskConfig = RISK_CONFIG[riskLevel];
   const RiskIcon = riskConfig.icon;
 
+  const parsersAgreeButWrong = tc.isSystemicMiss;
+  const deltaSub = parsersAgreeButWrong
+    ? 'Live and shadow match — both diverge from document total'
+    : Math.abs(tc.shadowTotalDelta) < 1
+      ? 'Totals match'
+      : undefined;
+
   const cards = [
     {
       label: 'Live Parsed Total',
@@ -55,27 +68,28 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
       label: 'Shadow Parsed Total',
       value: fmt(tc.shadowParsedTotal),
       sub: tc.shadowDiffToDocument !== null ? `${fmtDiff(tc.shadowDiffToDocument)} vs document` : undefined,
-      highlight: tc.shadowIsBetter,
-      highlightColor: 'text-green-400',
+      highlight: parsersAgreeButWrong ? true : tc.shadowIsBetter,
+      highlightColor: parsersAgreeButWrong ? 'text-orange-400' : 'text-green-400',
     },
     {
       label: 'Detected Document Total',
       value: fmt(tc.detectedDocumentTotal),
       sub: tc.detectedDocumentTotal ? undefined : 'Not detected',
-      highlight: !tc.detectedDocumentTotal,
-      highlightColor: 'text-amber-400',
+      highlight: !tc.detectedDocumentTotal || parsersAgreeButWrong,
+      highlightColor: parsersAgreeButWrong ? 'text-red-400' : 'text-amber-400',
     },
     {
       label: 'Shadow vs Live Delta',
       value: fmtDiff(tc.shadowTotalDelta),
-      sub: Math.abs(tc.shadowTotalDelta) < 1 ? 'Totals match' : undefined,
-      highlight: Math.abs(tc.shadowTotalDelta) > 500,
-      highlightColor: tc.shadowTotalDelta < 0 ? 'text-green-400' : 'text-red-400',
+      sub: deltaSub,
+      subColor: parsersAgreeButWrong ? 'text-orange-400' : undefined,
+      highlight: parsersAgreeButWrong || Math.abs(tc.shadowTotalDelta) > 500,
+      highlightColor: parsersAgreeButWrong ? 'text-orange-400' : tc.shadowTotalDelta < 0 ? 'text-green-400' : 'text-red-400',
       Icon: Math.abs(tc.shadowTotalDelta) < 1 ? Minus : tc.shadowTotalDelta < 0 ? TrendingDown : TrendingUp,
     },
     {
       label: 'Included Lines (Shadow)',
-      value: String(diff.totalsComparison.shadowParsedTotal > 0 ? diff.shadowExcludedRows.length > 0 ? diff.rowClassificationChanges.filter(r => r.shadowIncluded).length + '–' : '' : ''),
+      value: '',
       valueAlt: () => {
         const included = diff.rowClassificationChanges.filter((r) => r.shadowIncluded).length;
         const total = diff.rowClassificationChanges.length;
@@ -89,11 +103,18 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
       value: String(diff.shadowExcludedRows.length),
       sub: diff.liveExcludedRows.length !== diff.shadowExcludedRows.length
         ? `vs ${diff.liveExcludedRows.length} in live`
-        : 'Same as live',
-      highlight: diff.shadowExcludedRows.length > diff.liveExcludedRows.length,
-      highlightColor: 'text-cyan-400',
+        : parsersAgreeButWrong
+          ? 'Both exclude same rows'
+          : 'Same as live',
+      subColor: parsersAgreeButWrong ? 'text-orange-400' : undefined,
+      highlight: diff.shadowExcludedRows.length > diff.liveExcludedRows.length || parsersAgreeButWrong,
+      highlightColor: parsersAgreeButWrong ? 'text-orange-400' : 'text-cyan-400',
     },
   ];
+
+  const outcomeLabel = diff.recommendedOutcome === 'systemic_failure'
+    ? 'systemic failure'
+    : diff.recommendedOutcome.replace(/_/g, ' ');
 
   return (
     <div className="space-y-3">
@@ -109,7 +130,7 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
               {card.Icon && <card.Icon className="inline w-4 h-4 ml-1" />}
             </div>
             {card.sub && (
-              <div className="text-xs text-gray-600 mt-0.5 truncate">{card.sub}</div>
+              <div className={`text-xs mt-0.5 truncate ${card.subColor ?? 'text-gray-600'}`}>{card.sub}</div>
             )}
           </div>
         ))}
@@ -122,7 +143,7 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
           <span className="text-xs text-gray-400 ml-2">
             {diff.riskFlags.length} risk flag{diff.riskFlags.length !== 1 ? 's' : ''} detected
             {' · '}
-            Recommended: <span className="font-medium text-gray-300">{diff.recommendedOutcome.replace(/_/g, ' ')}</span>
+            Recommended: <span className={`font-medium ${diff.systemicFailure ? 'text-red-300' : 'text-gray-300'}`}>{outcomeLabel}</span>
           </span>
         </div>
       </div>

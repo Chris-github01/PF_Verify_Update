@@ -49,6 +49,7 @@ export function getRecommendationColor(recommendation: string): string {
     case 'live_better': return 'text-orange-400';
     case 'needs_review': return 'text-amber-400';
     case 'inconclusive': return 'text-gray-400';
+    case 'systemic_failure': return 'text-red-400';
     default: return 'text-gray-500';
   }
 }
@@ -59,6 +60,7 @@ export function getRecommendationLabel(recommendation: string): string {
     case 'live_better': return 'Live Better';
     case 'needs_review': return 'Needs Review';
     case 'inconclusive': return 'Inconclusive';
+    case 'systemic_failure': return 'Systemic Failure';
     default: return recommendation;
   }
 }

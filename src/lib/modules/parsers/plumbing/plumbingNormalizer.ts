@@ -166,7 +166,22 @@ export function buildRiskFlags(
   if (liveSummary.hasTotalMismatch && shadowSummary.hasTotalMismatch) {
     const liveDiff = Math.abs(liveSummary.differenceToDocumentTotal ?? 0);
     const shadowDiff = Math.abs(shadowSummary.differenceToDocumentTotal ?? 0);
-    if (shadowDiff > liveDiff) {
+
+    const parsersAgree = Math.abs(liveSummary.parsedValue - shadowSummary.parsedValue) < 1;
+    if (parsersAgree) {
+      const docGap = shadowSummary.detectedDocumentTotal != null
+        ? shadowSummary.detectedDocumentTotal - shadowSummary.parsedValue
+        : null;
+      const gapAmt = docGap != null ? Math.abs(docGap) : shadowDiff;
+      const severity: RiskLevel = gapAmt > 50000 ? 'critical' : 'high';
+      flags.push({
+        id: 'systemic_miss',
+        severity,
+        title: 'Systemic parsing failure — both parsers equally wrong',
+        explanation: `Live and shadow parsers produce identical totals, but both diverge from the detected document total by $${gapAmt.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}. This is NOT a parser disagreement — it is a shared blind spot. The document contains value that neither parser is capturing.`,
+        suggestedAction: 'Review summary row detection logic. Both parsers are likely excluding the same valid cost lines. Check for rows with high-confidence "phrase_match" signals that may be legitimate billable items.',
+      });
+    } else if (shadowDiff > liveDiff) {
       flags.push({
         id: 'shadow_worse_total_mismatch',
         severity: 'high' as RiskLevel,

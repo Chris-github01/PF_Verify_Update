@@ -7,6 +7,7 @@ import PlumbingRowDiffTable from '../../components/plumbing/PlumbingRowDiffTable
 import PlumbingExcludedRowsTable from '../../components/plumbing/PlumbingExcludedRowsTable';
 import PlumbingSuspiciousRowsTable from '../../components/plumbing/PlumbingSuspiciousRowsTable';
 import PlumbingAdjudicationSummary from '../../components/plumbing/PlumbingAdjudicationSummary';
+import PlumbingSystemicMissBlock from '../../components/plumbing/PlumbingSystemicMissBlock';
 import { dbGetShadowRun, dbGetShadowRunResults } from '../../lib/db/shadowRuns';
 import { normalizeForShadowCompare } from '../../lib/modules/parsers/plumbing/plumbingNormalizer';
 import { buildPlumbingDiff } from '../../lib/modules/parsers/plumbing/plumbingDiffBuilder';
@@ -189,6 +190,7 @@ export default function PlumbingCompareView() {
           ) : diff ? (
             <div className="space-y-6">
               <PlumbingDiscrepancySummaryCards diff={diff} />
+              {diff.systemicFailure && <PlumbingSystemicMissBlock diff={diff} />}
               <PlumbingRiskFlagsBanner flags={diff.riskFlags} />
 
               <div className="flex gap-2 border-b border-gray-800 pb-0">
