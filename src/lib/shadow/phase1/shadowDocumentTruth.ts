@@ -46,6 +46,13 @@ export interface DocumentTruthResult {
   extractionFailure: boolean;
 }
 
+export interface ResolveDocumentTruthInput {
+  runId: string;
+  dataset: ResolvedDataset;
+  liveOutput: Record<string, unknown>;
+  shadowOutput: Record<string, unknown> | null;
+}
+
 function normalizeText(text: string | null): string | null {
   if (!text) return null;
   return text.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -170,10 +177,20 @@ function detectConflict(candidates: TotalCandidate[]): boolean {
 }
 
 export async function resolveDocumentTruth(
-  runId: string,
-  liveOutput: Record<string, unknown>,
-  dataset: ResolvedDataset,
+  input: ResolveDocumentTruthInput,
 ): Promise<DocumentTruthResult> {
+  const { runId, dataset, liveOutput, shadowOutput: _shadowOutput } = input;
+
+  if (!runId) {
+    throw new Error('[resolveDocumentTruth] runId is required');
+  }
+  if (!dataset) {
+    throw new Error('[resolveDocumentTruth] dataset is required');
+  }
+  if (!liveOutput || typeof liveOutput !== 'object') {
+    throw new Error('[resolveDocumentTruth] liveOutput must be a non-null object');
+  }
+
   const rawCandidates = extractCandidatesFromOutput(liveOutput, dataset);
   const total = rawCandidates.length;
 
@@ -200,7 +217,9 @@ export async function resolveDocumentTruth(
 
   const validatedDocumentTotal = bestCandidate?.value ?? null;
   const detectedDocumentTotal =
-    typeof liveOutput.detectedDocumentTotal === 'number' ? liveOutput.detectedDocumentTotal : dataset.documentTotal;
+    typeof liveOutput.detectedDocumentTotal === 'number'
+      ? liveOutput.detectedDocumentTotal
+      : dataset.documentTotal;
 
   const parsedTotal = typeof liveOutput.parsedValue === 'number' ? liveOutput.parsedValue : null;
 
@@ -233,32 +252,43 @@ export async function resolveDocumentTruth(
     extractionFailure,
   };
 
-  await supabase.from('document_total_candidates').insert(
-    candidates.map((c, i) => ({
-      run_id: runId,
-      value: c.value,
-      anchor_type: c.anchorType,
-      source_text: c.sourceText,
-      normalized_source_text: c.normalizedSourceText,
-      confidence: c.confidence,
-      ranking_score: c.rankingScore,
-      selected: c.selected,
-      rejected_reason: c.rejectedReason,
-      page: c.page,
-      line_index: i,
-    }))
-  );
+  if (candidates.length > 0) {
+    const { error: candErr } = await supabase.from('document_total_candidates').insert(
+      candidates.map((c, i) => ({
+        run_id: runId,
+        value: c.value,
+        anchor_type: c.anchorType,
+        source_text: c.sourceText,
+        normalized_source_text: c.normalizedSourceText,
+        confidence: c.confidence,
+        ranking_score: c.rankingScore,
+        selected: c.selected,
+        rejected_reason: c.rejectedReason,
+        page: c.page,
+        line_index: i,
+      })),
+    );
+    if (candErr && import.meta.env.DEV) {
+      console.warn('[resolveDocumentTruth] document_total_candidates insert failed:', candErr.message);
+    }
+  }
 
-  await supabase.from('document_truth_validations').upsert({
-    run_id: runId,
-    detected_document_total: detectedDocumentTotal,
-    validated_document_total: validatedDocumentTotal,
-    selected_anchor_type: bestCandidate?.anchorType ?? null,
-    extraction_mismatch: extractionMismatch,
-    mismatch_reason: mismatchReason,
-    true_missing_value: trueMissingValue,
-    extraction_failure: extractionFailure,
-  }, { onConflict: 'run_id' });
+  const { error: valErr } = await supabase.from('document_truth_validations').upsert(
+    {
+      run_id: runId,
+      detected_document_total: detectedDocumentTotal,
+      validated_document_total: validatedDocumentTotal,
+      selected_anchor_type: bestCandidate?.anchorType ?? null,
+      extraction_mismatch: extractionMismatch,
+      mismatch_reason: mismatchReason,
+      true_missing_value: trueMissingValue,
+      extraction_failure: extractionFailure,
+    },
+    { onConflict: 'run_id' },
+  );
+  if (valErr && import.meta.env.DEV) {
+    console.warn('[resolveDocumentTruth] document_truth_validations upsert failed:', valErr.message);
+  }
 
   return result;
 }

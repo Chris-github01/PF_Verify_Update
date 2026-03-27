@@ -143,6 +143,16 @@ function calculateConfidenceScore(
 }
 
 export async function buildAndSaveDiagnostics(input: DiagnosticsInput): Promise<DiagnosticsProfile> {
+  if (!input.runId) {
+    throw new Error('[buildAndSaveDiagnostics] runId is required');
+  }
+  if (!input.dataset) {
+    throw new Error('[buildAndSaveDiagnostics] dataset is required');
+  }
+  if (!input.liveOutputJson || typeof input.liveOutputJson !== 'object') {
+    throw new Error('[buildAndSaveDiagnostics] liveOutputJson must be a non-null object');
+  }
+
   const { runId, dataset, moduleKey, liveOutputJson, shadowOutputJson } = input;
 
   const supplierNameNormalized = normalizeSupplierName(dataset.supplierName);
@@ -192,6 +202,10 @@ export async function buildAndSaveDiagnostics(input: DiagnosticsInput): Promise<
       hasLikelyFinalTotalAsLineItem: liveOutputJson.hasLikelyFinalTotalAsLineItem ?? false,
       hasDuplicateValueRisk: liveOutputJson.hasDuplicateValueRisk ?? false,
     },
+  }).then(({ error }) => {
+    if (error && import.meta.env.DEV) {
+      console.warn('[buildAndSaveDiagnostics] shadow_run_diagnostics insert failed:', error.message);
+    }
   });
 
   return profile;

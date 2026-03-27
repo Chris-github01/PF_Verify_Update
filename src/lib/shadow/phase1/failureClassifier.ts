@@ -16,7 +16,9 @@ export type FailureCode =
   | 'section_boundary_error'
   | 'gst_misclassification'
   | 'provisional_sum_misclassification'
-  | 'rate_vs_lump_sum_misread';
+  | 'rate_vs_lump_sum_misread'
+  | 'document_extraction_failure'
+  | 'confidence_misalignment';
 
 export type FailureSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 
@@ -137,9 +139,11 @@ function classifyFailures(
     });
   }
 
-  const warnings = Array.isArray(liveOutput.parserWarnings) ? liveOutput.parserWarnings as string[] : [];
-  const hasPsWarning = warnings.some((w) =>
-    w.toLowerCase().includes('provisional') || w.toLowerCase().includes('prime cost')
+  const warnings = Array.isArray(liveOutput.parserWarnings)
+    ? (liveOutput.parserWarnings as string[])
+    : [];
+  const hasPsWarning = warnings.some(
+    (w) => w.toLowerCase().includes('provisional') || w.toLowerCase().includes('prime cost'),
   );
   if (hasPsWarning) {
     failures.push({
@@ -149,6 +153,34 @@ function classifyFailures(
       financialImpactEstimate: null,
       notes: 'Parser warning references provisional sums or prime cost items.',
     });
+  }
+
+  const hasDocumentTotal =
+    dataset.documentTotal != null ||
+    typeof liveOutput.detectedDocumentTotal === 'number';
+  const hasParsedValue = liveVal > 0;
+
+  if (!hasDocumentTotal && hasParsedValue) {
+    failures.push({
+      failureCode: 'document_extraction_failure',
+      severity: 'high',
+      confidence: 0.85,
+      financialImpactEstimate: null,
+      notes: 'No document-level total anchor was found. Parser produced line items but could not locate a reference total from the source document.',
+    });
+  }
+
+  if (diagnostics.confidenceScore >= 80 && docTotal > 0 && liveVal > 0) {
+    const delta = Math.abs(liveVal - docTotal) / docTotal;
+    if (delta > 0.15) {
+      failures.push({
+        failureCode: 'confidence_misalignment',
+        severity: 'medium',
+        confidence: 0.75,
+        financialImpactEstimate: Math.abs(liveVal - docTotal),
+        notes: `High diagnostics confidence (${diagnostics.confidenceScore}) but parsed total deviates ${(delta * 100).toFixed(1)}% from document total. Possible structural parse error masked by clean document format.`,
+      });
+    }
   }
 
   return failures;
@@ -161,6 +193,19 @@ export async function classifyAndSaveFailures(
   shadowOutput: Record<string, unknown> | null,
   diagnostics: DiagnosticsProfile,
 ): Promise<ClassifiedFailure[]> {
+  if (!runId) {
+    throw new Error('[classifyAndSaveFailures] runId is required');
+  }
+  if (!dataset) {
+    throw new Error('[classifyAndSaveFailures] dataset is required');
+  }
+  if (!liveOutput || typeof liveOutput !== 'object') {
+    throw new Error('[classifyAndSaveFailures] liveOutput must be a non-null object');
+  }
+  if (!diagnostics) {
+    throw new Error('[classifyAndSaveFailures] diagnostics profile is required');
+  }
+
   const failures = classifyFailures(dataset, liveOutput, shadowOutput, diagnostics);
   if (failures.length === 0) return [];
 
@@ -173,7 +218,11 @@ export async function classifyAndSaveFailures(
     notes: f.notes,
   }));
 
-  await supabase.from('shadow_run_failures').insert(rows);
+  const { error } = await supabase.from('shadow_run_failures').insert(rows);
+  if (error && import.meta.env.DEV) {
+    console.warn('[classifyAndSaveFailures] insert failed:', error.message);
+  }
+
   return failures;
 }
 

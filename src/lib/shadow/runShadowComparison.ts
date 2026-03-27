@@ -2,13 +2,13 @@ import { supabase } from '../supabase';
 import { runLiveParser } from '../modules/parsers/plumbing/live';
 import { runShadowParser } from '../modules/parsers/plumbing/shadow';
 import { LIVE_PARSER_VERSION, SHADOW_PARSER_VERSION } from '../modules/parsers/plumbing/shared';
-import type { PlumbingSourceRow, PlumbingParserOutput } from '../modules/parsers/plumbing/types';
-import { TRADE_MODULES } from '../modules/tradeRegistry';
+import type { PlumbingParserOutput } from '../modules/parsers/plumbing/types';
 import type { RunMode } from '../../types/shadow';
+import { getShadowModule, getAdapterKey, isDeepDiffEnabled } from './phase1/shadowModuleRegistry';
+import { resolveDataset } from './phase1/sourceAdapters';
 import { buildAndSaveDiagnostics } from './phase1/runDiagnosticsBuilder';
 import { classifyAndSaveFailures } from './phase1/failureClassifier';
 import { resolveDocumentTruth } from './phase1/shadowDocumentTruth';
-import type { ResolvedDataset } from './phase1/sourceAdapters';
 
 export interface RunShadowComparisonInput {
   moduleKey: string;
@@ -20,66 +20,6 @@ export interface RunShadowComparisonResult {
   runId: string;
   status: 'completed' | 'failed';
   error?: string;
-}
-
-interface QuoteRowsResult {
-  rows: PlumbingSourceRow[];
-  documentTotal: number | null;
-  supplierName: string | null;
-  sourceLabel: string;
-  itemCount: number;
-  resolvedVia: string;
-}
-
-async function fetchQuoteRows(quoteId: string): Promise<QuoteRowsResult> {
-  const { data: quote, error: qErr } = await supabase
-    .from('quotes')
-    .select('id, supplier_name, document_total, total_price, inserted_items_count, line_item_count, final_items_count, trade')
-    .eq('id', quoteId)
-    .maybeSingle();
-
-  if (qErr) throw new Error(qErr.message);
-  if (!quote) throw new Error(`Quote ${quoteId} not found`);
-
-  const { data: items, error: iErr } = await supabase
-    .from('quote_items')
-    .select('description, raw_description, quantity, unit, unit_price, total_price')
-    .eq('quote_id', quoteId)
-    .order('created_at');
-
-  if (iErr) throw new Error(iErr.message);
-
-  const rows: PlumbingSourceRow[] = (items ?? []).map((item) => ({
-    description: item.description ?? item.raw_description ?? null,
-    qty: item.quantity ?? null,
-    unit: item.unit ?? null,
-    rate: item.unit_price ?? null,
-    total: item.total_price ?? null,
-  }));
-
-  const resolvedItemCount = rows.length;
-
-  const metaItemCount =
-    (quote.inserted_items_count ?? 0) > 0 ? (quote.inserted_items_count as number) :
-    (quote.line_item_count ?? 0) > 0 ? (quote.line_item_count as number) :
-    (quote.final_items_count ?? 0) as number;
-
-  console.log('[ShadowComparison] Source resolution', {
-    moduleKey: quote.trade,
-    quoteId: quoteId.slice(0, 8),
-    resolvedFromQuoteItems: resolvedItemCount,
-    metaItemCountFromQuotes: metaItemCount,
-    resolvedVia: resolvedItemCount > 0 ? 'quote_items' : 'quote_items_empty',
-  });
-
-  return {
-    rows,
-    documentTotal: quote.document_total ?? quote.total_price ?? null,
-    supplierName: quote.supplier_name ?? null,
-    sourceLabel: `${quote.supplier_name ?? 'Quote'} (${quoteId.slice(0, 8)})`,
-    itemCount: resolvedItemCount > 0 ? resolvedItemCount : metaItemCount,
-    resolvedVia: resolvedItemCount > 0 ? 'quote_items' : 'meta_count_fallback',
-  };
 }
 
 function buildRunOutput(output: PlumbingParserOutput): Record<string, unknown> {
@@ -105,15 +45,10 @@ function buildRunOutput(output: PlumbingParserOutput): Record<string, unknown> {
 function buildPassthroughOutput(
   moduleKey: string,
   quoteId: string,
-  rows: PlumbingSourceRow[],
-  documentTotal: number | null,
   itemCount: number,
+  documentTotal: number | null,
+  parsedValue: number,
 ): Record<string, unknown> {
-  const parsedValue = rows.reduce((sum, r) => {
-    const t = typeof r.total === 'number' ? r.total : parseFloat(String(r.total ?? '0')) || 0;
-    return sum + t;
-  }, 0);
-
   return {
     parserVersion: 'passthrough-v1',
     moduleKey,
@@ -137,18 +72,20 @@ function buildPassthroughOutput(
   };
 }
 
-function isPlumbingModule(moduleKey: string): boolean {
-  const mod = TRADE_MODULES[moduleKey];
-  return mod?.trade_category === 'plumbing';
-}
-
 export async function runShadowComparison(
-  input: RunShadowComparisonInput
+  input: RunShadowComparisonInput,
 ): Promise<RunShadowComparisonResult> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  const usePlumbingParser = isPlumbingModule(input.moduleKey);
+  const module = await getShadowModule(input.moduleKey);
+  if (!module) {
+    throw new Error(`Shadow module not registered: ${input.moduleKey}`);
+  }
+
+  const adapterKey = getAdapterKey(module);
+  const deepDiff = isDeepDiffEnabled(module);
+  const usePlumbingParser = module.parser_family === 'plumbing' || deepDiff;
 
   const { data: runRecord, error: insertErr } = await supabase
     .from('shadow_runs')
@@ -162,7 +99,12 @@ export async function runShadowComparison(
       live_version: usePlumbingParser ? LIVE_PARSER_VERSION : 'passthrough-v1',
       shadow_version: usePlumbingParser ? SHADOW_PARSER_VERSION : 'passthrough-v1',
       started_at: new Date().toISOString(),
-      metadata_json: { triggered_from: 'shadow_compare_ui', trade_module: input.moduleKey },
+      metadata_json: {
+        triggered_from: 'shadow_compare_ui',
+        trade_module: input.moduleKey,
+        adapter_key: adapterKey,
+        deep_diff_enabled: deepDiff,
+      },
     })
     .select('id')
     .single();
@@ -171,50 +113,60 @@ export async function runShadowComparison(
   const runId = runRecord.id as string;
 
   try {
-    const { rows, documentTotal, supplierName, sourceLabel, itemCount, resolvedVia } =
-      await fetchQuoteRows(input.quoteId);
+    const resolvedDataset = await resolveDataset(adapterKey, input.quoteId);
+
+    if (!resolvedDataset.lineItems || resolvedDataset.lineItems.length === 0) {
+      const metaCount = resolvedDataset.itemCount;
+      if (metaCount === 0) {
+        throw new Error(
+          `[${input.moduleKey}] No parsed line items found in dataset. ` +
+          `Import and parse the quote before running shadow comparison.`,
+        );
+      }
+      if (usePlumbingParser) {
+        throw new Error(
+          `[${input.moduleKey}] Quote has no parsed line items. Import and parse the quote first.`,
+        );
+      }
+      console.warn(
+        `[ShadowComparison] ${input.moduleKey}: quote_items returned 0 rows but ` +
+        `meta count is ${metaCount}. Using passthrough snapshot. adapter=${adapterKey}`,
+      );
+    }
 
     console.log('[ShadowComparison] Preflight', {
       moduleKey: input.moduleKey,
       quoteId: input.quoteId.slice(0, 8),
-      resolvedLineItems: rows.length,
-      itemCount,
-      resolvedVia,
+      adapterKey,
+      resolvedLineItems: resolvedDataset.lineItems.length,
+      itemCount: resolvedDataset.itemCount,
+      resolvedVia: resolvedDataset.resolvedVia,
       usePlumbingParser,
     });
 
-    if (itemCount === 0) {
-      throw new Error(
-        usePlumbingParser
-          ? 'Quote has no parsed line items. Import and parse the quote first.'
-          : `Parsed dataset record found, but no executable row payload could be resolved for ${input.moduleKey}. Ensure the quote was successfully parsed and items were saved.`
-      );
-    }
-
-    if (!usePlumbingParser && rows.length === 0) {
-      console.warn(
-        `[ShadowComparison] ${input.moduleKey}: quote_items returned 0 rows but meta count is ${itemCount}. ` +
-        `Using passthrough snapshot with meta count. resolvedVia=${resolvedVia}`
-      );
-    }
-
-    await supabase
-      .from('shadow_runs')
-      .update({ source_label: sourceLabel })
-      .eq('id', runId);
+    const sourceLabel = `${resolvedDataset.supplierName ?? 'Quote'} (${input.quoteId.slice(0, 8)})`;
+    await supabase.from('shadow_runs').update({ source_label: sourceLabel }).eq('id', runId);
 
     let liveOutputJson: Record<string, unknown>;
     let shadowOutputJson: Record<string, unknown> | null = null;
     let liveMetrics: Record<string, unknown>;
     let shadowMetrics: Record<string, unknown> | null = null;
 
-    if (usePlumbingParser) {
+    const plumbingRows = resolvedDataset.lineItems.map((item) => ({
+      description: item.description,
+      qty: item.qty,
+      unit: item.unit,
+      rate: item.rate,
+      total: item.total,
+    }));
+
+    if (usePlumbingParser && resolvedDataset.lineItems.length > 0) {
       const parserInput = {
         sourceType: 'quote' as const,
         sourceId: input.quoteId,
-        rows,
-        documentTotal,
-        supplierName,
+        rows: plumbingRows,
+        documentTotal: resolvedDataset.documentTotal,
+        supplierName: resolvedDataset.supplierName,
       };
 
       const liveOutput = runLiveParser(parserInput);
@@ -224,7 +176,7 @@ export async function runShadowComparison(
         itemCount: liveOutput.includedLineCount,
         excludedCount: liveOutput.excludedLineCount,
         totalMismatch: liveOutput.hasTotalMismatch,
-        sourceItemCount: itemCount,
+        sourceItemCount: resolvedDataset.itemCount,
       };
 
       if (input.mode === 'live_vs_shadow') {
@@ -241,20 +193,29 @@ export async function runShadowComparison(
           totalMismatch: shadowOutput.hasTotalMismatch,
           deltaVsLive: delta,
           deltaPercentVsLive: deltaPercent,
-          sourceItemCount: itemCount,
+          sourceItemCount: resolvedDataset.itemCount,
         };
       }
     } else {
+      const passthroughParsedValue = resolvedDataset.lineItems.reduce((sum, r) => {
+        const t = typeof r.total === 'number' ? r.total : parseFloat(String(r.total ?? '0')) || 0;
+        return sum + t;
+      }, 0);
+
       liveOutputJson = buildPassthroughOutput(
-        input.moduleKey, input.quoteId, rows, documentTotal, itemCount
+        input.moduleKey,
+        input.quoteId,
+        resolvedDataset.itemCount,
+        resolvedDataset.documentTotal,
+        passthroughParsedValue,
       );
       liveMetrics = {
-        parsedValue: liveOutputJson.parsedValue,
-        itemCount,
+        parsedValue: passthroughParsedValue,
+        itemCount: resolvedDataset.itemCount,
         excludedCount: 0,
         totalMismatch: false,
-        sourceItemCount: itemCount,
-        resolvedVia,
+        sourceItemCount: resolvedDataset.itemCount,
+        resolvedVia: resolvedDataset.resolvedVia,
         passthrough: true,
       };
 
@@ -295,36 +256,13 @@ export async function runShadowComparison(
       });
     }
 
-    const { error: resultsErr } = await supabase
-      .from('shadow_run_results')
-      .insert(resultRows);
-
+    const { error: resultsErr } = await supabase.from('shadow_run_results').insert(resultRows);
     if (resultsErr) throw new Error(resultsErr.message);
 
     await supabase
       .from('shadow_runs')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      })
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', runId);
-
-    const resolvedDataset: ResolvedDataset = {
-      quoteId: input.quoteId,
-      supplierName,
-      documentTotal,
-      parsedTotal: documentTotal,
-      itemCount,
-      lineItems: rows.map((r) => ({
-        description: r.description,
-        qty: r.qty,
-        unit: r.unit,
-        rate: r.rate,
-        total: r.total,
-      })),
-      resolvedVia,
-      trade: TRADE_MODULES[input.moduleKey]?.trade_category ?? null,
-    };
 
     Promise.allSettled([
       buildAndSaveDiagnostics({
@@ -334,8 +272,23 @@ export async function runShadowComparison(
         liveOutputJson,
         shadowOutputJson,
       }),
-      resolveDocumentTruth(runId, liveOutputJson, resolvedDataset),
-    ]).then(async ([diagResult]) => {
+      resolveDocumentTruth({
+        runId,
+        dataset: resolvedDataset,
+        liveOutput: liveOutputJson,
+        shadowOutput: shadowOutputJson,
+      }),
+    ]).then(async ([diagResult, truthResult]) => {
+      if (diagResult.status === 'rejected') {
+        if (import.meta.env.DEV) {
+          console.warn('[Phase1] buildAndSaveDiagnostics failed:', diagResult.reason);
+        }
+      }
+      if (truthResult.status === 'rejected') {
+        if (import.meta.env.DEV) {
+          console.warn('[Phase1] resolveDocumentTruth failed:', truthResult.reason);
+        }
+      }
       if (diagResult.status === 'fulfilled') {
         const diagnostics = diagResult.value;
         await classifyAndSaveFailures(
@@ -344,9 +297,17 @@ export async function runShadowComparison(
           liveOutputJson,
           shadowOutputJson,
           diagnostics,
-        ).catch(() => {});
+        ).catch((err) => {
+          if (import.meta.env.DEV) {
+            console.warn('[Phase1] classifyAndSaveFailures failed:', err);
+          }
+        });
       }
-    }).catch(() => {});
+    }).catch((err) => {
+      if (import.meta.env.DEV) {
+        console.warn('[Phase1] Promise.allSettled wrapper failed:', err);
+      }
+    });
 
     return { runId, status: 'completed' };
   } catch (err) {
@@ -378,7 +339,11 @@ export async function fetchPlumbingQuotes(limit = 80, includeEmpty = false): Pro
   return fetchQuotesByTrade('plumbing', limit, includeEmpty);
 }
 
-export async function fetchQuotesByTrade(trade: string, limit = 80, includeEmpty = false): Promise<QuoteOption[]> {
+export async function fetchQuotesByTrade(
+  trade: string,
+  limit = 80,
+  includeEmpty = false,
+): Promise<QuoteOption[]> {
   let query = supabase
     .from('quotes')
     .select('id, supplier_name, total_price, trade, parse_status, inserted_items_count, line_item_count, final_items_count')
