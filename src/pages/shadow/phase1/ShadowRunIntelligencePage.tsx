@@ -11,6 +11,8 @@ import ScopeIntelligencePanel from '../../../components/shadow/phase3/ScopeIntel
 import RateIntelligencePanel from '../../../components/shadow/phase3/RateIntelligencePanel';
 import RevenueLeakagePanel from '../../../components/shadow/phase3/RevenueLeakagePanel';
 import CommercialRiskPanel from '../../../components/shadow/phase3/CommercialRiskPanel';
+import QuoteIntelligenceSummaryPanel from '../../../components/phase6/QuoteIntelligenceSummaryPanel';
+import DecisionCopilotPanel from '../../../components/phase6/DecisionCopilotPanel';
 import { dbGetShadowRun, dbGetShadowRunResults } from '../../../lib/db/shadowRuns';
 import type { ShadowRunRecord, ShadowRunResultRecord, ModuleDiff } from '../../../types/shadow';
 
@@ -141,6 +143,8 @@ export default function ShadowRunIntelligencePage() {
             <div>
               {tab === 'overview' && (
                 <div className="space-y-4">
+                  <QuoteIntelligenceSummaryPanel runId={runId} moduleKey={run.module_key} />
+                  <DecisionCopilotPanel entityType="run" entityId={runId} />
                   <div className="grid sm:grid-cols-4 gap-3">
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                       <div className="text-xs text-gray-500 mb-1">Status</div>

@@ -5,6 +5,7 @@ import {
   BarChart2, FileText,
 } from 'lucide-react';
 import ShadowLayout from '../../../components/shadow/ShadowLayout';
+import DecisionCopilotPanel from '../../../components/phase6/DecisionCopilotPanel';
 import {
   getPromotionDecisions, applyAdminOverride,
   generatePromotionDecision,
@@ -95,6 +96,7 @@ function DecisionCard({ record, onOverride }: {
 
       {expanded && (
         <div className="border-t border-gray-800 px-5 py-5 space-y-5">
+          <DecisionCopilotPanel entityType="version" entityId={record.version_id} compact />
           <p className="text-sm text-gray-300 bg-gray-800/50 rounded-lg p-3 border-l-2 border-amber-500/50">
             {record.reasoning_text}
           </p>

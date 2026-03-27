@@ -86,6 +86,7 @@ import ShadowVersionsV4Page from './pages/shadow/phase4/ShadowVersionsV4Page';
 import ShadowPromotionDecisionsPage from './pages/shadow/phase4/ShadowPromotionDecisionsPage';
 import ShadowRolloutPlansPage from './pages/shadow/phase4/ShadowRolloutPlansPage';
 import ShadowBenchmarkEvaluationPage from './pages/shadow/phase4/ShadowBenchmarkEvaluationPage';
+import RevenueProtectionDashboard from './pages/shadow/RevenueProtectionDashboard';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1240,6 +1241,9 @@ function AppContent() {
   }
   if (shadowPath.match(/^\/shadow\/runs\/([^/]+)\/intelligence$/)) {
     return <ShadowRunIntelligencePage />;
+  }
+  if (shadowPath === '/shadow/product/revenue-protection') {
+    return <RevenueProtectionDashboard />;
   }
 
   if (!session) {
