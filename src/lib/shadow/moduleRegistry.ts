@@ -9,8 +9,9 @@ export async function getAllModules(): Promise<(ModuleRegistryRecord & { version
   ]);
 
   if (modulesResult.error) {
-    console.error('[shadow] getAllModules: module_registry query failed', modulesResult.error);
-    throw modulesResult.error;
+    const e = modulesResult.error;
+    console.error('[shadow] getAllModules: module_registry query failed', e);
+    throw new Error(e.message ?? e.details ?? e.code ?? 'Failed to load module_registry');
   }
   if (versionsResult.error) {
     console.error('[shadow] getAllModules: module_versions query failed', versionsResult.error);
