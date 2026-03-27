@@ -6,77 +6,260 @@ import type {
   TotalsComparison,
   RecommendedOutcome,
   DocumentTotalValidation,
+  TotalCandidate,
+  AnchorType,
   ClassifiedRow,
 } from '../../../../types/plumbingDiscrepancy';
 
 const SYSTEMIC_MISS_THRESHOLD = 500;
 const EXTRACTION_MISMATCH_TOLERANCE = 50;
 
-// ─── Document Total Validation ────────────────────────────────────────────────
+// ─── Anchor Ranking Constants ─────────────────────────────────────────────────
+// Higher = stronger anchor. Priority order:
+//   1. Explicit labeled totals (grand total / total price / contract total / final total) → 1000+
+//   2. Final TOTAL row where both parsers agree                                          → 800
+//   3. Final TOTAL row from live or shadow individually                                  → 700
+//   4. Strong final summary row near end of quote                                        → 600
+//   5. Max summary value fallback                                                        → 400
+//   6. Detected/fallback from normaliser                                                 → 200
 
-interface TotalCandidate {
-  value: number;
-  anchorType: string;
-  confidence: number;
+const ANCHOR_RANK: Record<AnchorType, number> = {
+  explicit_total_price:       1100,
+  explicit_grand_total:       1050,
+  explicit_contract_total:    1000,
+  explicit_final_total:        980,
+  explicit_label:              960,
+  final_total_row_agreed:      800,
+  final_total_row_live:        700,
+  final_total_row_shadow:      700,
+  strong_final_summary:        600,
+  max_summary:                 400,
+  detected_live:               200,
+  detected_shadow:             200,
+};
+
+// ─── Explicit Label Patterns ──────────────────────────────────────────────────
+
+interface LabelMatch {
+  anchorType: AnchorType;
+  re: RegExp;
 }
 
-const EXPLICIT_LABEL_RE = /\b(total\s+price|contract\s+total|grand\s+total|total\s+amount|total\s+value)\b/i;
+const EXPLICIT_LABEL_PATTERNS: LabelMatch[] = [
+  { anchorType: 'explicit_total_price',    re: /\btotal\s+price\b/i },
+  { anchorType: 'explicit_grand_total',    re: /\bgrand\s+total\b/i },
+  { anchorType: 'explicit_contract_total', re: /\bcontract\s+total\b/i },
+  { anchorType: 'explicit_final_total',    re: /\bfinal\s+total\b/i },
+  { anchorType: 'explicit_label',          re: /\b(total\s+amount|total\s+value|total\s+cost|lump\s+sum\s+total)\b/i },
+];
 
-function buildTotalCandidates(
+function classifyExplicitLabel(text: string): AnchorType | null {
+  for (const { anchorType, re } of EXPLICIT_LABEL_PATTERNS) {
+    if (re.test(text)) return anchorType;
+  }
+  return null;
+}
+
+// ─── Candidate Builder ─────────────────────────────────────────────────────────
+
+function rowText(row: ClassifiedRow): string {
+  return (row.rawText ?? row.normalizedDescription ?? '').trim();
+}
+
+function buildCandidatesFromRows(
   liveRows: ClassifiedRow[],
-  shadowRows: ClassifiedRow[],
-  liveDetected: number | null,
-  shadowDetected: number | null
+  shadowRows: ClassifiedRow[]
 ): TotalCandidate[] {
-  const candidates: TotalCandidate[] = [];
-  const allRows = [...liveRows, ...shadowRows];
+  const raw: TotalCandidate[] = [];
 
-  for (const row of allRows) {
+  // Pass 1 — scan all rows for explicit labels at highest confidence
+  for (const row of [...liveRows, ...shadowRows]) {
     if (row.amount == null) continue;
-    const text = row.rawText ?? row.normalizedDescription ?? '';
-    if (EXPLICIT_LABEL_RE.test(text) && row.classification === 'summary_total') {
-      candidates.push({ value: row.amount, anchorType: 'explicit_label', confidence: 0.95 });
+    const text = rowText(row);
+    const labelType = classifyExplicitLabel(text);
+    if (labelType) {
+      const rank = ANCHOR_RANK[labelType];
+      raw.push({
+        value: row.amount,
+        anchorType: labelType,
+        sourceText: text.slice(0, 120),
+        confidence: 0.95,
+        rankingScore: rank,
+        selected: false,
+        selectionReason: '',
+      });
     }
   }
 
-  const lastLive = liveRows.filter((r) => r.amount != null && r.classification === 'summary_total').at(-1);
-  const lastShadow = shadowRows.filter((r) => r.amount != null && r.classification === 'summary_total').at(-1);
+  // Pass 2 — final summary_total row from each parser
+  const lastLiveSummary = liveRows
+    .filter((r) => r.amount != null && r.classification === 'summary_total')
+    .at(-1);
+  const lastShadowSummary = shadowRows
+    .filter((r) => r.amount != null && r.classification === 'summary_total')
+    .at(-1);
 
-  if (lastLive?.amount != null) {
-    candidates.push({ value: lastLive.amount, anchorType: 'final_total_row_live', confidence: 0.8 });
-  }
-  if (lastShadow?.amount != null) {
-    candidates.push({ value: lastShadow.amount, anchorType: 'final_total_row_shadow', confidence: 0.8 });
+  const liveTotal = lastLiveSummary?.amount ?? null;
+  const shadowTotal = lastShadowSummary?.amount ?? null;
+
+  if (liveTotal != null && shadowTotal != null && Math.abs(liveTotal - shadowTotal) < EXTRACTION_MISMATCH_TOLERANCE) {
+    // Both parsers agree on the final row → strong confirmation
+    raw.push({
+      value: liveTotal,
+      anchorType: 'final_total_row_agreed',
+      sourceText: rowText(lastLiveSummary!),
+      confidence: 0.88,
+      rankingScore: ANCHOR_RANK['final_total_row_agreed'],
+      selected: false,
+      selectionReason: '',
+    });
+  } else {
+    if (liveTotal != null) {
+      raw.push({
+        value: liveTotal,
+        anchorType: 'final_total_row_live',
+        sourceText: rowText(lastLiveSummary!),
+        confidence: 0.80,
+        rankingScore: ANCHOR_RANK['final_total_row_live'],
+        selected: false,
+        selectionReason: '',
+      });
+    }
+    if (shadowTotal != null) {
+      raw.push({
+        value: shadowTotal,
+        anchorType: 'final_total_row_shadow',
+        sourceText: rowText(lastShadowSummary!),
+        confidence: 0.80,
+        rankingScore: ANCHOR_RANK['final_total_row_shadow'],
+        selected: false,
+        selectionReason: '',
+      });
+    }
   }
 
+  // Pass 3 — strong final summary rows near the end of the quote (last 20% of rows)
+  const NEAR_END_THRESHOLD = 0.8;
+  const allRows = [...liveRows, ...shadowRows];
+  const maxIndex = Math.max(...allRows.map((r) => r.rowIndex), 0);
+
+  for (const row of allRows) {
+    if (row.amount == null) continue;
+    if (row.classification !== 'summary_total' && row.classification !== 'subtotal') continue;
+    if (row.rowIndex / maxIndex < NEAR_END_THRESHOLD) continue;
+    const text = rowText(row);
+    if (classifyExplicitLabel(text)) continue; // already captured in pass 1
+    raw.push({
+      value: row.amount,
+      anchorType: 'strong_final_summary',
+      sourceText: text.slice(0, 120),
+      confidence: 0.65,
+      rankingScore: ANCHOR_RANK['strong_final_summary'],
+      selected: false,
+      selectionReason: '',
+    });
+  }
+
+  // Pass 4 — max summary value fallback
   const summaryAmounts = allRows
     .filter((r) => r.amount != null && (r.classification === 'summary_total' || r.classification === 'subtotal'))
     .map((r) => r.amount!);
 
   if (summaryAmounts.length > 0) {
-    candidates.push({ value: Math.max(...summaryAmounts), anchorType: 'max_summary', confidence: 0.6 });
+    const maxVal = Math.max(...summaryAmounts);
+    const maxRow = allRows.find((r) => r.amount === maxVal);
+    raw.push({
+      value: maxVal,
+      anchorType: 'max_summary',
+      sourceText: maxRow ? rowText(maxRow).slice(0, 120) : 'max of summary rows',
+      confidence: 0.55,
+      rankingScore: ANCHOR_RANK['max_summary'],
+      selected: false,
+      selectionReason: '',
+    });
   }
 
-  if (liveDetected != null) {
-    candidates.push({ value: liveDetected, anchorType: 'detected_live', confidence: 0.5 });
-  }
-  if (shadowDetected != null) {
-    candidates.push({ value: shadowDetected, anchorType: 'detected_shadow', confidence: 0.5 });
-  }
-
-  return candidates;
+  return raw;
 }
 
-function deduplicateCandidates(candidates: TotalCandidate[]): TotalCandidate[] {
+function addDetectedCandidates(
+  raw: TotalCandidate[],
+  liveDetected: number | null,
+  shadowDetected: number | null
+): TotalCandidate[] {
+  const out = [...raw];
+  if (liveDetected != null) {
+    out.push({
+      value: liveDetected,
+      anchorType: 'detected_live',
+      sourceText: 'normaliser detected total (live)',
+      confidence: 0.50,
+      rankingScore: ANCHOR_RANK['detected_live'],
+      selected: false,
+      selectionReason: '',
+    });
+  }
+  if (shadowDetected != null) {
+    out.push({
+      value: shadowDetected,
+      anchorType: 'detected_shadow',
+      sourceText: 'normaliser detected total (shadow)',
+      confidence: 0.50,
+      rankingScore: ANCHOR_RANK['detected_shadow'],
+      selected: false,
+      selectionReason: '',
+    });
+  }
+  return out;
+}
+
+/**
+ * Deduplicate by value, keeping the highest-ranked anchor for each dollar value.
+ */
+function deduplicateAndRank(candidates: TotalCandidate[]): TotalCandidate[] {
   const seen = new Map<number, TotalCandidate>();
   for (const c of candidates) {
     const existing = seen.get(c.value);
-    if (!existing || c.confidence > existing.confidence) {
+    if (!existing || c.rankingScore > existing.rankingScore) {
       seen.set(c.value, c);
     }
   }
-  return Array.from(seen.values()).sort((a, b) => b.confidence - a.confidence);
+  return Array.from(seen.values()).sort((a, b) => b.rankingScore - a.rankingScore);
 }
+
+/**
+ * Choose the winning candidate and annotate all candidates with
+ * selected/selectionReason so the inspector panel can display them.
+ */
+function selectWinner(
+  candidates: TotalCandidate[],
+  detectedDocumentTotal: number | null
+): TotalCandidate[] {
+  if (candidates.length === 0) return candidates;
+
+  const best = candidates[0];
+
+  return candidates.map((c, i) => {
+    const isWinner = i === 0;
+
+    let reason: string;
+    if (isWinner) {
+      reason = `Selected — highest anchor rank (${c.rankingScore}): ${c.anchorType}`;
+    } else if (
+      detectedDocumentTotal != null &&
+      c.anchorType === 'detected_live' &&
+      best.rankingScore > ANCHOR_RANK['detected_live']
+    ) {
+      reason = `Rejected — weaker anchor (${c.rankingScore}) than winner (${best.rankingScore}). Detected fallback overridden by ${best.anchorType}.`;
+    } else {
+      reason = `Not selected — lower anchor rank (${c.rankingScore}) than winner (${best.rankingScore})`;
+    }
+
+    return { ...c, selected: isWinner, selectionReason: reason };
+  });
+}
+
+// ─── Main Validation Entry Point ──────────────────────────────────────────────
 
 export function validateDocumentTotal(
   liveOutput: PlumbingNormalizedOutput,
@@ -86,15 +269,14 @@ export function validateDocumentTotal(
   const shadowDetected = shadowOutput.summary.detectedDocumentTotal;
   const detectedDocumentTotal = shadowDetected ?? liveDetected;
 
-  const rawCandidates = buildTotalCandidates(
-    liveOutput.rows,
-    shadowOutput.rows,
-    liveDetected,
-    shadowDetected
-  );
-  const candidates = deduplicateCandidates(rawCandidates);
-  const best = candidates[0] ?? null;
-  const validatedDocumentTotal = best?.value ?? null;
+  // Build candidates — FIX: was passing liveOutput.rows twice; now uses both parsers' rows
+  const rawFromRows = buildCandidatesFromRows(liveOutput.rows, shadowOutput.rows);
+  const rawAll = addDetectedCandidates(rawFromRows, liveDetected, shadowDetected);
+  const ranked = deduplicateAndRank(rawAll);
+  const annotated = selectWinner(ranked, detectedDocumentTotal);
+
+  const winner = annotated.find((c) => c.selected) ?? null;
+  const validatedDocumentTotal = winner?.value ?? null;
 
   let extractionMismatch = false;
   let mismatchReason: string | null = null;
@@ -106,17 +288,20 @@ export function validateDocumentTotal(
   ) {
     extractionMismatch = true;
     mismatchReason =
-      `Detected total ${fmt(detectedDocumentTotal)} differs from validated total ${fmt(validatedDocumentTotal)} ` +
-      `by ${fmt(Math.abs(detectedDocumentTotal - validatedDocumentTotal))} ` +
-      `(anchor: ${best?.anchorType ?? 'unknown'})`;
+      `Detected total ${fmt(detectedDocumentTotal)} was overridden by a stronger anchor (${winner!.anchorType}) ` +
+      `yielding validated total ${fmt(validatedDocumentTotal)}. ` +
+      `Difference: ${fmt(Math.abs(detectedDocumentTotal - validatedDocumentTotal))}.`;
   }
 
   return {
     detectedDocumentTotal,
     validatedDocumentTotal,
+    anchorType: winner?.anchorType ?? null,
+    anchorSourceText: winner?.sourceText ?? null,
+    anchorConfidence: winner?.confidence ?? null,
     extractionMismatch,
     mismatchReason,
-    candidates,
+    candidates: annotated,
   };
 }
 
@@ -341,10 +526,12 @@ function buildAdjudicationSummary(
     `  Detected document total:  ${totals.detectedDocumentTotal != null ? fmt(totals.detectedDocumentTotal) : 'Not detected'}`
   );
   if (totals.validatedDocumentTotal != null) {
-    const bestAnchor = validation.candidates[0];
     lines.push(
-      `  Validated document total: ${fmt(totals.validatedDocumentTotal)} (anchor: ${bestAnchor?.anchorType ?? 'unknown'})`
+      `  Validated document total: ${fmt(totals.validatedDocumentTotal)} (anchor: ${validation.anchorType ?? 'unknown'}, confidence: ${((validation.anchorConfidence ?? 0) * 100).toFixed(0)}%)`
     );
+    if (validation.anchorSourceText) {
+      lines.push(`  Anchor source text: "${validation.anchorSourceText}"`);
+    }
   } else {
     lines.push('  Validated document total: Not available');
   }
@@ -363,6 +550,17 @@ function buildAdjudicationSummary(
     lines.push(`  True missing value (vs validated): ${fmt(gapAbs)} (${direction})`);
   }
   lines.push('');
+
+  // Candidate summary (top 3)
+  const topCandidates = validation.candidates.slice(0, 3);
+  if (topCandidates.length > 1) {
+    lines.push('CANDIDATES CONSIDERED');
+    for (const c of topCandidates) {
+      const tag = c.selected ? '[WINNER]' : '[rejected]';
+      lines.push(`  ${tag} ${fmt(c.value)} — ${c.anchorType} (rank ${c.rankingScore}, ${(c.confidence * 100).toFixed(0)}%)`);
+    }
+    lines.push('');
+  }
 
   if (totals.isSystemicMiss && totals.documentGap != null) {
     const gapAmt = Math.abs(totals.documentGap);
@@ -429,7 +627,7 @@ function buildAdjudicationSummary(
       'Recommended action: first verify document total extraction accuracy before comparing parsers.'
     );
     lines.push(
-      'The detected total may be wrong — review extracted candidates and confirm the true contract total.'
+      'The detected total was overridden by a stronger anchor — confirm the validated total is correct.'
     );
     if (totals.isSystemicMiss) {
       lines.push('');

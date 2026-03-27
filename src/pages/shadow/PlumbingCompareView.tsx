@@ -7,6 +7,7 @@ import PlumbingRowDiffTable from '../../components/plumbing/PlumbingRowDiffTable
 import PlumbingExcludedRowsTable from '../../components/plumbing/PlumbingExcludedRowsTable';
 import PlumbingSuspiciousRowsTable from '../../components/plumbing/PlumbingSuspiciousRowsTable';
 import PlumbingAdjudicationSummary from '../../components/plumbing/PlumbingAdjudicationSummary';
+import DocumentTotalCandidatesPanel from '../../components/plumbing/DocumentTotalCandidatesPanel';
 import PlumbingSystemicMissBlock from '../../components/plumbing/PlumbingSystemicMissBlock';
 import { dbGetShadowRun, dbGetShadowRunResults } from '../../lib/db/shadowRuns';
 import { normalizeForShadowCompare } from '../../lib/modules/parsers/plumbing/plumbingNormalizer';
@@ -242,6 +243,7 @@ export default function PlumbingCompareView() {
 
               {activeSection === 'adjudication' && (
                 <div className="space-y-4">
+                  <DocumentTotalCandidatesPanel validation={diff.documentTotalValidation} />
                   <PlumbingAdjudicationSummary diff={diff} />
 
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">

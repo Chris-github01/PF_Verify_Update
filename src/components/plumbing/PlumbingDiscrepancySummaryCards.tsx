@@ -93,10 +93,12 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
     {
       label: 'Validated Document Total',
       value: fmt(tc.validatedDocumentTotal),
-      sub: dtv?.candidates[0] ? `anchor: ${dtv.candidates[0].anchorType}` : undefined,
+      sub: dtv?.anchorType
+        ? `anchor: ${dtv.anchorType}${dtv.anchorConfidence != null ? ` · ${Math.round(dtv.anchorConfidence * 100)}%` : ''}`
+        : tc.validatedDocumentTotal == null ? 'No anchor found' : undefined,
       subColor: 'text-cyan-700',
-      highlight: hasMismatch,
-      highlightColor: 'text-cyan-300',
+      highlight: hasMismatch || tc.validatedDocumentTotal == null,
+      highlightColor: tc.validatedDocumentTotal == null ? 'text-gray-500' : 'text-cyan-300',
     },
     {
       label: 'True Missing Value',
@@ -134,6 +136,11 @@ export default function PlumbingDiscrepancySummaryCards({ diff }: Props) {
             <span className="text-sm font-bold text-amber-300">Document total extraction mismatch detected</span>
             {dtv?.mismatchReason && (
               <p className="text-xs text-amber-500 mt-0.5 leading-relaxed">{dtv.mismatchReason}</p>
+            )}
+            {dtv?.anchorSourceText && (
+              <p className="text-xs text-amber-600/70 mt-0.5 font-mono">
+                Winning anchor: "{dtv.anchorSourceText}"
+              </p>
             )}
             <p className="text-xs text-amber-600 mt-0.5">
               Discrepancy analysis is anchored to the validated total. Review extraction candidates before drawing parser conclusions.

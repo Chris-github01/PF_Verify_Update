@@ -79,17 +79,49 @@ export interface RiskFlag {
   suggestedAction: string;
 }
 
+export type AnchorType =
+  | 'explicit_total_price'
+  | 'explicit_grand_total'
+  | 'explicit_contract_total'
+  | 'explicit_final_total'
+  | 'explicit_label'
+  | 'final_total_row_live'
+  | 'final_total_row_shadow'
+  | 'final_total_row_agreed'
+  | 'strong_final_summary'
+  | 'max_summary'
+  | 'detected_live'
+  | 'detected_shadow';
+
+export interface TotalCandidate {
+  value: number;
+  anchorType: AnchorType;
+  sourceText: string;
+  confidence: number;
+  rankingScore: number;
+  /** Whether this candidate was selected as the validated total */
+  selected: boolean;
+  /** Why this candidate was accepted or rejected */
+  selectionReason: string;
+}
+
 export interface DocumentTotalValidation {
-  /** Raw total extracted from the document (may be from a summary row) */
+  /** Raw total extracted by the normaliser (may be from a weak summary row) */
   detectedDocumentTotal: number | null;
-  /** Best-anchored total after cross-checking candidates (explicit "Total Price" label, final TOTAL row, etc.) */
+  /** Best-anchored total after cross-checking all candidates */
   validatedDocumentTotal: number | null;
+  /** Anchor type that won */
+  anchorType: AnchorType | null;
+  /** Source text of the winning anchor row */
+  anchorSourceText: string | null;
+  /** Confidence of the winning anchor (0–1) */
+  anchorConfidence: number | null;
   /** True when detected and validated totals differ beyond tolerance */
   extractionMismatch: boolean;
   /** Human-readable reason for any mismatch */
   mismatchReason: string | null;
-  /** All candidate totals found during extraction with their anchor strength */
-  candidates: Array<{ value: number; anchorType: string; confidence: number }>;
+  /** All candidates considered, ordered by ranking score descending */
+  candidates: TotalCandidate[];
 }
 
 export interface TotalsComparison {

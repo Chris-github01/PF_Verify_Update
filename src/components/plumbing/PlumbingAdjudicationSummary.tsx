@@ -96,6 +96,18 @@ export default function PlumbingAdjudicationSummary({ diff }: Props) {
             if (line === '') {
               return <div key={i} className="h-2" />;
             }
+            if (line.startsWith('CANDIDATES CONSIDERED')) {
+              return <div key={i} className="text-gray-300 font-semibold mt-1">{line}</div>;
+            }
+            if (line.includes('[WINNER]')) {
+              return <div key={i} className="text-cyan-300 pl-2">{line}</div>;
+            }
+            if (line.includes('[rejected]')) {
+              return <div key={i} className="text-gray-600 pl-2">{line}</div>;
+            }
+            if (line.startsWith('  Anchor source text:')) {
+              return <div key={i} className="text-cyan-700 pl-2 font-mono">{line}</div>;
+            }
             if (line.startsWith('Active risk flags')) {
               return <div key={i} className="text-orange-400 font-medium mt-1">{line}</div>;
             }
