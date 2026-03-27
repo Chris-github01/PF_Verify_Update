@@ -7,10 +7,11 @@ interface Props {
 }
 
 const OUTCOME_CONFIG: Record<RecommendedOutcome, { label: string; color: string; bg: string }> = {
-  shadow_better:  { label: 'Shadow Better',   color: 'text-green-400',  bg: 'bg-green-950/30 border-green-800' },
-  needs_review:   { label: 'Needs Review',    color: 'text-amber-400',  bg: 'bg-amber-950/30 border-amber-800' },
-  live_better:    { label: 'Live Better',     color: 'text-red-400',    bg: 'bg-red-950/30 border-red-800' },
-  inconclusive:   { label: 'Inconclusive',    color: 'text-gray-400',   bg: 'bg-gray-800/50 border-gray-700' },
+  shadow_better:     { label: 'Shadow Better',      color: 'text-green-400',  bg: 'bg-green-950/30 border-green-800' },
+  needs_review:      { label: 'Needs Review',       color: 'text-amber-400',  bg: 'bg-amber-950/30 border-amber-800' },
+  live_better:       { label: 'Live Better',        color: 'text-red-400',    bg: 'bg-red-950/30 border-red-800' },
+  inconclusive:      { label: 'Inconclusive',       color: 'text-gray-400',   bg: 'bg-gray-800/50 border-gray-700' },
+  systemic_failure:  { label: 'Systemic Failure',   color: 'text-red-400',    bg: 'bg-red-950/40 border-red-700' },
 };
 
 export default function PlumbingAdjudicationSummary({ diff }: Props) {
@@ -53,13 +54,19 @@ export default function PlumbingAdjudicationSummary({ diff }: Props) {
             if (line.startsWith('PLUMBING PARSER')) {
               return <div key={i} className="text-amber-400 font-bold text-[11px] tracking-wider">{line}</div>;
             }
-            if (line.startsWith('FINDING:')) {
+            if (line.startsWith('⚠ SYSTEMIC FAILURE')) {
+              return <div key={i} className="text-red-400 font-bold">{line}</div>;
+            }
+            if (line.startsWith('FINDING:') || line.startsWith('LIKELY ROOT CAUSE:')) {
               return <div key={i} className="text-cyan-300">{line}</div>;
+            }
+            if (line.startsWith('Do not promote') || line.startsWith('Recommended action:')) {
+              return <div key={i} className="text-orange-300 italic">{line}</div>;
             }
             if (line.startsWith('Recommended outcome:')) {
               return <div key={i} className={`font-bold ${outcome.color}`}>{line}</div>;
             }
-            if (line.startsWith('Shadow parser appears') || line.startsWith('Live parser performs') || line.startsWith('Insufficient evidence') || line.startsWith('Manual review')) {
+            if (line.startsWith('Shadow parser appears') || line.startsWith('Live parser performs') || line.startsWith('Insufficient evidence') || line.startsWith('Manual review') || line.startsWith('Parser logic is likely')) {
               return <div key={i} className="text-gray-300 italic">{line}</div>;
             }
             if (line === '') {
