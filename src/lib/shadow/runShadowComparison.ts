@@ -15,6 +15,7 @@ import { runScopeIntelligence } from './phase3/scopeIntelligenceService';
 import { runRateIntelligence } from './phase3/rateIntelligenceService';
 import { runRevenueLeakageDetection } from './phase3/revenueLeakageService';
 import { computeCommercialRiskProfile, persistCommercialRiskProfile } from './phase3/commercialRiskEngine';
+import { runConsistencyCheck } from './phase3/consistencyChecker';
 
 export interface RunShadowComparisonInput {
   moduleKey: string;
@@ -356,12 +357,46 @@ export async function runShadowComparison(
 
           await persistCommercialRiskProfile(input.moduleKey, riskProfile);
 
+          // Phase 3.5 — consistency check (non-blocking, shadow-only)
+          await runConsistencyCheck(
+            runId,
+            scopeSummary,
+            rateSummary,
+            leakageSummary,
+            riskProfile,
+          ).catch((err) => {
+            if (import.meta.env.DEV) {
+              console.warn('[Phase3/Consistency] check failed:', err);
+            }
+          });
+
+          // Phase 3.5 — data quality guard: warn on empty outputs
+          if (scopeSummary.items.length === 0) {
+            console.warn(`[Phase3/Guard] run=${runId.slice(0, 8)} — zero scope items written (dataset may be empty or filter too strict)`);
+          }
+          if (rateSummary.records.length === 0) {
+            console.warn(`[Phase3/Guard] run=${runId.slice(0, 8)} — zero rate records written (no items with positive unit rates)`);
+          }
+          if (leakageSummary.events.length === 0 && scopeSummary.gaps.length > 0) {
+            console.warn(`[Phase3/Guard] run=${runId.slice(0, 8)} — ${scopeSummary.gaps.length} scope gap(s) detected but zero leakage events written`);
+          }
+
+          // Dev-safe debug summary per run
           if (import.meta.env.DEV) {
-            console.log('[Phase3] Commercial risk profile persisted:', {
-              runId: runId.slice(0, 8),
-              overallScore: riskProfile.overallScore,
-              riskLevel: riskProfile.riskLevel,
-              factors: riskProfile.factors.length,
+            console.log('[Phase3] Run debug summary:', {
+              run: runId.slice(0, 8),
+              scope_items: scopeSummary.items.length,
+              scope_gaps: scopeSummary.gaps.length,
+              scope_quals: scopeSummary.qualifications.length,
+              scope_excl: scopeSummary.exclusions.length,
+              rate_records: rateSummary.records.length,
+              rate_anomalies: rateSummary.anomalyCount,
+              leakage_events: leakageSummary.events.length,
+              leakage_high_conf: leakageSummary.events.filter((e) => e.confidence >= 0.75).length,
+              leakage_with_value: leakageSummary.events.filter((e) => (e.estimated_value ?? 0) > 0).length,
+              total_estimated_leakage: leakageSummary.totalEstimatedLeakage,
+              risk_score: riskProfile.overallScore,
+              risk_level: riskProfile.riskLevel,
             });
           }
         } catch (err) {

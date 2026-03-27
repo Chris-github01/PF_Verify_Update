@@ -127,6 +127,61 @@ async function findExistingFingerprint(
   return data as SupplierFingerprint | null;
 }
 
+// Compute a similarity score [0,1] between two sets of markers.
+// Used to detect near-duplicate fingerprints that differ only by minor noise.
+function computeMarkerSimilarity(a: FingerprintMarkers, b: FingerprintMarkers): number {
+  let score = 0;
+  const weights = { tableStyle: 0.25, gstMode: 0.2, documentFormatFamily: 0.3, totalStyle: 0.15, supplierName: 0.1 };
+
+  if (a.tableStyle === b.tableStyle && a.tableStyle !== 'unknown') score += weights.tableStyle;
+  if (a.gstMode === b.gstMode && a.gstMode !== 'unknown') score += weights.gstMode;
+  if (a.documentFormatFamily === b.documentFormatFamily) score += weights.documentFormatFamily;
+  if (a.totalStyle === b.totalStyle) score += weights.totalStyle;
+
+  if (a.supplierNameNormalized && b.supplierNameNormalized) {
+    // Exact or prefix match on normalized supplier name
+    const aParts = a.supplierNameNormalized.split(' ').slice(0, 2).join(' ');
+    const bParts = b.supplierNameNormalized.split(' ').slice(0, 2).join(' ');
+    if (aParts === bParts) score += weights.supplierName;
+  }
+
+  return score;
+}
+
+// Check if any existing fingerprint is near-duplicate to the new one.
+// If found, log a merge candidate — does NOT auto-merge.
+async function detectAndLogMergeCandidates(
+  newMarkers: FingerprintMarkers,
+  newHash: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('supplier_fingerprints')
+    .select('fingerprint_hash, supplier_name_normalized, table_style, gst_mode, total_phrase_family, markers_json')
+    .neq('fingerprint_hash', newHash)
+    .limit(50);
+
+  if (error || !data || data.length === 0) return;
+
+  for (const row of data) {
+    const candidateMarkers: FingerprintMarkers = {
+      supplierNameNormalized: row.supplier_name_normalized as string | null,
+      tableStyle: (row.table_style as string) ?? 'unknown',
+      gstMode: (row.gst_mode as string) ?? 'unknown',
+      totalStyle: (row.total_phrase_family as string) ?? 'unknown',
+      documentFormatFamily: ((row.markers_json as Record<string, unknown>)?.documentFormatFamily as string) ?? 'generic_quote',
+      hasExplicitTotal: false,
+      hasMismatch: false,
+    };
+
+    const similarity = computeMarkerSimilarity(newMarkers, candidateMarkers);
+    if (similarity >= 0.80) {
+      console.warn(
+        `[Phase2/Fingerprint] Near-duplicate candidate detected: hash=${newHash} is ${(similarity * 100).toFixed(0)}% similar to ${row.fingerprint_hash}. Merge candidate — NOT auto-merged.`,
+      );
+    }
+  }
+}
+
 async function createOrUpdateFingerprint(
   markers: FingerprintMarkers,
   hash: string,
@@ -165,6 +220,9 @@ async function createOrUpdateFingerprint(
     if (error) throw new Error(`[fingerprintingService] update fingerprint failed: ${error.message}`);
     return data as SupplierFingerprint;
   }
+
+  // Check for near-duplicates before creating (non-blocking)
+  await detectAndLogMergeCandidates(markers, hash).catch(() => { /* non-critical */ });
 
   const initialAccuracy = Math.min(1, Math.max(0, diagnosticConfidenceScore / 100));
   const { data, error } = await supabase

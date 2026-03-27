@@ -25,10 +25,11 @@ export interface CommercialRiskProfile {
   fromDb?: boolean;
 }
 
+// Thresholds: 0-20 low, 21-50 medium, 51-80 high, 81-100 critical
 function scoreToLevel(score: number): CommercialRiskLevel {
-  if (score >= 75) return 'critical';
-  if (score >= 50) return 'high';
-  if (score >= 25) return 'medium';
+  if (score >= 81) return 'critical';
+  if (score >= 51) return 'high';
+  if (score >= 21) return 'medium';
   return 'low';
 }
 
@@ -49,148 +50,208 @@ function buildRecommendation(level: CommercialRiskLevel, factors: CommercialRisk
   return 'Commercial risk profile appears normal. Standard QA procedures apply.';
 }
 
-function buildFactors(
-  scope: ScopeIntelligenceResult,
-  rates: RateIntelligenceResult,
-  leakage: RevenueLeakageSummary,
-  parsedValue: number,
-): { factors: CommercialRiskFactor[]; scopeScore: number; rateScore: number; leakageScore: number } {
-  const factors: CommercialRiskFactor[] = [];
-  let scopeScore = 0;
-  let rateScore = 0;
-  let leakageScore = 0;
+// Nonlinear amplifier: normalises rawScore/cap to [0,1], applies power,
+// then re-scales back. exponent > 1 = convex curve (large issues grow faster).
+function amplify(rawScore: number, cap: number, exponent: number): number {
+  if (rawScore <= 0) return 0;
+  const normalized = Math.min(1, rawScore / cap);
+  const amplified = Math.pow(normalized, exponent);
+  return Math.round(amplified * cap);
+}
 
-  // --- Scope pillar (max 40pts raw) ---
-  const highRiskGaps = scope.gaps.filter((g) => g.risk_level === 'high');
-  const mediumRiskGaps = scope.gaps.filter((g) => g.risk_level === 'medium');
-  if (highRiskGaps.length > 0) {
-    const s = Math.min(40, highRiskGaps.length * 15);
-    scopeScore += s;
+// Scope pillar
+function buildScopeScore(
+  scope: ScopeIntelligenceResult,
+): { score: number; factors: CommercialRiskFactor[] } {
+  const factors: CommercialRiskFactor[] = [];
+  let raw = 0;
+
+  const highGaps = scope.gaps.filter((g) => g.risk_level === 'high');
+  const medGaps = scope.gaps.filter((g) => g.risk_level === 'medium');
+
+  if (highGaps.length > 0) {
+    const base = highGaps.length * 20;
+    const s = amplify(base, 80, 1.4);
+    raw += s;
     factors.push({
       factor: 'scope_gaps_high',
-      description: `${highRiskGaps.length} high-risk scope gap(s) detected`,
-      severity: highRiskGaps.length >= 3 ? 'critical' : 'high',
-      score: s,
-    });
-  }
-  if (mediumRiskGaps.length > 2) {
-    const s = Math.min(20, mediumRiskGaps.length * 5);
-    scopeScore += s;
-    factors.push({
-      factor: 'scope_gaps_medium',
-      description: `${mediumRiskGaps.length} medium-risk scope gap(s) detected`,
-      severity: 'medium',
+      description: `${highGaps.length} high-risk scope gap(s) detected`,
+      severity: highGaps.length >= 3 ? 'critical' : 'high',
       score: s,
     });
   }
 
-  const highRiskExclusions = scope.exclusions.filter((e) => e.risk_level === 'high');
-  if (highRiskExclusions.length > 0) {
-    const s = Math.min(30, highRiskExclusions.length * 12);
-    scopeScore += s;
+  if (medGaps.length > 0) {
+    const base = medGaps.length * 8;
+    const s = amplify(base, 48, medGaps.length > 3 ? 1.3 : 1.0);
+    raw += s;
+    factors.push({
+      factor: 'scope_gaps_medium',
+      description: `${medGaps.length} medium-risk scope gap(s) detected`,
+      severity: medGaps.length >= 4 ? 'high' : 'medium',
+      score: s,
+    });
+  }
+
+  const highExclusions = scope.exclusions.filter((e) => e.risk_level === 'high');
+  if (highExclusions.length > 0) {
+    const base = highExclusions.length * 18;
+    const s = amplify(base, 54, 1.3);
+    raw += s;
     factors.push({
       factor: 'high_risk_exclusions',
-      description: `${highRiskExclusions.length} high-risk scope exclusion(s) detected`,
-      severity: highRiskExclusions.length >= 2 ? 'high' : 'medium',
+      description: `${highExclusions.length} high-risk scope exclusion(s) detected`,
+      severity: highExclusions.length >= 2 ? 'high' : 'medium',
       score: s,
     });
   }
 
   const provisionalItems = scope.qualifications.filter((q) => q.impact_type === 'provisional_sum');
-  if (provisionalItems.length > 5) {
-    const s = Math.min(20, provisionalItems.length * 3);
-    scopeScore += s;
+  if (provisionalItems.length > 3) {
+    const base = (provisionalItems.length - 3) * 6;
+    const s = amplify(base, 36, provisionalItems.length > 8 ? 1.5 : 1.0);
+    raw += s;
     factors.push({
       factor: 'high_provisional_density',
       description: `${provisionalItems.length} provisional sum items — scope creep risk`,
-      severity: 'medium',
+      severity: provisionalItems.length > 10 ? 'high' : 'medium',
       score: s,
     });
   }
 
-  // --- Rate pillar (max 40pts raw) ---
-  const anomalyRate =
-    rates.records.length > 0 ? (rates.anomalyCount / rates.records.length) * 100 : 0;
+  return { score: Math.min(100, raw), factors };
+}
+
+// Rate pillar
+function buildRateScore(
+  rates: RateIntelligenceResult,
+): { score: number; factors: CommercialRiskFactor[] } {
+  const factors: CommercialRiskFactor[] = [];
+  let raw = 0;
+
+  const priced = rates.records.filter((r) => r.variance_type !== 'no_benchmark');
+  const anomalyRate = priced.length > 0 ? (rates.anomalyCount / priced.length) * 100 : 0;
 
   if (rates.anomalyCount > 0) {
-    const s = Math.min(40, rates.anomalyCount * 8);
-    rateScore += s;
+    const base = rates.anomalyCount * 12;
+    const s = amplify(base, 72, anomalyRate > 25 ? 1.6 : 1.2);
+    raw += s;
     factors.push({
       factor: 'rate_anomalies',
-      description: `${rates.anomalyCount} rate anomaly(ies) detected (${anomalyRate.toFixed(0)}% of priced items)`,
-      severity: anomalyRate > 20 ? 'critical' : anomalyRate > 10 ? 'high' : 'medium',
+      description: `${rates.anomalyCount} rate anomaly(ies) detected (${anomalyRate.toFixed(0)}% of benchmarked items)`,
+      severity: anomalyRate > 30 ? 'critical' : anomalyRate > 15 ? 'high' : 'medium',
       score: s,
     });
   }
 
-  if (rates.underPricedCount > 3) {
-    const s = Math.min(20, rates.underPricedCount * 4);
-    rateScore += s;
+  if (rates.underPricedCount > 0) {
+    const base = rates.underPricedCount * 7;
+    const s = amplify(base, 42, rates.underPricedCount > 5 ? 1.3 : 1.0);
+    raw += s;
     factors.push({
       factor: 'under_priced_items',
-      description: `${rates.underPricedCount} items priced significantly below market benchmark`,
-      severity: 'medium',
+      description: `${rates.underPricedCount} item(s) priced significantly below market benchmark`,
+      severity: rates.underPricedCount >= 5 ? 'high' : 'medium',
       score: s,
     });
   }
 
-  // --- Leakage pillar (max 30pts raw) ---
-  // Critical rule: leakage score must be proportional to actual leakage events.
-  // High leakage → high leakage score. Zero leakage → zero leakage score.
-  if (leakage.events.length > 0) {
-    const totalMismatch = leakage.events.find((e) => e.leakage_type === 'total_mismatch');
-    if (totalMismatch) {
-      const mismatchAmount = totalMismatch.estimated_value ?? 0;
-      const mismatchPercent = parsedValue > 0 ? (mismatchAmount / parsedValue) * 100 : 0;
-      const s = Math.min(30, Math.round(mismatchPercent * 2));
-      if (s > 0) {
-        leakageScore += s;
-        factors.push({
-          factor: 'document_total_mismatch',
-          description: totalMismatch.description,
-          severity: mismatchPercent > 10 ? 'high' : 'medium',
-          score: s,
-        });
-      }
-    }
+  return { score: Math.min(100, raw), factors };
+}
 
-    const highConfEvents = leakage.events.filter(
-      (e) => e.confidence >= 0.75 && e.leakage_type !== 'total_mismatch',
-    );
-    if (highConfEvents.length > 0) {
-      const s = Math.min(20, highConfEvents.length * 5);
-      leakageScore += s;
-      factors.push({
-        factor: 'high_confidence_leakage_events',
-        description: `${highConfEvents.length} high-confidence revenue leakage event(s) detected`,
-        severity: highConfEvents.length >= 3 ? 'high' : 'medium',
-        score: s,
-      });
-    }
+// Leakage pillar
+function buildLeakageScore(
+  leakage: RevenueLeakageSummary,
+  parsedValue: number,
+): { score: number; factors: CommercialRiskFactor[] } {
+  const factors: CommercialRiskFactor[] = [];
+  let raw = 0;
 
-    // Low-confidence events still contribute a small signal
-    const lowConfEvents = leakage.events.filter(
-      (e) => e.confidence < 0.75 && e.leakage_type !== 'total_mismatch',
-    );
-    if (lowConfEvents.length > 2) {
-      const s = Math.min(10, lowConfEvents.length * 2);
-      leakageScore += s;
+  if (leakage.events.length === 0) {
+    return { score: 0, factors };
+  }
+
+  const totalMismatch = leakage.events.find((e) => e.leakage_type === 'total_mismatch');
+  if (totalMismatch) {
+    const mismatchAmount = totalMismatch.estimated_value ?? 0;
+    const mismatchPercent = parsedValue > 0 ? (mismatchAmount / parsedValue) * 100 : 0;
+    const base = Math.round(mismatchPercent * 3);
+    const s = amplify(base, 45, mismatchPercent > 5 ? 1.5 : 1.0);
+    if (s > 0) {
+      raw += s;
       factors.push({
-        factor: 'low_confidence_leakage_signals',
-        description: `${lowConfEvents.length} low-confidence leakage signals — warrants monitoring`,
-        severity: 'low',
+        factor: 'document_total_mismatch',
+        description: totalMismatch.description,
+        severity: mismatchPercent > 15 ? 'critical' : mismatchPercent > 5 ? 'high' : 'medium',
         score: s,
       });
     }
   }
-  // If leakage.events.length === 0 → leakageScore stays 0. No contradiction possible.
 
-  return {
-    factors: factors.sort((a, b) => b.score - a.score),
-    scopeScore: Math.min(100, scopeScore),
-    rateScore: Math.min(100, rateScore),
-    leakageScore: Math.min(100, leakageScore),
-  };
+  const highConfEvents = leakage.events.filter(
+    (e) => e.confidence >= 0.75 && e.leakage_type !== 'total_mismatch',
+  );
+  if (highConfEvents.length > 0) {
+    const base = highConfEvents.length * 8;
+    const s = amplify(base, 48, highConfEvents.length >= 3 ? 1.4 : 1.0);
+    raw += s;
+    factors.push({
+      factor: 'high_confidence_leakage_events',
+      description: `${highConfEvents.length} high-confidence revenue leakage event(s) detected`,
+      severity: highConfEvents.length >= 4 ? 'critical' : highConfEvents.length >= 2 ? 'high' : 'medium',
+      score: s,
+    });
+  }
+
+  const lowConfEvents = leakage.events.filter(
+    (e) => e.confidence < 0.75 && e.leakage_type !== 'total_mismatch',
+  );
+  if (lowConfEvents.length > 2) {
+    const base = (lowConfEvents.length - 2) * 3;
+    const s = amplify(base, 18, 1.0);
+    raw += s;
+    factors.push({
+      factor: 'low_confidence_leakage_signals',
+      description: `${lowConfEvents.length} low-confidence leakage signals — warrants monitoring`,
+      severity: 'low',
+      score: s,
+    });
+  }
+
+  // Financial amplifier: if total estimated leakage > 5% of parsed value
+  if (parsedValue > 0 && leakage.totalEstimatedLeakage > 0) {
+    const leakagePct = (leakage.totalEstimatedLeakage / parsedValue) * 100;
+    if (leakagePct > 5) {
+      const bonus = Math.min(20, Math.round(leakagePct));
+      raw += bonus;
+      factors.push({
+        factor: 'high_financial_leakage',
+        description: `Estimated leakage ($${leakage.totalEstimatedLeakage.toFixed(0)}) represents ${leakagePct.toFixed(1)}% of contract value`,
+        severity: leakagePct > 15 ? 'high' : 'medium',
+        score: bonus,
+      });
+    }
+  }
+
+  return { score: Math.min(100, raw), factors };
+}
+
+// Cross-pillar systemic multiplier: simultaneous elevation across pillars
+// indicates compounding risk that exceeds the sum of parts.
+function applySystemicMultiplier(
+  scopeScore: number,
+  rateScore: number,
+  leakageScore: number,
+  baseScore: number,
+): number {
+  const elevatedPillars = [scopeScore, rateScore, leakageScore].filter((s) => s >= 30).length;
+  if (elevatedPillars >= 3) {
+    return Math.min(100, Math.round(baseScore * 1.35));
+  }
+  if (elevatedPillars >= 2) {
+    return Math.min(100, Math.round(baseScore * 1.18));
+  }
+  return baseScore;
 }
 
 export function computeCommercialRiskProfile(
@@ -200,27 +261,30 @@ export function computeCommercialRiskProfile(
   leakage: RevenueLeakageSummary,
   parsedValue: number,
 ): CommercialRiskProfile {
-  const { factors, scopeScore, rateScore, leakageScore } = buildFactors(
-    scope,
-    rates,
-    leakage,
-    parsedValue,
+  const { score: scopeScore, factors: scopeFactors } = buildScopeScore(scope);
+  const { score: rateScore, factors: rateFactors } = buildRateScore(rates);
+  const { score: leakageScore, factors: leakageFactors } = buildLeakageScore(leakage, parsedValue);
+
+  const allFactors = [...scopeFactors, ...rateFactors, ...leakageFactors].sort(
+    (a, b) => b.score - a.score,
   );
 
-  // Weighted sum: scope 40%, rate 35%, leakage 25%
-  const overallScore = Math.min(
-    100,
-    Math.round(scopeScore * 0.4 + rateScore * 0.35 + leakageScore * 0.25),
+  const weighted = Math.round(scopeScore * 0.4 + rateScore * 0.35 + leakageScore * 0.25);
+  const overallScore = applySystemicMultiplier(
+    scopeScore,
+    rateScore,
+    leakageScore,
+    Math.min(100, weighted),
   );
 
   const riskLevel = scoreToLevel(overallScore);
-  const recommendation = buildRecommendation(riskLevel, factors);
+  const recommendation = buildRecommendation(riskLevel, allFactors);
 
   return {
     runId,
     overallScore,
     riskLevel,
-    factors,
+    factors: allFactors,
     scopeScore,
     rateScore,
     leakageScore,

@@ -59,9 +59,15 @@ function normalizeUnit(unit: string | undefined | null): string {
   return u.slice(0, 10);
 }
 
+// Minimum sample size before anomaly detection is considered reliable.
+// Below this threshold, we classify variance but suppress the anomaly flag
+// to avoid false positives from sparse benchmark data.
+const MIN_SAMPLE_FOR_ANOMALY = 3;
+
 function classifyVariance(
   rate: number,
   benchmarkRate: number | null,
+  sampleSize: number,
 ): { variancePercent: number | null; varianceType: string; anomalyFlag: boolean } {
   if (benchmarkRate == null || benchmarkRate <= 0 || rate <= 0) {
     return { variancePercent: null, varianceType: 'no_benchmark', anomalyFlag: false };
@@ -69,14 +75,17 @@ function classifyVariance(
 
   const variancePercent = ((rate - benchmarkRate) / benchmarkRate) * 100;
 
+  // Anomaly flag suppressed until sample is statistically meaningful
+  const anomalyEnabled = sampleSize >= MIN_SAMPLE_FOR_ANOMALY;
+
   if (variancePercent < -40) {
-    return { variancePercent, varianceType: 'significantly_under', anomalyFlag: true };
+    return { variancePercent, varianceType: 'significantly_under', anomalyFlag: anomalyEnabled };
   }
   if (variancePercent < -15) {
     return { variancePercent, varianceType: 'under_priced', anomalyFlag: false };
   }
   if (variancePercent > 50) {
-    return { variancePercent, varianceType: 'significantly_over', anomalyFlag: true };
+    return { variancePercent, varianceType: 'significantly_over', anomalyFlag: anomalyEnabled };
   }
   if (variancePercent > 20) {
     return { variancePercent, varianceType: 'over_priced', anomalyFlag: false };
@@ -146,11 +155,28 @@ async function upsertBenchmarks(
     if (existing) {
       const prevN = existing.sample_size as number;
       const prevMean = existing.median_rate as number;
+      const prevP25 = existing.p25_rate as number;
+      const prevP75 = existing.p75_rate as number;
+
+      // Outlier guard: if the new batch mean is more than 3× or less than 1/3
+      // of the established benchmark, treat as a likely data anomaly and skip update.
+      // This prevents single bad runs from permanently skewing the benchmark.
+      if (prevN >= MIN_SAMPLE_FOR_ANOMALY) {
+        const ratio = batchMean / prevMean;
+        if (ratio > 3 || ratio < 0.333) {
+          console.warn(
+            `[Phase3/Benchmarks] Outlier guard triggered for "${normalizedItem}": ` +
+            `new batch mean ${batchMean.toFixed(2)} vs established ${prevMean.toFixed(2)} (ratio ${ratio.toFixed(2)}) — skipping update`,
+          );
+          continue;
+        }
+      }
+
       const n = prevN + agg.count;
-      // Incremental mean — guaranteed > 0 when inputs are > 0
       const newMean = (prevMean * prevN + agg.sum) / n;
-      const newP25 = Math.min(existing.p25_rate as number, agg.min);
-      const newP75 = Math.max(existing.p75_rate as number, agg.max);
+      // p25/p75 track full historical range; only extend, never contract
+      const newP25 = Math.min(prevP25, agg.min);
+      const newP75 = Math.max(prevP75, agg.max);
 
       await supabase
         .from('shadow_rate_benchmarks')
@@ -218,9 +244,11 @@ export async function runRateIntelligence(
       // benchmark_rate is never null when sample_size > 0 — enforced in fetchBenchmarksForItems
       const benchmarkRate = benchmark ? benchmark.median_rate : null;
 
+      const benchmarkSampleSize = benchmark ? benchmark.sample_size : 0;
       const { variancePercent, varianceType, anomalyFlag } = classifyVariance(
         item.rate as number,
         benchmarkRate,
+        benchmarkSampleSize,
       );
 
       return {
