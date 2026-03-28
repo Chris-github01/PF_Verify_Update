@@ -646,18 +646,27 @@ export default function AwardReport({
 
       const sortedSuppliers = [...suppliersWithScores].sort((a, b) => b.weightedScore - a.weightedScore);
 
-      const suppliers = sortedSuppliers.map((s, idx) => ({
-        rank: idx + 1,
-        supplierName: s.supplierName,
-        adjustedTotal: s.adjustedTotal,
-        riskScore: s.riskScore,
-        coveragePercent: s.coveragePercent,
-        itemsQuoted: s.itemsQuoted,
-        totalItems: s.totalItems,
-        weightedScore: s.weightedScore,
-        notes: s.notes && s.notes.length > 0 ? s.notes : undefined,
-        quoteId: s.quoteId
-      }));
+      const suppliers = sortedSuppliers.map((s, idx) => {
+        const maxRiskScore = Math.max(...suppliersWithScores.map(sup => sup.riskScore));
+        const variationExposureValue = s.riskScore > 0 ? Math.round(s.adjustedTotal * (s.riskScore / Math.max(maxRiskScore, 1)) * 0.08) : 0;
+        const variationExposurePct = s.adjustedTotal > 0 ? variationExposureValue / s.adjustedTotal : 0;
+        return {
+          rank: idx + 1,
+          supplierName: s.supplierName,
+          adjustedTotal: s.adjustedTotal,
+          riskScore: s.riskScore,
+          coveragePercent: s.coveragePercent,
+          itemsQuoted: s.itemsQuoted,
+          totalItems: s.totalItems,
+          weightedScore: s.weightedScore,
+          notes: s.notes && s.notes.length > 0 ? s.notes : undefined,
+          quoteId: s.quoteId,
+          projectedTotal: s.adjustedTotal + variationExposureValue,
+          variationExposureValue,
+          variationExposurePct,
+          scopeGaps: s.notes?.filter(n => n.toLowerCase().includes('gap') || n.toLowerCase().includes('missing') || n.toLowerCase().includes('excluded')) ?? [],
+        };
+      });
 
       let recommendations = [];
 
@@ -705,6 +714,35 @@ export default function AwardReport({
         ].filter(Boolean).slice(0, 3);
       }
 
+      const topSupplier = suppliers[0];
+      const maxRiskForLabel = Math.max(...suppliers.map(s => s.riskScore));
+      const riskLabelForTop = maxRiskForLabel === 0 ? 'Low' : topSupplier && topSupplier.riskScore / maxRiskForLabel < 0.3 ? 'Low' : topSupplier && topSupplier.riskScore / maxRiskForLabel < 0.6 ? 'Moderate' : 'High';
+
+      const keyDrivers: string[] = [];
+      if (topSupplier) {
+        keyDrivers.push(`${topSupplier.supplierName} achieved the highest composite score of ${Math.round(topSupplier.weightedScore ?? 0)}/100`);
+        if (topSupplier.coveragePercent >= 85) keyDrivers.push(`Full scope coverage (${Math.round(topSupplier.coveragePercent)}%) across ${topSupplier.totalItems} scope items`);
+        else keyDrivers.push(`Scope coverage of ${Math.round(topSupplier.coveragePercent)}% — ${topSupplier.totalItems - topSupplier.itemsQuoted} items not priced`);
+        keyDrivers.push(`Risk classification: ${riskLabelForTop} (${topSupplier.riskScore} factors)`);
+        if (suppliers.length >= 2) {
+          const priceDiff = suppliers[1].adjustedTotal - topSupplier.adjustedTotal;
+          if (priceDiff > 0) keyDrivers.push(`${Math.round((priceDiff / suppliers[1].adjustedTotal) * 100)}% below second-placed tenderer on quoted price`);
+        }
+        if (topSupplier.variationExposureValue !== undefined && topSupplier.variationExposureValue > 0) {
+          keyDrivers.push(`Estimated variation exposure: $${topSupplier.variationExposureValue.toLocaleString()} (${Math.round((topSupplier.variationExposurePct ?? 0) * 100)}%)`);
+        }
+      }
+
+      const hasHighRisk = suppliers.some(s => maxRiskForLabel > 0 && s.riskScore / maxRiskForLabel >= 0.6);
+      const hasLowCoverage = suppliers.some(s => s.coveragePercent < 75);
+      const commercialWarning = hasHighRisk && hasLowCoverage
+        ? 'One or more tenderers carry a high-risk classification combined with below-threshold scope coverage. Independent commercial review is recommended before contract award.'
+        : hasHighRisk
+        ? 'One or more tenderers carry a high-risk classification. Independent scope and rate validation is recommended before contract execution.'
+        : hasLowCoverage
+        ? 'One or more tenderers have scope coverage below 75%. The quoted total should be treated as a floor price pending scope gap resolution.'
+        : undefined;
+
       const htmlContent = generateModernPdfHtml({
         projectName: currentProject.name,
         clientName: currentProject.client || undefined,
@@ -713,7 +751,11 @@ export default function AwardReport({
         suppliers,
         approvedQuoteId: currentProject.approved_quote_id,
         scoringWeights: projectScoringWeights,
-        executiveSummary: `Award recommendation analysis for ${currentProject.name}. Total systems analyzed: ${awardSummary.totalSystems}.`,
+        keyDecisionDrivers: keyDrivers,
+        commercialWarning,
+        executiveSummary: topSupplier
+          ? `Commercial analysis of ${suppliers.length} tenderer${suppliers.length !== 1 ? 's' : ''} was conducted across ${topSupplier.totalItems} scope items. ${topSupplier.supplierName} achieved the highest composite score of ${Math.round(topSupplier.weightedScore ?? 0)}/100, with a quoted total of $${topSupplier.adjustedTotal.toLocaleString()} and scope coverage of ${Math.round(topSupplier.coveragePercent)}%. ${hasHighRisk ? 'Risk factors have been identified across the tender field that require resolution before contract award.' : 'Risk levels across the tender field are within acceptable bounds.'}`
+          : `Award recommendation analysis for ${currentProject.name}. Total systems analyzed: ${awardSummary.totalSystems}.`,
         methodology: [
           'Quote Import & Validation',
           'Data Normalization',
