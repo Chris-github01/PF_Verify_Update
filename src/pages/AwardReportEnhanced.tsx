@@ -93,6 +93,7 @@ export default function AwardReportEnhanced({
   const [selectedSupplier, setSelectedSupplier] = useState<EnhancedSupplierMetrics | null>(null);
   const [equalisationResult, setEqualisationResult] = useState<EqualisationResult | null>(null);
   const [approvalGateChecked, setApprovalGateChecked] = useState({ scopeGaps: false, commercialRisks: false });
+  const [completingWorkflow, setCompletingWorkflow] = useState(false);
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -882,6 +883,32 @@ export default function AwardReportEnhanced({
   const bestValue = enhancedSuppliers.find(s => s.isBestValue);
   const lowestRisk = enhancedSuppliers.find(s => s.isLowestRisk);
 
+  const handleCompleteAndFinish = async () => {
+    if (!approvalGateChecked.scopeGaps || !approvalGateChecked.commercialRisks) return;
+    setCompletingWorkflow(true);
+    try {
+      if (currentReportId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase
+          .from('award_reports')
+          .update({
+            review_scope_gaps: true,
+            review_commercial_risks: true,
+            review_confirmed_at: new Date().toISOString(),
+            review_confirmed_by: user?.id ?? null,
+            status: 'completed',
+          })
+          .eq('id', currentReportId);
+      }
+      onNavigate?.('dashboard');
+    } catch (err) {
+      console.error('Failed to save review confirmation:', err);
+      onNavigate?.('dashboard');
+    } finally {
+      setCompletingWorkflow(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-900">
       <div className="bg-slate-800/60 border-b border-slate-700">
@@ -1318,10 +1345,10 @@ export default function AwardReportEnhanced({
         currentStep={6}
         totalSteps={7}
         onBack={onNavigateBack}
-        onNext={() => onNavigate?.('dashboard')}
+        onNext={handleCompleteAndFinish}
         backLabel="Back: Equalisation Analysis"
-        nextLabel="Complete and Finish"
-        disabledNext={!approvalGateChecked.scopeGaps || !approvalGateChecked.commercialRisks}
+        nextLabel={completingWorkflow ? 'Saving...' : 'Complete and Finish'}
+        disabledNext={!approvalGateChecked.scopeGaps || !approvalGateChecked.commercialRisks || completingWorkflow}
       />
     </div>
   );
