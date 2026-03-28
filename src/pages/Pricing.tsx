@@ -22,14 +22,7 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
     if (onBookDemo) onBookDemo();
   };
 
-  const companyLogos = [
-    'Fletcher Construction',
-    'Hawkins',
-    'Naylor Love',
-    'Beca',
-    'Rider Levett Bucknall',
-    'WT Partnership'
-  ];
+  const companyLogos: string[] = [];
 
   const pricingTiers = [
     {
@@ -308,16 +301,8 @@ export default function Pricing({ onStartTrial, onBookDemo, onBackToHome }: Pric
       <div className="py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <h3 className="text-center text-sm font-semibold text-slate-400 uppercase tracking-wider mb-8">
-            Used by leading New Zealand main contractors & Quantity Surveyors
+            Used by leading New Zealand & Australian main contractors & Quantity Surveyors
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 mb-12">
-            {companyLogos.map((logo, index) => (
-              <div key={index} className="flex items-center justify-center">
-                <div className="text-slate-400 font-semibold text-sm text-center">{logo}</div>
-              </div>
-            ))}
-          </div>
-
           <div className="bg-slate-800/40 rounded-2xl p-8 border border-slate-700">
             <div className="flex items-start gap-4">
               <Award className="text-blue-400 flex-shrink-0" size={32} />
