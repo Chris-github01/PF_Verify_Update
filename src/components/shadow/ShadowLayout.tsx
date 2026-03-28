@@ -4,7 +4,7 @@ import {
   Zap, FlaskConical, ChevronLeft, Menu, X,
   Activity, ShieldAlert, FileSearch, PlaySquare,
   BookOpen, Lightbulb, Fingerprint, LayoutTemplate,
-  ShieldCheck, BarChart2, GitCompare, DollarSign, Scale,
+  ShieldCheck, BarChart2, GitCompare, DollarSign, Scale, Trophy,
 } from 'lucide-react';
 import { getAdminRole } from '../../lib/shadow/shadowAccess';
 import type { AdminRole } from '../../types/shadow';
@@ -41,6 +41,7 @@ const NAV_PHASE6 = [
 
 const NAV_COMMERCIAL = [
   { label: 'Commercial Validation', href: '/shadow/admin/commercial-validation', icon: Scale },
+  { label: 'Tender Decision Engine', href: '/shadow/admin/tender-decision', icon: Trophy },
 ];
 
 interface Props {
