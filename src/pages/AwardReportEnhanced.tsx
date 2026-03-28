@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet, Printer, ChevronDown, Mail } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet, Printer, ChevronDown, Mail, Square, CheckSquare, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { AwardSummary } from '../types/award.types';
@@ -92,6 +92,7 @@ export default function AwardReportEnhanced({
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<EnhancedSupplierMetrics | null>(null);
   const [equalisationResult, setEqualisationResult] = useState<EqualisationResult | null>(null);
+  const [approvalGateChecked, setApprovalGateChecked] = useState({ scopeGaps: false, commercialRisks: false });
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -1254,6 +1255,64 @@ export default function AwardReportEnhanced({
         onClose={() => setSelectedSupplier(null)}
       />
 
+      {/* Approval Gate */}
+      <div className="max-w-7xl mx-auto px-6 pb-4">
+        <div className="bg-slate-800/70 border border-slate-600/60 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 bg-orange-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-5 h-5 text-orange-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Mandatory Review Confirmation</h3>
+              <p className="text-xs text-slate-400">Both items must be acknowledged before completing the award workflow</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <button
+              onClick={() => setApprovalGateChecked(prev => ({ ...prev, scopeGaps: !prev.scopeGaps }))}
+              className="w-full flex items-start gap-3 p-4 rounded-lg border border-slate-600/50 hover:border-slate-500 bg-slate-700/30 hover:bg-slate-700/50 transition-all text-left"
+            >
+              {approvalGateChecked.scopeGaps ? (
+                <CheckSquare className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+              ) : (
+                <Square className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+              )}
+              <div>
+                <p className={`text-sm font-semibold ${approvalGateChecked.scopeGaps ? 'text-green-300' : 'text-slate-200'}`}>
+                  I have reviewed the identified scope gaps
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  All coverage breakdowns and gap exposures have been reviewed for each supplier
+                </p>
+              </div>
+            </button>
+            <button
+              onClick={() => setApprovalGateChecked(prev => ({ ...prev, commercialRisks: !prev.commercialRisks }))}
+              className="w-full flex items-start gap-3 p-4 rounded-lg border border-slate-600/50 hover:border-slate-500 bg-slate-700/30 hover:bg-slate-700/50 transition-all text-left"
+            >
+              {approvalGateChecked.commercialRisks ? (
+                <CheckSquare className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+              ) : (
+                <Square className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+              )}
+              <div>
+                <p className={`text-sm font-semibold ${approvalGateChecked.commercialRisks ? 'text-green-300' : 'text-slate-200'}`}>
+                  I accept the commercial risks and controls required
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  I understand the estimated add-on exposure and confirm appropriate controls will be implemented
+                </p>
+              </div>
+            </button>
+          </div>
+          {(!approvalGateChecked.scopeGaps || !approvalGateChecked.commercialRisks) && (
+            <p className="mt-3 text-xs text-slate-500 text-center">
+              Check both items above to enable "Complete and Finish"
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* Navigation */}
       <WorkflowNav
         currentStep={6}
@@ -1262,6 +1321,7 @@ export default function AwardReportEnhanced({
         onNext={() => onNavigate?.('dashboard')}
         backLabel="Back: Equalisation Analysis"
         nextLabel="Complete and Finish"
+        disabledNext={!approvalGateChecked.scopeGaps || !approvalGateChecked.commercialRisks}
       />
     </div>
   );
