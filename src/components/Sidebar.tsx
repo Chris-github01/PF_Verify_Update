@@ -103,12 +103,8 @@ const mainContractorMenu = [
       { id: 'commercial' as SidebarTab, label: 'Commercial Control', icon: DollarSign },
     ]
   },
-  {
-    section: 'BASELINE TRACKER',
-    items: [
-      { id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard', icon: BookOpen },
-    ]
-  }
+  // BASELINE TRACKER section hidden — not yet visible in sidebar
+  // { section: 'BASELINE TRACKER', items: [{ id: 'bt-dashboard' as SidebarTab, label: 'BT Dashboard', icon: BookOpen }] }
 ];
 
 const subContractorMenu = [
