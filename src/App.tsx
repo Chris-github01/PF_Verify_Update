@@ -12,6 +12,7 @@ import EnhancedImportQuotes from './pages/EnhancedImportQuotes';
 import QuoteSelect from './pages/QuoteSelect';
 import ReviewClean from './pages/ReviewClean';
 import QuoteIntelligence from './pages/QuoteIntelligence';
+import QuantityIntelligencePage from './pages/QuantityIntelligencePage';
 import ScopeMatrix from './pages/ScopeMatrix';
 import Equalisation from './pages/Equalisation';
 import BOQBuilder from './pages/BOQBuilder';
@@ -759,6 +760,22 @@ function AppContent() {
           dashboardMode={dashboardMode}
           onQuotesSelected={setSelectedQuoteIds}
         />;
+
+      case 'quantity-intelligence':
+        if (!projectId) {
+          return <NewProjectDashboard
+            projectId={null}
+            projectName={undefined}
+            allProjects={allProjects}
+            onProjectSelect={handleProjectSelect}
+            onCreateProject={handleCreateProject}
+            onNavigateToQuotes={() => { if (handleNavigationGuard('quotes')) setActiveTab('quotes'); }}
+            onNavigateToMatrix={() => { if (handleNavigationGuard('scope')) setActiveTab('scope'); }}
+            onNavigateToReports={() => { if (handleNavigationGuard('reports')) setActiveTab('reports'); }}
+            dashboardMode={dashboardMode}
+          />;
+        }
+        return <QuantityIntelligencePage projectId={projectId} />;
 
       case 'scope':
         if (!projectId) {
