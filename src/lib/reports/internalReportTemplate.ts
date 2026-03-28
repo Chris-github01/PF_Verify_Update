@@ -123,7 +123,7 @@ function pageRiskAndBehaviour(opts: ReportOptions): string {
     if (s.coveragePercent < 85) weaknesses.push(`Margin recovery via scope variations on ${s.totalItems - s.itemsQuoted} unpriced items`);
     if (tier === 'high' || tier === 'critical') weaknesses.push('Unit rate re-measurement risk on high-spread line items');
     if (s.underallowanceFlag) weaknesses.push('Under-allowance detected — quantity shortfall likely to result in post-contract claims');
-    if (s.variationExposurePct !== undefined && s.variationExposurePct > 0.05) weaknesses.push(\`Estimated variation exposure of ${pct(s.variationExposurePct * 100)} above quoted total`);
+    if (s.variationExposurePct !== undefined && s.variationExposurePct > 0.05) weaknesses.push(`Estimated variation exposure of ${pct(s.variationExposurePct * 100)} above quoted total`);
     if (weaknesses.length === 0) weaknesses.push('No specific margin recovery vectors identified');
 
     return `<div style="border:1px solid ${C.BORDER};border-radius:10px;padding:18px;margin-bottom:14px;break-inside:avoid;">

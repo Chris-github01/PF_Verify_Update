@@ -7,8 +7,8 @@ import type { EqualisationMode } from '../types/equalisation.types';
 import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
 import type { DashboardMode } from '../App';
-import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { openClientReport } from '../lib/reports/clientReportTemplate';
+import { openInternalReport } from '../lib/reports/internalReportTemplate';
 import { openDisputeDefencePack } from '../lib/reports/disputeDefencePack';
 import type { ReportOptions } from '../lib/reports/reportTypes';
 import ApprovalModal from '../components/ApprovalModal';
@@ -65,7 +65,7 @@ export default function AwardReport({
   const [selectedSupplierForApproval, setSelectedSupplierForApproval] = useState<string | null>(null);
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | null>(null);
   const [commercialValidation, setCommercialValidation] = useState<CommercialValidationResult | null>(null);
-  const [reportMode, setReportMode] = useState<'INTERNAL' | 'CLIENT' | 'DISPUTE'>('INTERNAL');
+  const [reportMode, setReportMode] = useState<'INTERNAL' | 'CLIENT'>('INTERNAL');
   const [approvalData, setApprovalData] = useState<{
     id: string;
     ai_recommended_supplier: string;
@@ -798,57 +798,8 @@ export default function AwardReport({
         openClientReport(opts, filename);
         onToast?.('Client Report opened — select "Save as PDF" in the print dialog.', 'success');
       } else {
-        const htmlContent = generateModernPdfHtml({
-          projectName: currentProject.name,
-          clientName: currentProject.client || undefined,
-          generatedAt: reportTimestamp || awardSummary.generatedAt || new Date().toISOString(),
-          recommendations: opts.recommendations,
-          suppliers,
-          approvedQuoteId: currentProject.approved_quote_id,
-          scoringWeights: projectScoringWeights,
-          commercialPosition,
-          keyDecisionDrivers: opts.keyDecisionDrivers,
-          commercialWarning: opts.commercialWarning,
-          executiveSummary: opts.executiveSummary,
-          methodology: [
-            'Quote Import & Validation',
-            'Data Normalization',
-            'Scope Gap Analysis',
-            'Risk Assessment',
-            'Multi-Criteria Scoring'
-          ],
-          additionalSections: opts.approvalRecord ? [{
-            title: `Approval Decision${opts.approvalRecord.is_override ? '<span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 8px;">OVERRIDE</span>' : ''}`,
-            content: `
-              <div style="background: ${opts.approvalRecord.is_override ? '#fef3c7' : '#dcfce7'}; border: 2px solid ${opts.approvalRecord.is_override ? '#f59e0b' : '#22c55e'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-                  <div>
-                    <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Verify+ Recommended</p>
-                    <p style="font-size: 16px; color: #111827; font-weight: 600;">${opts.approvalRecord.ai_recommended_supplier}</p>
-                  </div>
-                  <div>
-                    <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Final Approved Supplier</p>
-                    <p style="font-size: 16px; color: ${opts.approvalRecord.is_override ? '#d97706' : '#059669'}; font-weight: 700;">${opts.approvalRecord.final_approved_supplier}</p>
-                  </div>
-                </div>
-                ${opts.approvalRecord.is_override ? `
-                  <div style="border-top: 2px solid #f59e0b; padding-top: 16px; margin-top: 16px;">
-                    <p style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 8px;">Override Reason:</p>
-                    <p style="font-size: 14px; color: #78350f; font-weight: 600; margin-bottom: 8px;">${opts.approvalRecord.override_reason_category?.replace(/_/g, ' ').toUpperCase() || 'N/A'}</p>
-                    <p style="font-size: 14px; color: #451a03; line-height: 1.6;">${opts.approvalRecord.override_reason_detail || 'No additional details provided.'}</p>
-                  </div>
-                ` : ''}
-                <div style="border-top: 1px solid ${opts.approvalRecord.is_override ? '#fbbf24' : '#86efac'}; padding-top: 12px; margin-top: 16px; display: flex; justify-content: space-between; font-size: 12px; color: #6b7280;">
-                  <span><strong>Approved By:</strong> ${opts.approvalRecord.approved_by_email}</span>
-                  <span><strong>Approved At:</strong> ${new Date(opts.approvalRecord.approved_at).toLocaleString()}</span>
-                </div>
-              </div>
-            `
-          }] : [],
-          organisationLogoUrl: resolvedLogoUrl,
-        });
-        generatePdfWithPrint(htmlContent, filename);
-        onToast?.('Print window opened! In the print dialog, select "Save as PDF" or "Microsoft Print to PDF" as your destination.', 'success');
+        openInternalReport(opts, filename);
+        onToast?.('Internal Report opened — select "Save as PDF" in the print dialog.', 'success');
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
