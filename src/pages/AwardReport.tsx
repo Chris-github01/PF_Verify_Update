@@ -728,6 +728,36 @@ export default function AwardReport({
       approved_at: approvalData.approved_at,
     } : undefined;
 
+    // Derive a single authoritative commercialPosition for the report.
+    // If award has been approved, the position is 'recommended' (or 'recommended' with override note).
+    // If no approval yet, derive from scoring: low coverage or high risk → provisional, else recommended.
+    // Never mix approval state with 'no_recommendation' wording.
+    let commercialPosition: 'recommended' | 'narrow_margin' | 'provisional' | 'no_recommendation';
+    if (approvalData) {
+      commercialPosition = 'recommended';
+    } else if (suppliers.length === 0) {
+      commercialPosition = 'no_recommendation';
+    } else {
+      const topScore = topSupplier?.weightedScore ?? 0;
+      const secondScore = suppliers[1]?.weightedScore ?? 0;
+      const margin = topScore - secondScore;
+      const topLowCoverage = topSupplier && topSupplier.coveragePercent < 75;
+      const topHighRisk = topSupplier && maxRiskForLabel > 0 && topSupplier.riskScore / maxRiskForLabel >= 0.6;
+      if (topLowCoverage || topHighRisk) {
+        commercialPosition = 'provisional';
+      } else if (margin < 5) {
+        commercialPosition = 'narrow_margin';
+      } else {
+        commercialPosition = 'recommended';
+      }
+    }
+
+    // Stamp recommendationStatus on each supplier row for consistent PDF rendering.
+    const suppliersWithStatus = suppliers.map(s => ({
+      ...s,
+      recommendationStatus: s.rank === 1 ? commercialPosition : ('no_recommendation' as const),
+    }));
+
     const opts: ReportOptions = {
       mode: reportMode === 'CLIENT' ? 'CLIENT' : 'INTERNAL',
       projectName: currentProject.name,
@@ -735,17 +765,18 @@ export default function AwardReport({
       generatedAt: reportTimestamp || awardSummary.generatedAt || new Date().toISOString(),
       generatedByEmail: approvalData?.approved_by_email,
       reportId: currentReportId ?? undefined,
-      suppliers,
+      suppliers: suppliersWithStatus,
       recommendations,
       scoringWeights: projectScoringWeights,
       executiveSummary,
       keyDecisionDrivers: keyDrivers,
       commercialWarning,
+      commercialPosition,
       approvalRecord,
       organisationLogoUrl: resolvedLogoUrl,
     };
 
-    return { opts, projectScoringWeights, suppliers, resolvedLogoUrl, topSupplier, hasHighRisk, hasLowCoverage };
+    return { opts, projectScoringWeights, suppliers: suppliersWithStatus, resolvedLogoUrl, topSupplier, hasHighRisk, hasLowCoverage, commercialPosition };
   };
 
   const handlePrint = async () => {
@@ -759,7 +790,7 @@ export default function AwardReport({
     try {
       const built = await buildReportData();
       if (!built) return;
-      const { opts, projectScoringWeights, suppliers, resolvedLogoUrl, topSupplier, hasHighRisk } = built;
+      const { opts, projectScoringWeights, suppliers, resolvedLogoUrl, topSupplier, hasHighRisk, commercialPosition } = built;
 
       const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}`;
 
@@ -775,6 +806,7 @@ export default function AwardReport({
           suppliers,
           approvedQuoteId: currentProject.approved_quote_id,
           scoringWeights: projectScoringWeights,
+          commercialPosition,
           keyDecisionDrivers: opts.keyDecisionDrivers,
           commercialWarning: opts.commercialWarning,
           executiveSummary: opts.executiveSummary,
@@ -1196,149 +1228,218 @@ export default function AwardReport({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="bg-gradient-to-br from-green-900/40 to-green-800/20 rounded-xl shadow-xl p-8 border-2 border-green-600/30 hover:border-green-500/50 transition-all">
-            <div className="flex items-center justify-center w-16 h-16 bg-green-600 rounded-xl mx-auto mb-4 shadow-lg">
-              <TrendingUp className="w-8 h-8 text-white" />
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-bold text-green-400 uppercase tracking-wider mb-2">Best Value</p>
-              <p className="text-2xl font-bold text-white mb-3">
-                {bestValue?.supplier.supplierName || 'N/A'}
-              </p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Price</span>
-                  <span className="font-bold text-green-400">{bestValue ? formatCurrency(bestValue.supplier.adjustedTotal) : 'N/A'}</span>
+        {approvalData ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div className="col-span-1 md:col-span-2 bg-gradient-to-br from-green-900/30 to-green-800/10 rounded-xl shadow-xl p-8 border-2 border-green-600/40">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <Award className="w-7 h-7 text-white" />
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Coverage</span>
-                  <span className="font-bold text-white">{bestValue ? `${Math.round(bestValue.supplier.coveragePercent)}%` : 'N/A'}</span>
+                <div>
+                  <p className="text-xs font-bold text-green-400 uppercase tracking-wider">Awarded Supplier</p>
+                  <p className="text-2xl font-bold text-white">{approvalData.final_approved_supplier}</p>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Risk Score</span>
-                  <span className="font-bold text-white">{bestValue ? `${(10 - bestValue.supplier.riskScore).toFixed(1)}/10` : 'N/A'}</span>
+              </div>
+              {approvalData.is_override && (
+                <div className="mb-4 flex items-start gap-2 bg-yellow-900/30 border border-yellow-700/50 rounded-lg px-4 py-3">
+                  <AlertOctagon className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-yellow-300">
+                    <strong className="text-yellow-200">Override Decision</strong>
+                    {approvalData.override_reason_detail && (
+                      <p className="mt-1 text-yellow-400/80">{approvalData.override_reason_detail}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-slate-400">System Recommended</span>
+                  <p className="font-semibold text-white mt-0.5">{approvalData.ai_recommended_supplier}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400">Approved By</span>
+                  <p className="font-semibold text-white mt-0.5">{approvalData.approved_by_email}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400">Approved At</span>
+                  <p className="font-semibold text-white mt-0.5">{new Date(approvalData.approved_at).toLocaleString()}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400">Decision Type</span>
+                  <p className={`font-semibold mt-0.5 ${approvalData.is_override ? 'text-yellow-400' : 'text-green-400'}`}>
+                    {approvalData.is_override ? 'Override' : 'Aligned with Recommendation'}
+                  </p>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 rounded-xl shadow-xl p-8 border-2 border-blue-600/30 hover:border-blue-500/50 transition-all">
-            <div className="flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl mx-auto mb-4 shadow-lg">
-              <Shield className="w-8 h-8 text-white" />
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Lowest Risk</p>
-              <p className="text-2xl font-bold text-white mb-3">
-                {lowestRisk?.supplier.supplierName || 'N/A'}
-              </p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Price</span>
-                  <span className="font-bold text-blue-400">{lowestRisk ? formatCurrency(lowestRisk.supplier.adjustedTotal) : 'N/A'}</span>
+            <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6 flex flex-col justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Tenderer Summary</p>
+                <div className="space-y-2 text-sm">
+                  {awardSummary.suppliers.slice(0, 4).map((s, i) => (
+                    <div key={s.supplierName} className="flex items-center justify-between">
+                      <span className={`${s.supplierName === approvalData.final_approved_supplier ? 'text-green-400 font-semibold' : 'text-slate-400'}`}>
+                        {i + 1}. {s.supplierName}
+                      </span>
+                      <span className="text-slate-300 font-mono text-xs">{formatCurrency(s.adjustedTotal)}</span>
+                    </div>
+                  ))}
+                  {awardSummary.suppliers.length > 4 && (
+                    <p className="text-xs text-slate-500">+{awardSummary.suppliers.length - 4} more tenderers</p>
+                  )}
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Coverage</span>
-                  <span className="font-bold text-white">{lowestRisk ? `${Math.round(lowestRisk.supplier.coveragePercent)}%` : 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Risk Score</span>
-                  <span className="font-bold text-white">{lowestRisk ? `${(10 - lowestRisk.supplier.riskScore).toFixed(1)}/10` : 'N/A'}</span>
-                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-700 text-xs text-slate-500">
+                Award closed — no further approval actions available.
               </div>
             </div>
           </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div className="bg-gradient-to-br from-green-900/40 to-green-800/20 rounded-xl shadow-xl p-8 border-2 border-green-600/30 hover:border-green-500/50 transition-all">
+              <div className="flex items-center justify-center w-16 h-16 bg-green-600 rounded-xl mx-auto mb-4 shadow-lg">
+                <TrendingUp className="w-8 h-8 text-white" />
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-bold text-green-400 uppercase tracking-wider mb-2">Best Value</p>
+                <p className="text-2xl font-bold text-white mb-3">
+                  {bestValue?.supplier.supplierName || 'N/A'}
+                </p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Price</span>
+                    <span className="font-bold text-green-400">{bestValue ? formatCurrency(bestValue.supplier.adjustedTotal) : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Coverage</span>
+                    <span className="font-bold text-white">{bestValue ? `${Math.round(bestValue.supplier.coveragePercent)}%` : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Risk Score</span>
+                    <span className="font-bold text-white">{bestValue ? `${(10 - bestValue.supplier.riskScore).toFixed(1)}/10` : 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          <div className={`bg-gradient-to-br rounded-xl shadow-xl p-8 border-2 transition-all relative ${
-            !commercialValidation || commercialValidation.validation_status === 'validated'
-              ? 'from-orange-900/40 to-orange-800/20 border-orange-600/30 hover:border-orange-500/50'
-              : commercialValidation.validation_status === 'conditional'
-                ? 'from-amber-900/40 to-amber-800/20 border-amber-600/30 hover:border-amber-500/50'
-                : 'from-red-900/40 to-red-800/20 border-red-600/30 hover:border-red-500/50'
-          }`}>
-            <div className={`absolute -top-3 -right-3 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg ${
-              !commercialValidation || commercialValidation.validation_status === 'validated'
-                ? 'bg-orange-600'
-                : commercialValidation.validation_status === 'conditional'
-                  ? 'bg-amber-600'
-                  : 'bg-red-600'
-            }`}>
-              {!commercialValidation || commercialValidation.validation_status === 'validated'
-                ? 'RECOMMENDED'
-                : commercialValidation.validation_status === 'conditional'
-                  ? 'REVIEW REQUIRED'
-                  : 'NOT COMPARABLE'}
+            <div className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 rounded-xl shadow-xl p-8 border-2 border-blue-600/30 hover:border-blue-500/50 transition-all">
+              <div className="flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl mx-auto mb-4 shadow-lg">
+                <Shield className="w-8 h-8 text-white" />
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Lowest Risk</p>
+                <p className="text-2xl font-bold text-white mb-3">
+                  {lowestRisk?.supplier.supplierName || 'N/A'}
+                </p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Price</span>
+                    <span className="font-bold text-blue-400">{lowestRisk ? formatCurrency(lowestRisk.supplier.adjustedTotal) : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Coverage</span>
+                    <span className="font-bold text-white">{lowestRisk ? `${Math.round(lowestRisk.supplier.coveragePercent)}%` : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Risk Score</span>
+                    <span className="font-bold text-white">{lowestRisk ? `${(10 - lowestRisk.supplier.riskScore).toFixed(1)}/10` : 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className={`flex items-center justify-center w-16 h-16 rounded-xl mx-auto mb-4 shadow-lg ${
+
+            <div className={`bg-gradient-to-br rounded-xl shadow-xl p-8 border-2 transition-all relative ${
               !commercialValidation || commercialValidation.validation_status === 'validated'
-                ? 'bg-orange-600'
+                ? 'from-orange-900/40 to-orange-800/20 border-orange-600/30 hover:border-orange-500/50'
                 : commercialValidation.validation_status === 'conditional'
-                  ? 'bg-amber-600'
-                  : 'bg-red-600'
+                  ? 'from-amber-900/40 to-amber-800/20 border-amber-600/30 hover:border-amber-500/50'
+                  : 'from-red-900/40 to-red-800/20 border-red-600/30 hover:border-red-500/50'
             }`}>
-              <Scale className="w-8 h-8 text-white" />
-            </div>
-            <div className="text-center">
-              <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${
+              <div className={`absolute -top-3 -right-3 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg ${
                 !commercialValidation || commercialValidation.validation_status === 'validated'
-                  ? 'text-orange-400'
+                  ? 'bg-orange-600'
                   : commercialValidation.validation_status === 'conditional'
-                    ? 'text-amber-400'
-                    : 'text-red-400'
+                    ? 'bg-amber-600'
+                    : 'bg-red-600'
               }`}>
                 {!commercialValidation || commercialValidation.validation_status === 'validated'
-                  ? 'Best Tenderer'
+                  ? 'RECOMMENDED'
                   : commercialValidation.validation_status === 'conditional'
-                    ? 'Lowest Price (Subject to Commercial Review)'
-                    : 'Comparison Not Commercially Valid'}
-              </p>
-              <p className="text-3xl font-black text-white mb-3">
-                {commercialValidation?.validation_status === 'not_comparable'
-                  ? '—'
-                  : balanced?.supplier.supplierName || 'N/A'}
-              </p>
-              <div className="space-y-2 text-sm mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Price</span>
-                  <span className="font-bold text-orange-400">{balanced ? formatCurrency(balanced.supplier.adjustedTotal) : 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Coverage</span>
-                  <span className="font-bold text-white">{balanced ? `${Math.round(balanced.supplier.coveragePercent)}%` : 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Risk Score</span>
-                  <span className="font-bold text-white">{balanced ? `${(10 - balanced.supplier.riskScore).toFixed(1)}/10` : 'N/A'}</span>
-                </div>
+                    ? 'REVIEW REQUIRED'
+                    : 'NOT COMPARABLE'}
               </div>
-              {commercialValidation?.validation_status === 'not_comparable' ? (
-                <div className="w-full px-4 py-3 bg-red-900/30 border border-red-700/50 text-red-300 text-xs font-semibold rounded-lg text-center">
-                  Approval blocked — comparison not commercially valid
-                </div>
-              ) : (
-                <button
-                  onClick={() => balanced && handleApproveQuote(balanced.supplier.supplierName)}
-                  className={`w-full px-6 py-3 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 ${
-                    commercialValidation?.validation_status === 'conditional'
-                      ? 'bg-amber-600 hover:bg-amber-700'
-                      : 'bg-orange-600 hover:bg-orange-700'
-                  }`}
-                >
-                  <Target className="w-5 h-5" />
-                  {commercialValidation?.validation_status === 'conditional'
-                    ? 'Proceed with Caution'
-                    : 'Proceed to Approval'}
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              )}
-              {commercialValidation && commercialValidation.validation_status !== 'validated' && (
-                <p className="text-[10px] text-center mt-2 text-slate-500">
-                  Commercial validation: {commercialValidation.validation_status.replace(/_/g, ' ')} — see Shadow Admin for details
+              <div className={`flex items-center justify-center w-16 h-16 rounded-xl mx-auto mb-4 shadow-lg ${
+                !commercialValidation || commercialValidation.validation_status === 'validated'
+                  ? 'bg-orange-600'
+                  : commercialValidation.validation_status === 'conditional'
+                    ? 'bg-amber-600'
+                    : 'bg-red-600'
+              }`}>
+                <Scale className="w-8 h-8 text-white" />
+              </div>
+              <div className="text-center">
+                <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${
+                  !commercialValidation || commercialValidation.validation_status === 'validated'
+                    ? 'text-orange-400'
+                    : commercialValidation.validation_status === 'conditional'
+                      ? 'text-amber-400'
+                      : 'text-red-400'
+                }`}>
+                  {!commercialValidation || commercialValidation.validation_status === 'validated'
+                    ? 'Best Tenderer'
+                    : commercialValidation.validation_status === 'conditional'
+                      ? 'Lowest Price (Subject to Commercial Review)'
+                      : 'Comparison Not Commercially Valid'}
                 </p>
-              )}
+                <p className="text-3xl font-black text-white mb-3">
+                  {commercialValidation?.validation_status === 'not_comparable'
+                    ? '—'
+                    : balanced?.supplier.supplierName || 'N/A'}
+                </p>
+                <div className="space-y-2 text-sm mb-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Price</span>
+                    <span className="font-bold text-orange-400">{balanced ? formatCurrency(balanced.supplier.adjustedTotal) : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Coverage</span>
+                    <span className="font-bold text-white">{balanced ? `${Math.round(balanced.supplier.coveragePercent)}%` : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Risk Score</span>
+                    <span className="font-bold text-white">{balanced ? `${(10 - balanced.supplier.riskScore).toFixed(1)}/10` : 'N/A'}</span>
+                  </div>
+                </div>
+                {commercialValidation?.validation_status === 'not_comparable' ? (
+                  <div className="w-full px-4 py-3 bg-red-900/30 border border-red-700/50 text-red-300 text-xs font-semibold rounded-lg text-center">
+                    Approval blocked — comparison not commercially valid
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => balanced && handleApproveQuote(balanced.supplier.supplierName)}
+                    className={`w-full px-6 py-3 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 ${
+                      commercialValidation?.validation_status === 'conditional'
+                        ? 'bg-amber-600 hover:bg-amber-700'
+                        : 'bg-orange-600 hover:bg-orange-700'
+                    }`}
+                  >
+                    <Target className="w-5 h-5" />
+                    {commercialValidation?.validation_status === 'conditional'
+                      ? 'Proceed with Caution'
+                      : 'Proceed to Approval'}
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+                {commercialValidation && commercialValidation.validation_status !== 'validated' && (
+                  <p className="text-[10px] text-center mt-2 text-slate-500">
+                    Commercial validation: {commercialValidation.validation_status.replace(/_/g, ' ')} — see Shadow Admin for details
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="bg-gradient-to-br from-green-900/20 to-green-800/10 rounded-xl shadow-xl border-2 border-green-600/30 p-8 mb-8">
           <div className="flex items-center gap-3 mb-6">
@@ -1353,12 +1454,17 @@ export default function AwardReport({
 
           <div className="space-y-3">
             {[
-              {
+              ...(!approvalData ? [{
                 id: 'approve',
                 title: 'Approve Recommended Supplier',
                 description: `Click "Proceed to Approval" to formally approve ${balanced?.supplier.supplierName || 'the recommended supplier'} and initiate contract process`,
                 urgent: true,
-              },
+              }] : [{
+                id: 'approve',
+                title: 'Award Approved',
+                description: `${approvalData.final_approved_supplier} approved by ${approvalData.approved_by_email} on ${new Date(approvalData.approved_at).toLocaleDateString()}`,
+                urgent: false,
+              }]),
               {
                 id: 'review_gaps',
                 title: 'Request Clarification on Scope Gaps',
@@ -1391,11 +1497,14 @@ export default function AwardReport({
                 description: `Notify ${awardSummary.suppliers.length - 1} unsuccessful suppliers with feedback`,
                 urgent: false,
               },
-            ].map((action) => (
+            ].map((action) => {
+              const isApproveItem = action.id === 'approve';
+              const isChecked = isApproveItem && approvalData ? true : !!actionChecklist[action.id];
+              return (
               <div
                 key={action.id}
                 className={`flex items-start gap-4 p-4 rounded-lg border transition-all ${
-                  actionChecklist[action.id]
+                  isChecked
                     ? 'bg-green-900/20 border-green-600/50'
                     : action.urgent
                     ? 'bg-orange-900/20 border-orange-600/50'
@@ -1403,10 +1512,10 @@ export default function AwardReport({
                 }`}
               >
                 <button
-                  onClick={() => setActionChecklist({ ...actionChecklist, [action.id]: !actionChecklist[action.id] })}
-                  className="flex-shrink-0 mt-1 text-slate-300 hover:text-green-400 transition-colors"
+                  onClick={() => !isApproveItem && setActionChecklist({ ...actionChecklist, [action.id]: !actionChecklist[action.id] })}
+                  className={`flex-shrink-0 mt-1 transition-colors ${isApproveItem && approvalData ? 'cursor-default' : 'text-slate-300 hover:text-green-400'}`}
                 >
-                  {actionChecklist[action.id] ? (
+                  {isChecked ? (
                     <CheckSquare className="w-6 h-6 text-green-400" />
                   ) : (
                     <Square className="w-6 h-6" />
@@ -1415,7 +1524,7 @@ export default function AwardReport({
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-bold text-white">{action.title}</h4>
-                    {action.urgent && !actionChecklist[action.id] && (
+                    {action.urgent && !isChecked && (
                       <span className="px-2 py-0.5 bg-orange-600 text-white text-xs font-bold rounded">
                         URGENT
                       </span>
@@ -1425,7 +1534,8 @@ export default function AwardReport({
                 </div>
                 <ChevronRight className="w-5 h-5 text-slate-500 flex-shrink-0 mt-1" />
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="mt-6 p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">

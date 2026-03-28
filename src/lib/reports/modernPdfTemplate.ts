@@ -249,7 +249,7 @@ function pageExecutiveDecision(opts: ModernPdfOptions): string {
       <td style="padding:10px 12px;text-align:right;font-size:13px;color:${varExp && varExp > 0 ? RED : MUTED};">${varExp !== undefined ? fmt(varExp) : '—'}</td>
       <td style="padding:10px 12px;text-align:center;">
         <span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;background:${s.rank === 1 ? GREEN_BG : LIGHT_BG};color:${s.rank === 1 ? GREEN : MUTED};">
-          ${s.rank === 1 ? 'Leader' : `#${s.rank}`}
+          ${s.rank === 1 && pos !== 'no_recommendation' ? 'Leader' : `#${s.rank}`}
         </span>
       </td>
     </tr>`;
@@ -382,24 +382,32 @@ function pageCommercialComparison(opts: ModernPdfOptions): string {
       </table>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
-      ${opts.recommendations.slice(0, 3).map(rec => {
-        const typeLabels: Record<string, string> = { best_value: 'Best Value', lowest_risk: 'Lowest Risk', balanced: 'Balanced' };
-        const typeColors: Record<string, string> = { best_value: GREEN, lowest_risk: BLUE, balanced: ORANGE };
-        const typeBgs: Record<string, string> = { best_value: GREEN_BG, lowest_risk: BLUE_BG, balanced: '#fff7ed' };
-        const c = typeColors[rec.type] ?? ORANGE;
-        const bg = typeBgs[rec.type] ?? LIGHT_BG;
-        return `<div style="background:${bg};border:2px solid ${c}33;border-radius:10px;padding:18px;">
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${c};margin-bottom:6px;">${typeLabels[rec.type] ?? rec.type}</div>
-          <div style="font-size:16px;font-weight:800;color:${DARK};margin-bottom:12px;line-height:1.2;">${rec.supplierName}</div>
-          <div style="font-size:12px;color:${MID};">
-            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid ${BORDER};"><span>Quoted</span><strong>${fmt(rec.price)}</strong></div>
-            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid ${BORDER};"><span>Coverage</span><strong>${pct(rec.coverage)}</strong></div>
-            <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Composite</span><strong style="color:${c};">${Math.round(rec.score)}/100</strong></div>
-          </div>
+    ${(() => {
+      const pos2 = opts.commercialPosition ?? (opts.suppliers[0]?.recommendationStatus ?? 'no_recommendation');
+      if (pos2 === 'no_recommendation') {
+        return `<div style="background:${LIGHT_BG};border:1px solid ${BORDER};border-radius:10px;padding:20px;text-align:center;">
+          <div style="font-size:13px;color:${MUTED};font-style:italic;">No commercial recommendation has been issued for this tender. Refer to the Executive Decision section for current commercial position.</div>
         </div>`;
-      }).join('')}
-    </div>
+      }
+      return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+        ${opts.recommendations.slice(0, 3).map(rec => {
+          const typeLabels: Record<string, string> = { best_value: 'Best Value', lowest_risk: 'Lowest Risk', balanced: 'Balanced' };
+          const typeColors: Record<string, string> = { best_value: GREEN, lowest_risk: BLUE, balanced: ORANGE };
+          const typeBgs: Record<string, string> = { best_value: GREEN_BG, lowest_risk: BLUE_BG, balanced: '#fff7ed' };
+          const c = typeColors[rec.type] ?? ORANGE;
+          const bg = typeBgs[rec.type] ?? LIGHT_BG;
+          return `<div style="background:${bg};border:2px solid ${c}33;border-radius:10px;padding:18px;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${c};margin-bottom:6px;">${typeLabels[rec.type] ?? rec.type}</div>
+            <div style="font-size:16px;font-weight:800;color:${DARK};margin-bottom:12px;line-height:1.2;">${rec.supplierName}</div>
+            <div style="font-size:12px;color:${MID};">
+              <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid ${BORDER};"><span>Quoted</span><strong>${fmt(rec.price)}</strong></div>
+              <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid ${BORDER};"><span>Coverage</span><strong>${pct(rec.coverage)}</strong></div>
+              <div style="display:flex;justify-content:space-between;padding:5px 0;"><span>Composite</span><strong style="color:${c};">${Math.round(rec.score)}/100</strong></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    })()}
 
     ${pageFooter('Commercial Comparison', '2')}
   </div>`;
