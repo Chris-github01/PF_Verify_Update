@@ -3,10 +3,11 @@ import { buildSupplierProfiles, saveSupplierProfiles } from './profileBuilder';
 import { classifyBehaviours, saveBehaviourAnalysis } from './behaviourClassifier';
 import { calculateVariationExposures, saveVariationExposures } from './variationExposure';
 import { projectCosts, saveCostProjections } from './costProjection';
-import { rankSuppliers } from './rankingEngine';
+import { rankSuppliers, evaluateGating } from './rankingEngine';
 import { buildJustification } from './explanationBuilder';
 import { buildDecisionState, saveDecisionSnapshot } from './decisionState';
-import type { CdeDecisionState, CdeWeights } from './types';
+import type { CdeDecisionState, CdeWeights, GatingThresholds } from './types';
+import { DEFAULT_GATING_THRESHOLDS } from './types';
 
 function generateRunId(projectId: string): string {
   const ts = Date.now().toString(36);
@@ -16,6 +17,7 @@ function generateRunId(projectId: string): string {
 
 export interface CdeRunOptions {
   weights?: CdeWeights;
+  gatingThresholds?: GatingThresholds;
   saveResults?: boolean;
 }
 
@@ -23,7 +25,7 @@ export async function runCde(
   projectId: string,
   options: CdeRunOptions = {}
 ): Promise<CdeDecisionState> {
-  const { weights, saveResults = true } = options;
+  const { weights, gatingThresholds = DEFAULT_GATING_THRESHOLDS, saveResults = true } = options;
   const runId = generateRunId(projectId);
 
   const { data: quotes, error } = await supabase
@@ -42,8 +44,14 @@ export async function runCde(
   const exposures = calculateVariationExposures(profiles);
   const projections = projectCosts(profiles, exposures);
   const ranked = rankSuppliers(profiles, behaviours, exposures, projections, weights);
-  const justification = buildJustification(ranked, behaviours, exposures);
-  const state = buildDecisionState(projectId, runId, ranked, justification);
+
+  const topConfidence = ranked[0]
+    ? Math.min(1, ranked[0].compositeScore * (ranked.length >= 3 ? 1.0 : 0.85))
+    : 0;
+
+  const gating = evaluateGating(ranked, topConfidence, gatingThresholds);
+  const justification = buildJustification(ranked, behaviours, exposures, gating);
+  const state = buildDecisionState(projectId, runId, ranked, justification, gating);
 
   if (saveResults) {
     await Promise.all([

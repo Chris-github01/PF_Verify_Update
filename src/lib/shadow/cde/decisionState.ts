@@ -1,11 +1,18 @@
 import { supabase } from '../../supabase';
-import type { CdeDecisionState, CdeRankedSupplier, DecisionBasis } from './types';
+import type {
+  CdeDecisionState,
+  CdeRankedSupplier,
+  DecisionBasis,
+  GatingResult,
+  RecommendationStatus,
+} from './types';
 
 export function buildDecisionState(
   projectId: string,
   runId: string,
   ranked: CdeRankedSupplier[],
   justification: string,
+  gating: GatingResult,
   basis: DecisionBasis = 'weighted_score'
 ): CdeDecisionState {
   const top = ranked[0] ?? null;
@@ -15,15 +22,34 @@ export function buildDecisionState(
     ? Math.min(1, top.compositeScore * (ranked.length >= 3 ? 1.0 : 0.85))
     : 0;
 
+  let recommendationStatus: RecommendationStatus;
+  let recommendedSupplier: string | null = null;
+  let runnerUpSupplier: string | null = runnerUp?.supplierName ?? null;
+
+  if (!top || ranked.length === 0) {
+    recommendationStatus = 'no_recommendation';
+  } else if (!gating.passed) {
+    recommendationStatus = 'provisional';
+    recommendedSupplier = top.supplierName;
+  } else if (gating.isNarrowMargin) {
+    recommendationStatus = 'narrow_margin';
+    recommendedSupplier = top.supplierName;
+  } else {
+    recommendationStatus = 'recommended';
+    recommendedSupplier = top.supplierName;
+  }
+
   return {
     projectId,
     runId,
     suppliers: ranked,
-    recommendedSupplier: top?.supplierName ?? null,
-    runnerUpSupplier: runnerUp?.supplierName ?? null,
+    recommendedSupplier,
+    runnerUpSupplier,
+    recommendationStatus,
     decisionBasis: basis,
     overallConfidence: Math.round(overallConfidence * 100) / 100,
     justification,
+    gating,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -59,7 +85,21 @@ export async function loadLatestDecisionSnapshot(
 
   if (!data) return null;
 
-  return data.decision_state as CdeDecisionState;
+  const state = data.decision_state as CdeDecisionState;
+  if (!state.recommendationStatus) {
+    state.recommendationStatus = 'provisional';
+  }
+  if (!state.gating) {
+    state.gating = {
+      passed: false,
+      failedGates: ['Legacy snapshot — gating data unavailable'],
+      scopeCoverageScore: 0,
+      variationResistanceScore: 0,
+      confidence: state.overallConfidence ?? 0,
+      isNarrowMargin: false,
+    };
+  }
+  return state;
 }
 
 export async function loadDecisionHistory(
@@ -73,5 +113,19 @@ export async function loadDecisionHistory(
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  return (data ?? []).map((row) => row.decision_state as CdeDecisionState);
+  return (data ?? []).map((row) => {
+    const state = row.decision_state as CdeDecisionState;
+    if (!state.recommendationStatus) state.recommendationStatus = 'provisional';
+    if (!state.gating) {
+      state.gating = {
+        passed: false,
+        failedGates: ['Legacy snapshot'],
+        scopeCoverageScore: 0,
+        variationResistanceScore: 0,
+        confidence: state.overallConfidence ?? 0,
+        isNarrowMargin: false,
+      };
+    }
+    return state;
+  });
 }

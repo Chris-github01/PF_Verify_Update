@@ -2,37 +2,91 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { runCde } from '../../lib/shadow/cde/cdeRunner';
 import { loadLatestDecisionSnapshot, loadDecisionHistory } from '../../lib/shadow/cde/decisionState';
-import { RISK_TIER_COLORS, RISK_TIER_LABELS, BEHAVIOUR_CLASS_LABELS, BEHAVIOUR_CLASS_COLORS } from '../../lib/shadow/cde/constants';
-import type { CdeDecisionState, CdeRankedSupplier } from '../../lib/shadow/cde/types';
+import {
+  RISK_TIER_COLORS,
+  RISK_TIER_LABELS,
+  BEHAVIOUR_CLASS_LABELS,
+  BEHAVIOUR_CLASS_COLORS,
+} from '../../lib/shadow/cde/constants';
+import type { CdeDecisionState, CdeRankedSupplier, RecommendationStatus } from '../../lib/shadow/cde/types';
 import {
   Trophy, AlertTriangle, TrendingUp, ChevronDown, ChevronUp,
   Play, RefreshCw, Clock, CheckCircle, Info, BarChart2, Shield,
-  DollarSign, Target, History, ChevronRight
+  DollarSign, Target, History, ChevronRight, XCircle, MinusCircle,
 } from 'lucide-react';
 
 function fmt(n: number): string {
-  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
 function fmtPct(n: number): string {
   return `${Math.round(n * 10) / 10}%`;
 }
 
+const STATUS_CONFIG: Record<
+  RecommendationStatus,
+  {
+    label: string;
+    subLabel: string;
+    badgeClass: string;
+    icon: React.ElementType;
+    headerClass: string;
+  }
+> = {
+  recommended: {
+    label: 'Preferred Tenderer',
+    subLabel: 'All gating conditions satisfied — final CDE recommendation',
+    badgeClass: 'bg-emerald-700 text-white',
+    icon: Trophy,
+    headerClass: 'border-emerald-300',
+  },
+  narrow_margin: {
+    label: 'Commercial Leader — Narrow Margin',
+    subLabel: 'Top-2 suppliers within 3-point composite margin. Scope validation advised before award.',
+    badgeClass: 'bg-amber-600 text-white',
+    icon: MinusCircle,
+    headerClass: 'border-amber-300',
+  },
+  provisional: {
+    label: 'Provisional Leader — Scope Validation Required',
+    subLabel: 'One or more gating conditions not yet satisfied. Cannot issue final recommendation.',
+    badgeClass: 'bg-slate-600 text-white',
+    icon: AlertTriangle,
+    headerClass: 'border-slate-300',
+  },
+  no_recommendation: {
+    label: 'No Recommendation',
+    subLabel: 'Insufficient data or critical conditions failed. Run CDE after resolving issues below.',
+    badgeClass: 'bg-red-700 text-white',
+    icon: XCircle,
+    headerClass: 'border-red-300',
+  },
+};
+
 function ConfidenceBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100);
-  const color = pct >= 75 ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-    : pct >= 50 ? 'text-amber-700 bg-amber-50 border-amber-200'
-    : 'text-red-700 bg-red-50 border-red-200';
+  const color =
+    pct >= 75
+      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+      : pct >= 50
+      ? 'text-amber-700 bg-amber-50 border-amber-200'
+      : 'text-red-700 bg-red-50 border-red-200';
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${color}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${color}`}
+    >
       <CheckCircle className="w-3 h-3" />
       {pct}% confidence
     </span>
   );
 }
 
-function ScoreBar({ label, value, max = 1 }: { label: string; value: number; max?: number }) {
-  const pct = Math.round((value / max) * 100);
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const pct = Math.round(value * 100);
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-slate-500">
@@ -49,45 +103,179 @@ function ScoreBar({ label, value, max = 1 }: { label: string; value: number; max
   );
 }
 
-function SupplierCard({ supplier, isTop, isRunnerUp }: { supplier: CdeRankedSupplier; isTop: boolean; isRunnerUp: boolean }) {
+function GatingPanel({ state }: { state: CdeDecisionState }) {
+  const { gating } = state;
+  const allPassed = gating.passed && !gating.isNarrowMargin;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+        <Shield className="w-4 h-4 text-slate-400" />
+        Recommendation Gating
+      </h3>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+        <GateItem
+          label="Scope coverage"
+          value={`${Math.round(gating.scopeCoverageScore * 100)}/100`}
+          threshold="min 55"
+          passed={gating.scopeCoverageScore >= 0.55}
+        />
+        <GateItem
+          label="Variation resistance"
+          value={`${Math.round(gating.variationResistanceScore * 100)}/100`}
+          threshold="min 45"
+          passed={gating.variationResistanceScore >= 0.45}
+        />
+        <GateItem
+          label="Confidence"
+          value={`${Math.round(gating.confidence * 100)}%`}
+          threshold="min 50%"
+          passed={gating.confidence >= 0.50}
+        />
+      </div>
+
+      {gating.isNarrowMargin && (
+        <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <span>
+            Top-2 composite scores are within the 3-point narrow margin threshold. Gating conditions
+            passed, but the margin is insufficient for a hard final recommendation without additional validation.
+          </span>
+        </div>
+      )}
+
+      {gating.failedGates.length > 0 && (
+        <div className="space-y-1">
+          {gating.failedGates.map((g, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+            >
+              <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+              {g}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {allPassed && gating.failedGates.length === 0 && (
+        <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+          <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          All gating conditions satisfied. CDE recommendation is final.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GateItem({
+  label,
+  value,
+  threshold,
+  passed,
+}: {
+  label: string;
+  value: string;
+  threshold: string;
+  passed: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2 ${
+        passed
+          ? 'border-emerald-200 bg-emerald-50'
+          : 'border-red-200 bg-red-50'
+      }`}
+    >
+      <div className={`flex items-center gap-1 ${passed ? 'text-emerald-600' : 'text-red-600'}`}>
+        {passed ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+        <span className="font-semibold">{value}</span>
+      </div>
+      <div className="text-slate-500 mt-0.5">{label}</div>
+      <div className="text-slate-400 text-[10px]">threshold: {threshold}</div>
+    </div>
+  );
+}
+
+function SupplierCard({
+  supplier,
+  state,
+}: {
+  supplier: CdeRankedSupplier;
+  state: CdeDecisionState;
+}) {
   const [expanded, setExpanded] = useState(false);
   const riskColors = RISK_TIER_COLORS[supplier.riskTier];
   const behaviourColors = BEHAVIOUR_CLASS_COLORS[supplier.behaviourClass];
 
+  const isTop = supplier.supplierName === state.recommendedSupplier;
+  const isRunnerUp = supplier.supplierName === state.runnerUpSupplier;
+  const status = state.recommendationStatus;
+
+  const topBadgeLabel =
+    status === 'recommended'
+      ? 'Preferred Tenderer'
+      : status === 'narrow_margin'
+      ? 'Commercial Leader — Narrow Margin'
+      : status === 'provisional'
+      ? 'Provisional Leader'
+      : null;
+
   return (
-    <div className={`rounded-xl border bg-white transition-all duration-200 ${isTop ? 'border-slate-700 shadow-md' : 'border-slate-200 hover:border-slate-300'}`}>
+    <div
+      className={`rounded-xl border bg-white transition-all duration-200 ${
+        isTop ? 'border-slate-700 shadow-md' : 'border-slate-200 hover:border-slate-300'
+      }`}
+    >
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
-            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${isTop ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
+            <div
+              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                isTop ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
               {supplier.rank}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-slate-800 truncate">{supplier.supplierName}</h3>
-                {isTop && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-white">
-                    <Trophy className="w-3 h-3" /> Recommended
+                {isTop && topBadgeLabel && (
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[status].badgeClass}`}
+                  >
+                    {status === 'recommended' && <Trophy className="w-3 h-3" />}
+                    {status === 'narrow_margin' && <MinusCircle className="w-3 h-3" />}
+                    {status === 'provisional' && <AlertTriangle className="w-3 h-3" />}
+                    {topBadgeLabel}
                   </span>
                 )}
-                {isRunnerUp && (
+                {isRunnerUp && !isTop && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
                     Runner-up
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${riskColors}`}>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${riskColors}`}
+                >
                   {RISK_TIER_LABELS[supplier.riskTier]}
                 </span>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${behaviourColors}`}>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${behaviourColors}`}
+                >
                   {BEHAVIOUR_CLASS_LABELS[supplier.behaviourClass]}
                 </span>
               </div>
             </div>
           </div>
           <div className="flex-shrink-0 text-right">
-            <div className="text-lg font-bold text-slate-800">{Math.round(supplier.compositeScore * 100)}<span className="text-sm font-normal text-slate-500">/100</span></div>
+            <div className="text-lg font-bold text-slate-800">
+              {Math.round(supplier.compositeScore * 100)}
+              <span className="text-sm font-normal text-slate-500">/100</span>
+            </div>
             <div className="text-xs text-slate-500">composite score</div>
           </div>
         </div>
@@ -111,16 +299,24 @@ function SupplierCard({ supplier, isTop, isRunnerUp }: { supplier: CdeRankedSupp
           onClick={() => setExpanded(!expanded)}
           className="mt-3 w-full flex items-center justify-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
         >
-          {expanded ? <><ChevronUp className="w-3.5 h-3.5" /> Hide breakdown</> : <><ChevronDown className="w-3.5 h-3.5" /> Score breakdown</>}
+          {expanded ? (
+            <>
+              <ChevronUp className="w-3.5 h-3.5" /> Hide breakdown
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-3.5 h-3.5" /> Score breakdown
+            </>
+          )}
         </button>
 
         {expanded && (
           <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
-            <ScoreBar label="Cost score" value={supplier.scoreBreakdown.cost} />
-            <ScoreBar label="Behaviour score" value={supplier.scoreBreakdown.behaviour} />
-            <ScoreBar label="Scope coverage" value={supplier.scoreBreakdown.scope} />
-            <ScoreBar label="Variation resistance" value={supplier.scoreBreakdown.variation} />
-            <ScoreBar label="Programme risk" value={supplier.scoreBreakdown.programme} />
+            <ScoreBar label="Cost efficiency (35%)" value={supplier.scoreBreakdown.cost} />
+            <ScoreBar label="Supplier behaviour (25%)" value={supplier.scoreBreakdown.behaviour} />
+            <ScoreBar label="Scope coverage (20%)" value={supplier.scoreBreakdown.scope} />
+            <ScoreBar label="Variation resistance (12%)" value={supplier.scoreBreakdown.variation} />
+            <ScoreBar label="Programme risk (8%)" value={supplier.scoreBreakdown.programme} />
           </div>
         )}
       </div>
@@ -128,11 +324,21 @@ function SupplierCard({ supplier, isTop, isRunnerUp }: { supplier: CdeRankedSupp
   );
 }
 
-function ProjectPicker({ projectId, onChange }: { projectId: string; onChange: (id: string) => void }) {
+function ProjectPicker({
+  projectId,
+  onChange,
+}: {
+  projectId: string;
+  onChange: (id: string) => void;
+}) {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
-    supabase.from('projects').select('id, name').order('created_at', { ascending: false }).limit(50)
+    supabase
+      .from('projects')
+      .select('id, name')
+      .order('created_at', { ascending: false })
+      .limit(50)
       .then(({ data }) => setProjects(data ?? []));
   }, []);
 
@@ -144,7 +350,9 @@ function ProjectPicker({ projectId, onChange }: { projectId: string; onChange: (
     >
       <option value="">-- Select a project --</option>
       {projects.map((p) => (
-        <option key={p.id} value={p.id}>{p.name}</option>
+        <option key={p.id} value={p.id}>
+          {p.name}
+        </option>
       ))}
     </select>
   );
@@ -158,18 +366,34 @@ function HistoryPanel({ history }: { history: CdeDecisionState[] }) {
         <History className="w-4 h-4 text-slate-400" /> Decision History
       </h3>
       <div className="space-y-2">
-        {history.map((snap, i) => (
-          <div key={snap.runId} className="flex items-center justify-between text-sm py-2 border-b border-slate-50 last:border-0">
-            <div>
-              <span className="font-medium text-slate-700">{snap.recommendedSupplier ?? 'No recommendation'}</span>
-              <span className="text-slate-400 ml-2 text-xs">{new Date(snap.generatedAt).toLocaleDateString('en-AU')}</span>
+        {history.map((snap, i) => {
+          const cfg = STATUS_CONFIG[snap.recommendationStatus ?? 'provisional'];
+          const StatusIcon = cfg.icon;
+          return (
+            <div
+              key={snap.runId}
+              className="flex items-center justify-between text-sm py-2 border-b border-slate-50 last:border-0"
+            >
+              <div>
+                <span className="font-medium text-slate-700">
+                  {snap.recommendedSupplier ?? 'No recommendation'}
+                </span>
+                <span className="text-slate-400 ml-2 text-xs">
+                  {new Date(snap.generatedAt).toLocaleDateString('en-AU')}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badgeClass}`}
+                >
+                  <StatusIcon className="w-3 h-3" />
+                  {cfg.label}
+                </span>
+                {i === 0 && <span className="text-xs text-slate-400">Latest</span>}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ConfidenceBadge value={snap.overallConfidence} />
-              {i === 0 && <span className="text-xs text-slate-400">Latest</span>}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -224,8 +448,10 @@ export default function TenderDecisionDashboard() {
     }
   };
 
+  const status = state?.recommendationStatus ?? 'no_recommendation';
+  const cfg = STATUS_CONFIG[status];
+  const StatusIcon = cfg.icon;
   const top = state?.suppliers[0];
-  const runnerUp = state?.suppliers[1];
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -236,13 +462,15 @@ export default function TenderDecisionDashboard() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Tender Decision Engine</h1>
             <p className="text-slate-500 text-sm mt-1">
-              Comparative decision analysis across supplier profiles, variation exposure, and projected cost.
+              The sole authority for preferred tenderer, runner-up, and no-recommendation status.
+              Consumes cost, scope, behaviour, and variation risk inputs.
             </p>
           </div>
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex flex-col gap-1.5 items-end">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
               <Shield className="w-3 h-3" /> Shadow Module
             </span>
+            <span className="text-xs text-slate-400">CDE — Final Decision Authority</span>
           </div>
         </div>
 
@@ -259,7 +487,11 @@ export default function TenderDecisionDashboard() {
               disabled={!projectId || running}
               className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {running ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              {running ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
               {running ? 'Running analysis...' : 'Run CDE'}
             </button>
             {state && (
@@ -282,32 +514,44 @@ export default function TenderDecisionDashboard() {
         </div>
 
         {loading && (
-          <div className="text-center py-12 text-slate-400 text-sm">Loading decision data...</div>
+          <div className="text-center py-12 text-slate-400 text-sm">
+            Loading decision data...
+          </div>
         )}
 
         {!loading && state && (
           <>
-            {/* Decision Summary */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
+            {/* Decision Status Banner */}
+            <div className={`bg-white rounded-xl border-2 p-5 ${cfg.headerClass}`}>
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center">
-                  <Trophy className="w-5 h-5 text-white" />
+                  <StatusIcon className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
                     <h2 className="text-lg font-bold text-slate-900">
-                      {state.recommendedSupplier ?? 'No recommendation'}
+                      {state.recommendedSupplier ?? 'No recommendation issued'}
                     </h2>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.badgeClass}`}
+                    >
+                      <StatusIcon className="w-3 h-3" />
+                      {cfg.label}
+                    </span>
                     <ConfidenceBadge value={state.overallConfidence} />
                     <span className="text-xs text-slate-400 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {new Date(state.generatedAt).toLocaleString('en-AU')}
                     </span>
                   </div>
+                  <p className="text-xs text-slate-500 mt-1 italic">{cfg.subLabel}</p>
                   <p className="text-sm text-slate-600 mt-2 leading-relaxed">{state.justification}</p>
                 </div>
               </div>
             </div>
+
+            {/* Gating panel */}
+            <GatingPanel state={state} />
 
             {/* Stats row */}
             {top && (
@@ -324,7 +568,7 @@ export default function TenderDecisionDashboard() {
                       <span className="text-xs">{label}</span>
                     </div>
                     <div className="text-lg font-bold text-slate-800">{value}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">Recommended supplier</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Composite leader</div>
                   </div>
                 ))}
               </div>
@@ -338,25 +582,28 @@ export default function TenderDecisionDashboard() {
               </h2>
               <div className="space-y-3">
                 {state.suppliers.map((supplier) => (
-                  <SupplierCard
-                    key={supplier.supplierName}
-                    supplier={supplier}
-                    isTop={supplier.supplierName === state.recommendedSupplier}
-                    isRunnerUp={supplier.supplierName === state.runnerUpSupplier}
-                  />
+                  <SupplierCard key={supplier.supplierName} supplier={supplier} state={state} />
                 ))}
               </div>
             </div>
 
-            {/* Methodology note */}
+            {/* CDE authority note */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-start gap-3">
               <Info className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Composite scores are calculated using weighted dimensions: cost efficiency (35%), supplier behaviour (25%),
-                scope coverage (20%), variation resistance (12%), and programme risk (8%). Risk tier penalties
-                are applied to reduce scores for high-risk suppliers. Projected totals incorporate historical variation rates
-                and risk premiums on top of quoted figures.
-              </p>
+              <div className="text-xs text-slate-500 leading-relaxed space-y-1">
+                <p>
+                  <strong>CDE is the sole recommendation authority.</strong> Only this module may
+                  output preferred tenderer, runner-up, narrow margin leader, or no-recommendation
+                  status. Quantity Intelligence and other advisory modules inform inputs but do not
+                  determine the outcome.
+                </p>
+                <p>
+                  Composite scores use: cost efficiency (35%), supplier behaviour (25%), scope
+                  coverage (20%), variation resistance (12%), programme risk (8%). Risk tier penalties
+                  apply. Gating thresholds: scope &ge;55, variation &ge;45, confidence &ge;50%.
+                  Narrow-margin suppression: &le;3 composite points.
+                </p>
+              </div>
             </div>
 
             <HistoryPanel history={history} />
@@ -367,7 +614,9 @@ export default function TenderDecisionDashboard() {
           <div className="text-center py-16 space-y-3">
             <Target className="w-10 h-10 text-slate-300 mx-auto" />
             <p className="text-slate-500 text-sm">No CDE analysis found for this project.</p>
-            <p className="text-slate-400 text-xs">Click "Run CDE" to generate the first comparative decision analysis.</p>
+            <p className="text-slate-400 text-xs">
+              Click &ldquo;Run CDE&rdquo; to generate the first comparative decision analysis.
+            </p>
           </div>
         )}
 

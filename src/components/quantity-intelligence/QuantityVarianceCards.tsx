@@ -56,9 +56,9 @@ export default function QuantityVarianceCards({ result }: Props) {
   const { suppliers, totalMatchedLines, linesWithMajorVariance, linesWithReviewFlag, hasUnderallowanceRisk } = result;
 
   const underallowedSuppliers = suppliers.filter((s) => s.underallowanceFlag);
-  const bestByNorm = [...suppliers].sort((a, b) => a.normalizedTotal - b.normalizedTotal)[0];
-  const bestByRaw = [...suppliers].sort((a, b) => a.rawTotal - b.rawTotal)[0];
-  const rankFlipped = bestByRaw && bestByNorm && bestByRaw.quoteId !== bestByNorm.quoteId;
+  const lowestByNorm = [...suppliers].sort((a, b) => a.normalizedTotal - b.normalizedTotal)[0];
+  const lowestByRaw = [...suppliers].sort((a, b) => a.rawTotal - b.rawTotal)[0];
+  const rankFlipped = lowestByRaw && lowestByNorm && lowestByRaw.quoteId !== lowestByNorm.quoteId;
 
   const alerts: Array<{ title: string; description: string; severity: 'critical' | 'warning' | 'info' | 'success' }> = [];
 
@@ -71,10 +71,10 @@ export default function QuantityVarianceCards({ result }: Props) {
     });
   }
 
-  if (rankFlipped && bestByNorm) {
+  if (rankFlipped && lowestByNorm) {
     alerts.push({
-      title: 'Cheapest supplier changes after quantity adjustment',
-      description: `Raw cheapest: ${bestByRaw?.supplierName}. After normalizing quantities: ${bestByNorm.supplierName}. Quantity under-allowance may be distorting the raw comparison.`,
+      title: 'Quantity normalisation changes cost ranking',
+      description: `Lowest raw total: ${lowestByRaw?.supplierName}. Lowest on equal quantities: ${lowestByNorm.supplierName}. Quantity under-allowance may be distorting the raw comparison. Review line-level quantities before drawing conclusions.`,
       severity: 'warning',
     });
   }
@@ -98,8 +98,8 @@ export default function QuantityVarianceCards({ result }: Props) {
   const highestCompleteness = [...suppliers].sort((a, b) => b.completenessScore - a.completenessScore)[0];
   if (highestCompleteness && !underallowedSuppliers.find((s) => s.quoteId === highestCompleteness.quoteId)) {
     alerts.push({
-      title: `${highestCompleteness.supplierName} has the highest completeness score`,
-      description: `Completeness: ${highestCompleteness.completenessScore.toFixed(0)}/100. This supplier's quantities most closely match the reference across all matched lines.`,
+      title: `${highestCompleteness.supplierName} has the highest quantity completeness score`,
+      description: `Completeness: ${highestCompleteness.completenessScore.toFixed(0)}/100. This supplier's quantities most closely match the reference across all matched lines. Note: completeness is a quantity measure only — not a tender recommendation.`,
       severity: 'success',
     });
   }

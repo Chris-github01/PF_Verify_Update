@@ -1,4 +1,4 @@
-import type { CdeRankedSupplier, CdeBehaviourAnalysis, CdeVariationExposure } from './types';
+import type { CdeRankedSupplier, CdeBehaviourAnalysis, CdeVariationExposure, GatingResult } from './types';
 
 function fmt(n: number): string {
   return new Intl.NumberFormat('en-AU', {
@@ -15,7 +15,8 @@ function fmtPct(n: number): string {
 export function buildJustification(
   ranked: CdeRankedSupplier[],
   behaviours: CdeBehaviourAnalysis[],
-  exposures: CdeVariationExposure[]
+  exposures: CdeVariationExposure[],
+  gating: GatingResult
 ): string {
   if (ranked.length === 0) return 'No suppliers available for comparison.';
 
@@ -29,40 +30,65 @@ export function buildJustification(
 
   const lines: string[] = [];
 
-  lines.push(
-    `${top.supplierName} is recommended as the preferred tenderer with a composite score of ` +
-      `${(top.compositeScore * 100).toFixed(1)}/100.`
-  );
+  const isProvisional = !gating.passed;
+  const isNarrow = gating.isNarrowMargin;
+
+  if (isProvisional) {
+    lines.push(
+      `${top.supplierName} is the composite leader with a score of ${(top.compositeScore * 100).toFixed(1)}/100, ` +
+        `however this is a provisional result — scope validation is required before a final recommendation can be issued.`
+    );
+  } else if (isNarrow) {
+    lines.push(
+      `${top.supplierName} leads by a narrow composite margin (score: ${(top.compositeScore * 100).toFixed(1)}/100). ` +
+        `The margin over the runner-up is within the 3-point threshold. A final recommendation requires additional scope validation.`
+    );
+  } else {
+    lines.push(
+      `${top.supplierName} is the preferred tenderer with a composite score of ${(top.compositeScore * 100).toFixed(1)}/100. ` +
+        `All gating conditions have been satisfied.`
+    );
+  }
 
   lines.push(
-    `Their quoted total of ${fmt(top.quotedTotal)} projects to ${fmt(top.projectedTotal)} ` +
-      `after applying historical variation rate adjustments and risk premiums.`
+    `Quoted total: ${fmt(top.quotedTotal)}, projecting to ${fmt(top.projectedTotal)} after variation rate adjustments and risk premiums.`
   );
 
   if (topExposure && topExposure.exposurePct > 0) {
+    const exposureRisk =
+      topExposure.exposurePct < 5
+        ? 'within acceptable bounds'
+        : topExposure.exposurePct < 12
+        ? 'moderate — recommend contractual controls'
+        : 'elevated — contractual mitigation required';
     lines.push(
-      `Variation exposure is estimated at ${fmtPct(topExposure.exposurePct)} of contract value ` +
-        `(${fmt(topExposure.exposureAmount)}), which is ${topExposure.exposurePct < 8 ? 'within acceptable bounds' : 'elevated and should be managed contractually'}.`
+      `Variation exposure: ${fmtPct(topExposure.exposurePct)} of contract value (${fmt(topExposure.exposureAmount)}) — ${exposureRisk}.`
     );
   }
 
   if (topBehaviour) {
     const flagText =
       topBehaviour.flags.length > 0
-        ? `Key flags: ${topBehaviour.flags.join('; ')}.`
-        : 'No significant risk flags were identified.';
+        ? `Unresolved flags: ${topBehaviour.flags.join('; ')}.`
+        : 'No significant risk flags identified.';
     lines.push(
-      `Behaviour classification: ${topBehaviour.behaviourClass} (Risk tier: ${topBehaviour.riskTier}). ${flagText}`
+      `Supplier behaviour: ${topBehaviour.behaviourClass}, risk tier: ${topBehaviour.riskTier}. ${flagText}`
+    );
+  }
+
+  if (gating.failedGates.length > 0) {
+    lines.push(
+      `Unresolved conditions preventing final recommendation: ${gating.failedGates.join('; ')}.`
     );
   }
 
   if (runnerUp) {
-    const gap = top.projectedTotal > 0
-      ? (((runnerUp.projectedTotal - top.projectedTotal) / top.projectedTotal) * 100).toFixed(1)
-      : '0.0';
+    const gap =
+      top.projectedTotal > 0
+        ? (((runnerUp.projectedTotal - top.projectedTotal) / top.projectedTotal) * 100).toFixed(1)
+        : '0.0';
     lines.push(
-      `Runner-up: ${runnerUp.supplierName} at ${fmt(runnerUp.projectedTotal)} projected total ` +
-        `(+${gap}% vs recommended), composite score ${(runnerUp.compositeScore * 100).toFixed(1)}/100.`
+      `Runner-up: ${runnerUp.supplierName} — projected ${fmt(runnerUp.projectedTotal)} (+${gap}%), composite score ${(runnerUp.compositeScore * 100).toFixed(1)}/100.`
     );
   }
 

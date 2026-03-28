@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import {
   Layers, Play, History, ChevronDown, RefreshCw, AlertTriangle,
   CheckCircle2, BarChart2, X, Download, Shield, TrendingDown,
-  TrendingUp, Award, Info,
+  TrendingUp, DollarSign, Info,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
@@ -585,19 +585,19 @@ export default function QuantityIntelligencePage({ projectId, onNavigateNext }: 
                 {safeSuppliers.length >= 2 && (rawCheapest || normCheapest) && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <CommercialCard
-                      icon={<Award className="w-4 h-4 text-green-400" />}
-                      label="Raw Cheapest"
+                      icon={<DollarSign className="w-4 h-4 text-green-400" />}
+                      label="Raw Cheapest Quote"
                       value={rawCheapest?.supplierName ?? '—'}
-                      sub={rawCheapest ? `$${rawCheapest.rawTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : ''}
+                      sub={rawCheapest ? `$${rawCheapest.rawTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} submitted total` : ''}
                       color="green"
                     />
                     <CommercialCard
-                      icon={<Award className="w-4 h-4 text-teal-400" />}
-                      label="Cheapest on Equal Qty"
+                      icon={<BarChart2 className="w-4 h-4 text-teal-400" />}
+                      label="Lowest Qty-Normalised Total"
                       value={normCheapest?.supplierName ?? '—'}
-                      sub={normCheapest ? `$${normCheapest.normalizedTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} normalized` : ''}
+                      sub={normCheapest ? `$${normCheapest.normalizedTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} on equal quantities` : ''}
                       color="teal"
-                      highlight={rankFlipped ? 'Rank changed after normalization' : undefined}
+                      highlight={rankFlipped ? 'Rank changes after normalisation' : undefined}
                     />
                     <CommercialCard
                       icon={<AlertTriangle className="w-4 h-4 text-red-400" />}
@@ -620,20 +620,20 @@ export default function QuantityIntelligencePage({ projectId, onNavigateNext }: 
                   <div className="flex items-start gap-3 px-4 py-3 bg-amber-500/8 border border-amber-500/25 rounded-xl">
                     <TrendingDown className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <div className="text-xs font-semibold text-amber-300 mb-0.5">Rank changed after quantity normalization</div>
+                      <div className="text-xs font-semibold text-amber-300 mb-0.5">Quantity normalisation changes cost ranking</div>
                       <div className="text-xs text-amber-400/80">
-                        <strong>{rawCheapest.supplierName}</strong> is cheapest on raw submitted total, but
-                        <strong> {normCheapest.supplierName}</strong> is cheapest on a fair equal-quantity basis.
-                        This suggests {rawCheapest.supplierName} may have allowed fewer quantities to achieve a lower headline price.
+                        <strong>{rawCheapest.supplierName}</strong> has a lower submitted total, but
+                        <strong> {normCheapest.supplierName}</strong> has a lower total on a fair equal-quantity basis.
+                        This suggests quantity under-allowance may be distorting the raw cost comparison. Review line-level quantities before drawing conclusions.
                       </div>
                     </div>
                   </div>
                 )}
 
                 <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl px-4 py-2.5 flex items-center gap-2">
-                  <Shield className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />
-                  <span className="text-xs text-gray-600 italic">
-                    Reference quantities are for fair commercial comparison only and do not modify supplier submissions.
+                  <Shield className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
+                  <span className="text-xs text-gray-500">
+                    Quantity Intelligence is advisory-only and does not determine the preferred tenderer. Final recommendations are issued by the Commercial Decision Engine.
                   </span>
                 </div>
 

@@ -6,8 +6,10 @@ import type {
   CdeRankedSupplier,
   CdeWeights,
   RiskTier,
+  GatingResult,
+  GatingThresholds,
 } from './types';
-import { DEFAULT_CDE_WEIGHTS } from './types';
+import { DEFAULT_CDE_WEIGHTS, DEFAULT_GATING_THRESHOLDS } from './types';
 
 const RISK_TIER_PENALTY: Record<RiskTier, number> = {
   low: 1.0,
@@ -38,10 +40,7 @@ function normaliseScope(scopeCoveragePct: number): number {
   return Math.min(1, Math.max(0, scopeCoveragePct / 100));
 }
 
-function normaliseVariation(
-  exposurePct: number,
-  allExposurePcts: number[]
-): number {
+function normaliseVariation(exposurePct: number, allExposurePcts: number[]): number {
   const max = Math.max(...allExposurePcts, 1);
   return 1 - Math.min(1, exposurePct / max);
 }
@@ -113,6 +112,82 @@ export function rankSuppliers(
   });
 
   scored.sort((a, b) => b.compositeScore - a.compositeScore);
-
   return scored.map((s, i) => ({ ...s, rank: i + 1 }));
+}
+
+/**
+ * Evaluate gating conditions for the top-ranked supplier.
+ *
+ * Gates:
+ *   1. Scope coverage score >= minScopeCoverageScore
+ *   2. Variation resistance score >= minVariationResistanceScore
+ *   3. Overall confidence >= minConfidence
+ *   4. Narrow margin check: top-2 composite gap <= narrowMarginPoints
+ *
+ * If all gates pass and margin is wide enough → 'recommended'
+ * If gates pass but margin is narrow → 'narrow_margin'
+ * If any gate fails but a leader exists → 'provisional'
+ * If no suppliers or critical failures → 'no_recommendation'
+ */
+export function evaluateGating(
+  ranked: CdeRankedSupplier[],
+  overallConfidence: number,
+  thresholds: GatingThresholds = DEFAULT_GATING_THRESHOLDS
+): GatingResult {
+  if (ranked.length === 0) {
+    return {
+      passed: false,
+      failedGates: ['No suppliers available for evaluation'],
+      scopeCoverageScore: 0,
+      variationResistanceScore: 0,
+      confidence: 0,
+      isNarrowMargin: false,
+    };
+  }
+
+  const top = ranked[0];
+  const runnerUp = ranked[1];
+
+  const scopeCoverageScore = top.scoreBreakdown.scope;
+  const variationResistanceScore = top.scoreBreakdown.variation;
+  const confidence = overallConfidence;
+
+  const narrowMarginGap =
+    runnerUp != null ? top.compositeScore - runnerUp.compositeScore : 1;
+  const isNarrowMargin = narrowMarginGap <= thresholds.narrowMarginPoints;
+
+  const failedGates: string[] = [];
+
+  if (scopeCoverageScore < thresholds.minScopeCoverageScore) {
+    failedGates.push(
+      `Scope coverage score ${(scopeCoverageScore * 100).toFixed(0)}/100 is below minimum threshold of ${(thresholds.minScopeCoverageScore * 100).toFixed(0)}/100`
+    );
+  }
+
+  if (variationResistanceScore < thresholds.minVariationResistanceScore) {
+    failedGates.push(
+      `Variation resistance score ${(variationResistanceScore * 100).toFixed(0)}/100 is below minimum threshold of ${(thresholds.minVariationResistanceScore * 100).toFixed(0)}/100`
+    );
+  }
+
+  if (confidence < thresholds.minConfidence) {
+    failedGates.push(
+      `Overall confidence ${(confidence * 100).toFixed(0)}% is below minimum threshold of ${(thresholds.minConfidence * 100).toFixed(0)}%`
+    );
+  }
+
+  if (top.riskTier === 'critical') {
+    failedGates.push('Top-ranked supplier has a critical risk tier — manual review required');
+  }
+
+  const passed = failedGates.length === 0;
+
+  return {
+    passed,
+    failedGates,
+    scopeCoverageScore,
+    variationResistanceScore,
+    confidence,
+    isNarrowMargin,
+  };
 }
