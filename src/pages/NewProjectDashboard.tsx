@@ -29,6 +29,7 @@ interface NewProjectDashboardProps {
   onNavigateToQuotes: () => void;
   onNavigateToMatrix: () => void;
   onNavigateToReports: () => void;
+  onNavigateToQuantityIntelligence?: () => void;
   dashboardMode?: 'original' | 'revisions';
 }
 
@@ -54,6 +55,7 @@ interface ProjectStats {
   hasScopeMatrix: boolean;
   hasIntelligence: boolean;
   hasEqualisation: boolean;
+  hasQuantityIntelligence: boolean;
   hasBOQ: boolean;
   hasReports: boolean;
 }
@@ -67,6 +69,7 @@ export default function NewProjectDashboard({
   onNavigateToQuotes,
   onNavigateToMatrix,
   onNavigateToReports,
+  onNavigateToQuantityIntelligence,
   dashboardMode = 'original',
 }: NewProjectDashboardProps) {
   const { currentOrganisation } = useOrganisation();
@@ -94,6 +97,7 @@ export default function NewProjectDashboard({
     hasScopeMatrix: false,
     hasIntelligence: false,
     hasEqualisation: false,
+    hasQuantityIntelligence: false,
     hasBOQ: false,
     hasReports: false,
   });
@@ -236,6 +240,7 @@ export default function NewProjectDashboard({
       // Explicit flags — only true when the user has actually completed each step
       const hasReviewCleanCompleted = !!settings?.settings?.review_clean_completed;
       const hasQuoteIntelligenceCompleted = !!settings?.settings?.quote_intelligence_completed;
+      const hasQuantityIntelligenceCompleted = !!settings?.settings?.quantity_intelligence_completed;
       const hasScopeMatrixCompleted = !!(projectRecord as any)?.scope_matrix_completed;
 
       // For trade isolation: only show equalisation and reports as complete if THIS TRADE has quotes
@@ -258,6 +263,7 @@ export default function NewProjectDashboard({
         hasScopeMatrix: hasScopeMatrixCompleted,
         hasIntelligence: hasQuoteIntelligenceCompleted,
         hasEqualisation,
+        hasQuantityIntelligence: hasQuantityIntelligenceCompleted,
         hasBOQ,
         hasReports,
       };
@@ -298,6 +304,9 @@ export default function NewProjectDashboard({
           // Completed if equalisation analysis has been run
           status = projectStats.hasEqualisation ? 'completed' : projectStats.hasScopeMatrix ? 'in_progress' : 'not_started';
           break;
+        case 'quantity-intelligence':
+          status = projectStats.hasQuantityIntelligence ? 'completed' : projectStats.hasEqualisation ? 'in_progress' : 'not_started';
+          break;
         case 'boq-builder':
           // Completed if BOQ has been generated
           status = projectStats.hasBOQ ? 'completed' : projectStats.hasEqualisation ? 'in_progress' : 'not_started';
@@ -331,6 +340,9 @@ export default function NewProjectDashboard({
         break;
       case 'reports':
         onNavigateToReports();
+        break;
+      case 'quantity-intelligence':
+        if (onNavigateToQuantityIntelligence) onNavigateToQuantityIntelligence();
         break;
       default:
         console.log('Navigation to', route, 'not yet implemented');

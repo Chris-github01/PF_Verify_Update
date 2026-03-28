@@ -647,6 +647,9 @@ function AppContent() {
           onNavigateToReports={() => {
             if (handleNavigationGuard('reports')) setActiveTab('reports');
           }}
+          onNavigateToQuantityIntelligence={() => {
+            if (handleNavigationGuard('quantity-intelligence')) setActiveTab('quantity-intelligence');
+          }}
           dashboardMode={dashboardMode}
         />;
 

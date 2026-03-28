@@ -237,6 +237,21 @@ export default function QuantityIntelligencePage({ projectId, onNavigateNext }: 
       }
 
       setResult(safeRes);
+
+      const { data: existingSettings } = await supabase
+        .from('project_settings')
+        .select('settings')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      await supabase.from('project_settings').upsert({
+        project_id: projectId,
+        settings: {
+          ...(existingSettings?.settings || {}),
+          quantity_intelligence_completed: true,
+        },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'project_id' });
     } catch (err) {
       console.error('[QI] Analysis failed', err);
       setError('An unexpected error occurred during analysis. Please try again.');
