@@ -23,7 +23,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
 
   return (
     <div className="bg-slate-800/60 rounded-xl shadow-xl border border-slate-700 overflow-hidden">
-      <div className="px-8 py-6 border-b border-slate-700">
+      <div className="px-5 py-5 border-b border-slate-700">
         <h3 className="text-2xl font-bold text-white flex items-center gap-3">
           <div className="w-10 h-10 bg-orange-600/20 rounded-lg flex items-center justify-center">
             <TrendingUp className="w-6 h-6 text-orange-500" />
@@ -39,28 +39,28 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
         <table className="w-full">
           <thead className="bg-gradient-to-r from-slate-700 to-slate-800">
             <tr>
-              <th className="text-left text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
+              <th className="text-left text-xs font-bold text-white uppercase tracking-wide px-3 py-4">
                 Rank
               </th>
-              <th className="text-left text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
+              <th className="text-left text-xs font-bold text-white uppercase tracking-wide px-3 py-4">
                 Supplier
               </th>
-              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
+              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-3 py-4">
                 Total Price
               </th>
-              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
+              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-3 py-4">
                 Price/Unit
               </th>
-              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
+              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-3 py-4">
                 Variance %
               </th>
-              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
+              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-3 py-4">
                 Coverage
               </th>
-              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
+              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-3 py-4">
                 Risk Score
               </th>
-              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-6 py-4">
+              <th className="text-right text-xs font-bold text-white uppercase tracking-wide px-3 py-4">
                 Weighted Score
               </th>
             </tr>
@@ -81,7 +81,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     hover:bg-slate-700/40
                   `}
                 >
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-4">
                     <div
                       className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm
                         ${isTopChoice ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}
@@ -91,7 +91,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     </div>
                   </td>
 
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-4">
                     <div>
                       <div className="font-semibold text-white flex items-center gap-2">
                         {supplier.supplierName}
@@ -112,13 +112,13 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     </div>
                   </td>
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-4 text-right">
                     <div className="font-bold text-green-400 text-base">
                       {formatCurrency(supplier.totalPrice)}
                     </div>
                   </td>
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-4 text-right">
                     <div className="font-semibold text-slate-300">
                       {formatCurrency(supplier.normalizedPricePerSystem)}
                     </div>
@@ -127,7 +127,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     </div>
                   </td>
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-4 text-right">
                     <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${getVarianceColor(supplier.variancePercent)}`}>
                       {getVarianceIcon(supplier.variancePercent)}
                       {supplier.variancePercent > 0 ? '+' : ''}
@@ -135,7 +135,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     </div>
                   </td>
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-4 text-right">
                     <div className="text-slate-300 font-semibold">
                       {formatPercent(supplier.coveragePercent)}
                     </div>
@@ -147,7 +147,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     </div>
                   </td>
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-4 text-right">
                     <span
                       className={`inline-flex px-3 py-1.5 rounded-full text-xs font-bold ${
                         supplier.riskMitigationScore >= 8
@@ -163,7 +163,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     </span>
                   </td>
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-4 text-right">
                     <div className="text-orange-400 font-bold text-lg">
                       {supplier.weightedTotal.toFixed(1)}
                     </div>
@@ -176,7 +176,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
         </table>
       </div>
 
-      <div className="px-8 py-4 bg-slate-800/40 border-t border-slate-700">
+      <div className="px-5 py-4 bg-slate-800/40 border-t border-slate-700">
         <div className="flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">

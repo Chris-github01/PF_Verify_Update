@@ -885,7 +885,7 @@ export default function AwardReportEnhanced({
   return (
     <div className="min-h-screen bg-slate-900">
       <div className="bg-slate-800/60 border-b border-slate-700">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-end">
             <div className="flex items-center gap-3">
               <button
@@ -1006,7 +1006,7 @@ export default function AwardReportEnhanced({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 overflow-x-hidden">
         {/* Header */}
         <div className="text-center">
           <h1 className="text-5xl font-bold text-white mb-3">Award Recommendation Report</h1>
@@ -1256,7 +1256,7 @@ export default function AwardReportEnhanced({
       />
 
       {/* Approval Gate */}
-      <div className="max-w-7xl mx-auto px-6 pb-4">
+      <div className="max-w-7xl mx-auto px-4 pb-4">
         <div className="bg-slate-800/70 border border-slate-600/60 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-9 h-9 bg-orange-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
