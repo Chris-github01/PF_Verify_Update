@@ -7,7 +7,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import DashboardHeader from '../components/DashboardHeader';
 import SummaryStatCard from '../components/SummaryStatCard';
 import { AlertTriangle, TrendingUp, CheckCircle, Clock, AlertCircle, Download, Upload, AlertOctagon } from 'lucide-react';
 import { downloadBaseTracker } from '../lib/export/baseTrackerExport';
@@ -619,24 +618,25 @@ export default function CommercialControlDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 p-6 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-300">Loading commercial dashboard...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto"></div>
+          <p className="mt-4 text-slate-400 text-sm">Loading commercial dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <DashboardHeader
-        title="Commercial Control Dashboard"
-        subtitle="Live commercial visibility across all trades"
-        projectName={projectName}
-      />
+    <div className="space-y-8">
+      <div className="border-b border-slate-800 pb-6">
+        <h1 className="text-2xl font-bold text-slate-50 tracking-tight">Commercial Control Dashboard</h1>
+        <p className="text-slate-400 text-sm mt-1">
+          Live commercial visibility across all trades{projectName ? ` — ${projectName}` : ''}
+        </p>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+      <div className="space-y-8">
         {/* Project-Level Metrics */}
         {metrics && (
           <div>
@@ -686,11 +686,11 @@ export default function CommercialControlDashboard() {
         {/* Trade-Level Metrics */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Trade Performance</h2>
+            <h2 className="text-lg font-semibold text-slate-100">Trade Performance</h2>
             <div className="flex gap-2">
               <button
                 disabled={true}
-                className="px-4 py-2 bg-gray-700 text-gray-500 rounded-lg cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-slate-700 text-slate-500 rounded-lg cursor-not-allowed flex items-center gap-2 text-sm"
                 title="Baseline already generated. Do not regenerate to avoid data corruption."
               >
                 <CheckCircle className="w-4 h-4" />
@@ -698,7 +698,7 @@ export default function CommercialControlDashboard() {
               </button>
               <button
                 onClick={handleExportVOTracker}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 text-sm"
               >
                 <Download className="w-4 h-4" />
                 Export VO Tracker
@@ -707,49 +707,49 @@ export default function CommercialControlDashboard() {
           </div>
 
           {tradeMetrics.length === 0 ? (
-            <div className="bg-gray-800 rounded-lg border border-gray-700 p-8 text-center">
-              <AlertTriangle className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-              <p className="text-gray-300">No awarded trades found. Award suppliers to see commercial metrics.</p>
+            <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-8 text-center">
+              <AlertTriangle className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400">No awarded trades found. Award suppliers to see commercial metrics.</p>
             </div>
           ) : (
-            <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-900">
+            <div className="bg-slate-800/60 rounded-lg border border-slate-700 overflow-hidden">
+              <table className="min-w-full divide-y divide-slate-700">
+                <thead className="bg-slate-900/60">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                       Trade / Supplier
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                       % Complete
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                       Remaining
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                       VOs
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                       VO Pending
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-gray-800 divide-y divide-gray-700">
+                <tbody className="divide-y divide-slate-700/60">
                   {tradeMetrics.map((trade) => (
-                    <tr key={`${trade.tradeKey}_${trade.supplierId}`} className="hover:bg-gray-750">
+                    <tr key={`${trade.tradeKey}_${trade.supplierId}`} className="hover:bg-slate-700/30 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-white">{trade.tradeName}</div>
-                          <div className="text-sm text-gray-400">{trade.supplierName}</div>
+                          <div className="text-sm font-medium text-slate-100">{trade.tradeName}</div>
+                          <div className="text-sm text-slate-400">{trade.supplierName}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="w-full bg-gray-700 rounded-full h-2.5 mr-3">
+                          <div className="w-full bg-slate-700 rounded-full h-2 mr-3">
                             <div
-                              className={`h-2.5 rounded-full ${
+                              className={`h-2 rounded-full ${
                                 trade.percentComplete >= 80
                                   ? 'bg-green-500'
                                   : trade.percentComplete >= 50
@@ -759,27 +759,27 @@ export default function CommercialControlDashboard() {
                               style={{ width: `${Math.min(trade.percentComplete, 100)}%` }}
                             ></div>
                           </div>
-                          <span className="text-sm font-medium text-gray-300">
+                          <span className="text-sm font-medium text-slate-300 whitespace-nowrap">
                             {trade.percentComplete.toFixed(1)}%
                           </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-white">
+                        <div className="text-sm text-slate-100">
                           ${trade.amountRemaining.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900 text-blue-300">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900/50 text-blue-300 border border-blue-800/50">
                           {trade.voCount} VOs
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-white">
+                        <div className="text-sm text-slate-100">
                           ${trade.voValuePending.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => {
@@ -825,12 +825,12 @@ export default function CommercialControlDashboard() {
             </div>
 
             {loadingOverRuns ? (
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 flex items-center gap-3">
+              <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-6 flex items-center gap-3">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-400"></div>
-                <span className="text-gray-400 text-sm">Checking for over run items...</span>
+                <span className="text-slate-400 text-sm">Checking for over run items...</span>
               </div>
             ) : (
-              <div className="bg-gray-800 rounded-lg border border-red-800/50 overflow-hidden">
+              <div className="bg-slate-800/60 rounded-lg border border-red-800/50 overflow-hidden">
                 <div className="px-5 py-3 bg-red-900/20 border-b border-red-800/40 flex items-center justify-between">
                   <p className="text-sm text-red-300">
                     These line items have been claimed beyond their contracted amount. A Variation Order is required to authorise the excess.
@@ -839,35 +839,35 @@ export default function CommercialControlDashboard() {
                     Total Over Run: ${overRunItems.reduce((s, i) => s + i.over_run_amount, 0).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-                <table className="min-w-full divide-y divide-gray-700">
-                  <thead className="bg-gray-900/60">
+                <table className="min-w-full divide-y divide-slate-700">
+                  <thead className="bg-slate-900/60">
                     <tr>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Line</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Description</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Supplier</th>
-                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Unit</th>
-                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Contract Qty</th>
-                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Contract Amt</th>
-                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Claimed Amt</th>
-                      <th className="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Over Run Amt</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Line</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Description</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Supplier</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Unit</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Contract Qty</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Contract Amt</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Claimed Amt</th>
+                      <th className="px-5 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Over Run Amt</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-700/60">
+                  <tbody className="divide-y divide-slate-700/60">
                     {overRunItems.map((item) => (
                       <tr key={item.id} className="hover:bg-red-900/10 transition-colors">
-                        <td className="px-5 py-3 text-xs text-gray-400 font-mono whitespace-nowrap">{item.line_number || '—'}</td>
-                        <td className="px-5 py-3 text-sm text-white max-w-xs truncate" title={item.description}>
+                        <td className="px-5 py-3 text-xs text-slate-400 font-mono whitespace-nowrap">{item.line_number || '—'}</td>
+                        <td className="px-5 py-3 text-sm text-slate-100 max-w-xs truncate" title={item.description}>
                           {item.description}
                         </td>
                         <td className="px-5 py-3 whitespace-nowrap">
-                          <div className="text-xs text-gray-300">{item.supplierName}</div>
-                          <div className="text-xs text-gray-500">{item.tradeName}</div>
+                          <div className="text-xs text-slate-300">{item.supplierName}</div>
+                          <div className="text-xs text-slate-500">{item.tradeName}</div>
                         </td>
-                        <td className="px-5 py-3 text-right text-xs text-gray-400 whitespace-nowrap">{item.unit || '—'}</td>
-                        <td className="px-5 py-3 text-right text-sm text-gray-300 whitespace-nowrap">
+                        <td className="px-5 py-3 text-right text-xs text-slate-400 whitespace-nowrap">{item.unit || '—'}</td>
+                        <td className="px-5 py-3 text-right text-sm text-slate-300 whitespace-nowrap">
                           {item.quantity.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="px-5 py-3 text-right text-sm text-gray-300 whitespace-nowrap">
+                        <td className="px-5 py-3 text-right text-sm text-slate-300 whitespace-nowrap">
                           ${item.line_amount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-5 py-3 text-right text-sm text-yellow-300 whitespace-nowrap">

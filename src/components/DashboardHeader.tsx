@@ -78,17 +78,17 @@ export default function DashboardHeader({
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
+    <header className="bg-slate-900 border-b border-slate-700/60 px-6 py-3.5 sticky top-0 z-30">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           {currentOrganisation && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Building2 size={16} />
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <Building2 size={15} />
               <span>{currentOrganisation.name}</span>
             </div>
           )}
 
-          <div className="border-l border-gray-300 pl-4 ml-4">
+          <div className="border-l border-slate-700 pl-4 ml-4">
             <TradeSelectorDropdown />
           </div>
 
@@ -96,10 +96,10 @@ export default function DashboardHeader({
             <div className="relative">
               <button
                 onClick={() => setShowProjectMenu(!showProjectMenu)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors text-slate-200"
               >
-                <span className="font-medium">{currentProjectName || 'Select Project'}</span>
-                <ChevronDown size={16} />
+                <span className="font-medium text-sm">{currentProjectName || 'Select Project'}</span>
+                <ChevronDown size={15} className="text-slate-400" />
               </button>
 
               {showProjectMenu && (
@@ -108,18 +108,18 @@ export default function DashboardHeader({
                     className="fixed inset-0 z-10"
                     onClick={() => setShowProjectMenu(false)}
                   />
-                  <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-20 max-h-96 overflow-y-auto">
+                  <div className="absolute top-full left-0 mt-2 w-64 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-20 max-h-96 overflow-y-auto">
                     <div className="p-2">
                       <button
                         onClick={() => {
                           onBackToDashboard();
                           setShowProjectMenu(false);
                         }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-lg text-sm font-medium text-blue-600"
+                        className="w-full text-left px-3 py-2 hover:bg-slate-700 rounded-lg text-sm font-medium text-orange-400"
                       >
                         All Projects
                       </button>
-                      <div className="border-t border-gray-200 my-2" />
+                      <div className="border-t border-slate-700 my-2" />
                       {projects.map((project) => (
                         <button
                           key={project.id}
@@ -127,13 +127,13 @@ export default function DashboardHeader({
                             onProjectChange(project.id);
                             setShowProjectMenu(false);
                           }}
-                          className={`w-full text-left px-3 py-2 hover:bg-gray-100 rounded-lg text-sm ${
-                            project.id === currentProjectId ? 'bg-blue-50 text-blue-600' : ''
+                          className={`w-full text-left px-3 py-2 hover:bg-slate-700 rounded-lg text-sm ${
+                            project.id === currentProjectId ? 'bg-orange-500/10 text-orange-400' : 'text-slate-300'
                           }`}
                         >
                           <div className="font-medium">{project.name}</div>
                           {project.client && (
-                            <div className="text-xs text-gray-500">{project.client}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{project.client}</div>
                           )}
                         </button>
                       ))}
@@ -145,9 +145,9 @@ export default function DashboardHeader({
           )}
         </div>
 
-        <div className="flex items-center gap-4">
-          <button className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <Bell size={20} />
+        <div className="flex items-center gap-3">
+          <button className="relative p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-slate-200">
+            <Bell size={18} />
             {notificationCount > 0 && (
               <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                 {notificationCount}
@@ -158,10 +158,10 @@ export default function DashboardHeader({
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-300"
             >
-              <User size={20} />
-              <ChevronDown size={16} />
+              <User size={17} />
+              <ChevronDown size={14} className="text-slate-500" />
             </button>
 
             {showUserMenu && (
@@ -170,11 +170,11 @@ export default function DashboardHeader({
                   className="fixed inset-0 z-10"
                   onClick={() => setShowUserMenu(false)}
                 />
-                <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
-                  <div className="p-4 border-b border-gray-200">
-                    <div className="text-sm font-medium text-gray-900">{userEmail}</div>
+                <div className="absolute top-full right-0 mt-2 w-64 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-20">
+                  <div className="p-4 border-b border-slate-700">
+                    <div className="text-sm font-medium text-slate-100">{userEmail}</div>
                     {currentOrganisation && (
-                      <div className="text-xs text-gray-500 mt-1">{currentOrganisation.name}</div>
+                      <div className="text-xs text-slate-500 mt-1">{currentOrganisation.name}</div>
                     )}
                   </div>
                   <div className="p-2">
@@ -183,7 +183,7 @@ export default function DashboardHeader({
                         onNavigateToAccount();
                         setShowUserMenu(false);
                       }}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-lg text-sm"
+                      className="w-full text-left px-3 py-2 hover:bg-slate-700 rounded-lg text-sm text-slate-300"
                     >
                       Account Settings
                     </button>
@@ -192,14 +192,14 @@ export default function DashboardHeader({
                         onSwitchOrganisation();
                         setShowUserMenu(false);
                       }}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-lg text-sm"
+                      className="w-full text-left px-3 py-2 hover:bg-slate-700 rounded-lg text-sm text-slate-300"
                     >
                       Switch Organisation
                     </button>
-                    <div className="border-t border-gray-200 my-2" />
+                    <div className="border-t border-slate-700 my-2" />
                     <button
                       onClick={handleSignOut}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-lg text-sm text-red-600"
+                      className="w-full text-left px-3 py-2 hover:bg-slate-700 rounded-lg text-sm text-red-400"
                     >
                       Sign Out
                     </button>
