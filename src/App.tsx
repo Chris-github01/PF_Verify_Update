@@ -761,9 +761,10 @@ function AppContent() {
         return <QuoteIntelligence
           projectId={projectId}
           onNavigateBack={() => setActiveTab('review')}
-          onNavigateNext={() => setActiveTab('scope')}
+          onNavigateNext={() => setActiveTab('quantity-intelligence')}
           dashboardMode={dashboardMode}
           onQuotesSelected={setSelectedQuoteIds}
+          nextLabel="Next: Quantity Intelligence"
         />;
 
       case 'quantity-intelligence':
