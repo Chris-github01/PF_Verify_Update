@@ -8,6 +8,9 @@ import type { AwardSummary } from '../types/award.types';
 import * as XLSX from 'xlsx';
 import type { DashboardMode } from '../App';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
+import { openClientReport } from '../lib/reports/clientReportTemplate';
+import { openDisputeDefencePack } from '../lib/reports/disputeDefencePack';
+import type { ReportOptions } from '../lib/reports/reportTypes';
 import ApprovalModal from '../components/ApprovalModal';
 import type { EnhancedSupplierMetrics } from '../lib/reports/awardReportEnhancements';
 import { exportSupplierComparison } from '../lib/export/supplierComparisonExport';
@@ -62,6 +65,7 @@ export default function AwardReport({
   const [selectedSupplierForApproval, setSelectedSupplierForApproval] = useState<string | null>(null);
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | null>(null);
   const [commercialValidation, setCommercialValidation] = useState<CommercialValidationResult | null>(null);
+  const [reportMode, setReportMode] = useState<'INTERNAL' | 'CLIENT' | 'DISPUTE'>('INTERNAL');
   const [approvalData, setApprovalData] = useState<{
     id: string;
     ai_recommended_supplier: string;
@@ -591,6 +595,159 @@ export default function AwardReport({
     }
   };
 
+  const buildReportData = async () => {
+    if (!awardSummary || !currentProject) return null;
+
+    const { data: projectWeightsData } = await supabase
+      .from('projects')
+      .select('scoring_weights')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    const projectScoringWeights = projectWeightsData?.scoring_weights || awardSummary.scoringWeights || { price: 45, compliance: 20, coverage: 25, risk: 10 };
+
+    let resolvedLogoUrl: string | undefined = undefined;
+    if (currentProject.organisation_id) {
+      const { data: orgData } = await supabase
+        .from('organisations')
+        .select('logo_url')
+        .eq('id', currentProject.organisation_id)
+        .maybeSingle();
+
+      if (orgData?.logo_url) {
+        const { data: urlData } = supabase.storage
+          .from('organisation-logos')
+          .getPublicUrl(orgData.logo_url);
+        if (urlData?.publicUrl) resolvedLogoUrl = urlData.publicUrl;
+      }
+    }
+
+    const suppliersWithScores = awardSummary.suppliers.map(s => {
+      const weightedScore = s.weightedTotal ?? (() => {
+        const weights = projectScoringWeights;
+        const maxTotal = Math.max(...awardSummary.suppliers.map(sup => sup.adjustedTotal));
+        const minTotal = Math.min(...awardSummary.suppliers.map(sup => sup.adjustedTotal));
+        const priceRange = maxTotal - minTotal;
+        const priceScore = priceRange > 0 ? ((maxTotal - s.adjustedTotal) / priceRange) * 10 : 10;
+        const coverageScore = (s.coveragePercent / 100) * 10;
+        const maxRisk = Math.max(...awardSummary.suppliers.map(sup => sup.riskScore));
+        const riskScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 10 : 10;
+        const complianceScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 5 : 10;
+        return ((priceScore * (weights.price / 100)) + (complianceScore * (weights.compliance / 100)) + (coverageScore * (weights.coverage / 100)) + (riskScore * (weights.risk / 100))) * 10;
+      })();
+      return { ...s, weightedScore };
+    });
+
+    const sortedSuppliers = [...suppliersWithScores].sort((a, b) => b.weightedScore - a.weightedScore);
+    const maxRiskScore = Math.max(...suppliersWithScores.map(sup => sup.riskScore));
+
+    const suppliers = sortedSuppliers.map((s, idx) => {
+      const variationExposureValue = s.riskScore > 0 ? Math.round(s.adjustedTotal * (s.riskScore / Math.max(maxRiskScore, 1)) * 0.08) : 0;
+      const variationExposurePct = s.adjustedTotal > 0 ? variationExposureValue / s.adjustedTotal : 0;
+      return {
+        rank: idx + 1,
+        supplierName: s.supplierName,
+        adjustedTotal: s.adjustedTotal,
+        riskScore: s.riskScore,
+        coveragePercent: s.coveragePercent,
+        itemsQuoted: s.itemsQuoted,
+        totalItems: s.totalItems,
+        weightedScore: s.weightedScore,
+        notes: s.notes && s.notes.length > 0 ? s.notes : undefined,
+        quoteId: s.quoteId,
+        projectedTotal: s.adjustedTotal + variationExposureValue,
+        variationExposureValue,
+        variationExposurePct,
+        scopeGaps: s.notes?.filter(n => n.toLowerCase().includes('gap') || n.toLowerCase().includes('missing') || n.toLowerCase().includes('excluded')) ?? [],
+      };
+    });
+
+    let recommendations: ReportOptions['recommendations'] = [];
+    if (awardSummary.recommendations && awardSummary.recommendations.length > 0) {
+      recommendations = awardSummary.recommendations.slice(0, 3).map(rec => ({
+        type: rec.type === 'BEST_VALUE' ? 'best_value' as const :
+              rec.type === 'LOWEST_RISK' ? 'lowest_risk' as const :
+              'balanced' as const,
+        supplierName: rec.supplier.supplierName,
+        price: rec.supplier.adjustedTotal,
+        coverage: rec.supplier.coveragePercent,
+        riskScore: rec.supplier.riskScore,
+        score: suppliersWithScores.find(s => s.supplierName === rec.supplier.supplierName)?.weightedScore || 0
+      }));
+    } else {
+      const bv = sortedSuppliers[0];
+      const lr = [...sortedSuppliers].sort((a, b) => a.riskScore - b.riskScore)[0];
+      const ba = sortedSuppliers[0];
+      recommendations = [
+        bv && { type: 'best_value' as const, supplierName: bv.supplierName, price: bv.adjustedTotal, coverage: bv.coveragePercent, riskScore: bv.riskScore, score: bv.weightedScore },
+        lr && { type: 'lowest_risk' as const, supplierName: lr.supplierName, price: lr.adjustedTotal, coverage: lr.coveragePercent, riskScore: lr.riskScore, score: lr.weightedScore },
+        ba && { type: 'balanced' as const, supplierName: ba.supplierName, price: ba.adjustedTotal, coverage: ba.coveragePercent, riskScore: ba.riskScore, score: ba.weightedScore },
+      ].filter(Boolean).slice(0, 3) as ReportOptions['recommendations'];
+    }
+
+    const topSupplier = suppliers[0];
+    const maxRiskForLabel = Math.max(...suppliers.map(s => s.riskScore));
+    const riskLabelForTop = maxRiskForLabel === 0 ? 'Low' : topSupplier && topSupplier.riskScore / maxRiskForLabel < 0.3 ? 'Low' : topSupplier && topSupplier.riskScore / maxRiskForLabel < 0.6 ? 'Moderate' : 'High';
+
+    const keyDrivers: string[] = [];
+    if (topSupplier) {
+      keyDrivers.push(`${topSupplier.supplierName} achieved the highest composite score of ${Math.round(topSupplier.weightedScore ?? 0)}/100`);
+      if (topSupplier.coveragePercent >= 85) keyDrivers.push(`Full scope coverage (${Math.round(topSupplier.coveragePercent)}%) across ${topSupplier.totalItems} scope items`);
+      else keyDrivers.push(`Scope coverage of ${Math.round(topSupplier.coveragePercent)}% — ${topSupplier.totalItems - topSupplier.itemsQuoted} items not priced`);
+      keyDrivers.push(`Risk classification: ${riskLabelForTop} (${topSupplier.riskScore} factors)`);
+      if (suppliers.length >= 2) {
+        const priceDiff = suppliers[1].adjustedTotal - topSupplier.adjustedTotal;
+        if (priceDiff > 0) keyDrivers.push(`${Math.round((priceDiff / suppliers[1].adjustedTotal) * 100)}% below second-placed tenderer on quoted price`);
+      }
+      if (topSupplier.variationExposureValue !== undefined && topSupplier.variationExposureValue > 0) {
+        keyDrivers.push(`Estimated variation exposure: $${topSupplier.variationExposureValue.toLocaleString()} (${Math.round((topSupplier.variationExposurePct ?? 0) * 100)}%)`);
+      }
+    }
+
+    const hasHighRisk = suppliers.some(s => maxRiskForLabel > 0 && s.riskScore / maxRiskForLabel >= 0.6);
+    const hasLowCoverage = suppliers.some(s => s.coveragePercent < 75);
+    const commercialWarning = hasHighRisk && hasLowCoverage
+      ? 'One or more tenderers carry a high-risk classification combined with below-threshold scope coverage. Independent commercial review is recommended before contract award.'
+      : hasHighRisk
+      ? 'One or more tenderers carry a high-risk classification. Independent scope and rate validation is recommended before contract execution.'
+      : hasLowCoverage
+      ? 'One or more tenderers have scope coverage below 75%. The quoted total should be treated as a floor price pending scope gap resolution.'
+      : undefined;
+
+    const executiveSummary = topSupplier
+      ? `Commercial analysis of ${suppliers.length} tenderer${suppliers.length !== 1 ? 's' : ''} was conducted across ${topSupplier.totalItems} scope items. ${topSupplier.supplierName} achieved the highest composite score of ${Math.round(topSupplier.weightedScore ?? 0)}/100, with a quoted total of $${topSupplier.adjustedTotal.toLocaleString()} and scope coverage of ${Math.round(topSupplier.coveragePercent)}%. ${hasHighRisk ? 'Risk factors have been identified across the tender field that require resolution before contract award.' : 'Risk levels across the tender field are within acceptable bounds.'}`
+      : `Award recommendation analysis for ${currentProject.name}. Total systems analyzed: ${awardSummary.totalSystems}.`;
+
+    const approvalRecord = approvalData ? {
+      ai_recommended_supplier: approvalData.ai_recommended_supplier,
+      final_approved_supplier: approvalData.final_approved_supplier,
+      is_override: approvalData.is_override,
+      override_reason_category: approvalData.override_reason_category ?? undefined,
+      override_reason_detail: approvalData.override_reason_detail ?? undefined,
+      approved_by_email: approvalData.approved_by_email,
+      approved_at: approvalData.approved_at,
+    } : undefined;
+
+    const opts: ReportOptions = {
+      mode: reportMode === 'CLIENT' ? 'CLIENT' : 'INTERNAL',
+      projectName: currentProject.name,
+      clientName: currentProject.client || undefined,
+      generatedAt: reportTimestamp || awardSummary.generatedAt || new Date().toISOString(),
+      generatedByEmail: approvalData?.approved_by_email,
+      reportId: currentReportId ?? undefined,
+      suppliers,
+      recommendations,
+      scoringWeights: projectScoringWeights,
+      executiveSummary,
+      keyDecisionDrivers: keyDrivers,
+      commercialWarning,
+      approvalRecord,
+      organisationLogoUrl: resolvedLogoUrl,
+    };
+
+    return { opts, projectScoringWeights, suppliers, resolvedLogoUrl, topSupplier, hasHighRisk, hasLowCoverage };
+  };
+
   const handlePrint = async () => {
     setShowExportDropdown(false);
 
@@ -600,204 +757,67 @@ export default function AwardReport({
     }
 
     try {
-      const { data: projectWeightsData } = await supabase
-        .from('projects')
-        .select('scoring_weights')
-        .eq('id', projectId)
-        .maybeSingle();
-
-      const projectScoringWeights = projectWeightsData?.scoring_weights || awardSummary.scoringWeights || { price: 45, compliance: 20, coverage: 25, risk: 10 };
-
-      let organisationLogoUrl: string | undefined = undefined;
-      if (currentProject.organisation_id) {
-        const { data: orgData } = await supabase
-          .from('organisations')
-          .select('logo_url')
-          .eq('id', currentProject.organisation_id)
-          .maybeSingle();
-
-        if (orgData?.logo_url) {
-          const { data: urlData } = supabase.storage
-            .from('organisation-logos')
-            .getPublicUrl(orgData.logo_url);
-
-          if (urlData?.publicUrl) {
-            organisationLogoUrl = urlData.publicUrl;
-            console.log('Organisation logo URL:', organisationLogoUrl);
-          }
-        }
-      }
-
-      const suppliersWithScores = awardSummary.suppliers.map(s => {
-        const weightedScore = s.weightedTotal ?? (() => {
-          const weights = projectScoringWeights;
-          const maxTotal = Math.max(...awardSummary.suppliers.map(sup => sup.adjustedTotal));
-          const minTotal = Math.min(...awardSummary.suppliers.map(sup => sup.adjustedTotal));
-          const priceRange = maxTotal - minTotal;
-          const priceScore = priceRange > 0 ? ((maxTotal - s.adjustedTotal) / priceRange) * 10 : 10;
-          const coverageScore = (s.coveragePercent / 100) * 10;
-          const maxRisk = Math.max(...awardSummary.suppliers.map(sup => sup.riskScore));
-          const riskScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 10 : 10;
-          const complianceScore = maxRisk > 0 ? 10 - (s.riskScore / maxRisk) * 5 : 10;
-          return ((priceScore * (weights.price / 100)) + (complianceScore * (weights.compliance / 100)) + (coverageScore * (weights.coverage / 100)) + (riskScore * (weights.risk / 100))) * 10;
-        })();
-        return { ...s, weightedScore };
-      });
-
-      const sortedSuppliers = [...suppliersWithScores].sort((a, b) => b.weightedScore - a.weightedScore);
-
-      const suppliers = sortedSuppliers.map((s, idx) => {
-        const maxRiskScore = Math.max(...suppliersWithScores.map(sup => sup.riskScore));
-        const variationExposureValue = s.riskScore > 0 ? Math.round(s.adjustedTotal * (s.riskScore / Math.max(maxRiskScore, 1)) * 0.08) : 0;
-        const variationExposurePct = s.adjustedTotal > 0 ? variationExposureValue / s.adjustedTotal : 0;
-        return {
-          rank: idx + 1,
-          supplierName: s.supplierName,
-          adjustedTotal: s.adjustedTotal,
-          riskScore: s.riskScore,
-          coveragePercent: s.coveragePercent,
-          itemsQuoted: s.itemsQuoted,
-          totalItems: s.totalItems,
-          weightedScore: s.weightedScore,
-          notes: s.notes && s.notes.length > 0 ? s.notes : undefined,
-          quoteId: s.quoteId,
-          projectedTotal: s.adjustedTotal + variationExposureValue,
-          variationExposureValue,
-          variationExposurePct,
-          scopeGaps: s.notes?.filter(n => n.toLowerCase().includes('gap') || n.toLowerCase().includes('missing') || n.toLowerCase().includes('excluded')) ?? [],
-        };
-      });
-
-      let recommendations = [];
-
-      if (awardSummary.recommendations && awardSummary.recommendations.length > 0) {
-        recommendations = awardSummary.recommendations.slice(0, 3).map(rec => ({
-          type: rec.type === 'BEST_VALUE' ? 'best_value' as const :
-                rec.type === 'LOWEST_RISK' ? 'lowest_risk' as const :
-                'balanced' as const,
-          supplierName: rec.supplier.supplierName,
-          price: rec.supplier.adjustedTotal,
-          coverage: rec.supplier.coveragePercent,
-          riskScore: rec.supplier.riskScore,
-          score: suppliersWithScores.find(s => s.supplierName === rec.supplier.supplierName)?.weightedScore || 0
-        }));
-      } else {
-        const bestValue = sortedSuppliers[0];
-        const lowestRisk = [...sortedSuppliers].sort((a, b) => a.riskScore - b.riskScore)[0];
-        const balanced = [...sortedSuppliers].sort((a, b) => b.weightedScore - a.weightedScore)[0];
-
-        recommendations = [
-          bestValue && {
-            type: 'best_value' as const,
-            supplierName: bestValue.supplierName,
-            price: bestValue.adjustedTotal,
-            coverage: bestValue.coveragePercent,
-            riskScore: bestValue.riskScore,
-            score: bestValue.weightedScore
-          },
-          lowestRisk && {
-            type: 'lowest_risk' as const,
-            supplierName: lowestRisk.supplierName,
-            price: lowestRisk.adjustedTotal,
-            coverage: lowestRisk.coveragePercent,
-            riskScore: lowestRisk.riskScore,
-            score: lowestRisk.weightedScore
-          },
-          balanced && {
-            type: 'balanced' as const,
-            supplierName: balanced.supplierName,
-            price: balanced.adjustedTotal,
-            coverage: balanced.coveragePercent,
-            riskScore: balanced.riskScore,
-            score: balanced.weightedScore
-          }
-        ].filter(Boolean).slice(0, 3);
-      }
-
-      const topSupplier = suppliers[0];
-      const maxRiskForLabel = Math.max(...suppliers.map(s => s.riskScore));
-      const riskLabelForTop = maxRiskForLabel === 0 ? 'Low' : topSupplier && topSupplier.riskScore / maxRiskForLabel < 0.3 ? 'Low' : topSupplier && topSupplier.riskScore / maxRiskForLabel < 0.6 ? 'Moderate' : 'High';
-
-      const keyDrivers: string[] = [];
-      if (topSupplier) {
-        keyDrivers.push(`${topSupplier.supplierName} achieved the highest composite score of ${Math.round(topSupplier.weightedScore ?? 0)}/100`);
-        if (topSupplier.coveragePercent >= 85) keyDrivers.push(`Full scope coverage (${Math.round(topSupplier.coveragePercent)}%) across ${topSupplier.totalItems} scope items`);
-        else keyDrivers.push(`Scope coverage of ${Math.round(topSupplier.coveragePercent)}% — ${topSupplier.totalItems - topSupplier.itemsQuoted} items not priced`);
-        keyDrivers.push(`Risk classification: ${riskLabelForTop} (${topSupplier.riskScore} factors)`);
-        if (suppliers.length >= 2) {
-          const priceDiff = suppliers[1].adjustedTotal - topSupplier.adjustedTotal;
-          if (priceDiff > 0) keyDrivers.push(`${Math.round((priceDiff / suppliers[1].adjustedTotal) * 100)}% below second-placed tenderer on quoted price`);
-        }
-        if (topSupplier.variationExposureValue !== undefined && topSupplier.variationExposureValue > 0) {
-          keyDrivers.push(`Estimated variation exposure: $${topSupplier.variationExposureValue.toLocaleString()} (${Math.round((topSupplier.variationExposurePct ?? 0) * 100)}%)`);
-        }
-      }
-
-      const hasHighRisk = suppliers.some(s => maxRiskForLabel > 0 && s.riskScore / maxRiskForLabel >= 0.6);
-      const hasLowCoverage = suppliers.some(s => s.coveragePercent < 75);
-      const commercialWarning = hasHighRisk && hasLowCoverage
-        ? 'One or more tenderers carry a high-risk classification combined with below-threshold scope coverage. Independent commercial review is recommended before contract award.'
-        : hasHighRisk
-        ? 'One or more tenderers carry a high-risk classification. Independent scope and rate validation is recommended before contract execution.'
-        : hasLowCoverage
-        ? 'One or more tenderers have scope coverage below 75%. The quoted total should be treated as a floor price pending scope gap resolution.'
-        : undefined;
-
-      const htmlContent = generateModernPdfHtml({
-        projectName: currentProject.name,
-        clientName: currentProject.client || undefined,
-        generatedAt: reportTimestamp || awardSummary.generatedAt || new Date().toISOString(),
-        recommendations,
-        suppliers,
-        approvedQuoteId: currentProject.approved_quote_id,
-        scoringWeights: projectScoringWeights,
-        keyDecisionDrivers: keyDrivers,
-        commercialWarning,
-        executiveSummary: topSupplier
-          ? `Commercial analysis of ${suppliers.length} tenderer${suppliers.length !== 1 ? 's' : ''} was conducted across ${topSupplier.totalItems} scope items. ${topSupplier.supplierName} achieved the highest composite score of ${Math.round(topSupplier.weightedScore ?? 0)}/100, with a quoted total of $${topSupplier.adjustedTotal.toLocaleString()} and scope coverage of ${Math.round(topSupplier.coveragePercent)}%. ${hasHighRisk ? 'Risk factors have been identified across the tender field that require resolution before contract award.' : 'Risk levels across the tender field are within acceptable bounds.'}`
-          : `Award recommendation analysis for ${currentProject.name}. Total systems analyzed: ${awardSummary.totalSystems}.`,
-        methodology: [
-          'Quote Import & Validation',
-          'Data Normalization',
-          'Scope Gap Analysis',
-          'Risk Assessment',
-          'Multi-Criteria Scoring'
-        ],
-        additionalSections: approvalData ? [{
-          title: `Approval Decision${approvalData.is_override ? '<span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 8px;">OVERRIDE</span>' : ''}`,
-          content: `
-            <div style="background: ${approvalData.is_override ? '#fef3c7' : '#dcfce7'}; border: 2px solid ${approvalData.is_override ? '#f59e0b' : '#22c55e'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-                <div>
-                  <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Verify+ Recommended</p>
-                  <p style="font-size: 16px; color: #111827; font-weight: 600;">${approvalData.ai_recommended_supplier}</p>
-                </div>
-                <div>
-                  <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Final Approved Supplier</p>
-                  <p style="font-size: 16px; color: ${approvalData.is_override ? '#d97706' : '#059669'}; font-weight: 700;">${approvalData.final_approved_supplier}</p>
-                </div>
-              </div>
-              ${approvalData.is_override ? `
-                <div style="border-top: 2px solid #f59e0b; padding-top: 16px; margin-top: 16px;">
-                  <p style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 8px;">Override Reason:</p>
-                  <p style="font-size: 14px; color: #78350f; font-weight: 600; margin-bottom: 8px;">${approvalData.override_reason_category?.replace(/_/g, ' ').toUpperCase() || 'N/A'}</p>
-                  <p style="font-size: 14px; color: #451a03; line-height: 1.6;">${approvalData.override_reason_detail || 'No additional details provided.'}</p>
-                </div>
-              ` : ''}
-              <div style="border-top: 1px solid ${approvalData.is_override ? '#fbbf24' : '#86efac'}; padding-top: 12px; margin-top: 16px; display: flex; justify-content: space-between; font-size: 12px; color: #6b7280;">
-                <span><strong>Approved By:</strong> ${approvalData.approved_by_email}</span>
-                <span><strong>Approved At:</strong> ${new Date(approvalData.approved_at).toLocaleString()}</span>
-              </div>
-            </div>
-          `
-        }] : [],
-        organisationLogoUrl
-      });
+      const built = await buildReportData();
+      if (!built) return;
+      const { opts, projectScoringWeights, suppliers, resolvedLogoUrl, topSupplier, hasHighRisk } = built;
 
       const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}`;
-      generatePdfWithPrint(htmlContent, filename);
 
-      onToast?.('Print window opened! In the print dialog, select "Save as PDF" or "Microsoft Print to PDF" as your destination.', 'success');
+      if (reportMode === 'CLIENT') {
+        openClientReport(opts, filename);
+        onToast?.('Client Report opened — select "Save as PDF" in the print dialog.', 'success');
+      } else {
+        const htmlContent = generateModernPdfHtml({
+          projectName: currentProject.name,
+          clientName: currentProject.client || undefined,
+          generatedAt: reportTimestamp || awardSummary.generatedAt || new Date().toISOString(),
+          recommendations: opts.recommendations,
+          suppliers,
+          approvedQuoteId: currentProject.approved_quote_id,
+          scoringWeights: projectScoringWeights,
+          keyDecisionDrivers: opts.keyDecisionDrivers,
+          commercialWarning: opts.commercialWarning,
+          executiveSummary: opts.executiveSummary,
+          methodology: [
+            'Quote Import & Validation',
+            'Data Normalization',
+            'Scope Gap Analysis',
+            'Risk Assessment',
+            'Multi-Criteria Scoring'
+          ],
+          additionalSections: opts.approvalRecord ? [{
+            title: `Approval Decision${opts.approvalRecord.is_override ? '<span style="display: inline-block; background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 8px;">OVERRIDE</span>' : ''}`,
+            content: `
+              <div style="background: ${opts.approvalRecord.is_override ? '#fef3c7' : '#dcfce7'}; border: 2px solid ${opts.approvalRecord.is_override ? '#f59e0b' : '#22c55e'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                  <div>
+                    <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Verify+ Recommended</p>
+                    <p style="font-size: 16px; color: #111827; font-weight: 600;">${opts.approvalRecord.ai_recommended_supplier}</p>
+                  </div>
+                  <div>
+                    <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Final Approved Supplier</p>
+                    <p style="font-size: 16px; color: ${opts.approvalRecord.is_override ? '#d97706' : '#059669'}; font-weight: 700;">${opts.approvalRecord.final_approved_supplier}</p>
+                  </div>
+                </div>
+                ${opts.approvalRecord.is_override ? `
+                  <div style="border-top: 2px solid #f59e0b; padding-top: 16px; margin-top: 16px;">
+                    <p style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 8px;">Override Reason:</p>
+                    <p style="font-size: 14px; color: #78350f; font-weight: 600; margin-bottom: 8px;">${opts.approvalRecord.override_reason_category?.replace(/_/g, ' ').toUpperCase() || 'N/A'}</p>
+                    <p style="font-size: 14px; color: #451a03; line-height: 1.6;">${opts.approvalRecord.override_reason_detail || 'No additional details provided.'}</p>
+                  </div>
+                ` : ''}
+                <div style="border-top: 1px solid ${opts.approvalRecord.is_override ? '#fbbf24' : '#86efac'}; padding-top: 12px; margin-top: 16px; display: flex; justify-content: space-between; font-size: 12px; color: #6b7280;">
+                  <span><strong>Approved By:</strong> ${opts.approvalRecord.approved_by_email}</span>
+                  <span><strong>Approved At:</strong> ${new Date(opts.approvalRecord.approved_at).toLocaleString()}</span>
+                </div>
+              </div>
+            `
+          }] : [],
+          organisationLogoUrl: resolvedLogoUrl,
+        });
+        generatePdfWithPrint(htmlContent, filename);
+        onToast?.('Print window opened! In the print dialog, select "Save as PDF" or "Microsoft Print to PDF" as your destination.', 'success');
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       onToast?.('Failed to generate PDF report', 'error');
@@ -921,15 +941,52 @@ export default function AwardReport({
                 </button>
 
                 {showExportDropdown && (
-                  <div className="absolute right-0 mt-2 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50">
+                  <div className="absolute right-0 mt-2 w-64 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50">
+                    <div className="px-3 py-2 border-b border-slate-700">
+                      <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">Report Type</p>
+                      <div className="flex gap-1">
+                        {(['INTERNAL', 'CLIENT'] as const).map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => setReportMode(mode)}
+                            className={`flex-1 py-1.5 text-xs font-semibold rounded transition-colors ${
+                              reportMode === mode
+                                ? 'bg-orange-600 text-white'
+                                : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200'
+                            }`}
+                          >
+                            {mode === 'INTERNAL' ? 'Internal' : 'Client'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="py-1">
                       <button
                         onClick={handlePrint}
                         className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
                       >
                         <Printer size={16} />
-                        Export PDF
+                        {reportMode === 'CLIENT' ? 'Export Client Report' : 'Export Internal Report'}
                       </button>
+                      <button
+                        onClick={async () => {
+                          setShowExportDropdown(false);
+                          if (!awardSummary || !currentProject) { onToast?.('Report data not available', 'error'); return; }
+                          try {
+                            const built = await buildReportData();
+                            if (!built) return;
+                            const { opts } = built;
+                            const filename = `Dispute_Defence_Pack_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}`;
+                            openDisputeDefencePack({ ...opts, snapshotTimestamp: new Date().toISOString() }, filename);
+                            onToast?.('Dispute Defence Pack opened — select "Save as PDF" in the print dialog.', 'success');
+                          } catch { onToast?.('Failed to generate Dispute Defence Pack', 'error'); }
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <Scale size={16} />
+                        Export Dispute Defence Pack
+                      </button>
+                      <div className="border-t border-slate-700 my-1" />
                       <button
                         onClick={handleExportSupplierComparison}
                         className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition-colors"
