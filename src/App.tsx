@@ -88,6 +88,7 @@ import ShadowPromotionDecisionsPage from './pages/shadow/phase4/ShadowPromotionD
 import ShadowRolloutPlansPage from './pages/shadow/phase4/ShadowRolloutPlansPage';
 import ShadowBenchmarkEvaluationPage from './pages/shadow/phase4/ShadowBenchmarkEvaluationPage';
 import RevenueProtectionDashboard from './pages/shadow/RevenueProtectionDashboard';
+import CommercialValidationDashboard from './pages/shadow/CommercialValidationDashboard';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1264,6 +1265,9 @@ function AppContent() {
   }
   if (shadowPath === '/shadow/product/revenue-protection') {
     return <RevenueProtectionDashboard />;
+  }
+  if (shadowPath === '/shadow/admin/commercial-validation') {
+    return <CommercialValidationDashboard />;
   }
 
   if (!session) {

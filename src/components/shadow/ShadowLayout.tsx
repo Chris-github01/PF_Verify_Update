@@ -4,7 +4,7 @@ import {
   Zap, FlaskConical, ChevronLeft, Menu, X,
   Activity, ShieldAlert, FileSearch, PlaySquare,
   BookOpen, Lightbulb, Fingerprint, LayoutTemplate,
-  ShieldCheck, BarChart2, GitCompare, DollarSign,
+  ShieldCheck, BarChart2, GitCompare, DollarSign, Scale,
 } from 'lucide-react';
 import { getAdminRole } from '../../lib/shadow/shadowAccess';
 import type { AdminRole } from '../../types/shadow';
@@ -37,6 +37,10 @@ const NAV_INTELLIGENCE = [
 
 const NAV_PHASE6 = [
   { label: 'Revenue Protection', href: '/shadow/product/revenue-protection', icon: DollarSign },
+];
+
+const NAV_COMMERCIAL = [
+  { label: 'Commercial Validation', href: '/shadow/admin/commercial-validation', icon: Scale },
 ];
 
 interface Props {
@@ -180,6 +184,33 @@ export default function ShadowLayout({ children }: Props) {
                   `}
                 >
                   <item.icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-blue-400' : ''}`} />
+                  {item.label}
+                </a>
+              );
+            })}
+          </div>
+
+          <div className="pt-3 pb-1">
+            <div className="flex items-center gap-2 px-3 mb-1">
+              <Scale className="w-3 h-3 text-gray-600" />
+              <span className="text-[10px] font-semibold tracking-widest text-gray-600 uppercase">Commercial</span>
+            </div>
+            {NAV_COMMERCIAL.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`
+                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all
+                    ${active
+                      ? 'bg-green-500/15 text-green-300 border border-green-500/30'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }
+                  `}
+                >
+                  <item.icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-green-400' : ''}`} />
                   {item.label}
                 </a>
               );

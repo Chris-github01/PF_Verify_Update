@@ -11,6 +11,8 @@ import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/mode
 import ApprovalModal from '../components/ApprovalModal';
 import type { EnhancedSupplierMetrics } from '../lib/reports/awardReportEnhancements';
 import { exportSupplierComparison } from '../lib/export/supplierComparisonExport';
+import { getLatestValidationForTrade } from '../lib/commercial-validation/commercialValidationEngine';
+import type { CommercialValidationResult } from '../lib/commercial-validation/types';
 
 interface Project {
   id: string;
@@ -59,6 +61,7 @@ export default function AwardReport({
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [selectedSupplierForApproval, setSelectedSupplierForApproval] = useState<string | null>(null);
   const [organisationLogoUrl, setOrganisationLogoUrl] = useState<string | null>(null);
+  const [commercialValidation, setCommercialValidation] = useState<CommercialValidationResult | null>(null);
   const [approvalData, setApprovalData] = useState<{
     id: string;
     ai_recommended_supplier: string;
@@ -127,6 +130,7 @@ export default function AwardReport({
 
     loadProjectInfo();
     validateAndLoad();
+    getLatestValidationForTrade(currentTrade).then(setCommercialValidation).catch(() => {});
   }, [reportId, projectId, currentTrade]);
 
   useEffect(() => {
@@ -1146,17 +1150,53 @@ export default function AwardReport({
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-orange-900/40 to-orange-800/20 rounded-xl shadow-xl p-8 border-2 border-orange-600/30 hover:border-orange-500/50 transition-all relative">
-            <div className="absolute -top-3 -right-3 bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
-              RECOMMENDED
+          <div className={`bg-gradient-to-br rounded-xl shadow-xl p-8 border-2 transition-all relative ${
+            !commercialValidation || commercialValidation.validation_status === 'validated'
+              ? 'from-orange-900/40 to-orange-800/20 border-orange-600/30 hover:border-orange-500/50'
+              : commercialValidation.validation_status === 'conditional'
+                ? 'from-amber-900/40 to-amber-800/20 border-amber-600/30 hover:border-amber-500/50'
+                : 'from-red-900/40 to-red-800/20 border-red-600/30 hover:border-red-500/50'
+          }`}>
+            <div className={`absolute -top-3 -right-3 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg ${
+              !commercialValidation || commercialValidation.validation_status === 'validated'
+                ? 'bg-orange-600'
+                : commercialValidation.validation_status === 'conditional'
+                  ? 'bg-amber-600'
+                  : 'bg-red-600'
+            }`}>
+              {!commercialValidation || commercialValidation.validation_status === 'validated'
+                ? 'RECOMMENDED'
+                : commercialValidation.validation_status === 'conditional'
+                  ? 'REVIEW REQUIRED'
+                  : 'NOT COMPARABLE'}
             </div>
-            <div className="flex items-center justify-center w-16 h-16 bg-orange-600 rounded-xl mx-auto mb-4 shadow-lg">
+            <div className={`flex items-center justify-center w-16 h-16 rounded-xl mx-auto mb-4 shadow-lg ${
+              !commercialValidation || commercialValidation.validation_status === 'validated'
+                ? 'bg-orange-600'
+                : commercialValidation.validation_status === 'conditional'
+                  ? 'bg-amber-600'
+                  : 'bg-red-600'
+            }`}>
               <Scale className="w-8 h-8 text-white" />
             </div>
             <div className="text-center">
-              <p className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-2">Balanced Choice</p>
+              <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${
+                !commercialValidation || commercialValidation.validation_status === 'validated'
+                  ? 'text-orange-400'
+                  : commercialValidation.validation_status === 'conditional'
+                    ? 'text-amber-400'
+                    : 'text-red-400'
+              }`}>
+                {!commercialValidation || commercialValidation.validation_status === 'validated'
+                  ? 'Best Tenderer'
+                  : commercialValidation.validation_status === 'conditional'
+                    ? 'Lowest Price (Subject to Commercial Review)'
+                    : 'Comparison Not Commercially Valid'}
+              </p>
               <p className="text-3xl font-black text-white mb-3">
-                {balanced?.supplier.supplierName || 'N/A'}
+                {commercialValidation?.validation_status === 'not_comparable'
+                  ? '—'
+                  : balanced?.supplier.supplierName || 'N/A'}
               </p>
               <div className="space-y-2 text-sm mb-4">
                 <div className="flex justify-between items-center">
@@ -1172,14 +1212,31 @@ export default function AwardReport({
                   <span className="font-bold text-white">{balanced ? `${(10 - balanced.supplier.riskScore).toFixed(1)}/10` : 'N/A'}</span>
                 </div>
               </div>
-              <button
-                onClick={() => balanced && handleApproveQuote(balanced.supplier.supplierName)}
-                className="w-full px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
-              >
-                <Target className="w-5 h-5" />
-                Proceed to Approval
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              {commercialValidation?.validation_status === 'not_comparable' ? (
+                <div className="w-full px-4 py-3 bg-red-900/30 border border-red-700/50 text-red-300 text-xs font-semibold rounded-lg text-center">
+                  Approval blocked — comparison not commercially valid
+                </div>
+              ) : (
+                <button
+                  onClick={() => balanced && handleApproveQuote(balanced.supplier.supplierName)}
+                  className={`w-full px-6 py-3 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 ${
+                    commercialValidation?.validation_status === 'conditional'
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-orange-600 hover:bg-orange-700'
+                  }`}
+                >
+                  <Target className="w-5 h-5" />
+                  {commercialValidation?.validation_status === 'conditional'
+                    ? 'Proceed with Caution'
+                    : 'Proceed to Approval'}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+              {commercialValidation && commercialValidation.validation_status !== 'validated' && (
+                <p className="text-[10px] text-center mt-2 text-slate-500">
+                  Commercial validation: {commercialValidation.validation_status.replace(/_/g, ' ')} — see Shadow Admin for details
+                </p>
+              )}
             </div>
           </div>
         </div>
