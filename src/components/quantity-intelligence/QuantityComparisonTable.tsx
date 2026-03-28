@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Info, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Info, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import type { MatchedLineGroup } from '../../lib/quantity-intelligence/lineMatcher';
 import type { ReferenceQuantityResult } from '../../lib/quantity-intelligence/referenceQuantityEngine';
 import type { ScoredSupplier } from '../../lib/quantity-intelligence/quantityScoring';
+import { computeLineConfidence } from '../../lib/quantity-intelligence/quantityConfidence';
 
 interface Props {
   matchedGroups: MatchedLineGroup[];
@@ -18,7 +19,7 @@ function SpreadBadge({ pct }: { pct: number | null }) {
   return <span className="text-xs text-teal-400">{pct.toFixed(1)}%</span>;
 }
 
-function QtyCell({ qty, refQty }: { qty: number | null; refQty: number | null }) {
+function QtyCell({ qty, refQty, ref }: { qty: number | null; refQty: number | null; ref: ReferenceQuantityResult | undefined }) {
   if (qty === null) return <span className="text-gray-600 text-xs italic">—</span>;
   if (refQty === null) return <span className="text-xs text-gray-300">{fmtQty(qty)}</span>;
 
@@ -26,13 +27,32 @@ function QtyCell({ qty, refQty }: { qty: number | null; refQty: number | null })
   const isUnder = ratio < 0.85;
   const isOver = ratio > 1.20;
 
+  const conf = computeLineConfidence(ref, qty);
+  const level = conf.level;
+
+  let textColor = 'text-gray-200';
+  let icon: React.ReactNode = null;
+
+  if (isUnder) {
+    if (level === 'HIGH') {
+      textColor = 'text-red-400 font-semibold';
+      icon = <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" title="Under-allowance risk" />;
+    } else if (level === 'MEDIUM') {
+      textColor = 'text-amber-400 font-semibold';
+      icon = <AlertTriangle className="w-3 h-3 text-amber-400 flex-shrink-0" title="Probable under-allowance position" />;
+    } else {
+      textColor = 'text-gray-400';
+      icon = <HelpCircle className="w-3 h-3 text-gray-500 flex-shrink-0" title="Quantity variance — low confidence" />;
+    }
+  } else if (isOver) {
+    textColor = 'text-blue-400';
+    icon = <Info className="w-3 h-3 text-blue-400 flex-shrink-0" />;
+  }
+
   return (
     <div className="flex items-center gap-1">
-      <span className={`text-xs font-mono ${isUnder ? 'text-red-400 font-semibold' : isOver ? 'text-blue-400' : 'text-gray-200'}`}>
-        {fmtQty(qty)}
-      </span>
-      {isUnder && <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" />}
-      {isOver && <Info className="w-3 h-3 text-blue-400 flex-shrink-0" />}
+      <span className={`text-xs font-mono ${textColor}`}>{fmtQty(qty)}</span>
+      {icon}
     </div>
   );
 }
@@ -150,7 +170,7 @@ export default function QuantityComparisonTable({ matchedGroups, referenceResult
                       const sv = group.supplierValues.find((v) => v.quoteId === s.quoteId);
                       return (
                         <td key={s.quoteId} className="px-3 py-2.5 text-center">
-                          <QtyCell qty={sv?.quantity ?? null} refQty={refQty} />
+                          <QtyCell qty={sv?.quantity ?? null} refQty={refQty} ref={ref} />
                         </td>
                       );
                     })}

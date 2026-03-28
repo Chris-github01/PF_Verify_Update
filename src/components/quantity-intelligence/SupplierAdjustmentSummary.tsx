@@ -1,8 +1,22 @@
-import { TrendingDown, TrendingUp, ShieldAlert, CheckCircle2, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { useState } from 'react';
+import {
+  TrendingDown, TrendingUp, ShieldAlert, CheckCircle2, ArrowUp, ArrowDown, Minus,
+  Info, AlertTriangle, HelpCircle, ChevronDown, ChevronRight,
+} from 'lucide-react';
 import type { ScoredSupplier } from '../../lib/quantity-intelligence/quantityScoring';
+import type { MatchedLineGroup } from '../../lib/quantity-intelligence/lineMatcher';
+import type { ReferenceQuantityResult } from '../../lib/quantity-intelligence/referenceQuantityEngine';
+import {
+  computeAllConfidence,
+  PROTECTION_STATEMENT,
+  type SupplierConfidence,
+  type ReferenceConfidenceLevel,
+} from '../../lib/quantity-intelligence/quantityConfidence';
 
 interface Props {
   suppliers: ScoredSupplier[];
+  matchedGroups?: MatchedLineGroup[];
+  referenceResults?: Map<string, ReferenceQuantityResult>;
 }
 
 function formatCurrency(v: number): string {
@@ -49,9 +63,139 @@ function CompletenessBar({ score }: { score: number }) {
   );
 }
 
-export default function SupplierAdjustmentSummary({ suppliers }: Props) {
+function ConfidencePill({ level, score }: { level: ReferenceConfidenceLevel; score: number }) {
+  const styles: Record<ReferenceConfidenceLevel, string> = {
+    HIGH: 'bg-teal-500/15 border-teal-500/30 text-teal-400',
+    MEDIUM: 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+    LOW: 'bg-gray-700/60 border-gray-600/40 text-gray-400',
+  };
+  const icons: Record<ReferenceConfidenceLevel, typeof CheckCircle2> = {
+    HIGH: CheckCircle2,
+    MEDIUM: AlertTriangle,
+    LOW: HelpCircle,
+  };
+  const Icon = icons[level];
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${styles[level]}`}>
+      <Icon className="w-3 h-3" />
+      {level} confidence · {score}/100
+    </span>
+  );
+}
+
+function buildUnderOverLabel(s: ScoredSupplier, conf: SupplierConfidence | undefined): string {
+  if (!conf) return s.underallowanceFlag ? 'Under-allowance risk' : 'Quantities complete';
+  return conf.commercialInterpretation.underOverLabel;
+}
+
+function buildUnderOverStyle(s: ScoredSupplier, conf: SupplierConfidence | undefined): string {
+  if (!conf || !s.underallowanceFlag) {
+    return s.underallowanceFlag
+      ? 'bg-red-500/15 border-red-500/30 text-red-300'
+      : 'bg-teal-500/10 border-teal-500/20 text-teal-400';
+  }
+  const level = conf.level;
+  if (level === 'HIGH') return 'bg-red-500/15 border-red-500/30 text-red-300';
+  if (level === 'MEDIUM') return 'bg-amber-500/15 border-amber-500/30 text-amber-300';
+  return 'bg-gray-700/40 border-gray-600/30 text-gray-400';
+}
+
+function buildUnderOverIcon(s: ScoredSupplier, conf: SupplierConfidence | undefined) {
+  if (!s.underallowanceFlag) return CheckCircle2;
+  if (!conf) return ShieldAlert;
+  const level = conf.level;
+  if (level === 'HIGH') return ShieldAlert;
+  if (level === 'MEDIUM') return AlertTriangle;
+  return Info;
+}
+
+function CommercialInterpretationBlock({ conf }: { conf: SupplierConfidence }) {
+  const [open, setOpen] = useState(false);
+  const driverColors: Record<string, string> = {
+    drawing_gaps: 'text-amber-400',
+    supplier_assumptions: 'text-blue-400',
+    missing_scope: 'text-red-400',
+    pricing_strategy: 'text-orange-400',
+    aligned: 'text-teal-400',
+  };
+  const driverLabels: Record<string, string> = {
+    drawing_gaps: 'Drawing Gaps',
+    supplier_assumptions: 'Supplier Assumptions',
+    missing_scope: 'Missing Scope',
+    pricing_strategy: 'Pricing Strategy',
+    aligned: 'Quantities Aligned',
+  };
+
+  const ci = conf.commercialInterpretation;
+  const color = driverColors[ci.primaryDriver] || 'text-gray-400';
+  const driverLabel = driverLabels[ci.primaryDriver] || ci.primaryDriver;
+
+  return (
+    <div className="mt-3 bg-gray-800/50 rounded-lg border border-gray-700/50 overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-800/60 transition-colors"
+        onClick={() => setOpen(v => !v)}
+      >
+        <div className="flex items-center gap-2">
+          <Info className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+          <span className="text-xs text-gray-400">Commercial Interpretation:</span>
+          <span className={`text-xs font-semibold ${color}`}>{driverLabel}</span>
+        </div>
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 space-y-2.5 border-t border-gray-700/50">
+          <p className="text-xs text-gray-300 mt-2 leading-relaxed">{ci.explanation}</p>
+
+          {conf.factors.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Confidence Factors</div>
+              {conf.factors.map((f, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  {f.impact === 'positive' && <ArrowUp className="w-3 h-3 text-teal-400 flex-shrink-0 mt-0.5" />}
+                  {f.impact === 'negative' && <ArrowDown className="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5" />}
+                  {f.impact === 'neutral' && <Minus className="w-3 h-3 text-gray-500 flex-shrink-0 mt-0.5" />}
+                  <span className="text-gray-400">{f.detail}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {conf.trueQuantityRange && (
+            <div className="bg-gray-900/60 rounded-md p-2 text-xs">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">True Quantity Range</div>
+              <div className="flex items-center gap-3 text-gray-300">
+                <span>Min: <span className="font-mono text-gray-200">{conf.trueQuantityRange.min.toFixed(1)}</span></span>
+                <span className="text-gray-600">|</span>
+                <span>Baseline: <span className="font-mono text-teal-400 font-semibold">{conf.trueQuantityRange.baseline.toFixed(1)}</span></span>
+                <span className="text-gray-600">|</span>
+                <span>Max: <span className="font-mono text-gray-200">{conf.trueQuantityRange.max.toFixed(1)}</span></span>
+                <span className="text-gray-500 ml-1">({conf.trueQuantityRange.unit})</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-start gap-2 bg-blue-500/5 border border-blue-500/15 rounded-md px-2.5 py-1.5 text-xs">
+            <Info className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
+            <span className="text-blue-300/80">{ci.actionNote}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function SupplierAdjustmentSummary({ suppliers, matchedGroups, referenceResults }: Props) {
   const sorted = [...suppliers].sort((a, b) => a.rawRank - b.rawRank);
   const total = suppliers.length;
+
+  const confidenceMap: Map<string, SupplierConfidence> =
+    matchedGroups && referenceResults
+      ? computeAllConfidence(suppliers, matchedGroups, referenceResults)
+      : new Map();
+
+  const showConfidence = confidenceMap.size > 0;
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -67,23 +211,22 @@ export default function SupplierAdjustmentSummary({ suppliers }: Props) {
           const gapAbs = Math.abs(s.quantityGapValue);
           const gapSign = s.quantityGapValue > 0 ? '+' : s.quantityGapValue < 0 ? '-' : '';
           const gapLabel = gapSign === '+' ? 'under-allowed (hidden cost)' : gapSign === '-' ? 'over-allowed' : 'no gap';
+          const conf = confidenceMap.get(s.quoteId);
+          const underOverLabel = buildUnderOverLabel(s, conf);
+          const underOverStyle = buildUnderOverStyle(s, conf);
+          const UnderOverIcon = buildUnderOverIcon(s, conf);
 
           return (
             <div key={s.quoteId} className={`p-4 ${s.underallowanceFlag ? 'bg-red-500/3' : ''}`}>
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
+              <div className="flex items-start justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="text-sm font-semibold text-white">{s.supplierName}</div>
-                  {s.underallowanceFlag && (
-                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-300">
-                      <ShieldAlert className="w-3 h-3" />
-                      Under-allowance risk
-                    </span>
-                  )}
-                  {!s.underallowanceFlag && (
-                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Quantities complete
-                    </span>
+                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${underOverStyle}`}>
+                    <UnderOverIcon className="w-3 h-3" />
+                    {underOverLabel}
+                  </span>
+                  {showConfidence && conf && (
+                    <ConfidencePill level={conf.level} score={conf.score} />
                   )}
                 </div>
                 <RankChangeIndicator rawRank={s.rawRank} normRank={s.normalizedRank} />
@@ -125,10 +268,21 @@ export default function SupplierAdjustmentSummary({ suppliers }: Props) {
                 <span>{s.matchedLinesCount} matched lines · {s.underallowedLinesCount} under-allowed</span>
                 <span>Raw competitiveness: {s.competitivenessScoreRaw.toFixed(0)}/100 · Normalized: {s.competitivenessScoreNormalized.toFixed(0)}/100</span>
               </div>
+
+              {showConfidence && conf && (s.underallowanceFlag || conf.level !== 'HIGH') && (
+                <CommercialInterpretationBlock conf={conf} />
+              )}
             </div>
           );
         })}
       </div>
+
+      {showConfidence && (
+        <div className="px-4 py-3 border-t border-gray-800 flex items-start gap-2">
+          <Info className="w-3.5 h-3.5 text-gray-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-gray-600 italic">{PROTECTION_STATEMENT}</p>
+        </div>
+      )}
     </div>
   );
 }

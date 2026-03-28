@@ -639,7 +639,11 @@ export default function QuantityIntelligencePage({ projectId, onNavigateNext }: 
 
                 <QuantityVarianceCards result={result} />
 
-                <SupplierAdjustmentSummary suppliers={safeSuppliers} />
+                <SupplierAdjustmentSummary
+                  suppliers={safeSuppliers}
+                  matchedGroups={safeGroups}
+                  referenceResults={safeRefs}
+                />
 
                 <QuantityComparisonTable
                   matchedGroups={safeGroups}
