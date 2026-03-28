@@ -90,6 +90,7 @@ import ShadowBenchmarkEvaluationPage from './pages/shadow/phase4/ShadowBenchmark
 import RevenueProtectionDashboard from './pages/shadow/RevenueProtectionDashboard';
 import CommercialValidationDashboard from './pages/shadow/CommercialValidationDashboard';
 import TenderDecisionDashboard from './pages/shadow/TenderDecisionDashboard';
+import BoqNormalisationPage from './pages/shadow/BoqNormalisationPage';
 import { supabase } from './lib/supabase';
 import { OrganisationProvider, useOrganisation } from './lib/organisationContext';
 import { AdminProvider, useAdmin } from './lib/adminContext';
@@ -1270,6 +1271,9 @@ function AppContent() {
   }
   if (shadowPath === '/shadow/admin/commercial-validation') {
     return <CommercialValidationDashboard />;
+  }
+  if (shadowPath === '/shadow/admin/boq-normalisation') {
+    return <BoqNormalisationPage />;
   }
   if (shadowPath === '/shadow/admin/tender-decision') {
     return <TenderDecisionDashboard />;

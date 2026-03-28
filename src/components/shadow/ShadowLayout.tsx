@@ -42,6 +42,7 @@ const NAV_PHASE6 = [
 const NAV_COMMERCIAL = [
   { label: 'Commercial Validation', href: '/shadow/admin/commercial-validation', icon: Scale },
   { label: 'Tender Decision Engine', href: '/shadow/admin/tender-decision', icon: Trophy },
+  { label: 'BOQ Normalisation Engine', href: '/shadow/admin/boq-normalisation', icon: Layers },
 ];
 
 interface Props {
