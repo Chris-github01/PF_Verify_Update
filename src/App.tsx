@@ -775,7 +775,7 @@ function AppContent() {
             dashboardMode={dashboardMode}
           />;
         }
-        return <QuantityIntelligencePage projectId={projectId} />;
+        return <QuantityIntelligencePage projectId={projectId} onNavigateNext={() => setActiveTab('scope')} />;
 
       case 'scope':
         if (!projectId) {

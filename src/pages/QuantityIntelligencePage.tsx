@@ -20,9 +20,11 @@ import QuantityVarianceCards from '../components/quantity-intelligence/QuantityV
 import QuantityComparisonTable from '../components/quantity-intelligence/QuantityComparisonTable';
 import SupplierAdjustmentSummary from '../components/quantity-intelligence/SupplierAdjustmentSummary';
 import QuantityExplainabilityDrawer from '../components/quantity-intelligence/QuantityExplainabilityDrawer';
+import WorkflowNav from '../components/WorkflowNav';
 
 interface Props {
   projectId: string;
+  onNavigateNext?: () => void;
 }
 
 interface QuoteOption {
@@ -67,7 +69,7 @@ function tradeLabel(trade: string): string {
   return labels[trade] ?? trade;
 }
 
-export default function QuantityIntelligencePage({ projectId }: Props) {
+export default function QuantityIntelligencePage({ projectId, onNavigateNext }: Props) {
   const { currentTrade } = useTrade();
 
   const [quotes, setQuotes] = useState<QuoteOption[]>([]);
@@ -642,6 +644,15 @@ export default function QuantityIntelligencePage({ projectId }: Props) {
         suppliers={safeSuppliers}
         onClose={() => setDrawerGroup(null)}
       />
+
+      {onNavigateNext && (
+        <WorkflowNav
+          currentStep={4}
+          totalSteps={7}
+          nextLabel="Next: Scope Matrix"
+          onNext={onNavigateNext}
+        />
+      )}
     </div>
   );
 }
