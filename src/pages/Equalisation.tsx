@@ -601,7 +601,7 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         onBack={onNavigateBack}
         onNext={handleNavigateNext}
         backLabel="Back: Scope Matrix"
-        nextLabel="Next: Award Reports"
+        nextLabel="Next: BOQ Builder"
       />
         </div>
       </div>
