@@ -91,7 +91,7 @@ function pageExecutiveAndFinancial(opts: ReportOptions): string {
         <thead style="background:${C.LIGHT_BG};">
           <tr>
             ${['Tenderer','Quoted','Projected','Variation ($)','Variation (%)','Risk','Coverage','Score'].map(h =>
-              `<th style="padding:9px 12px;text-align:${h==='Tenderer'?'left':'${h===\'Variation ($)\'||h===\'Quoted\'||h===\'Projected\'?\'right\':\'center\'}\'};font-size:10px;font-weight:700;color:${C.MUTED};text-transform:uppercase;letter-spacing:0.4px;">${h}</th>`
+              `<th style="padding:9px 12px;text-align:${h==='Tenderer'?'left':(h==='Variation ($)'||h==='Quoted'||h==='Projected'?'right':'center')};font-size:10px;font-weight:700;color:${C.MUTED};text-transform:uppercase;letter-spacing:0.4px;">${h}</th>`
             ).join('')}
           </tr>
         </thead>
@@ -123,7 +123,7 @@ function pageRiskAndBehaviour(opts: ReportOptions): string {
     if (s.coveragePercent < 85) weaknesses.push(`Margin recovery via scope variations on ${s.totalItems - s.itemsQuoted} unpriced items`);
     if (tier === 'high' || tier === 'critical') weaknesses.push('Unit rate re-measurement risk on high-spread line items');
     if (s.underallowanceFlag) weaknesses.push('Under-allowance detected — quantity shortfall likely to result in post-contract claims');
-    if (s.variationExposurePct !== undefined && s.variationExposurePct > 0.05) weaknesses.push(`Estimated variation exposure of ${pct(s.variationExposurePct * 100)} above quoted total`);
+    if (s.variationExposurePct !== undefined && s.variationExposurePct > 0.05) weaknesses.push(\`Estimated variation exposure of ${pct(s.variationExposurePct * 100)} above quoted total`);
     if (weaknesses.length === 0) weaknesses.push('No specific margin recovery vectors identified');
 
     return `<div style="border:1px solid ${C.BORDER};border-radius:10px;padding:18px;margin-bottom:14px;break-inside:avoid;">
@@ -252,7 +252,7 @@ function pageScopeAndQuantityDetail(opts: ReportOptions): string {
         </div>
       </td>
       <td style="padding:11px 12px;font-size:11px;color:${C.MID};">
-        ${gaps.length > 0 ? gaps.slice(0,3).map(g => `<div style="margin-bottom:3px;">&#9654; ${g}</div>`).join('') : '<span style="color:${C.MUTED};">None identified</span>'}
+        ${gaps.length > 0 ? gaps.slice(0,3).map(g => `<div style="margin-bottom:3px;">&#9654; ${g}</div>`).join('') : `<span style="color:${C.MUTED};">None identified</span>`}
       </td>
     </tr>`;
   }).join('');
