@@ -1735,80 +1735,84 @@ export default function AwardReport({
 
         {comparisonData.length > 0 && (
           <div className="bg-slate-800/60 rounded-xl shadow-xl border border-slate-700 mb-8 overflow-hidden">
-            <div className="px-8 py-6 border-b border-slate-700">
-              <h3 className="text-2xl font-bold text-white">Itemized Comparison</h3>
-              <p className="text-slate-400 mt-2">
-                {comparisonData.length} line items available for detailed comparison. Access the full itemized breakdown with side-by-side pricing, quantities, and variance analysis.
-              </p>
-            </div>
-            <div className="p-8">
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  onClick={() => setShowItemizedDetails(!showItemizedDetails)}
-                  className="px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg hover:from-orange-700 hover:to-orange-800 transition-all text-sm font-semibold shadow-lg flex items-center gap-2"
-                >
-                  <FileSpreadsheet size={18} />
-                  {showItemizedDetails ? 'Hide' : 'View'} Full Itemized Comparison
-                </button>
-                <button
-                  onClick={handleExportSupplierComparison}
-                  className="px-6 py-3 border-2 border-emerald-600 bg-emerald-900/30 text-emerald-200 rounded-lg hover:bg-emerald-800/40 transition-all text-sm font-semibold flex items-center gap-2"
-                >
-                  <FileSpreadsheet size={18} />
-                  Export Supplier Comparison
-                </button>
-                <button
-                  onClick={exportItemizedComparisonToExcel}
-                  className="px-6 py-3 border-2 border-slate-600 bg-slate-700/30 text-slate-200 rounded-lg hover:bg-slate-700/50 transition-all text-sm font-semibold flex items-center gap-2"
-                >
-                  <Download size={18} />
-                  Export Itemized Excel
-                </button>
+            <button
+              onClick={() => setShowItemizedDetails(!showItemizedDetails)}
+              className="w-full px-8 py-6 flex items-center justify-between hover:bg-slate-700/30 transition-colors text-left"
+            >
+              <div>
+                <h3 className="text-2xl font-bold text-white">Itemized Comparison</h3>
+                <p className="text-slate-400 mt-1 text-sm">
+                  {comparisonData.length} line items — side-by-side pricing and variance across all suppliers
+                </p>
               </div>
-
-              {showItemizedDetails && (
-                <div className="mt-6 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gradient-to-r from-slate-700 to-slate-800">
-                      <tr>
-                        <th className="text-left font-bold text-white uppercase tracking-wide px-4 py-3">Description</th>
-                        <th className="text-right font-bold text-white uppercase tracking-wide px-4 py-3">Qty</th>
-                        <th className="text-left font-bold text-white uppercase tracking-wide px-4 py-3">Unit</th>
-                        {awardSummary.suppliers.map((supplier, idx) => (
-                          <th key={idx} className="text-right font-bold text-white uppercase tracking-wide px-4 py-3">
-                            {supplier.supplierName}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {comparisonData.slice(0, 50).map((row, idx) => (
-                        <tr key={idx} className={`border-b border-slate-700 hover:bg-slate-700/30 transition-colors ${idx % 2 === 0 ? 'bg-slate-800/30' : ''}`}>
-                          <td className="py-3 px-4 text-slate-200">{row.description}</td>
-                          <td className="py-3 px-4 text-right text-slate-300">{row.quantity}</td>
-                          <td className="py-3 px-4 text-slate-300">{row.unit}</td>
-                          {awardSummary.suppliers.map((supplier, sidx) => {
-                            const supplierData = row.suppliers?.[supplier.supplierName];
-                            return (
-                              <td key={sidx} className="py-3 px-4 text-right text-slate-300 font-medium">
-                                {supplierData && supplierData.unitPrice !== null
-                                  ? formatCurrency(supplierData.unitPrice)
-                                  : <span className="text-slate-600">N/A</span>}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {comparisonData.length > 50 && (
-                    <p className="text-sm text-slate-400 mt-4 text-center">
-                      Showing first 50 of {comparisonData.length} items. Export to Excel for full data.
-                    </p>
-                  )}
+              <div className="flex items-center gap-4 flex-shrink-0 ml-6">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleExportSupplierComparison(); }}
+                    className="px-3 py-1.5 border border-emerald-700/60 bg-emerald-900/20 text-emerald-300 rounded-md hover:bg-emerald-800/30 transition-all text-xs font-semibold flex items-center gap-1.5"
+                  >
+                    <FileSpreadsheet size={14} />
+                    Supplier CSV
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); exportItemizedComparisonToExcel(); }}
+                    className="px-3 py-1.5 border border-slate-600 bg-slate-700/30 text-slate-300 rounded-md hover:bg-slate-700/50 transition-all text-xs font-semibold flex items-center gap-1.5"
+                  >
+                    <Download size={14} />
+                    Excel
+                  </button>
                 </div>
-              )}
-            </div>
+                <ChevronDown
+                  size={24}
+                  className={`text-slate-400 transition-transform flex-shrink-0 ${showItemizedDetails ? 'rotate-180' : ''}`}
+                />
+              </div>
+            </button>
+
+            {showItemizedDetails && (
+              <div className="border-t border-slate-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gradient-to-r from-slate-700 to-slate-800">
+                    <tr>
+                      <th className="text-left font-bold text-white uppercase tracking-wide px-4 py-3">Description</th>
+                      <th className="text-right font-bold text-white uppercase tracking-wide px-4 py-3">Qty</th>
+                      <th className="text-left font-bold text-white uppercase tracking-wide px-4 py-3">Unit</th>
+                      {awardSummary.suppliers.map((supplier, idx) => (
+                        <th key={idx} className="text-right font-bold text-white uppercase tracking-wide px-4 py-3">
+                          {supplier.supplierName}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparisonData.slice(0, 50).map((row, idx) => (
+                      <tr key={idx} className={`border-b border-slate-700 hover:bg-slate-700/30 transition-colors ${idx % 2 === 0 ? 'bg-slate-800/30' : ''}`}>
+                        <td className="py-3 px-4 text-slate-200">{row.description}</td>
+                        <td className="py-3 px-4 text-right text-slate-300">{row.quantity}</td>
+                        <td className="py-3 px-4 text-slate-300">{row.unit}</td>
+                        {awardSummary.suppliers.map((supplier, sidx) => {
+                          const supplierData = row.suppliers?.[supplier.supplierName];
+                          return (
+                            <td key={sidx} className="py-3 px-4 text-right text-slate-300 font-medium">
+                              {supplierData && supplierData.unitPrice !== null
+                                ? formatCurrency(supplierData.unitPrice)
+                                : <span className="text-slate-600">N/A</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {comparisonData.length > 50 && (
+                  <div className="px-8 py-4 bg-slate-700/30 border-t border-slate-700">
+                    <p className="text-sm text-slate-400 text-center">
+                      Showing first 50 of {comparisonData.length} items. Export to Excel for the full dataset.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
