@@ -1,4 +1,9 @@
-import { Shield, Upload, Cpu, Layers, Zap, FileText, BarChart3, Download, CheckCircle, ArrowRight, Target, AlertTriangle, Award, Users, Brain, Database, FileSearch, TrendingUp, ShieldAlert, Lock, Briefcase, BookOpen, HelpCircle, FileCode, LifeBuoy } from 'lucide-react';
+import {
+  Shield, Upload, Layers, FileText, BarChart3, Download,
+  CheckCircle, ArrowRight, AlertTriangle, Award, Users,
+  FileSearch, Lock, Database, ChevronRight, ClipboardList,
+  GitBranch, Briefcase, Scale, TrendingUp, Mail
+} from 'lucide-react';
 import { useState } from 'react';
 import DemoBookingModal from '../components/DemoBookingModal';
 import HeroVideo from '../components/HeroVideo';
@@ -24,36 +29,37 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)]">
-      <nav className="fixed top-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 z-50 shadow-sm">
+    <div className="min-h-screen bg-[#0b0f1a] text-slate-100">
+
+      {/* NAV */}
+      <nav className="fixed top-0 left-0 right-0 bg-[#0b0f1a]/95 backdrop-blur-sm border-b border-slate-800/80 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-32">
-            <div className="flex items-center h-24 overflow-hidden">
+          <div className="flex justify-between items-center h-20">
+            <div className="flex items-center h-16 overflow-hidden">
               <img
                 src="/verifytrade_logo.png"
                 alt="VerifyTrade"
-                className="h-32 w-auto object-cover object-center scale-125"
+                className="h-20 w-auto object-cover object-center"
               />
             </div>
 
             <div className="hidden md:flex items-center gap-8">
-              <a href="#how-it-works" className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">How It Works</a>
-              <button onClick={onViewPricing} className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">Pricing</button>
-              <a href="#customers" className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">Customers</a>
-              <a href="#resources" className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">Resources</a>
-              <a href="#support" className="text-sm text-slate-400 hover:text-slate-50 transition-colors font-medium">Support</a>
+              <a href="#workflow" className="text-sm text-slate-400 hover:text-slate-100 transition-colors font-medium tracking-wide">How It Works</a>
+              <a href="#outputs" className="text-sm text-slate-400 hover:text-slate-100 transition-colors font-medium tracking-wide">Outputs</a>
+              <button onClick={onViewPricing} className="text-sm text-slate-400 hover:text-slate-100 transition-colors font-medium tracking-wide">Pricing</button>
+              <a href="#who" className="text-sm text-slate-400 hover:text-slate-100 transition-colors font-medium tracking-wide">Who It's For</a>
             </div>
 
             <div className="flex items-center gap-3">
               <button
                 onClick={onSignIn}
-                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 rounded-lg transition-all"
               >
                 Sign In
               </button>
               <button
                 onClick={() => setShowDemoModal(true)}
-                className="hidden sm:block px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all shadow-sm"
+                className="hidden sm:block px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all"
               >
                 Book Demo
               </button>
@@ -62,1065 +68,589 @@ export default function LandingPage({ onSignIn, onViewPricing }: LandingPageProp
         </div>
       </nav>
 
-      <main className="pt-32">
-        <section className="relative overflow-hidden py-12 sm:py-24 lg:py-32 min-h-[85vh] sm:min-h-[90vh] flex items-center">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-            <div className="text-center max-w-5xl mx-auto">
-              <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-6 sm:mb-8">
-                <span className="px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-300 bg-blue-900/40 rounded-full border border-blue-800/50 backdrop-blur-sm">
-                  Main Contractors
-                </span>
-                <span className="px-3 py-1.5 text-xs sm:text-sm font-medium text-purple-300 bg-purple-900/40 rounded-full border border-purple-800/50 backdrop-blur-sm">
-                  Quantity Surveyors
-                </span>
-                <span className="px-3 py-1.5 text-xs sm:text-sm font-medium text-green-300 bg-green-900/40 rounded-full border border-green-800/50 backdrop-blur-sm">
-                  Estimators
-                </span>
+      <main className="pt-20">
+
+        {/* HERO */}
+        <section className="relative overflow-hidden pt-20 pb-0">
+          <div className="absolute inset-0 -z-10">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-blue-600/8 blur-[120px] rounded-full" />
+          </div>
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center max-w-4xl mx-auto mb-14">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-8 text-xs font-semibold text-blue-300 bg-blue-900/30 rounded-full border border-blue-800/50 tracking-widest uppercase">
+                Commercial Adjudication Platform
               </div>
 
-              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-slate-50 mb-4 sm:mb-6 tracking-tight leading-[1.15] sm:leading-tight px-2">
-                The New Global Standard for<br />
-                <span className="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
-                  Trade Quote Auditing
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 tracking-tight leading-[1.08]">
+                The Commercial Adjudication<br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-600">
+                  Platform for Trade Packages
                 </span>
               </h1>
 
-              <p className="text-lg sm:text-2xl md:text-3xl font-semibold text-blue-400 mb-4 sm:mb-6 leading-snug sm:leading-tight px-4">
-                One suite. Five critical trades. Zero scope gaps.
+              <p className="text-xl sm:text-2xl text-slate-400 mb-4 leading-relaxed font-light">
+                From supplier quotes to award, contract, and commercial control —<br className="hidden sm:block" /> all in one structured workflow.
               </p>
 
-              <p className="text-sm sm:text-base md:text-lg text-slate-400 mb-8 sm:mb-12 max-w-3xl mx-auto px-4">
-                Built for main contractors and QS teams across NZ & Australia.
+              <p className="text-sm text-slate-500 mb-10 leading-relaxed">
+                Built for main contractors, quantity surveyors, estimators, and commercial managers<br className="hidden sm:block" />
+                across passive fire, plumbing, electrical, HVAC, and active fire.
               </p>
 
-              {/* Full Suite Modules */}
-              <div className="mb-10 sm:mb-14 max-w-4xl mx-auto px-4">
-                <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 sm:p-8 border border-slate-700/50 shadow-xl">
-                  <h3 className="text-xl sm:text-2xl font-bold text-slate-50 mb-3">Verify+ Full Trade Suite</h3>
-
-                  <p className="text-sm sm:text-base text-slate-300 mb-6 leading-relaxed">
-                    Audit every quote with the same defensible workflow — regardless of trade.
-                  </p>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3">
-                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
-                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ Passive Fire</span>
-                    </div>
-                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3">
-                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
-                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ Electrical</span>
-                    </div>
-                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3">
-                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
-                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ Plumbing</span>
-                    </div>
-                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3">
-                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
-                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ HVAC</span>
-                    </div>
-                    <div className="px-4 py-3 bg-slate-700/30 rounded-xl border border-slate-600/50 flex items-center gap-3 sm:col-span-2 lg:col-span-1">
-                      <CheckCircle className="text-green-400 flex-shrink-0" size={20} />
-                      <span className="text-slate-100 font-medium text-sm sm:text-base">Verify+ Active Fire & Alarms</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <button
-                      onClick={() => setShowDemoModal(true)}
-                      className="inline-flex items-center gap-2 px-6 py-3 text-sm sm:text-base font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl"
-                    >
-                      See the Suite in Action
-                      <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Hero Video */}
-            <HeroVideo onBookDemo={() => setShowDemoModal(true)} />
-
-            <div className="text-center max-w-5xl mx-auto mt-12 sm:mt-16">
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 mb-8 sm:mb-12 border border-slate-700/50 mx-2 sm:mx-0">
-                <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-slate-100 font-medium leading-relaxed">
-                  Upload every supplier quote → Get a full audit report that tells you exactly who is <span className="font-bold text-red-400">under-scoping</span>, <span className="font-bold text-orange-400">over-pricing</span>, or taking <span className="font-bold text-red-400">unacceptable risk</span> — in under 30 minutes.
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
-                <button
-                  onClick={onSignIn}
-                  className="group px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-                >
-                  Start Auditing Now
-                  <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
-                </button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
                   onClick={() => setShowDemoModal(true)}
-                  className="px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-slate-100 bg-slate-800 border-2 border-slate-700 rounded-xl hover:border-slate-600 hover:bg-slate-700 transition-all shadow-sm hover:shadow-md"
+                  className="group px-7 py-4 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
                 >
-                  Book a Live Demo
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="how-it-works" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12 md:mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Complete Quote Audit in 8 Steps</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4">The most comprehensive trade quote analysis platform ever built</p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-              <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-6 hover:border-blue-500/50 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-blue-900/40 rounded-lg flex items-center justify-center mb-4">
-                  <Upload className="text-blue-400" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-100 mb-3">1. Automated Quote Import & Parsing</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Upload PDFs or Excel files. Our AI instantly extracts every line item, rate, description, and spec — even from messy formats.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-6 hover:border-purple-500/50 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-purple-900/40 rounded-lg flex items-center justify-center mb-4">
-                  <Cpu className="text-purple-400" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-100 mb-3">2. AI-Driven Normalising & Cleaning</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Automatically standardizes units, corrects typos, and groups similar items across all quotes for true apples-to-apples comparison.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-6 hover:border-green-500/50 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-green-900/40 rounded-lg flex items-center justify-center mb-4">
-                  <Layers className="text-green-400" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-100 mb-3">3. Smart System Detection</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Recognizes major manufacturers across all trades. Maps every product to certified systems and standards.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-6 hover:border-orange-500/50 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-orange-900/40 rounded-lg flex items-center justify-center mb-4">
-                  <Zap className="text-orange-400" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-100 mb-3">4. One-Click Quote Intelligence</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Trade-specific templates across all five disciplines. Instantly highlights missing items, wrong specs, and coverage gaps.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-6 hover:border-red-500/50 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-red-900/40 rounded-lg flex items-center justify-center mb-4">
-                  <Target className="text-red-400" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-100 mb-3">5. Scope Matrix Generation</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  True line-by-line comparison across all suppliers. See exactly who included what, who's missing items, and who's over-pricing.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-6 hover:border-yellow-500/50 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-yellow-900/40 rounded-lg flex items-center justify-center mb-4">
-                  <AlertTriangle className="text-yellow-400" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-100 mb-3">6. Automated Risk & Coverage Scoring</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Every quote gets a risk score (0-100). Flags exclusions, underscoping, non-compliant systems, and missing certifications.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-6 hover:border-blue-500/50 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-blue-900/40 rounded-lg flex items-center justify-center mb-4">
-                  <FileText className="text-blue-400" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-100 mb-3">7. Award Recommendation Report</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Client-ready PDF + Excel report with executive summary, risk analysis, and clear recommendation. Board-meeting ready.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-6 hover:border-green-500/50 hover:shadow-lg transition-all">
-                <div className="w-12 h-12 bg-green-900/40 rounded-lg flex items-center justify-center mb-4">
-                  <Download className="text-green-400" size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-100 mb-3">8. One-Click Export Everything</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Export scope matrix, award report, comparison tables, and audit trail in multiple formats. Full transparency, zero manual work.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="py-12 sm:py-16 md:py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12 md:mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Who It's Built For</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4">The procurement confidence you've been missing</p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 hover:border-blue-500/50 transition-all">
-                <div className="w-14 h-14 bg-blue-900/40 rounded-xl flex items-center justify-center mb-4">
-                  <Users className="text-blue-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Main Contractors</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Never award an under-scoped job again. Catch every gap before you sign.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 hover:border-purple-500/50 transition-all">
-                <div className="w-14 h-14 bg-purple-900/40 rounded-xl flex items-center justify-center mb-4">
-                  <BarChart3 className="text-purple-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Quantity Surveyors</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Make awards with total confidence. Defend every decision with data.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 hover:border-green-500/50 transition-all">
-                <div className="w-14 h-14 bg-green-900/40 rounded-xl flex items-center justify-center mb-4">
-                  <Shield className="text-green-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Fire Engineers</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Verify every proposed system meets compliance requirements. Zero risk.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-8 shadow-md border-2 border-slate-700/50 hover:border-orange-500/50 transition-all">
-                <div className="w-14 h-14 bg-orange-900/40 rounded-xl flex items-center justify-center mb-4">
-                  <Award className="text-orange-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Compliance & Audit Teams</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  100% defensible procurement decisions with full audit trail.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="customers" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12 md:mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Built for Industry Leaders</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4 max-w-3xl mx-auto">
-                Trusted by construction professionals who demand precision and accountability
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8 mb-12">
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
-                    <Users className="text-blue-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-100">Main Contractors</h3>
-                    <p className="text-sm text-slate-500">NZ & Australia</p>
-                  </div>
-                </div>
-                <p className="text-slate-300 leading-relaxed mb-4">
-                  "After manually auditing hundreds of quotes across multiple trades, we knew there had to be a better way. VerifyTrade eliminates the guesswork and gives us complete confidence in our procurement decisions."
-                </p>
-                <p className="text-sm text-green-400 italic font-semibold">Live</p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
-                    <BarChart3 className="text-green-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-100">Quantity Surveyors</h3>
-                    <p className="text-sm text-slate-500">Professional Services</p>
-                  </div>
-                </div>
-                <p className="text-slate-300 leading-relaxed mb-4">
-                  "The ability to compare quotes line-by-line across multiple suppliers in minutes instead of days is transformative. Every recommendation is now backed by data, not gut feel."
-                </p>
-                <p className="text-sm text-green-400 italic font-semibold">Live</p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center">
-                    <Shield className="text-orange-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-100">Estimators</h3>
-                    <p className="text-sm text-slate-500">Specialist Teams</p>
-                  </div>
-                </div>
-                <p className="text-slate-300 leading-relaxed mb-4">
-                  "Having the same audit workflow across all five trades is a game-changer. We can now audit mechanical, electrical, and fire protection quotes with the same rigor and speed."
-                </p>
-                <p className="text-sm text-green-400 italic font-semibold">Live</p>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 text-center">
-              <h3 className="text-2xl font-bold text-slate-100 mb-4">Start Using Verify+ Today</h3>
-              <p className="text-lg text-slate-400 mb-6 max-w-2xl mx-auto">
-                Join construction professionals across NZ & Australia who audit every trade quote with confidence.
-              </p>
-              <button
-                onClick={onSignIn}
-                className="px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
-              >
-                Get Started Now
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section id="features" className="py-12 sm:py-16 md:py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12 md:mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Revolutionary Features</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4 max-w-3xl mx-auto">
-                Purpose-built for construction professionals who need absolute clarity on every quote they receive
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-8 mb-16">
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Brain className="text-blue-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Multi-Model AI Extraction</h3>
-                    <p className="text-slate-400">
-                      Advanced ensemble parsing using multiple AI models simultaneously. Achieves 98%+ extraction accuracy even on poorly formatted quotes with handwritten markups.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Database className="text-purple-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Multi-Trade System Library</h3>
-                    <p className="text-slate-400">
-                      Comprehensive templates across all five trades covering systems, materials, and standards. Constantly updated with latest manufacturer certifications.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <FileSearch className="text-green-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Intelligent Scope Gap Detection</h3>
-                    <p className="text-slate-400">
-                      Automatically identifies missing items by comparing quotes against your specification and drawings. No manual cross-checking required.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <TrendingUp className="text-orange-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Real-Time Price Benchmarking</h3>
-                    <p className="text-slate-400">
-                      Compare rates against market averages and historical data. Instantly flag outliers and negotiate with confidence backed by data.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <ShieldAlert className="text-red-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Compliance Risk Scoring</h3>
-                    <p className="text-slate-400">
-                      Each quote receives an automated risk score (0-100) based on scope coverage, system compliance, and certification status. Make informed decisions fast.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <FileText className="text-yellow-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Quote Revision Tracking</h3>
-                    <p className="text-slate-400">
-                      Automatic change detection across quote versions. See exactly what changed, why, and the cost impact. Complete audit trail for every modification.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="py-12 sm:py-16 md:py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12 md:mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Key Benefits</h2>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
-              <div className="text-center p-6">
-                <div className="text-5xl font-bold text-blue-400 mb-3">10x</div>
-                <h4 className="font-semibold text-slate-100 mb-2">Faster Audits</h4>
-                <p className="text-sm text-slate-400">Days → under 30 minutes</p>
-              </div>
-
-              <div className="text-center p-6">
-                <div className="text-5xl font-bold text-green-400 mb-3">0</div>
-                <h4 className="font-semibold text-slate-100 mb-2">Scope Gaps Missed</h4>
-                <p className="text-sm text-slate-400">AI catches every exclusion</p>
-              </div>
-
-              <div className="text-center p-6">
-                <div className="text-5xl font-bold text-purple-400 mb-3">100%</div>
-                <h4 className="font-semibold text-slate-100 mb-2">Risk Transparency</h4>
-                <p className="text-sm text-slate-400">Full visibility on every quote</p>
-              </div>
-
-              <div className="text-center p-6">
-                <div className="text-5xl font-bold text-orange-400 mb-3">5</div>
-                <h4 className="font-semibold text-slate-100 mb-2">Trade Modules</h4>
-                <p className="text-sm text-slate-400">Complete suite coverage</p>
-              </div>
-
-              <div className="text-center p-6">
-                <div className="text-5xl font-bold text-red-400 mb-3">∞</div>
-                <h4 className="font-semibold text-slate-100 mb-2">Standard Format</h4>
-                <p className="text-sm text-slate-400">Industry-standard output</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-5 sm:mb-6 leading-tight">
-              The New Global Standard for<br />Trade Quote Auditing
-            </h2>
-            <div className="space-y-3 sm:space-y-4 text-lg sm:text-xl md:text-2xl mb-8 sm:mb-10 md:mb-12 font-medium px-4">
-              <p>No more guesswork.</p>
-              <p>No more nasty surprises.</p>
-              <p>No other tool gives you this level of visibility.</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
-              <button
-                onClick={onSignIn}
-                className="group px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-black bg-white rounded-xl hover:bg-gray-100 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-              >
-                Start Auditing Today
-                <ArrowRight className="group-hover:translate-x-1 transition-transform" size={20} />
-              </button>
-              <button
-                onClick={() => setShowDemoModal(true)}
-                className="px-6 sm:px-8 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white bg-transparent border-2 border-white rounded-xl hover:bg-white hover:text-gray-900 transition-all"
-              >
-                Book a Live Demo
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section id="security" className="py-12 sm:py-16 md:py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12 md:mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Enterprise-Grade Security</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4 max-w-3xl mx-auto">
-                Your quotes contain commercially sensitive data. We take security seriously.
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <Lock className="text-blue-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">End-to-End Encryption</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  All data encrypted in transit (TLS 1.3) and at rest (AES-256). Your quotes are never accessible to unauthorized parties.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <Shield className="text-green-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Role-Based Access Control</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Granular permissions system ensures team members only see what they need. Full audit trail of all access and changes.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="w-14 h-14 bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <Database className="text-purple-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Secure Cloud Infrastructure</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Hosted on enterprise-grade infrastructure with 99.9% uptime SLA. Daily automated backups and disaster recovery.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="w-14 h-14 bg-orange-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <FileText className="text-orange-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Data Sovereignty</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Your data stays in your region. We comply with GDPR, CCPA, and local data protection regulations.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="w-14 h-14 bg-red-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <AlertTriangle className="text-red-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Penetration Tested</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Regular third-party security audits and penetration testing. Vulnerabilities identified and patched promptly.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <Briefcase className="text-yellow-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Enterprise SSO Support</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Integration with your existing identity provider (Azure AD, Okta, Google Workspace). Available now for Enterprise plans.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="about" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-6">Built by Experts Who've Been There</h2>
-              <div className="text-left space-y-6 text-slate-300 leading-relaxed">
-                <p className="text-lg">
-                  VerifyTrade was born from real frustration. Our founding team has collectively audited over <span className="font-bold text-slate-100">$500 million</span> of trade quotes across major construction projects in NZ and Australia.
-                </p>
-                <p className="text-lg">
-                  We've seen the same problems over and over: quotes that arrive in inconsistent formats, missing critical items, non-compliant systems specified, and procurement teams struggling to make informed decisions under tight deadlines.
-                </p>
-                <p className="text-lg">
-                  After spending thousands of hours manually comparing quotes line-by-line, we knew there had to be a better way. So we built it.
-                </p>
-                <p className="text-lg">
-                  VerifyTrade combines deep domain expertise across five critical trades with cutting-edge AI to deliver what the industry has been missing: <span className="font-bold text-blue-400">absolute clarity</span> on every quote you receive.
-                </p>
-                <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6 mt-8">
-                  <p className="text-lg font-semibold text-slate-100 mb-2">Our Mission</p>
-                  <p className="text-base text-slate-400">
-                    To eliminate the risk and uncertainty in construction procurement by making it impossible for under-scoped, non-compliant quotes to slip through unnoticed.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="help" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-4">Frequently Asked Questions</h2>
-            </div>
-            <div className="space-y-6">
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">How accurate is the AI extraction?</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Our multi-model ensemble approach achieves 98%+ extraction accuracy, even on poorly formatted quotes. Every extraction includes a confidence score, and items flagged as low-confidence are automatically queued for human review.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">What file formats do you support?</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  We support PDF (including scanned/image-based PDFs with OCR) and Excel files (.xlsx, .xls, .csv). Our AI can handle inconsistent formatting, merged cells, and various table layouts.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">How long does it take to audit a quote?</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Most quotes are fully processed and audited in under 5 minutes. Complex quotes with 500+ line items may take up to 15 minutes. You'll get real-time progress updates throughout.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Can I customize the system templates?</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Yes! While we provide comprehensive pre-built templates across all five trades, you can create custom templates tailored to your specific projects and specifications. Templates can be shared across your organization.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">What happens to my uploaded quotes?</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Your quotes are encrypted at rest and in transit. We never share your data with third parties or use it to train AI models. You maintain full ownership and can delete quotes at any time. Data retention policies can be customized per your requirements.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Which trades are supported?</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  All five critical building services trades are fully supported: Passive Fire, Electrical, Plumbing, HVAC, and Active Fire & Alarms. Each module uses the same proven audit workflow with trade-specific intelligence.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">What level of support do you provide?</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  All plans include email support with 24-hour response time. Professional and Enterprise plans include priority support, dedicated account manager, and onboarding assistance. We also provide comprehensive documentation and video tutorials.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Can I export the audit reports?</h3>
-                <p className="text-slate-400 leading-relaxed">
-                  Yes! Export comprehensive audit reports as PDF, Excel, or CSV. All reports are client-ready and include executive summaries, detailed comparisons, risk analysis, and recommendations.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="docs" className="py-12 sm:py-16 md:py-20">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-4">Documentation & Resources</h2>
-              <p className="text-lg text-slate-400">
-                Everything you need to get started and maximize value from VerifyTrade
-              </p>
-            </div>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-blue-500/50 transition-all">
-                <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <BookOpen className="text-blue-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Getting Started Guide</h3>
-                <p className="text-slate-400 mb-4">
-                  Step-by-step walkthrough from account setup to your first audit report. Includes video tutorials and best practices.
-                </p>
-                <span className="text-blue-400 text-sm font-medium">Available now →</span>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-purple-500/50 transition-all">
-                <div className="w-14 h-14 bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <FileCode className="text-purple-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">API Documentation</h3>
-                <p className="text-slate-400 mb-4">
-                  RESTful API for integrating VerifyTrade into your existing procurement workflow. OAuth 2.0 authentication included.
-                </p>
-                <span className="text-purple-400 text-sm font-medium">Available now →</span>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-green-500/50 transition-all">
-                <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <LifeBuoy className="text-green-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Support Portal</h3>
-                <p className="text-slate-400 mb-4">
-                  Access knowledge base, submit support tickets, and connect with our team. Track issue resolution in real-time.
-                </p>
-                <span className="text-green-400 text-sm font-medium">Available now →</span>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-orange-500/50 transition-all">
-                <div className="w-14 h-14 bg-orange-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <Target className="text-orange-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Best Practices</h3>
-                <p className="text-slate-400 mb-4">
-                  Industry insights and recommendations from our expert team on optimizing your procurement process.
-                </p>
-                <span className="text-orange-400 text-sm font-medium">Available now →</span>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-yellow-500/50 transition-all">
-                <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <FileText className="text-yellow-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Template Library</h3>
-                <p className="text-slate-400 mb-4">
-                  Browse and download pre-built system templates across all five trades. Filter by manufacturer, system type, and standards.
-                </p>
-                <span className="text-yellow-400 text-sm font-medium">Available now →</span>
-              </div>
-
-              <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-8 hover:border-red-500/50 transition-all">
-                <div className="w-14 h-14 bg-red-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <HelpCircle className="text-red-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Video Tutorials</h3>
-                <p className="text-slate-400 mb-4">
-                  Comprehensive video library covering every feature, from basic quote import to advanced audit customization.
-                </p>
-                <span className="text-red-400 text-sm font-medium">Available now →</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="resources" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12 md:mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">Resources Hub</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4 max-w-3xl mx-auto">
-                Everything you need to master quote auditing and procurement best practices
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-blue-500/50 transition-all">
-                <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <BookOpen className="text-blue-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Knowledge Base</h3>
-                <p className="text-slate-400 mb-4 leading-relaxed">
-                  Comprehensive guides, tutorials, and best practices for trade quote auditing. Searchable articles covering every feature and workflow.
-                </p>
-                <a href="#docs" className="text-blue-400 text-sm font-medium hover:text-blue-300 transition-colors">
-                  Browse Documentation →
-                </a>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-purple-500/50 transition-all">
-                <div className="w-14 h-14 bg-purple-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <FileText className="text-purple-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Industry Insights</h3>
-                <p className="text-slate-400 mb-4 leading-relaxed">
-                  Expert analysis on trade trends, common procurement pitfalls, and how to improve your quote evaluation process.
-                </p>
-                <span className="text-purple-400 text-sm font-medium">Visit our blog →</span>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-green-500/50 transition-all">
-                <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <HelpCircle className="text-green-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">FAQs</h3>
-                <p className="text-slate-400 mb-4 leading-relaxed">
-                  Quick answers to common questions about AI extraction accuracy, data security, pricing, and platform capabilities.
-                </p>
-                <a href="#help" className="text-green-400 text-sm font-medium hover:text-green-300 transition-colors">
-                  View FAQ →
-                </a>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-orange-500/50 transition-all">
-                <div className="w-14 h-14 bg-orange-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <FileCode className="text-orange-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">API Reference</h3>
-                <p className="text-slate-400 mb-4 leading-relaxed">
-                  Complete API documentation for developers integrating VerifyTrade into existing procurement systems and workflows.
-                </p>
-                <span className="text-orange-400 text-sm font-medium">View API docs →</span>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-yellow-500/50 transition-all">
-                <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <Target className="text-yellow-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Template Library</h3>
-                <p className="text-slate-400 mb-4 leading-relaxed">
-                  Pre-built templates across all five trades. Download, customize, and share across your organization.
-                </p>
-                <span className="text-yellow-400 text-sm font-medium">Browse templates →</span>
-              </div>
-
-              <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 hover:border-red-500/50 transition-all">
-                <div className="w-14 h-14 bg-red-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <Users className="text-red-400" size={28} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-100 mb-3">Webinars & Training</h3>
-                <p className="text-slate-400 mb-4 leading-relaxed">
-                  Live training sessions, recorded webinars, and certification programs to help your team maximize platform value.
-                </p>
-                <span className="text-red-400 text-sm font-medium">Join a session →</span>
-              </div>
-            </div>
-
-            <div className="mt-12 text-center">
-              <p className="text-slate-400 mb-6">
-                Can't find what you're looking for?
-              </p>
-              <a
-                href="#support"
-                className="inline-block px-6 py-3 text-base font-semibold text-slate-100 bg-slate-800 border-2 border-slate-600 rounded-xl hover:border-slate-500 hover:bg-slate-700 transition-all"
-              >
-                Contact Support
-              </a>
-            </div>
-          </div>
-        </section>
-
-        <section id="support" className="py-12 sm:py-16 md:py-20">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-10 sm:mb-12 md:mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-3 sm:mb-4">World-Class Support</h2>
-              <p className="text-base sm:text-lg md:text-xl text-slate-400 px-4 max-w-3xl mx-auto">
-                We're here to help you succeed at every step of your journey
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-8 mb-12">
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-6">
-                  <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <LifeBuoy className="text-blue-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Email Support</h3>
-                    <p className="text-sm text-slate-500 mb-4">Available on all plans</p>
-                    <p className="text-slate-400 leading-relaxed">
-                      Get expert help via email with guaranteed 24-hour response time. Our team of trade specialists understands your challenges and provides detailed, actionable solutions.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-slate-700">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>24-hour response time</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Expert multi-trade knowledge</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Detailed troubleshooting</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-6">
-                  <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Users className="text-purple-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Priority Support</h3>
-                    <p className="text-sm text-slate-500 mb-4">Professional & Enterprise plans</p>
-                    <p className="text-slate-400 leading-relaxed">
-                      Get faster response times, direct access to senior engineers, and proactive monitoring of your account. Includes dedicated onboarding and training sessions.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-slate-700">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>4-hour response time</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Dedicated account manager</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Onboarding & training included</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-6">
-                  <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <BookOpen className="text-green-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Self-Service Resources</h3>
-                    <p className="text-sm text-slate-500 mb-4">Available 24/7</p>
-                    <p className="text-slate-400 leading-relaxed">
-                      Comprehensive knowledge base, video tutorials, and interactive guides help you find answers instantly without waiting for support.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-slate-700">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Searchable knowledge base</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Video tutorial library</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Step-by-step guides</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-6">
-                  <div className="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Target className="text-orange-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Implementation Support</h3>
-                    <p className="text-sm text-slate-500 mb-4">Enterprise plans</p>
-                    <p className="text-slate-400 leading-relaxed">
-                      Hands-on assistance setting up custom templates, integrating with your systems, and training your team. We ensure smooth adoption across your organization.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-slate-700">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Custom template setup</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Team training sessions</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <CheckCircle className="text-green-400" size={16} />
-                      <span>Integration assistance</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-8 text-center">
-              <h3 className="text-2xl font-bold text-slate-100 mb-3">Need Help Right Now?</h3>
-              <p className="text-lg text-slate-400 mb-6">
-                Our support team is ready to assist with any questions about features, pricing, or implementation.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button
-                  onClick={() => setShowDemoModal(true)}
-                  className="px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
-                >
-                  Book a Demo Call
+                  Book a Demo
+                  <ArrowRight className="group-hover:translate-x-0.5 transition-transform" size={18} />
                 </button>
                 <a
-                  href="#help"
-                  className="px-8 py-3 text-lg font-semibold text-slate-100 bg-slate-800 border-2 border-slate-600 rounded-xl hover:border-slate-500 hover:bg-slate-700 transition-all inline-block"
+                  href="#workflow"
+                  className="px-7 py-4 text-base font-semibold text-slate-300 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all flex items-center justify-center gap-2"
                 >
-                  View FAQ
+                  See How It Works
                 </a>
               </div>
             </div>
+
+            {/* VIDEO */}
+            <HeroVideo onBookDemo={() => setShowDemoModal(true)} />
           </div>
         </section>
 
-        <section id="contact" className="py-12 sm:py-16 md:py-20 bg-slate-900/50 backdrop-blur-sm">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-50 mb-6">Ready to Get Started?</h2>
-            <p className="text-lg text-slate-400 mb-8">
-              Join construction professionals across NZ & Australia who audit every trade quote with confidence.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={onSignIn}
-                className="px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
-              >
-                Start Now
-              </button>
-              <button
-                onClick={() => setShowDemoModal(true)}
-                className="px-8 py-4 text-lg font-semibold text-slate-100 border-2 border-slate-600 rounded-xl hover:border-slate-500 hover:bg-slate-800/50 transition-all"
-              >
-                Schedule a Demo
-              </button>
+        {/* PROBLEM */}
+        <section className="py-24 bg-slate-900/40">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6 leading-tight">
+                Trade procurement is still being<br />run in spreadsheets.
+              </h2>
             </div>
-          </div>
-        </section>
-      </main>
-
-      <footer className="bg-slate-950 border-t border-slate-800 text-slate-400 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8">
-            <p className="text-sm text-slate-500 italic">
-              Built by the team that's audited over $500m of trade quotes.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
-                  <Shield className="text-white" size={14} />
+            <div className="grid sm:grid-cols-2 gap-4 mb-10">
+              {[
+                'Different suppliers price different scopes.',
+                'Quotes are inconsistent, incomplete, and hard to compare.',
+                'Critical gaps are missed until after award.',
+                'Decisions are difficult to defend when challenged.',
+              ].map((problem) => (
+                <div key={problem} className="flex items-start gap-3 bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
+                  <AlertTriangle className="text-amber-400 flex-shrink-0 mt-0.5" size={18} />
+                  <p className="text-slate-300 text-sm leading-relaxed">{problem}</p>
                 </div>
-                <span className="text-lg font-bold text-slate-50">VerifyTrade</span>
-              </div>
-              <p className="text-sm">
-                The world's first AI audit engine for trade quotes
+              ))}
+            </div>
+            <div className="text-center">
+              <p className="text-lg text-slate-300 font-medium">
+                VerifyTrade replaces fragmented workflows with structured commercial clarity.
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* WHAT IT DOES */}
+        <section className="py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                From raw quotes to clear commercial decisions
+              </h2>
+              <p className="text-lg text-slate-400 max-w-2xl mx-auto">
+                Every stage of the adjudication process, structured and auditable.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[
+                {
+                  icon: Upload,
+                  color: 'text-blue-400',
+                  bg: 'bg-blue-900/30',
+                  border: 'border-blue-800/40',
+                  title: 'Import & Structure',
+                  body: 'Upload supplier quotes in PDF or Excel. Line items are extracted, structured, and prepared for comparison across all tenderers.',
+                },
+                {
+                  icon: Layers,
+                  color: 'text-teal-400',
+                  bg: 'bg-teal-900/30',
+                  border: 'border-teal-800/40',
+                  title: 'Classify & Understand Scope',
+                  body: 'Every line item is classified — main works, optional items, or provisional sums. Attributes including size, specification, and service type are extracted automatically.',
+                },
+                {
+                  icon: Scale,
+                  color: 'text-sky-400',
+                  bg: 'bg-sky-900/30',
+                  border: 'border-sky-800/40',
+                  title: 'Compare Like-for-Like',
+                  body: 'Equalise quotes to a common scope baseline. Missing items are identified per supplier and estimated against reference rates for a fair comparison.',
+                },
+                {
+                  icon: FileSearch,
+                  color: 'text-amber-400',
+                  bg: 'bg-amber-900/30',
+                  border: 'border-amber-800/40',
+                  title: 'Identify Commercial Risk',
+                  body: 'Scope gaps are classified by severity with estimated cost exposure. Quantity misalignments are detected across suppliers. Risk is surfaced before the award decision.',
+                },
+                {
+                  icon: BarChart3,
+                  color: 'text-orange-400',
+                  bg: 'bg-orange-900/30',
+                  border: 'border-orange-800/40',
+                  title: 'Evaluate Suppliers',
+                  body: 'Suppliers are scored across multiple commercial dimensions — price, scope coverage, quantity alignment, and compliance. Weighted scoring is configurable per project.',
+                },
+                {
+                  icon: Award,
+                  color: 'text-green-400',
+                  bg: 'bg-green-900/30',
+                  border: 'border-green-800/40',
+                  title: 'Approve with Confidence',
+                  body: 'Award decisions go through a formal approval gate with mandatory sign-off and override tracking. Every decision is recorded with rationale and audit trail.',
+                },
+              ].map(({ icon: Icon, color, bg, border, title, body }) => (
+                <div
+                  key={title}
+                  className="bg-slate-900/60 border border-slate-800/60 hover:border-slate-700/80 rounded-2xl p-7 transition-all group"
+                >
+                  <div className={`w-11 h-11 ${bg} border ${border} rounded-xl flex items-center justify-center mb-5`}>
+                    <Icon className={color} size={22} />
+                  </div>
+                  <h3 className="text-base font-bold text-white mb-2 group-hover:text-blue-300 transition-colors">{title}</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* WORKFLOW */}
+        <section id="workflow" className="py-24 bg-slate-900/40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                One platform. Full commercial lifecycle.
+              </h2>
+              <p className="text-lg text-slate-400 max-w-2xl mx-auto">
+                Pre-award adjudication through to post-award commercial management in a single structured workflow.
+              </p>
+            </div>
+
+            <div className="relative">
+              <div className="hidden lg:block absolute top-7 left-[calc(14.28%+1.5rem)] right-[calc(14.28%+1.5rem)] h-px bg-gradient-to-r from-blue-800/0 via-blue-700/50 to-blue-800/0" />
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+                {[
+                  { step: '01', label: 'Quote Import', sub: 'PDF & Excel', icon: Upload },
+                  { step: '02', label: 'Review & Clean', sub: 'Classify & tag', icon: ClipboardList },
+                  { step: '03', label: 'Scope Analysis', sub: 'Gap detection', icon: FileSearch },
+                  { step: '04', label: 'Equalisation', sub: 'Fair comparison', icon: Scale },
+                  { step: '05', label: 'Award', sub: 'Scored decision', icon: Award },
+                  { step: '06', label: 'Contract', sub: 'SA 2017 ready', icon: FileText },
+                  { step: '07', label: 'Post-Award Control', sub: 'Baseline & claims', icon: TrendingUp },
+                ].map(({ step, label, sub, icon: Icon }) => (
+                  <div key={step} className="flex flex-col items-center text-center group">
+                    <div className="relative w-14 h-14 rounded-2xl bg-slate-800 border border-slate-700 group-hover:border-blue-600 group-hover:bg-blue-900/30 flex items-center justify-center mb-3 transition-all z-10">
+                      <Icon className="text-slate-400 group-hover:text-blue-400 transition-colors" size={22} />
+                    </div>
+                    <span className="text-xs font-bold text-blue-500 mb-1 tracking-widest">{step}</span>
+                    <p className="text-xs font-semibold text-slate-200 mb-0.5 leading-tight">{label}</p>
+                    <p className="text-xs text-slate-500 leading-tight">{sub}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* OUTPUTS */}
+        <section id="outputs" className="py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                Outputs your team can actually use
+              </h2>
+              <p className="text-lg text-slate-400 max-w-2xl mx-auto">
+                Every output is structured, exportable, and ready for stakeholders.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[
+                {
+                  icon: BarChart3,
+                  color: 'text-blue-400',
+                  title: 'Award Reports',
+                  body: 'Weighted supplier scoring across commercial dimensions. Coverage breakdown, scope gap analysis with cost estimates, and recommendation rationale — in PDF and Excel.',
+                },
+                {
+                  icon: Shield,
+                  color: 'text-green-400',
+                  title: 'Dispute Defence Pack',
+                  body: 'A formal, timestamped procurement defence document capturing the full decision record, approval chain, risk identification, and commercial rationale.',
+                },
+                {
+                  icon: FileSearch,
+                  color: 'text-teal-400',
+                  title: 'Itemised Comparison',
+                  body: 'Line-by-line supplier comparison in Excel — quantity, unit of measure, unit rate, and total per tenderer. Colour-coded and client-ready.',
+                },
+                {
+                  icon: FileText,
+                  color: 'text-amber-400',
+                  title: 'Schedule of Rates',
+                  body: 'Structured rate schedule exports for each awarded supplier — ready for contract administration and variation management.',
+                },
+                {
+                  icon: Briefcase,
+                  color: 'text-orange-400',
+                  title: 'Subcontract Agreement (SA 2017)',
+                  body: 'Template-based SA 2017 subcontract form, auto-filled from project data. Completed field-by-field, versioned, and exportable as a PDF.',
+                },
+                {
+                  icon: Download,
+                  color: 'text-slate-300',
+                  title: 'Commercial Exports',
+                  body: 'Baseline tracker, VO tracker, tags and clarifications, SAFE classification audit, and baseline in internal and supplier-facing formats.',
+                },
+              ].map(({ icon: Icon, color, title, body }) => (
+                <div
+                  key={title}
+                  className="bg-slate-900/60 border border-slate-800/60 hover:border-slate-700 rounded-2xl p-7 transition-all"
+                >
+                  <Icon className={`${color} mb-4`} size={26} />
+                  <h3 className="text-base font-bold text-white mb-2">{title}</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* DIFFERENTIATORS */}
+        <section className="py-24 bg-slate-900/40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                More than quote comparison
+              </h2>
+              <p className="text-lg text-slate-400 max-w-2xl mx-auto">
+                VerifyTrade is built for the full commercial lifecycle, not just price analysis.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                {
+                  icon: BarChart3,
+                  color: 'text-blue-400',
+                  title: 'Structured Commercial Intelligence',
+                  body: 'Scope gap detection, quantity alignment analysis, coverage scoring, and weighted evaluation — applied consistently to every tender package.',
+                },
+                {
+                  icon: Shield,
+                  color: 'text-green-400',
+                  title: 'Defensible Decisions',
+                  body: 'Formal approval gates, override tracking, and a complete audit trail. Every award decision is documented and retrievable.',
+                },
+                {
+                  icon: Layers,
+                  color: 'text-teal-400',
+                  title: 'Trade-Specific Workflows',
+                  body: 'Dedicated workflows for passive fire, plumbing, electrical, HVAC, and active fire. Each with trade-appropriate classification rules and system templates.',
+                },
+                {
+                  icon: GitBranch,
+                  color: 'text-orange-400',
+                  title: 'End-to-End Continuity',
+                  body: 'The data from quote adjudication flows directly into contract generation, baseline tracking, and post-award commercial management — no re-entry.',
+                },
+              ].map(({ icon: Icon, color, title, body }) => (
+                <div
+                  key={title}
+                  className="bg-[#111827] border border-slate-800/60 rounded-2xl p-8 hover:border-slate-700 transition-all"
+                >
+                  <div className={`w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center mb-5`}>
+                    <Icon className={color} size={24} />
+                  </div>
+                  <h3 className="text-base font-bold text-white mb-3">{title}</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* WHO IT'S FOR */}
+        <section id="who" className="py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                Designed for the teams running complex projects
+              </h2>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-12 items-start">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Roles</p>
+                <div className="space-y-3">
+                  {[
+                    { icon: Briefcase, label: 'Main Contractors', body: 'Manage trade procurement across multiple packages with consistency and accountability.' },
+                    { icon: BarChart3, label: 'Quantity Surveyors', body: 'Produce structured award recommendations backed by commercial data, not gut feel.' },
+                    { icon: TrendingUp, label: 'Estimators', body: 'Compare incoming quotes on equal terms before they reach the award stage.' },
+                    { icon: Scale, label: 'Commercial Managers', body: 'Track commercial exposure from award through to final account in one place.' },
+                    { icon: Users, label: 'Project Managers', body: 'Maintain visibility of scope, variations, and subcontractor performance post-award.' },
+                  ].map(({ icon: Icon, label, body }) => (
+                    <div key={label} className="flex items-start gap-4 p-4 rounded-xl bg-slate-900/50 border border-slate-800/60 hover:border-slate-700 transition-all">
+                      <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Icon className="text-slate-400" size={17} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-100 mb-0.5">{label}</p>
+                        <p className="text-sm text-slate-500 leading-relaxed">{body}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Supported Trades</p>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Passive Fire', desc: 'Penetration sealing, dampers, barriers — classified per FRL and substrate.' },
+                    { label: 'Plumbing', desc: 'Hydraulic services, drainage, and sanitary — line items compared at quantity level.' },
+                    { label: 'Electrical', desc: 'Power, lighting, and services — system templates applied per section.' },
+                    { label: 'HVAC', desc: 'Mechanical services and ventilation packages adjudicated with full scope coverage analysis.' },
+                    { label: 'Active Fire & Alarms', desc: 'Detection, suppression, and evacuation packages with compliance classification.' },
+                  ].map(({ label, desc }, i) => (
+                    <div key={label} className="flex items-start gap-4 p-4 rounded-xl bg-slate-900/50 border border-slate-800/60 hover:border-slate-700 transition-all">
+                      <div className="w-9 h-9 rounded-lg bg-blue-900/40 border border-blue-800/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-blue-400">{String(i + 1).padStart(2, '0')}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-100 mb-0.5">{label}</p>
+                        <p className="text-sm text-slate-500 leading-relaxed">{desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* COMMERCIAL IMPACT */}
+        <section className="py-24 bg-slate-900/40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                What changes when teams use VerifyTrade
+              </h2>
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[
+                {
+                  icon: CheckCircle,
+                  color: 'text-green-400',
+                  title: 'Faster, more consistent quote evaluation',
+                  body: 'A structured workflow replaces ad-hoc spreadsheet reviews. Every tender package follows the same adjudication process.',
+                },
+                {
+                  icon: Shield,
+                  color: 'text-blue-400',
+                  title: 'Reduced risk of scope gaps and cost overruns',
+                  body: 'Scope gaps are identified before award with estimated cost exposure flagged by severity — before they become post-award problems.',
+                },
+                {
+                  icon: Award,
+                  color: 'text-amber-400',
+                  title: 'Clear, defensible award decisions',
+                  body: 'Scored evaluation with formal approval tracking. When decisions are challenged, the record is complete and retrievable.',
+                },
+                {
+                  icon: FileText,
+                  color: 'text-teal-400',
+                  title: 'Faster transition from award to contract',
+                  body: 'SA 2017 subcontract agreements are auto-filled from award data. Contract generation starts immediately after award sign-off.',
+                },
+                {
+                  icon: TrendingUp,
+                  color: 'text-orange-400',
+                  title: 'Ongoing visibility into post-award performance',
+                  body: 'Baseline tracker, VO management, and payment claims give commercial managers visibility throughout the subcontract lifecycle.',
+                },
+                {
+                  icon: Database,
+                  color: 'text-slate-300',
+                  title: 'A single source of commercial truth',
+                  body: 'All project data — quotes, comparisons, awards, contracts, and claims — in one place, accessible to the whole team.',
+                },
+              ].map(({ icon: Icon, color, title, body }) => (
+                <div key={title} className="bg-slate-900/60 border border-slate-800/60 hover:border-slate-700 rounded-2xl p-7 transition-all">
+                  <Icon className={`${color} mb-4`} size={24} />
+                  <h3 className="text-sm font-bold text-white mb-2">{title}</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* GOVERNANCE */}
+        <section className="py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-6 text-xs font-semibold text-blue-300 bg-blue-900/30 rounded-full border border-blue-800/50 tracking-widest uppercase">
+                  Commercial Accountability
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6 leading-tight">
+                  Built for commercial accountability
+                </h2>
+                <p className="text-slate-400 mb-8 leading-relaxed">
+                  Every decision in VerifyTrade is structured, tracked, and exportable. When procurement processes are scrutinised, the record is complete.
+                </p>
+                <div className="space-y-4">
+                  {[
+                    { icon: CheckCircle, text: 'Approval workflows with mandatory sign-off and override tracking' },
+                    { icon: FileSearch, text: 'Structured decision records with full rationale captured' },
+                    { icon: Download, text: 'Exportable documentation for clients, principals, and stakeholders' },
+                    { icon: Users, text: 'Organisational controls with team and user management' },
+                    { icon: Lock, text: 'Data encrypted in transit and at rest — commercially sensitive information stays secure' },
+                  ].map(({ icon: Icon, text }) => (
+                    <div key={text} className="flex items-start gap-3">
+                      <Icon className="text-blue-400 flex-shrink-0 mt-0.5" size={17} />
+                      <p className="text-sm text-slate-300 leading-relaxed">{text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: 'Award Reports', sub: 'PDF & Excel', icon: BarChart3, color: 'text-blue-400' },
+                  { label: 'Dispute Defence Pack', sub: 'Formal procurement record', icon: Shield, color: 'text-green-400' },
+                  { label: 'Approval Audit Trail', sub: 'Complete decision history', icon: ClipboardList, color: 'text-teal-400' },
+                  { label: 'Subcontract Agreement', sub: 'SA 2017 ready', icon: FileText, color: 'text-amber-400' },
+                  { label: 'Baseline Tracker', sub: '4 export formats', icon: TrendingUp, color: 'text-orange-400' },
+                  { label: 'Tags & Clarifications', sub: 'Excel export', icon: Database, color: 'text-slate-300' },
+                ].map(({ label, sub, icon: Icon, color }) => (
+                  <div key={label} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-5 hover:border-slate-700 transition-all">
+                    <Icon className={`${color} mb-3`} size={20} />
+                    <p className="text-xs font-semibold text-slate-100">{label}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FINAL CTA */}
+        <section className="py-28 bg-gradient-to-b from-slate-900/60 to-[#0b0f1a]">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mb-5 leading-tight">
+              Take control of your trade<br />procurement workflow
+            </h2>
+            <p className="text-lg text-slate-400 mb-10 leading-relaxed">
+              Move from fragmented quote comparison to structured commercial decision-making.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+              <button
+                onClick={() => setShowDemoModal(true)}
+                className="group px-8 py-4 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
+              >
+                Book a Demo
+                <ArrowRight className="group-hover:translate-x-0.5 transition-transform" size={18} />
+              </button>
+              <a
+                href="mailto:admin@verifytrade.co.nz"
+                className="px-8 py-4 text-base font-semibold text-slate-300 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                <Mail size={17} />
+                Talk to Us
+              </a>
+            </div>
+            <p className="text-sm text-slate-600">
+              No obligation. See how it works on real project data.
+            </p>
+          </div>
+        </section>
+
+      </main>
+
+      {/* FOOTER */}
+      <footer className="bg-[#080b13] border-t border-slate-800/60 text-slate-500 py-14">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
             <div>
-              <h4 className="text-slate-50 font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#features" className="hover:text-slate-50 transition-colors">Features</a></li>
-                <li><a href="#how-it-works" className="hover:text-slate-50 transition-colors">How It Works</a></li>
-                <li><a href="#pricing" className="hover:text-slate-50 transition-colors">Pricing</a></li>
-                <li><a href="#security" className="hover:text-slate-50 transition-colors">Security</a></li>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
+                  <Shield className="text-white" size={13} />
+                </div>
+                <span className="text-base font-bold text-slate-100">VerifyTrade</span>
+              </div>
+              <p className="text-sm leading-relaxed text-slate-500">
+                Commercial adjudication platform for trade packages.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="text-slate-200 font-semibold mb-4 text-sm">Platform</h4>
+              <ul className="space-y-2.5 text-sm">
+                <li><a href="#workflow" className="hover:text-slate-200 transition-colors">How It Works</a></li>
+                <li><a href="#outputs" className="hover:text-slate-200 transition-colors">Outputs</a></li>
+                <li><button onClick={onViewPricing} className="hover:text-slate-200 transition-colors text-left">Pricing</button></li>
+                <li><a href="#who" className="hover:text-slate-200 transition-colors">Who It's For</a></li>
               </ul>
             </div>
+
             <div>
-              <h4 className="text-slate-50 font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#about" className="hover:text-slate-50 transition-colors">About</a></li>
-                <li><a href="#contact" className="hover:text-slate-50 transition-colors">Contact</a></li>
-                <li><a href="#careers" className="hover:text-slate-50 transition-colors">Careers</a></li>
-                <li><button onClick={() => setShowPrivacyPolicy(true)} className="hover:text-slate-50 transition-colors text-left">Privacy Policy</button></li>
-                <li><button onClick={() => setShowTermsOfService(true)} className="hover:text-slate-50 transition-colors text-left">Terms of Service</button></li>
+              <h4 className="text-slate-200 font-semibold mb-4 text-sm">Trades</h4>
+              <ul className="space-y-2.5 text-sm">
+                <li className="text-slate-500">Passive Fire</li>
+                <li className="text-slate-500">Plumbing</li>
+                <li className="text-slate-500">Electrical</li>
+                <li className="text-slate-500">HVAC</li>
+                <li className="text-slate-500">Active Fire & Alarms</li>
               </ul>
             </div>
+
             <div>
-              <h4 className="text-slate-50 font-semibold mb-4">Resources</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#help" className="hover:text-slate-50 transition-colors">Help Center</a></li>
-                <li><a href="#docs" className="hover:text-slate-50 transition-colors">Documentation</a></li>
-                <li><a href="#support" className="hover:text-slate-50 transition-colors">Support</a></li>
-                <li><a href="#status" className="hover:text-slate-50 transition-colors">System Status</a></li>
-                <li><a href="#blog" className="hover:text-slate-50 transition-colors">Blog</a></li>
-                <li><a href="#api" className="hover:text-slate-50 transition-colors">API Documentation</a></li>
+              <h4 className="text-slate-200 font-semibold mb-4 text-sm">Company</h4>
+              <ul className="space-y-2.5 text-sm">
+                <li>
+                  <a href="mailto:admin@verifytrade.co.nz" className="hover:text-slate-200 transition-colors">
+                    admin@verifytrade.co.nz
+                  </a>
+                </li>
+                <li>
+                  <button onClick={() => setShowDemoModal(true)} className="hover:text-slate-200 transition-colors text-left">
+                    Book a Demo
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setShowPrivacyPolicy(true)} className="hover:text-slate-200 transition-colors text-left">
+                    Privacy Policy
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setShowTermsOfService(true)} className="hover:text-slate-200 transition-colors text-left">
+                    Terms of Service
+                  </button>
+                </li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-slate-800 pt-8 text-center text-sm">
+
+          <div className="border-t border-slate-800/60 pt-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <p>&copy; {new Date().getFullYear()} VerifyTrade. All rights reserved.</p>
+            <p className="text-slate-600">Built for construction teams across NZ & Australia.</p>
           </div>
         </div>
       </footer>
