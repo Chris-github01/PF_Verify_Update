@@ -7,6 +7,7 @@ import CommercialSummaryCard from './CommercialSummaryCard';
 interface Props {
   projectId: string;
   tradeType?: string;
+  onViewsChange?: (views: SupplierIntelligenceView[]) => void;
 }
 
 interface QuoteRow {
@@ -91,7 +92,7 @@ function OverallHeader({
   );
 }
 
-export default function CommercialIntelligencePanel({ projectId, tradeType = 'general' }: Props) {
+export default function CommercialIntelligencePanel({ projectId, tradeType = 'general', onViewsChange }: Props) {
   const [views, setViews] = useState<SupplierIntelligenceView[]>([]);
   const [status, setStatus] = useState<PanelStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -141,6 +142,7 @@ export default function CommercialIntelligencePanel({ projectId, tradeType = 'ge
       const hasAnyData = existingViews.some((v) => v.scopeSummary !== null);
       if (hasAnyData) {
         setViews(existingViews);
+        onViewsChange?.(existingViews);
         setStatus('done');
       } else {
         setStatus('idle');
@@ -183,6 +185,7 @@ export default function CommercialIntelligencePanel({ projectId, tradeType = 'ge
       });
 
       setViews(results);
+      onViewsChange?.(results);
       setStatus('done');
     } catch (err) {
       console.error('[CommercialIntelligencePanel] runAnalysis error:', err);

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet, Printer, ChevronDown, Mail, Square, CheckSquare, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Award, CheckCircle2, FileSpreadsheet, Printer, ChevronDown, Mail, Square, CheckSquare, ShieldCheck, AlertTriangle, AlertCircle } from 'lucide-react';
+import CommercialIntelligencePanel from '../components/intelligence/CommercialIntelligencePanel';
+import type { SupplierIntelligenceView, DecisionGateResult } from '../lib/intelligence/types';
 import { supabase } from '../lib/supabase';
 import type { ComparisonRow } from '../types/comparison.types';
 import type { AwardSummary } from '../types/award.types';
@@ -94,6 +96,7 @@ export default function AwardReportEnhanced({
   const [equalisationResult, setEqualisationResult] = useState<EqualisationResult | null>(null);
   const [approvalGateChecked, setApprovalGateChecked] = useState({ scopeGaps: false, commercialRisks: false });
   const [completingWorkflow, setCompletingWorkflow] = useState(false);
+  const [intelligenceViews, setIntelligenceViews] = useState<SupplierIntelligenceView[]>([]);
 
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -883,6 +886,16 @@ export default function AwardReportEnhanced({
   const bestValue = enhancedSuppliers.find(s => s.isBestValue);
   const lowestRisk = enhancedSuppliers.find(s => s.isLowestRisk);
 
+  const getGateForSupplier = (supplierName: string): DecisionGateResult | null => {
+    const view = intelligenceViews.find(v => v.supplierName === supplierName);
+    return view?.gateResult ?? null;
+  };
+
+  const isSupplierGated = (supplierName: string): boolean => {
+    const gate = getGateForSupplier(supplierName);
+    return gate !== null && !gate.canBeBestTenderer;
+  };
+
   const handleCompleteAndFinish = async () => {
     if (!approvalGateChecked.scopeGaps || !approvalGateChecked.commercialRisks) return;
     setCompletingWorkflow(true);
@@ -1112,6 +1125,54 @@ export default function AwardReportEnhanced({
           </div>
         )}
 
+        {/* Gate override notices — shown when top-ranked supplier is commercially gated */}
+        {intelligenceViews.length > 0 && isSupplierGated(topSupplier.supplierName) && (() => {
+          const gate = getGateForSupplier(topSupplier.supplierName)!;
+          return (
+            <div className="rounded-xl border border-red-500/40 bg-red-900/20 p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-red-600/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-red-300 mb-1">Commercial Gate — Best Tenderer Blocked</p>
+                  <p className="text-sm text-red-200 mb-2">
+                    <span className="font-semibold">{topSupplier.supplierName}</span> has the highest weighted score but cannot be labelled Best Tenderer due to commercial intelligence gate failures.
+                  </p>
+                  <div className="space-y-1">
+                    {gate.gateReasons.filter(r => r.status === 'fail').map((r, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs text-red-300">
+                        <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                        <span>{r.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-red-400 mt-3 font-medium">
+                    Status: <span className="uppercase tracking-wide">Not Commercially Suitable</span>
+                    {gate.overrideRequired && ' — Manual override required to proceed'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {intelligenceViews.length > 0 && !isSupplierGated(topSupplier.supplierName) && (() => {
+          const gate = getGateForSupplier(topSupplier.supplierName);
+          if (!gate || gate.gateStatus !== 'warn') return null;
+          return (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-900/20 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-300 mb-1">Commercial Warning — {topSupplier.supplierName}</p>
+                  <p className="text-xs text-amber-200">{gate.gateSummary}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Enhanced Recommendations */}
         <EnhancedRecommendationsCard
           bestValue={bestValue || null}
@@ -1119,6 +1180,13 @@ export default function AwardReportEnhanced({
           balanced={topSupplier}
           highestPrice={Math.max(...enhancedSuppliers.map(s => s.totalPrice))}
           lowestPrice={Math.min(...enhancedSuppliers.map(s => s.totalPrice))}
+        />
+
+        {/* Commercial Intelligence Panel */}
+        <CommercialIntelligencePanel
+          projectId={projectId}
+          tradeType={currentTrade ?? 'general'}
+          onViewsChange={setIntelligenceViews}
         />
 
         {/* Methodology */}

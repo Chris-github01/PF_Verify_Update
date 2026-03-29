@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FileDown, Printer, AlertTriangle, Target, TrendingUp, Shield, Loader2, Download, AlertCircle, Star, CheckCircle, ArrowRight, GitCompare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
+import CommercialIntelligencePanel from '../components/intelligence/CommercialIntelligencePanel';
 import * as XLSX from 'xlsx';
 import { analyzeQuoteIntelligence } from '../lib/quoteIntelligence/analyzer';
 import type { QuoteIntelligenceAnalysis, RedFlag } from '../types/quoteIntelligence.types';
@@ -578,6 +579,12 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           </div>
         )}
       </div>
+
+      {/* Commercial Intelligence — per-supplier scope, behaviour and gate analysis */}
+      <CommercialIntelligencePanel
+        projectId={projectId}
+        tradeType={currentTrade ?? 'general'}
+      />
 
       <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-6">
         <div className="flex items-center gap-3 mb-6">
