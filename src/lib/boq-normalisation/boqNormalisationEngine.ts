@@ -28,8 +28,8 @@ export interface QuoteItemRow {
   description: string;
   section?: string | null;
   quantity: number;
-  unit_rate: number;
-  total_amount?: number | null;
+  unit_price: number;
+  total_price?: number | null;
   line_number?: number | null;
   trade?: string | null;
   service?: string | null;
@@ -58,7 +58,7 @@ async function fetchQuoteItems(projectId: string, trade: string): Promise<{
     .eq('project_id', projectId)
     .eq('is_latest', true);
 
-  if (quotesError) throw quotesError;
+  if (quotesError) throw new Error(quotesError.message || 'Failed to fetch quotes');
 
   const filteredQuotes: QuoteRow[] = (quotes || []).filter(q =>
     !trade || !q.trade || q.trade.toLowerCase().replace(/[\s_]/g, '_').includes(trade.toLowerCase().replace(/[\s_]/g, '_'))
@@ -69,10 +69,10 @@ async function fetchQuoteItems(projectId: string, trade: string): Promise<{
   for (const quote of filteredQuotes) {
     const { data: items, error: itemsError } = await supabase
       .from('quote_items')
-      .select('id, quote_id, description, section, quantity, unit_rate, total_amount, line_number, trade, service, size, substrate, frl, system_name, item_type, is_provisional, is_optional')
+      .select('id, quote_id, description, section, quantity, unit_price, total_price, line_number, trade, service, size, substrate, frl, system_name, item_type, is_provisional, is_optional')
       .eq('quote_id', quote.id);
 
-    if (itemsError) throw itemsError;
+    if (itemsError) throw new Error(itemsError.message || 'Failed to fetch quote items');
     itemsByQuote.set(quote.id, items || []);
   }
 
@@ -209,8 +209,8 @@ export async function runBoqNormalisation(
           description: item.description,
           section: item.section ?? undefined,
           quantity: item.quantity,
-          unit_rate: item.unit_rate,
-          total_amount: item.total_amount ?? undefined,
+          unit_rate: item.unit_price,
+          total_amount: item.total_price ?? undefined,
           line_number: item.line_number ?? undefined,
           trade: item.trade ?? undefined,
           service: item.service ?? undefined,
