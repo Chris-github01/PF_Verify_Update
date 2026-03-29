@@ -13,6 +13,8 @@ import RevisionRequestModal from '../components/RevisionRequestModal';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import AutoAdjudicationPanel from '../components/auto-adjudication/AutoAdjudicationPanel';
 import type { SupplierInputData } from '../lib/auto-adjudication/autoAdjudicationTypes';
+import VariationRiskPanel from '../components/variation-risk/VariationRiskPanel';
+import type { VariationRiskInputData } from '../lib/variation-risk/variationRiskTypes';
 
 interface SupplierScore {
   supplierName: string;
@@ -82,6 +84,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
   const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [adjudicationSuppliers, setAdjudicationSuppliers] = useState<SupplierInputData[]>([]);
+  const [variationRiskSuppliers, setVariationRiskSuppliers] = useState<VariationRiskInputData[]>([]);
   const [projectTrade, setProjectTrade] = useState<string>('passive_fire');
 
   useEffect(() => {
@@ -282,6 +285,26 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         } satisfies SupplierInputData;
       });
       setAdjudicationSuppliers(adjSuppliers);
+
+      const vrSuppliers: VariationRiskInputData[] = adjSuppliers.map(s => ({
+        supplier_id: s.supplier_id,
+        supplier_name: s.supplier_name,
+        submitted_total: s.submitted_total,
+        normalised_total: s.normalised_total,
+        core_scope_coverage_pct: s.core_scope_coverage_pct,
+        secondary_scope_coverage_pct: s.secondary_scope_coverage_pct,
+        excluded_scope_count: s.excluded_scope_count,
+        risk_scope_count: s.risk_scope_count,
+        unknown_scope_count: s.unknown_scope_count,
+        scope_confidence_score: s.scope_confidence_score,
+        likely_variation_exposure_score: s.variation_exposure_score,
+        behaviour_risk_rating: s.behaviour_risk_rating,
+        behaviour_confidence: s.behaviour_confidence,
+        gate_status: s.gate_status,
+        document_truth_valid: s.document_truth_valid,
+        quantity_comparability_valid: s.quantity_comparability_valid,
+      } satisfies VariationRiskInputData));
+      setVariationRiskSuppliers(vrSuppliers);
 
     } catch (error: any) {
       console.error('Error loading report data:', error);
@@ -807,6 +830,17 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
           />
         </div>
       )}
+
+      <div className="no-print">
+        <VariationRiskPanel
+          projectId={projectId}
+          trade={projectTrade}
+          suppliers={variationRiskSuppliers}
+          onRiskResultReady={(result) => {
+            console.log('[VariationRisk] run complete, quality:', result.overall_data_quality);
+          }}
+        />
+      </div>
 
       {reportId && approvedSupplierQuoteId && reportData && (
         <div className="no-print space-y-4">
