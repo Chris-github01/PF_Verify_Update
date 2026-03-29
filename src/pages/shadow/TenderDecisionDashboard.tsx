@@ -9,6 +9,7 @@ import {
   BEHAVIOUR_CLASS_COLORS,
 } from '../../lib/shadow/cde/constants';
 import type { CdeDecisionState, CdeRankedSupplier, RecommendationStatus } from '../../lib/shadow/cde/types';
+import ShadowLayout from '../../components/shadow/ShadowLayout';
 import {
   Trophy, AlertTriangle, TrendingUp, ChevronDown, ChevronUp,
   Play, RefreshCw, Clock, CheckCircle, Info, BarChart2, Shield,
@@ -34,36 +35,41 @@ const STATUS_CONFIG: Record<
     subLabel: string;
     badgeClass: string;
     icon: React.ElementType;
-    headerClass: string;
+    borderClass: string;
+    bgClass: string;
   }
 > = {
   recommended: {
     label: 'Preferred Tenderer',
     subLabel: 'All gating conditions satisfied — final CDE recommendation',
-    badgeClass: 'bg-emerald-700 text-white',
+    badgeClass: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
     icon: Trophy,
-    headerClass: 'border-emerald-300',
+    borderClass: 'border-emerald-500/40',
+    bgClass: 'bg-emerald-500/8',
   },
   narrow_margin: {
     label: 'Commercial Leader — Narrow Margin',
     subLabel: 'Top-2 suppliers within 3-point composite margin. Scope validation advised before award.',
-    badgeClass: 'bg-amber-600 text-white',
+    badgeClass: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     icon: MinusCircle,
-    headerClass: 'border-amber-300',
+    borderClass: 'border-amber-500/40',
+    bgClass: 'bg-amber-500/8',
   },
   provisional: {
     label: 'Provisional Leader — Scope Validation Required',
     subLabel: 'One or more gating conditions not yet satisfied. Cannot issue final recommendation.',
-    badgeClass: 'bg-slate-600 text-white',
+    badgeClass: 'bg-slate-500/20 text-slate-300 border border-slate-500/30',
     icon: AlertTriangle,
-    headerClass: 'border-slate-300',
+    borderClass: 'border-slate-500/40',
+    bgClass: 'bg-slate-800/40',
   },
   no_recommendation: {
     label: 'No Recommendation',
     subLabel: 'Insufficient data or critical conditions failed. Run CDE after resolving issues below.',
-    badgeClass: 'bg-red-700 text-white',
+    badgeClass: 'bg-red-500/20 text-red-300 border border-red-500/30',
     icon: XCircle,
-    headerClass: 'border-red-300',
+    borderClass: 'border-red-500/40',
+    bgClass: 'bg-red-500/8',
   },
 };
 
@@ -71,14 +77,12 @@ function ConfidenceBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100);
   const color =
     pct >= 75
-      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+      ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30'
       : pct >= 50
-      ? 'text-amber-700 bg-amber-50 border-amber-200'
-      : 'text-red-700 bg-red-50 border-red-200';
+      ? 'text-amber-400 bg-amber-500/15 border-amber-500/30'
+      : 'text-red-400 bg-red-500/15 border-red-500/30';
   return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${color}`}
-    >
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${color}`}>
       <CheckCircle className="w-3 h-3" />
       {pct}% confidence
     </span>
@@ -87,15 +91,16 @@ function ConfidenceBadge({ value }: { value: number }) {
 
 function ScoreBar({ label, value }: { label: string; value: number }) {
   const pct = Math.round(value * 100);
+  const barColor = pct >= 70 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-xs text-slate-500">
+      <div className="flex justify-between text-xs text-slate-400">
         <span>{label}</span>
-        <span className="font-medium text-slate-700">{pct}/100</span>
+        <span className="font-medium text-slate-300">{pct}/100</span>
       </div>
-      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-slate-700/60 rounded-full overflow-hidden">
         <div
-          className="h-full bg-slate-700 rounded-full transition-all duration-500"
+          className={`h-full ${barColor} rounded-full transition-all duration-500`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -108,13 +113,13 @@ function GatingPanel({ state }: { state: CdeDecisionState }) {
   const allPassed = gating.passed && !gating.isNarrowMargin;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-      <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+    <div className="rounded-xl border border-slate-700/60 bg-slate-800/30 p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
         <Shield className="w-4 h-4 text-slate-400" />
         Recommendation Gating
       </h3>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <GateItem
           label="Scope coverage"
           value={`${Math.round(gating.scopeCoverageScore * 100)}/100`}
@@ -136,7 +141,7 @@ function GatingPanel({ state }: { state: CdeDecisionState }) {
       </div>
 
       {gating.isNarrowMargin && (
-        <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <div className="flex items-start gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
           <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
           <span>
             Top-2 composite scores are within the 3-point narrow margin threshold. Gating conditions
@@ -150,9 +155,9 @@ function GatingPanel({ state }: { state: CdeDecisionState }) {
           {gating.failedGates.map((g, i) => (
             <div
               key={i}
-              className="flex items-start gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+              className="flex items-start gap-2 text-xs text-slate-300 bg-slate-700/40 border border-slate-600/40 rounded-lg px-3 py-2"
             >
-              <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+              <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
               {g}
             </div>
           ))}
@@ -160,7 +165,7 @@ function GatingPanel({ state }: { state: CdeDecisionState }) {
       )}
 
       {allPassed && gating.failedGates.length === 0 && (
-        <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-3 py-2">
           <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
           All gating conditions satisfied. CDE recommendation is final.
         </div>
@@ -184,16 +189,16 @@ function GateItem({
     <div
       className={`rounded-lg border px-3 py-2 ${
         passed
-          ? 'border-emerald-200 bg-emerald-50'
-          : 'border-red-200 bg-red-50'
+          ? 'border-emerald-500/30 bg-emerald-500/10'
+          : 'border-red-500/30 bg-red-500/10'
       }`}
     >
-      <div className={`flex items-center gap-1 ${passed ? 'text-emerald-600' : 'text-red-600'}`}>
+      <div className={`flex items-center gap-1 ${passed ? 'text-emerald-400' : 'text-red-400'}`}>
         {passed ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-        <span className="font-semibold">{value}</span>
+        <span className="font-semibold text-xs">{value}</span>
       </div>
-      <div className="text-slate-500 mt-0.5">{label}</div>
-      <div className="text-slate-400 text-[10px]">threshold: {threshold}</div>
+      <div className="text-slate-400 text-xs mt-0.5">{label}</div>
+      <div className="text-slate-500 text-[10px]">threshold: {threshold}</div>
     </div>
   );
 }
@@ -224,8 +229,10 @@ function SupplierCard({
 
   return (
     <div
-      className={`rounded-xl border bg-white transition-all duration-200 ${
-        isTop ? 'border-slate-700 shadow-md' : 'border-slate-200 hover:border-slate-300'
+      className={`rounded-xl border transition-all duration-200 ${
+        isTop
+          ? 'border-amber-500/40 bg-amber-500/5 shadow-lg shadow-amber-500/5'
+          : 'border-slate-700/60 bg-slate-800/20 hover:border-slate-600/60'
       }`}
     >
       <div className="p-4">
@@ -233,18 +240,18 @@ function SupplierCard({
           <div className="flex items-start gap-3 min-w-0">
             <div
               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                isTop ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                isTop
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-slate-700/60 text-slate-400'
               }`}
             >
               {supplier.rank}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-slate-800 truncate">{supplier.supplierName}</h3>
+                <h3 className="font-semibold text-white truncate">{supplier.supplierName}</h3>
                 {isTop && topBadgeLabel && (
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[status].badgeClass}`}
-                  >
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CONFIG[status].badgeClass}`}>
                     {status === 'recommended' && <Trophy className="w-3 h-3" />}
                     {status === 'narrow_margin' && <MinusCircle className="w-3 h-3" />}
                     {status === 'provisional' && <AlertTriangle className="w-3 h-3" />}
@@ -252,27 +259,23 @@ function SupplierCard({
                   </span>
                 )}
                 {isRunnerUp && !isTop && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-700/60 text-slate-400 border border-slate-600/40">
                     Runner-up
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${riskColors}`}
-                >
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${riskColors}`}>
                   {RISK_TIER_LABELS[supplier.riskTier]}
                 </span>
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${behaviourColors}`}
-                >
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${behaviourColors}`}>
                   {BEHAVIOUR_CLASS_LABELS[supplier.behaviourClass]}
                 </span>
               </div>
             </div>
           </div>
           <div className="flex-shrink-0 text-right">
-            <div className="text-lg font-bold text-slate-800">
+            <div className="text-xl font-bold text-white">
               {Math.round(supplier.compositeScore * 100)}
               <span className="text-sm font-normal text-slate-500">/100</span>
             </div>
@@ -281,37 +284,30 @@ function SupplierCard({
         </div>
 
         <div className="grid grid-cols-3 gap-3 mt-4">
-          <div className="bg-slate-50 rounded-lg p-2.5">
-            <div className="text-xs text-slate-500">Quoted</div>
-            <div className="text-sm font-semibold text-slate-700 mt-0.5">{fmt(supplier.quotedTotal)}</div>
-          </div>
-          <div className="bg-slate-50 rounded-lg p-2.5">
-            <div className="text-xs text-slate-500">Projected</div>
-            <div className="text-sm font-semibold text-slate-700 mt-0.5">{fmt(supplier.projectedTotal)}</div>
-          </div>
-          <div className="bg-slate-50 rounded-lg p-2.5">
-            <div className="text-xs text-slate-500">Var. Exposure</div>
-            <div className="text-sm font-semibold text-slate-700 mt-0.5">{fmt(supplier.variationExposure)}</div>
-          </div>
+          {[
+            { label: 'Quoted', value: fmt(supplier.quotedTotal) },
+            { label: 'Projected', value: fmt(supplier.projectedTotal) },
+            { label: 'Var. Exposure', value: fmt(supplier.variationExposure) },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-slate-700/30 rounded-lg p-2.5">
+              <div className="text-xs text-slate-500">{label}</div>
+              <div className="text-sm font-semibold text-slate-200 mt-0.5">{value}</div>
+            </div>
+          ))}
         </div>
 
         <button
           onClick={() => setExpanded(!expanded)}
-          className="mt-3 w-full flex items-center justify-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+          className="mt-3 w-full flex items-center justify-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
         >
-          {expanded ? (
-            <>
-              <ChevronUp className="w-3.5 h-3.5" /> Hide breakdown
-            </>
-          ) : (
-            <>
-              <ChevronDown className="w-3.5 h-3.5" /> Score breakdown
-            </>
-          )}
+          {expanded
+            ? <><ChevronUp className="w-3.5 h-3.5" /> Hide breakdown</>
+            : <><ChevronDown className="w-3.5 h-3.5" /> Score breakdown</>
+          }
         </button>
 
         {expanded && (
-          <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+          <div className="mt-3 pt-3 border-t border-slate-700/40 space-y-2">
             <ScoreBar label="Cost efficiency (35%)" value={supplier.scoreBreakdown.cost} />
             <ScoreBar label="Supplier behaviour (25%)" value={supplier.scoreBreakdown.behaviour} />
             <ScoreBar label="Scope coverage (20%)" value={supplier.scoreBreakdown.scope} />
@@ -346,13 +342,11 @@ function ProjectPicker({
     <select
       value={projectId}
       onChange={(e) => onChange(e.target.value)}
-      className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+      className="text-sm border border-slate-600/60 rounded-lg px-3 py-2 bg-slate-800 text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40"
     >
       <option value="">-- Select a project --</option>
       {projects.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.name}
-        </option>
+        <option key={p.id} value={p.id}>{p.name}</option>
       ))}
     </select>
   );
@@ -361,8 +355,8 @@ function ProjectPicker({
 function HistoryPanel({ history }: { history: CdeDecisionState[] }) {
   if (history.length === 0) return null;
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+    <div className="rounded-xl border border-slate-700/60 bg-slate-800/30 p-4">
+      <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
         <History className="w-4 h-4 text-slate-400" /> Decision History
       </h3>
       <div className="space-y-2">
@@ -372,24 +366,22 @@ function HistoryPanel({ history }: { history: CdeDecisionState[] }) {
           return (
             <div
               key={snap.runId}
-              className="flex items-center justify-between text-sm py-2 border-b border-slate-50 last:border-0"
+              className="flex items-center justify-between text-sm py-2 border-b border-slate-700/40 last:border-0"
             >
               <div>
-                <span className="font-medium text-slate-700">
+                <span className="font-medium text-slate-200">
                   {snap.recommendedSupplier ?? 'No recommendation'}
                 </span>
-                <span className="text-slate-400 ml-2 text-xs">
+                <span className="text-slate-500 ml-2 text-xs">
                   {new Date(snap.generatedAt).toLocaleDateString('en-AU')}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badgeClass}`}
-                >
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badgeClass}`}>
                   <StatusIcon className="w-3 h-3" />
                   {cfg.label}
                 </span>
-                {i === 0 && <span className="text-xs text-slate-400">Latest</span>}
+                {i === 0 && <span className="text-xs text-slate-500">Latest</span>}
               </div>
             </div>
           );
@@ -454,51 +446,53 @@ export default function TenderDecisionDashboard() {
   const top = state?.suppliers[0];
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <ShadowLayout>
+      <div className="space-y-6">
 
-        {/* Header */}
+        {/* Page Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Tender Decision Engine</h1>
-            <p className="text-slate-500 text-sm mt-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Trophy className="w-5 h-5 text-amber-400" />
+              <h1 className="text-xl font-bold text-white">Tender Decision Engine</h1>
+            </div>
+            <p className="text-slate-400 text-sm">
               The sole authority for preferred tenderer, runner-up, and no-recommendation status.
               Consumes cost, scope, behaviour, and variation risk inputs.
             </p>
           </div>
           <div className="flex-shrink-0 flex flex-col gap-1.5 items-end">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              <Shield className="w-3 h-3" /> Shadow Module
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-700/60 text-slate-300 border border-slate-600/40">
+              <Shield className="w-3 h-3 text-amber-400" /> Shadow Module
             </span>
-            <span className="text-xs text-slate-400">CDE — Final Decision Authority</span>
+            <span className="text-xs text-slate-500">CDE — Final Decision Authority</span>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="rounded-xl border border-slate-700/60 bg-slate-800/30 p-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <Target className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-medium text-slate-700">Project:</span>
+              <span className="text-sm font-medium text-slate-300">Project:</span>
             </div>
             <ProjectPicker projectId={projectId} onChange={handleProjectChange} />
             <button
               onClick={handleRun}
               disabled={!projectId || running}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-gray-900 text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {running ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Play className="w-4 h-4" />
-              )}
+              {running
+                ? <RefreshCw className="w-4 h-4 animate-spin" />
+                : <Play className="w-4 h-4" />
+              }
               {running ? 'Running analysis...' : 'Run CDE'}
             </button>
             {state && (
               <button
                 onClick={() => projectId && loadData(projectId)}
                 disabled={loading}
-                className="inline-flex items-center gap-2 px-3 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50 transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-2 border border-slate-600/60 text-slate-400 text-sm rounded-lg hover:bg-slate-700/40 hover:text-slate-200 transition-colors"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -506,15 +500,16 @@ export default function TenderDecisionDashboard() {
             )}
           </div>
           {error && (
-            <div className="mt-3 flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div className="mt-3 flex items-start gap-2 text-sm text-red-300 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-red-400" />
               {error}
             </div>
           )}
         </div>
 
         {loading && (
-          <div className="text-center py-12 text-slate-400 text-sm">
+          <div className="text-center py-12 text-slate-500 text-sm">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-600" />
             Loading decision data...
           </div>
         )}
@@ -522,30 +517,28 @@ export default function TenderDecisionDashboard() {
         {!loading && state && (
           <>
             {/* Decision Status Banner */}
-            <div className={`bg-white rounded-xl border-2 p-5 ${cfg.headerClass}`}>
+            <div className={`rounded-xl border-2 p-5 ${cfg.borderClass} ${cfg.bgClass}`}>
               <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center">
+                <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border ${cfg.borderClass} bg-slate-800/60`}>
                   <StatusIcon className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <h2 className="text-lg font-bold text-slate-900">
+                    <h2 className="text-lg font-bold text-white">
                       {state.recommendedSupplier ?? 'No recommendation issued'}
                     </h2>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.badgeClass}`}
-                    >
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.badgeClass}`}>
                       <StatusIcon className="w-3 h-3" />
                       {cfg.label}
                     </span>
                     <ConfidenceBadge value={state.overallConfidence} />
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <span className="text-xs text-slate-500 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {new Date(state.generatedAt).toLocaleString('en-AU')}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 italic">{cfg.subLabel}</p>
-                  <p className="text-sm text-slate-600 mt-2 leading-relaxed">{state.justification}</p>
+                  <p className="text-xs text-slate-400 mt-1 italic">{cfg.subLabel}</p>
+                  <p className="text-sm text-slate-300 mt-2 leading-relaxed">{state.justification}</p>
                 </div>
               </div>
             </div>
@@ -562,13 +555,13 @@ export default function TenderDecisionDashboard() {
                   { icon: AlertTriangle, label: 'Variation exposure', value: fmt(top.variationExposure) },
                   { icon: BarChart2, label: 'Scope coverage', value: fmtPct(top.scopeCoverage) },
                 ].map(({ icon: Icon, label, value }) => (
-                  <div key={label} className="bg-white rounded-xl border border-slate-200 p-4">
+                  <div key={label} className="rounded-xl border border-slate-700/60 bg-slate-800/30 p-4">
                     <div className="flex items-center gap-2 text-slate-400 mb-1">
                       <Icon className="w-4 h-4" />
                       <span className="text-xs">{label}</span>
                     </div>
-                    <div className="text-lg font-bold text-slate-800">{value}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">Composite leader</div>
+                    <div className="text-lg font-bold text-white">{value}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Composite leader</div>
                   </div>
                 ))}
               </div>
@@ -576,8 +569,8 @@ export default function TenderDecisionDashboard() {
 
             {/* Ranked suppliers */}
             <div>
-              <h2 className="text-base font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                <ChevronRight className="w-4 h-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                <ChevronRight className="w-4 h-4 text-slate-500" />
                 Ranked Suppliers ({state.suppliers.length})
               </h2>
               <div className="space-y-3">
@@ -588,11 +581,11 @@ export default function TenderDecisionDashboard() {
             </div>
 
             {/* CDE authority note */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-start gap-3">
-              <Info className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+            <div className="rounded-xl border border-slate-700/40 bg-slate-800/20 p-4 flex items-start gap-3">
+              <Info className="w-4 h-4 text-slate-500 flex-shrink-0 mt-0.5" />
               <div className="text-xs text-slate-500 leading-relaxed space-y-1">
                 <p>
-                  <strong>CDE is the sole recommendation authority.</strong> Only this module may
+                  <strong className="text-slate-400">CDE is the sole recommendation authority.</strong> Only this module may
                   output preferred tenderer, runner-up, narrow margin leader, or no-recommendation
                   status. Quantity Intelligence and other advisory modules inform inputs but do not
                   determine the outcome.
@@ -612,9 +605,9 @@ export default function TenderDecisionDashboard() {
 
         {!loading && !state && projectId && !running && (
           <div className="text-center py-16 space-y-3">
-            <Target className="w-10 h-10 text-slate-300 mx-auto" />
-            <p className="text-slate-500 text-sm">No CDE analysis found for this project.</p>
-            <p className="text-slate-400 text-xs">
+            <Target className="w-10 h-10 text-slate-600 mx-auto" />
+            <p className="text-slate-400 text-sm">No CDE analysis found for this project.</p>
+            <p className="text-slate-500 text-xs">
               Click &ldquo;Run CDE&rdquo; to generate the first comparative decision analysis.
             </p>
           </div>
@@ -622,11 +615,11 @@ export default function TenderDecisionDashboard() {
 
         {!projectId && (
           <div className="text-center py-16 space-y-3">
-            <BarChart2 className="w-10 h-10 text-slate-300 mx-auto" />
-            <p className="text-slate-500 text-sm">Select a project to begin.</p>
+            <BarChart2 className="w-10 h-10 text-slate-600 mx-auto" />
+            <p className="text-slate-400 text-sm">Select a project to begin.</p>
           </div>
         )}
       </div>
-    </div>
+    </ShadowLayout>
   );
 }
