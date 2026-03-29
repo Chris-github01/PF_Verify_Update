@@ -11,6 +11,8 @@ import RFIGenerator from '../components/RFIGenerator';
 import UnsuccessfulLettersGenerator from '../components/UnsuccessfulLettersGenerator';
 import RevisionRequestModal from '../components/RevisionRequestModal';
 import { generateModernPdfHtml, generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
+import AutoAdjudicationPanel from '../components/auto-adjudication/AutoAdjudicationPanel';
+import type { SupplierInputData } from '../lib/auto-adjudication/autoAdjudicationTypes';
 
 interface SupplierScore {
   supplierName: string;
@@ -79,6 +81,8 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
   const [quoteDate, setQuoteDate] = useState<string>('');
   const [approvalData, setApprovalData] = useState<ApprovalData | null>(null);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [adjudicationSuppliers, setAdjudicationSuppliers] = useState<SupplierInputData[]>([]);
+  const [projectTrade, setProjectTrade] = useState<string>('passive_fire');
 
   useEffect(() => {
     if (projectId) {
@@ -252,6 +256,32 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         awardRationale: generateAwardRationale(recommended, suppliers),
         conditionsOfAward: generateConditionsOfAward(recommended),
       });
+
+      const trade = awardSummary.trade || reportRecord.trade || 'passive_fire';
+      setProjectTrade(trade);
+
+      const adjSuppliers: SupplierInputData[] = suppliers.map(s => {
+        const coveragePct = (s.coveragePercent || 0) / 100;
+        return {
+          supplier_id: s.quoteId || s.supplierName,
+          supplier_name: s.supplierName,
+          submitted_total: s.price,
+          normalised_total: null,
+          core_scope_coverage_pct: coveragePct,
+          secondary_scope_coverage_pct: Math.max(0, coveragePct - 0.1),
+          excluded_scope_count: Math.round(s.risks?.length ?? 0),
+          risk_scope_count: Math.round((s.risks?.length ?? 0) * 0.5),
+          unknown_scope_count: Math.max(0, s.totalItems - s.itemsQuoted),
+          scope_confidence_score: Math.min(1, coveragePct + 0.05),
+          variation_exposure_score: Math.max(0, 0.25 - (s.riskScore / 10) * 0.2),
+          behaviour_risk_rating: s.riskScore >= 7 ? 'green' : s.riskScore >= 4 ? 'amber' : 'red',
+          behaviour_confidence: 0.70,
+          gate_status: coveragePct >= 0.55 ? (coveragePct >= 0.70 ? 'pass' : 'warn') : 'fail',
+          document_truth_valid: null,
+          quantity_comparability_valid: null,
+        } satisfies SupplierInputData;
+      });
+      setAdjudicationSuppliers(adjSuppliers);
 
     } catch (error: any) {
       console.error('Error loading report data:', error);
@@ -765,6 +795,19 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
       </div>
 
       {/* Approval Panel and Document Generation (No Print) */}
+      {adjudicationSuppliers.length > 0 && (
+        <div className="no-print">
+          <AutoAdjudicationPanel
+            projectId={projectId}
+            trade={projectTrade}
+            suppliers={adjudicationSuppliers}
+            onRecommendationResolved={(supplierId, outcome) => {
+              console.log('[AutoAdjudication] outcome:', outcome, supplierId);
+            }}
+          />
+        </div>
+      )}
+
       {reportId && approvedSupplierQuoteId && reportData && (
         <div className="no-print space-y-4">
           <SupplierApprovalPanel
