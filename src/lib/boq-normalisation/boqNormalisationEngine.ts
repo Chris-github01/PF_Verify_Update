@@ -26,20 +26,19 @@ export interface QuoteItemRow {
   id: string;
   quote_id: string;
   description: string;
-  section?: string | null;
+  scope_category?: string | null;
   quantity: number;
   unit_price: number;
   total_price?: number | null;
-  line_number?: number | null;
-  trade?: string | null;
+  item_number?: number | null;
   service?: string | null;
   size?: string | null;
-  substrate?: string | null;
-  frl?: string | null;
-  system_name?: string | null;
-  item_type?: string | null;
-  is_provisional?: boolean | null;
-  is_optional?: boolean | null;
+  material?: string | null;
+  frr?: string | null;
+  system_label?: string | null;
+  subclass?: string | null;
+  mapped_service_type?: string | null;
+  mapped_system?: string | null;
 }
 
 export interface QuoteRow {
@@ -69,7 +68,7 @@ async function fetchQuoteItems(projectId: string, trade: string): Promise<{
   for (const quote of filteredQuotes) {
     const { data: items, error: itemsError } = await supabase
       .from('quote_items')
-      .select('id, quote_id, description, section, quantity, unit_price, total_price, line_number, trade, service, size, substrate, frl, system_name, item_type, is_provisional, is_optional')
+      .select('id, quote_id, description, scope_category, quantity, unit_price, total_price, item_number, service, size, material, frr, system_label, subclass, mapped_service_type, mapped_system')
       .eq('quote_id', quote.id);
 
     if (itemsError) throw new Error(itemsError.message || 'Failed to fetch quote items');
@@ -81,24 +80,22 @@ async function fetchQuoteItems(projectId: string, trade: string): Promise<{
 
 function buildSignatureFromItem(item: QuoteItemRow, trade: string): PenetrationSignature {
   const desc = item.description || '';
-  const serviceRaw = item.service || extractServiceFromDescription(desc);
+  const serviceRaw = item.service || item.mapped_service_type || extractServiceFromDescription(desc);
   const service = normalizeService(serviceRaw);
   const size = normalizeSize(item.size || extractSizeFromDescription(desc));
-  const frl = normalizeFRL(item.frl || extractFRLFromDescription(desc));
-  const substrate = normalizeSubstrate(item.substrate || extractSubstrateFromDescription(desc));
+  const frl = normalizeFRL(item.frr || extractFRLFromDescription(desc));
+  const substrate = normalizeSubstrate(item.material || extractSubstrateFromDescription(desc));
   const orientation = extractOrientationFromDescription(desc);
   const locationClass = extractLocationClass(desc);
   const insulationState = detectInsulationState(desc);
   const intent = classifyLineIntent(desc, {
-    is_provisional: item.is_provisional ?? undefined,
-    is_optional: item.is_optional ?? undefined,
-    item_type: item.item_type ?? undefined,
+    item_type: item.subclass ?? undefined,
   });
 
   const sig: PenetrationSignature = {
-    trade: trade || item.trade || '',
+    trade,
     service,
-    serviceType: item.item_type || '',
+    serviceType: item.subclass || item.mapped_service_type || '',
     sizeNormalized: size,
     substrateNormalized: substrate,
     frlNormalized: frl,
@@ -193,9 +190,7 @@ export async function runBoqNormalisation(
     const rawInputs = items.map(item => {
       const sig = buildSignatureFromItem(item, trade);
       const intent = classifyLineIntent(item.description || '', {
-        is_provisional: item.is_provisional ?? undefined,
-        is_optional: item.is_optional ?? undefined,
-        item_type: item.item_type ?? undefined,
+        item_type: item.subclass ?? undefined,
       });
       sig.unitEntryFlag = intent === 'unit_entry_subset';
       sig.optionalFlag = intent === 'optional_scope';
@@ -207,20 +202,18 @@ export async function runBoqNormalisation(
           quote_id: item.quote_id,
           supplier_id: supplierId,
           description: item.description,
-          section: item.section ?? undefined,
+          section: item.scope_category ?? undefined,
           quantity: item.quantity,
           unit_rate: item.unit_price,
           total_amount: item.total_price ?? undefined,
-          line_number: item.line_number ?? undefined,
-          trade: item.trade ?? undefined,
-          service: item.service ?? undefined,
+          line_number: item.item_number ?? undefined,
+          trade,
+          service: item.service ?? item.mapped_service_type ?? undefined,
           size: item.size ?? undefined,
-          substrate: item.substrate ?? undefined,
-          frl: item.frl ?? undefined,
-          system_name: item.system_name ?? undefined,
-          item_type: item.item_type ?? undefined,
-          is_provisional: item.is_provisional ?? undefined,
-          is_optional: item.is_optional ?? undefined,
+          substrate: item.material ?? undefined,
+          frl: item.frr ?? undefined,
+          system_name: item.system_label ?? item.mapped_system ?? undefined,
+          item_type: item.subclass ?? undefined,
         },
         intent,
         sig,
