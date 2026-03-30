@@ -1,4 +1,4 @@
-export type TradeCategory = 'plumbing' | 'passive_fire' | 'active_fire' | 'electrical' | 'hvac' | 'civil' | 'structural' | 'generic';
+export type TradeCategory = 'plumbing' | 'passive_fire' | 'active_fire' | 'electrical' | 'hvac' | 'carpentry' | 'civil' | 'structural' | 'generic';
 export type ModuleStatus = 'active' | 'beta' | 'experimental' | 'disabled';
 
 export interface ModuleCapabilities {
@@ -78,6 +78,17 @@ export const TRADE_MODULES: Record<string, TradeModuleDefinition> = {
     parser_available: false,
     regression_suite_count: 0,
   },
+  carpentry_parser: {
+    module_key: 'carpentry_parser',
+    module_name: 'Carpentry Parser',
+    trade_category: 'carpentry',
+    status: 'experimental',
+    version: '0.1.0',
+    capabilities: { parsing: true, predictive: false, learning: false, optimization: false, review: false, shadow: false },
+    description: 'Carpentry trade parser. Supports 3-section structure: Carpentry, Plasterboard, and Insulation.',
+    parser_available: true,
+    regression_suite_count: 0,
+  },
 };
 
 export function getModule(moduleKey: string): TradeModuleDefinition | undefined {
@@ -118,6 +129,7 @@ export const TRADE_COLORS: Record<TradeCategory, string> = {
   active_fire: 'text-red-300',
   electrical: 'text-yellow-300',
   hvac: 'text-cyan-300',
+  carpentry: 'text-amber-300',
   civil: 'text-stone-300',
   structural: 'text-gray-300',
   generic: 'text-gray-400',

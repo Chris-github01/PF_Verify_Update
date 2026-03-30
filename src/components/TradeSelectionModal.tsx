@@ -1,6 +1,6 @@
-import { Flame, Zap, Wind, Droplet, ShieldCheck } from 'lucide-react';
+import { Flame, Zap, Wind, Droplet, ShieldCheck, Hammer } from 'lucide-react';
 
-export type Trade = 'passive_fire' | 'electrical' | 'hvac' | 'plumbing' | 'active_fire';
+export type Trade = 'passive_fire' | 'electrical' | 'hvac' | 'plumbing' | 'active_fire' | 'carpentry';
 
 interface TradeOption {
   id: Trade;
@@ -51,6 +51,14 @@ const trades: TradeOption[] = [
     color: 'text-red-400',
     bgColor: 'bg-red-500/10',
     borderColor: 'border-red-500/30',
+  },
+  {
+    id: 'carpentry',
+    name: 'Carpentry',
+    icon: Hammer,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/30',
   },
 ];
 

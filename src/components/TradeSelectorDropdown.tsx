@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Flame, Zap, Wind, Droplet, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Flame, Zap, Wind, Droplet, ShieldCheck, Hammer } from 'lucide-react';
 import { useTrade, getTradeInfo } from '../lib/tradeContext';
 import type { Trade } from '../lib/userPreferences';
 
@@ -9,6 +9,7 @@ const trades: Array<{ id: Trade; icon: React.ComponentType<{ size?: number; clas
   { id: 'hvac', icon: Wind },
   { id: 'plumbing', icon: Droplet },
   { id: 'active_fire', icon: ShieldCheck },
+  { id: 'carpentry', icon: Hammer },
 ];
 
 export default function TradeSelectorDropdown() {
@@ -46,6 +47,10 @@ export default function TradeSelectorDropdown() {
       red: {
         text: 'text-red-400',
         iconBg: 'bg-red-950/50',
+      },
+      amber: {
+        text: 'text-amber-400',
+        iconBg: 'bg-amber-950/50',
       },
     };
     return colors[color];

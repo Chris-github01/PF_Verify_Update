@@ -133,6 +133,23 @@ export const MODULE_CONFIGS: Record<string, ModuleConfig> = {
     },
     ruleConfig_source: 'pending',
   },
+  carpentry_parser: {
+    module_key: 'carpentry_parser',
+    trade_category: 'carpentry',
+    thresholds: DEFAULT_THRESHOLDS,
+    learning: DEFAULT_LEARNING,
+    predictive_weights: DEFAULT_PREDICTIVE_WEIGHTS,
+    feature_flags: {
+      predictive_enabled: false,
+      learning_enabled: false,
+      optimization_enabled: false,
+      review_enabled: false,
+      shadow_enabled: false,
+      cross_trade_learning: false,
+      three_section_mode: true,
+    },
+    ruleConfig_source: 'src/lib/trades/carpentry/templates/index.ts',
+  },
 };
 
 export function getModuleConfig(moduleKey: string): ModuleConfig {

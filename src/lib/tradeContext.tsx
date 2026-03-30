@@ -81,6 +81,11 @@ export const getTradeInfo = (trade: Trade) => {
       color: 'red',
       description: 'Sprinkler systems and active fire protection',
     },
+    carpentry: {
+      name: 'Carpentry',
+      color: 'amber',
+      description: 'Carpentry, plasterboard and insulation works',
+    },
   };
 
   return tradeInfo[trade];

@@ -1,4 +1,4 @@
-import { Shield, Zap, Droplets, Wind, Wrench, BarChart3 } from 'lucide-react';
+import { Shield, Zap, Droplets, Wind, Wrench, BarChart3, Hammer } from 'lucide-react';
 
 interface TradeModuleBadgeProps {
   trade: string;
@@ -60,6 +60,17 @@ const TRADE_MODULES: Record<string, TradeModule> = {
     specificBorder: 'border-cyan-500/50',
     generalBorder: 'border-sky-500/50',
     specificBg: 'bg-cyan-950/40',
+    generalBg: 'bg-sky-950/40',
+  },
+  carpentry: {
+    icon: <Hammer size={12} />,
+    specificModule: 'Verify+ Carpentry',
+    generalModule: 'VerifyTrade Quote Audit Engine',
+    specificColor: 'text-amber-200',
+    generalColor: 'text-sky-200',
+    specificBorder: 'border-amber-500/50',
+    generalBorder: 'border-sky-500/50',
+    specificBg: 'bg-amber-950/40',
     generalBg: 'bg-sky-950/40',
   },
   mechanical: {

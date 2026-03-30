@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export type Trade = 'passive_fire' | 'electrical' | 'hvac' | 'plumbing' | 'active_fire';
+export type Trade = 'passive_fire' | 'electrical' | 'hvac' | 'plumbing' | 'active_fire' | 'carpentry';
 
 export interface UserPreferences {
   id: string;
