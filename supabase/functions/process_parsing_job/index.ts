@@ -41,25 +41,29 @@ async function parseLargeQuoteInChunks(
   console.log("Chunking large quote for processing...");
 
   const lines = text.split('\n');
-  const chunks: string[] = [];
+  const rawChunks: string[][] = [];
   let currentChunk: string[] = [];
   let currentSize = 0;
   const maxChunkSize = 2500;
+  const overlapLines = 3;
 
   for (const line of lines) {
     currentChunk.push(line);
     currentSize += line.length;
 
     if (currentSize >= maxChunkSize) {
-      chunks.push(currentChunk.join('\n'));
-      currentChunk = [];
-      currentSize = 0;
+      rawChunks.push([...currentChunk]);
+      const overlap = currentChunk.slice(-overlapLines);
+      currentChunk = [...overlap];
+      currentSize = overlap.reduce((s, l) => s + l.length, 0);
     }
   }
 
   if (currentChunk.length > 0) {
-    chunks.push(currentChunk.join('\n'));
+    rawChunks.push(currentChunk);
   }
+
+  const chunks = rawChunks.map(c => c.join('\n'));
 
   console.log(`Split into ${chunks.length} chunks`);
 
@@ -437,25 +441,29 @@ Deno.serve(async (req: Request) => {
           console.log("Large document detected, creating chunks...");
 
           const lines = fullText.split('\n');
-          const chunks: string[] = [];
+          const rawChunks: string[][] = [];
           let currentChunk: string[] = [];
           let currentSize = 0;
           const maxChunkSize = 2500;
+          const overlapLines = 3;
 
           for (const line of lines) {
             currentChunk.push(line);
             currentSize += line.length;
 
             if (currentSize >= maxChunkSize) {
-              chunks.push(currentChunk.join('\n'));
-              currentChunk = [];
-              currentSize = 0;
+              rawChunks.push([...currentChunk]);
+              const overlap = currentChunk.slice(-overlapLines);
+              currentChunk = [...overlap];
+              currentSize = overlap.reduce((s, l) => s + l.length, 0);
             }
           }
 
           if (currentChunk.length > 0) {
-            chunks.push(currentChunk.join('\n'));
+            rawChunks.push(currentChunk);
           }
+
+          const chunks = rawChunks.map(c => c.join('\n'));
 
           console.log(`Created ${chunks.length} chunks, saving to database...`);
 

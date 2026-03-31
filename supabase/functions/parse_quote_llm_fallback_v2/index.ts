@@ -321,6 +321,10 @@ Columns: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate 
 - The second-to-last value is the Overall Rate — use that as "rate"
 - Example row: "51mm 0.75BMT Bottom Track  4096  m  5.88  0.14  42  24,084.48  3.42  13,991.94  9.30  38,076.42"
   → description="51mm 0.75BMT Bottom Track", qty=4096, unit="m", rate=9.30, total=38076.42
+- PAGE BOUNDARY TRUNCATION: Some rows appear at the end of a page and the Overall Total column is cut off. You can identify these because the row ends with only an Overall Rate (a small number like "15.18" or "18.64") but has no final Overall Total value after it. In this case: total = qty × Overall Rate.
+  Example truncated row: "90x45mm H3.2 timber batten   4410   m   10.50   0.25   42   46305   4.68   20,638.80   15.18"
+  → The row ends at "15.18" (Overall Rate) with no Overall Total. Calculate: total = 4410 × 15.18 = 66,943.80
+  → Do NOT use 20,638.80 (Material Total) as the total for this row.
 - If the Overall Total column is blank/missing but Labour Total and Material Total are present, sum them for the total.
 - Rows where the Hourly Rate column contains a standalone "42" or "50" (with no other numbers on that row) are blank separator rows — SKIP them.
 
