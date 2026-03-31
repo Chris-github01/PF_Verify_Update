@@ -58,8 +58,7 @@ function chunkByLineItems(text: string, maxLinesPerChunk: number = 30): { sectio
     return /^(sub)?total[\s:]/i.test(lower) ||
            /^grand\s+total/i.test(lower) ||
            /^carried\s+forward/i.test(lower) ||
-           /^gst/i.test(lower) ||
-           /^p\s*&\s*g/i.test(lower);
+           /^gst/i.test(lower);
   };
 
   const detectSectionHeader = (line: string): string | null => {
