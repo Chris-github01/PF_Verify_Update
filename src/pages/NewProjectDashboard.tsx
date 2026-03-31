@@ -237,16 +237,18 @@ export default function NewProjectDashboard({
       const hasLineItems = lineItems.length > 0;
       const hasQuotesForTrade = quoteCount > 0;
 
-      // Explicit flags — only true when the user has actually completed each step
-      const hasReviewCleanCompleted = !!settings?.settings?.review_clean_completed;
-      const hasQuoteIntelligenceCompleted = !!settings?.settings?.quote_intelligence_completed;
-      const hasQuantityIntelligenceCompleted = !!settings?.settings?.quantity_intelligence_completed;
-      const hasScopeMatrixCompleted = !!(projectRecord as any)?.scope_matrix_completed;
+      // All downstream steps are gated on the current trade having quotes.
+      // project_settings and projects flags are NOT trade-scoped, so without this
+      // gate they would show as completed when switching to a trade with no quotes.
+      const hasReviewCleanCompleted = hasQuotesForTrade && !!settings?.settings?.review_clean_completed;
+      const hasQuoteIntelligenceCompleted = hasQuotesForTrade && !!settings?.settings?.quote_intelligence_completed;
+      const hasQuantityIntelligenceCompleted = hasQuotesForTrade && !!settings?.settings?.quantity_intelligence_completed;
+      const hasScopeMatrixCompleted = hasQuotesForTrade && !!(projectRecord as any)?.scope_matrix_completed;
 
-      // For trade isolation: only show equalisation and reports as complete if THIS TRADE has quotes
+      // For trade isolation: only show equalisation, BOQ and reports as complete if THIS TRADE has quotes
       const hasEqualisation = hasQuotesForTrade && !!settings?.settings?.last_equalisation_run;
       const hasReports = hasQuotesForTrade && (reportsList?.length || 0) > 0;
-      const hasBOQ = !!(projectRecord as any)?.boq_builder_completed;
+      const hasBOQ = hasQuotesForTrade && !!(projectRecord as any)?.boq_builder_completed;
 
       const newStats: ProjectStats = {
         quoteCount,
