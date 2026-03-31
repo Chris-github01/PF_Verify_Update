@@ -121,6 +121,7 @@ function chunkByLineItems(text: string, maxLinesPerChunk: number = 30): { sectio
 
 async function detectCandidateRows(text: string, openaiApiKey: string, trade?: string): Promise<{ rows: string[]; confidence: number }> {
   const isPlumbing = trade === 'plumbing';
+  const isCarpentry = trade === 'carpentry';
 
   const systemPrompt = isPlumbing
     ? `You are a line item detector for plumbing construction quotes.
@@ -146,6 +147,35 @@ DO NOT extract:
 - Payment terms, conditions, warranty text
 - GST lines, subtotals that are clearly summations of already-listed items
 - Supplier contact details, dates, project addresses
+
+Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`
+    : isCarpentry
+    ? `You are a line item detector for carpentry and interior lining construction quotes.
+
+Carpentry quotes typically cover: timber framing, GIB/plasterboard fixing and stopping, insulation, ceiling battens, and related interior lining trades. They are commonly presented as LUMP SUM packages or UNIT RATE items broken down by level, zone, wall type, or trade section.
+
+A valid carpentry line item can be ANY of these formats:
+1. LUMP SUM SECTION: A trade or scope description with a total price (e.g. "Framing Level 3 $45,000", "GIB Fixing - Apartments $120,000")
+2. UNIT RATE: Description + quantity + unit + rate + total (e.g. "W30 Intertenancy Wall 2400 m2 $28.50 $68,400")
+3. LEVEL-BASED: Work priced per floor or zone (e.g. "Level 1 Carpentry $38,500", "Ground Floor Framing & Lining $52,000")
+4. TRADE SECTION: A section heading with a total (e.g. "Carpentry $485,000", "Plasterboard $320,000", "Insulation $95,000")
+5. NUMBERED SCOPE: Numbered work items with a price (e.g. "1. Structural Framing $210,000", "2. GIB Fixing $180,000")
+6. SUMMARY LINE: A single price covering the whole quote if no breakdown is given (e.g. "Total Lump Sum $850,000 + GST")
+
+INCLUDE:
+- Any line that contains a description of carpentry/framing/GIB/plasterboard/insulation/lining work AND a dollar amount
+- Lump sum work packages even if no qty or unit rate is visible
+- Level-based rows where each floor is priced separately
+- Section subtotals where each section (Carpentry, Plasterboard, Insulation) represents a distinct trade scope
+- Hourly rate lines if they include an estimated total (e.g. "Carpenter $75/hr x 400hrs = $30,000")
+- The overall quote total if no individual items are broken out
+
+DO NOT extract:
+- Pure header lines with no dollar amount
+- Inclusions/exclusions lists with no price
+- GST lines or grand totals that are clearly the sum of already-listed sections
+- Payment terms, warranty text, contact details, project addresses
+- Rate-only lines with no quantity or total (e.g. "Carpenter $75/hr" with no hours or total)
 
 Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`
     : `You are a line item detector for construction quotes.
@@ -213,6 +243,7 @@ async function normalizeRows(rows: string[], section: string, openaiApiKey: stri
   if (rows.length === 0) return [];
 
   const isPlumbing = trade === 'plumbing';
+  const isCarpentry = trade === 'carpentry';
 
   const systemPrompt = isPlumbing
     ? `You are a line item normalizer for plumbing construction quotes.
@@ -238,6 +269,32 @@ Example: "Item NO. 3 - Sanitary fixtures Total Price: $250,000 + GST" → descri
 Example: "Non-Potable Cold Water system $85,000" → description="Non-Potable Cold Water system", qty=1, unit="LS", rate=85000, total=85000, confidence=0.85
 
 Return JSON: {"items": [{"description": "...", "qty": 1, "unit": "LS", "rate": 250000, "total": 250000, "confidence": 0.9}]}`
+    : isCarpentry
+    ? `You are a line item normalizer for carpentry and interior lining construction quotes.
+
+For each raw text line, extract:
+- description: The scope of work, trade section, or product/service name (clean, concise). Include level or zone if present (e.g. "GIB Fixing - Level 3", "Framing - Ground Floor").
+- qty: Quantity as a number. For lump sum items use 1. If a real quantity is present (e.g. m2, LM, sheets), use it.
+- unit: Unit of measure. Use "LS" for lump sum items, "m2" for square metres, "LM" for lineal metres, "ea" for each, etc.
+- rate: Unit price as a number. For lump sums where only a total is given, set rate equal to the total.
+- total: The total dollar amount for this line item.
+
+CRITICAL RULES:
+1. NUMBER FORMAT: Commas are THOUSAND separators, NOT decimal separators
+   - "$485,000" = 485000 (NOT 485)
+   - "$1,200,000" = 1200000
+2. Lump sum items are VALID — if a line has a description and a dollar amount with no qty/rate, extract it as qty=1, unit="LS", rate=total.
+3. Level-based rows are valid line items — "Level 1 Carpentry $38,500" → description="Level 1 Carpentry", qty=1, unit="LS", rate=38500, total=38500.
+4. Section totals (Carpentry, Plasterboard, Insulation) ARE valid line items if they represent distinct trade scopes.
+5. SKIP grand totals, GST lines, and summary rows that are the sum of already-extracted sections.
+6. SKIP contact details, addresses, dates, payment terms, inclusions/exclusions lists with no price.
+7. If only one total is found for the whole quote, return it as a single lump sum item.
+
+Example: "Framing Level 3 $45,000" → description="Framing Level 3", qty=1, unit="LS", rate=45000, total=45000, confidence=0.9
+Example: "W30 Intertenancy Wall 2400 m2 $28.50 $68,400" → description="W30 Intertenancy Wall", qty=2400, unit="m2", rate=28.50, total=68400, confidence=0.95
+Example: "GIB Fixing $120,000" → description="GIB Fixing", qty=1, unit="LS", rate=120000, total=120000, confidence=0.9
+
+Return JSON: {"items": [{"description": "...", "qty": 1, "unit": "LS", "rate": 45000, "total": 45000, "confidence": 0.9}]}`
     : `You are a line item normalizer for construction quotes.
 
 For each raw text line, extract:
@@ -376,7 +433,7 @@ function extractPlumbingLevelTable(text: string): LineItem[] {
 function validateAndFixItem(item: LineItem, trade?: string): LineItem {
   const flags: string[] = [];
   const isLumpSum = item.unit === 'LS' || item.qty === 1;
-  const isPlumbing = trade === 'plumbing';
+  const isLumpSumTrade = trade === 'plumbing' || trade === 'carpentry';
 
   if (!item.total && item.qty && item.rate) {
     item.total = Math.round(item.qty * item.rate * 100) / 100;
@@ -398,12 +455,12 @@ function validateAndFixItem(item: LineItem, trade?: string): LineItem {
     item.confidence = Math.max(0.2, item.confidence - 0.3);
   }
 
-  if (item.qty <= 0 && !isPlumbing) {
+  if (item.qty <= 0 && !isLumpSumTrade) {
     flags.push('INVALID_QTY');
     item.confidence = Math.max(0.2, item.confidence - 0.3);
   }
 
-  if (item.rate <= 0 && !isPlumbing) {
+  if (item.rate <= 0 && !isLumpSumTrade) {
     flags.push('INVALID_RATE');
     item.confidence = Math.max(0.2, item.confidence - 0.3);
   }
@@ -510,6 +567,7 @@ Deno.serve(async (req: Request) => {
 
     // Plumbing fallback: if LLM returned 0 items, try regex level-table extraction
     const isPlumbing = (trade ?? '').toLowerCase() === 'plumbing';
+    const isCarpentry = (trade ?? '').toLowerCase() === 'carpentry';
     if (isPlumbing && allItems.length === 0) {
       console.log('[LLM v2] Plumbing: LLM returned 0 items, attempting regex level-table fallback...');
       const levelItems = extractPlumbingLevelTable(text);
