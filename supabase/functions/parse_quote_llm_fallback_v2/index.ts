@@ -180,23 +180,12 @@ Example truncated rows to INCLUDE as-is:
   "13mm GIB Fyreline  882  m2  29.40  0.70  42  25,930.80  13.30  11,730.60  42.70"
 These are VALID line items — do NOT skip them.
 
-FORMAT 2B — MATERIAL-ONLY columns with NO Overall Total (SERO Plasterboard Supply style):
+FORMAT 2B — MATERIAL-ONLY columns with NO Labour columns (SERO GIB Supply style):
 Columns: Description | Qty | Unit | Material Rate | Material Total | Overall Rate | Overall Total
 (Labour Rate, Labour Constant, Hourly Rate, Labour Total are all blank/zero)
 The row has only: qty, unit, material rate, material total, overall rate, overall total.
 Example: "10mm GIB Standard - W33, W34, W35  30384  m2  8.06  244760  8.06  244760"
 → Overall Total = 244760. INCLUDE this row.
-
-FORMAT 2C — LABOUR+MATERIAL with NO Overall Total column (SERO GIB Stopping style):
-Columns: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate
-(Overall Total column is ABSENT — it ends at Overall Rate with no total after it)
-Example: "10mm GIB Standard - W33, W34, W35  30384  m2  16.50  0.33  50  501336  0.52  15,799.68  17.02"
-→ Overall Total = Labour Total + Material Total = 501336 + 15799.68 = 517,135.68. INCLUDE this row.
-More examples of Format 2C rows to INCLUDE:
-  "10mm GIB Aqualine - W33, W34, W35  3952  m2  16.50  0.33  50  65208  0.52  2,055.04  17.02"
-  "13mm GIB Fyreline - W30, W31, W32, W36  13,254.40  m2  16.50  0.33  50  218,697.60  0.52  6,892.29  17.02"
-  "13mm GIB Aqualine  889  m2  16.50  0.33  50  14,668.50  0.52  462.28  17.02"
-  "13mm GIB Fyreline  10568  m2  16.50  0.33  50  174372  0.52  5,495.36  17.02"
 
 FORMAT 3 — HIGH-LEVEL SECTION LUMP SUMS (e.g. TBH Construction style):
 Trade sections each have a lump sum total. Qty=1, unit="sum" or "LS".
@@ -213,11 +202,14 @@ Example rows to INCLUDE:
 
 ALWAYS INCLUDE:
 - Any row with a description AND a dollar amount or enough numbers to calculate a total
-- All rows in Format 2A (full columns), 2B (material-only), 2C (no overall total), including page-truncated rows
+- All rows in Format 2A (full columns) and 2B (material-only), including page-truncated rows
 - Percentage-based allowances: "General Fixings (nails, screws) - 6%  1  sum  76,651.49" and "Wastage - 10%  1  sum  127,752.48"
 - Items in ALL sections: Soffit, Overflow/Sump, Seismic Joint, Parapet, Entry Canopy, Lift/Car Starker top roof, Roof Hatch, Steel beam packer, Bulkhead, Window reveal, Miscellaneous, Ceiling suspension, Interior Doors, Finishing Lines
 
 DO NOT INCLUDE:
+- GIB Stopping section rows — these are rows under the "GIB Stopping" heading that follow the pattern: GIB description + qty + m2 + labour columns ending at Overall Rate ~17.02 with NO Overall Total after it. These rows are NOT in scope for this subcontract. Examples to EXCLUDE:
+    "10mm GIB Standard - W33, W34, W35  30384  m2  16.50  0.33  50  501336  0.52  15,799.68  17.02"
+    "13mm GIB Fyreline - W30, W31, W32, W36  13,254.40  m2  16.50  0.33  50  218,697.60  0.52  6,892.29  17.02"
 - "No allowance to..." exclusion notes with no dollar amount
 - Grand totals, GST lines, or lines whose value equals the sum of preceding items in the same section (e.g. "1,926,482.09  1,481,928.81  2,617,826.06")
 - Payment terms, contact details, project addresses, warranty text
