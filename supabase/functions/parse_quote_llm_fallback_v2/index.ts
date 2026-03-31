@@ -163,49 +163,67 @@ Example output rows (after pairing):
   "LGF, UGF  $13,700.00"
   "Lv1-9 ($77400 Each)  $696,600.00"
   "Lv10  $61,000.00"
-  "Lv11,12  $102,000.00"
-  "Lv13,14  $73,600.00"
-  "Lv15,16,17  $78,600.00"
 CRITICAL: If you see a TOTAL column with 6 prices and a separate list of 6 level labels, ALL 6 must be included.
 
-FORMAT 2 — FULLY ITEMISED with LABOUR + MATERIAL + OVERALL columns (e.g. SERO Redesigned style):
-Columns are: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate | Overall Total
-The LAST dollar value on each row is the "Overall Total" — this is the correct total to extract.
-Rows that have a Qty, Unit, and a non-zero Overall Total are valid line items.
+FORMAT 2A — FULLY ITEMISED with LABOUR + MATERIAL + OVERALL columns (SERO Carpentry style):
+Columns: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate | Overall Total
+The LAST value on the row is the Overall Total. The second-to-last is the Overall Rate.
 Example: "51mm 0.75BMT Bottom Track  4096  m  5.88  0.14  42  24,084.48  3.42  13,991.94  9.30  38,076.42"
-→ description="51mm 0.75BMT Bottom Track", qty=4096, unit="m", rate=9.30, total=38076.42
+→ Extract as the raw row including ALL numbers so the normalizer can identify Overall Total.
+PAGE-TRUNCATED ROWS: If a row ends at the Overall Rate with no Overall Total (e.g. ends in "15.18" or "18.64" with nothing after), include the full row as-is — the normalizer will calculate qty × rate.
+Example truncated rows to INCLUDE as-is:
+  "90x45mm H3.2 timber batten  4410  m  10.50  0.25  42  46305  4.68  20,638.80  15.18"
+  "140x45mm H3.2 timber plate  1130  m  11.76  0.28  42  13,288.80  6.88  7,774.40  18.64"
+  "100mm wide DPC  4410  m  3.36  0.08  42  14,817.60  0.45  1,984.50  3.81"
+  "Joist Hanger  1157  no.  6.30  0.15  42  7,289.10  5.45  6,305.65  11.75"
+  "M12 Bolt  1502  no.  5.04  0.12  42  7,570.08  3.43  5,151.86  8.47"
+  "13mm GIB Fyreline  882  m2  29.40  0.70  42  25,930.80  13.30  11,730.60  42.70"
+These are VALID line items — do NOT skip them.
+
+FORMAT 2B — MATERIAL-ONLY columns with NO Overall Total (SERO Plasterboard Supply style):
+Columns: Description | Qty | Unit | Material Rate | Material Total | Overall Rate | Overall Total
+(Labour Rate, Labour Constant, Hourly Rate, Labour Total are all blank/zero)
+The row has only: qty, unit, material rate, material total, overall rate, overall total.
+Example: "10mm GIB Standard - W33, W34, W35  30384  m2  8.06  244760  8.06  244760"
+→ Overall Total = 244760. INCLUDE this row.
+
+FORMAT 2C — LABOUR+MATERIAL with NO Overall Total column (SERO GIB Stopping style):
+Columns: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate
+(Overall Total column is ABSENT — it ends at Overall Rate with no total after it)
+Example: "10mm GIB Standard - W33, W34, W35  30384  m2  16.50  0.33  50  501336  0.52  15,799.68  17.02"
+→ Overall Total = Labour Total + Material Total = 501336 + 15799.68 = 517,135.68. INCLUDE this row.
+More examples of Format 2C rows to INCLUDE:
+  "10mm GIB Aqualine - W33, W34, W35  3952  m2  16.50  0.33  50  65208  0.52  2,055.04  17.02"
+  "13mm GIB Fyreline - W30, W31, W32, W36  13,254.40  m2  16.50  0.33  50  218,697.60  0.52  6,892.29  17.02"
+  "13mm GIB Aqualine  889  m2  16.50  0.33  50  14,668.50  0.52  462.28  17.02"
+  "13mm GIB Fyreline  10568  m2  16.50  0.33  50  174372  0.52  5,495.36  17.02"
 
 FORMAT 3 — HIGH-LEVEL SECTION LUMP SUMS (e.g. TBH Construction style):
 Trade sections each have a lump sum total. Qty=1, unit="sum" or "LS".
 Example rows to INCLUDE:
   "Wall framing  1.00  Sum  $1,387,477.30"
   "Ceiling  1.00  sum  $402,979.50"
-  "Interior  1.00  sum  $477,832.30"
-  "Door installation(Labour only)  $337,252.50"
   "Gib Plasterboard Supply  1.00  Sum  $946,680.00"
-  "Pink Batts Classic Wall insulation R2.2  1.00  Sum  $538,949.73"
 
 FORMAT 4 — ITEMISED with Qty | Unit | U/Rate | Total, sometimes COMMA as decimal separator:
 European number format may be used: "$ 373 819,07" means $373,819.07 (comma = decimal point, space = thousands separator).
 Example rows to INCLUDE:
   "1  Internal Wall Framing  373 819,07"
-  "5  Plasterboard  186 485,89"
   "37  Ceiling height 2.4-2.7m  676  m2  $93.14  $62,961.58"
 
 ALWAYS INCLUDE:
-- Any row with a description of carpentry/framing/GIB/plasterboard/insulation/ceiling/door/skirting work AND a dollar amount
-- Lump sum lines (even if just description + total, no qty/rate)
-- Itemised lines with qty + unit + rate + total (use the Overall/rightmost total column)
+- Any row with a description AND a dollar amount or enough numbers to calculate a total
+- All rows in Format 2A (full columns), 2B (material-only), 2C (no overall total), including page-truncated rows
 - Percentage-based allowances: "General Fixings (nails, screws) - 6%  1  sum  76,651.49" and "Wastage - 10%  1  sum  127,752.48"
-- Section totals that represent a distinct trade scope (Wall framing, Ceiling, Interior, GIB Fixing, Insulation etc.)
+- Items in ALL sections: Soffit, Overflow/Sump, Seismic Joint, Parapet, Entry Canopy, Lift/Car Starker top roof, Roof Hatch, Steel beam packer, Bulkhead, Window reveal, Miscellaneous, Ceiling suspension, Interior Doors, Finishing Lines
 
 DO NOT INCLUDE:
 - "No allowance to..." exclusion notes with no dollar amount
-- Lines that are purely scope/exclusion text with no price
-- Grand totals, GST lines, subtotals that clearly sum already-listed items
+- Grand totals, GST lines, or lines whose value equals the sum of preceding items in the same section (e.g. "1,926,482.09  1,481,928.81  2,617,826.06")
 - Payment terms, contact details, project addresses, warranty text
-- Column header rows (Description, Qty, Unit, Rate, Total)
-- Section headers with no price (e.g. "INTERNAL WALL FRAME" on its own line with no total)
+- Column header rows only (Description, Qty, Unit, Rate, Total, Labour, Material, Overall)
+- Section header labels with no numbers (e.g. "INTERNAL WALL FRAME", "ROOF", "Soffit", "Bulkhead" alone with no dollar amounts)
+- Standalone "42" or "50" separator rows
 
 Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`
     : `You are a line item detector for construction quotes.
@@ -303,48 +321,149 @@ Return JSON: {"items": [{"description": "...", "qty": 1, "unit": "LS", "rate": 2
     ? `You are a line item normalizer for carpentry and interior lining construction quotes (NZ/AU market).
 
 For each raw text row, extract:
-- description: Clean, concise name. Include level/zone/wall-type if present (e.g. "51mm 0.75BMT Bottom Track", "GIB Fixing - Level 3", "W30 Intertenancy Wall Frame").
-- qty: Numeric quantity. Use 1 for lump sums. Use the real qty when columns are present.
+- description: Clean, concise name including wall-type/section if present.
+- qty: Numeric quantity. Use 1 for lump sums.
 - unit: "m", "m2", "no", "ea", "LS", "sum" as appropriate.
 - rate: The OVERALL/COMBINED unit rate (labour + material combined). For lump sums set rate = total.
-- total: The OVERALL total dollar amount for this line item (rightmost money column when multiple exist).
+- total: The OVERALL total dollar amount (see format rules below).
 
 CRITICAL NUMBER FORMAT RULES:
-1. Standard format — comma = thousands separator:  "$38,076.42" = 38076.42,  "$1,025,500" = 1025500
-2. European format — comma = decimal, space = thousands:  "38 076,42" = 38076.42,  "373 819,07" = 373819.07
-   Detect European format when numbers contain a comma followed by exactly 2 digits at the end (e.g. "819,07").
+1. Standard format — comma = thousands separator: "$38,076.42" = 38076.42, "$1,025,500" = 1025500
+2. European format — comma = decimal, space = thousands: "38 076,42" = 38076.42, "373 819,07" = 373819.07
 3. Never interpret a comma-separated number as a small decimal.
+4. Large unformatted integers like "501336", "46305", "244760" are full dollar amounts (e.g. 501336 = $501,336).
 
-MULTI-COLUMN LABOUR/MATERIAL FORMAT (Quote 2 style):
-Columns: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate | Overall Total
-- The LAST dollar value on the row is the Overall Total — use that as "total"
-- The second-to-last value is the Overall Rate — use that as "rate"
-- Example row: "51mm 0.75BMT Bottom Track  4096  m  5.88  0.14  42  24,084.48  3.42  13,991.94  9.30  38,076.42"
-  → description="51mm 0.75BMT Bottom Track", qty=4096, unit="m", rate=9.30, total=38076.42
-- PAGE BOUNDARY TRUNCATION: Some rows appear at the end of a page and the Overall Total column is cut off. You can identify these because the row ends with only an Overall Rate (a small number like "15.18" or "18.64") but has no final Overall Total value after it. In this case: total = qty × Overall Rate.
-  Example truncated row: "90x45mm H3.2 timber batten   4410   m   10.50   0.25   42   46305   4.68   20,638.80   15.18"
-  → The row ends at "15.18" (Overall Rate) with no Overall Total. Calculate: total = 4410 × 15.18 = 66,943.80
-  → Do NOT use 20,638.80 (Material Total) as the total for this row.
-- If the Overall Total column is blank/missing but Labour Total and Material Total are present, sum them for the total.
-- Rows where the Hourly Rate column contains a standalone "42" or "50" (with no other numbers on that row) are blank separator rows — SKIP them.
+IDENTIFYING THE COLUMN STRUCTURE — read the numbers carefully:
+This quote uses up to 11 columns: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate | Overall Total
+The Hourly Rate column contains a fixed value of 42 or 50 (the hourly labour rate). Use this to orient yourself.
+Count columns from left: col7 = Labour Total (large), col9 = Material Total (large), col10 = Overall Rate (small), col11 = Overall Total (large).
 
-LUMP SUM FORMAT (Quote 1 and 3 style):
-- "LGF, UGF  $13,700.00" → description="LGF, UGF", qty=1, unit="LS", rate=13700, total=13700
-- "Wall framing  1.00  Sum  $1,387,477.30" → description="Wall framing", qty=1, unit="LS", rate=1387477.30, total=1387477.30
-- "Gib Plasterboard Supply  1.00  Sum  $946,680.00" → description="Gib Plasterboard Supply", qty=1, unit="LS", rate=946680, total=946680
-- "General Fixings (nails, screws) - 6%  1  sum  76,651.49  76,651.49" → description="General Fixings - 6%", qty=1, unit="LS", rate=76651.49, total=76651.49
-- "Wastage - 10%  1  sum  127,752.48  127,752.48" → description="Wastage - 10%", qty=1, unit="LS", rate=127752.48, total=127752.48
+FORMAT A — FULL 11-COLUMN ROW (Overall Total present):
+The LAST value is the Overall Total. The second-to-last is the Overall Rate.
+Examples:
+  "51mm 0.75BMT Bottom Track  4096  m  5.88  0.14  42  24,084.48  3.42  13,991.94  9.30  38,076.42"
+  → qty=4096, unit="m", rate=9.30, total=38076.42
+  "Rondo128 - 38x21x0.75 top cross rail  11,981.44  m  6.30  0.15  42  75,483.10  8.72  104,442.25  15.02  179,925.35"
+  → qty=11981.44, unit="m", rate=15.02, total=179925.35
+  "60mm (h) Suspension Clip  13,312.72  no  2.52  0.06  42  33,548.04  2.90  38,580.25  5.42  72,128.30"
+  → qty=13312.72, unit="no", rate=5.42, total=72128.30
+  "Hanger clips to concrete  13,312.72  no  2.10  0.05  42  27,956.70  3.42  45,469.58  5.52  73,426.29"
+  → qty=13312.72, unit="no", rate=5.52, total=73426.29
+  "Ø5.0mm Soft Galvanised Suspension Rod  8,653.27  m  1.68  0.04  42  14,537.49  1.84  15,922.01  3.52  30,459.49"
+  → qty=8653.27, unit="m", rate=3.52, total=30459.49
+  "Gridlocl bracing tee  95  no  147  3.50  42  13965  223.69  21,250.55  370.69  35,215.55"
+  → qty=95, unit="no", rate=370.69, total=35215.55
+  "9mm Villaboard soffit lining  882  m2  27.30  0.65  42  24,078.60  29.53  26,045.46  56.83  50,124.06"
+  → qty=882, unit="m2", rate=56.83, total=50124.06
+  "9mm Villaboard soffit lining  135  m2  27.30  0.65  42  3,685.50  29.53  3,986.55  56.83  7,672.05"
+  → qty=135, unit="m2", rate=56.83, total=7672.05
+  "Joist Hanger  771  no.  6.30  0.15  42  4,857.30  5.45  4,201.95  11.75  9,059.25"
+  → qty=771, unit="no", rate=11.75, total=9059.25
+  "240x45mm H1.2 timber trimmer beam  80  m  14.70  0.35  42  1176  12.56  1,004.80  27.26  2,180.80"
+  → qty=80, unit="m", rate=27.26, total=2180.80
+  "18mm Plywood  30  m2  37.80  0.90  42  1134  50.25  1,507.50  88.05  2,641.50"
+  → qty=30, unit="m2", rate=88.05, total=2641.50
 
-ITEMISED FORMAT (Quote 4 style, may use European number format):
-- "5  Plasterboard  186 485,89" → description="Plasterboard", qty=1, unit="LS", rate=186485.89, total=186485.89
-- "37  Ceiling height 2.4-2.7m  676  m2  93,14  62 961,58" → description="Ceiling height 2.4-2.7m", qty=676, unit="m2", rate=93.14, total=62961.58
+FORMAT B — PAGE-TRUNCATED ROW (Overall Total cut off, row ends at Overall Rate):
+You can identify these because: the row ends with a small decimal number (the Overall Rate) and there is no following large total value.
+Calculate: total = qty × Overall Rate
+Examples:
+  "90x45mm H3.2 timber batten  4410  m  10.50  0.25  42  46305  4.68  20,638.80  15.18"
+  → Row ends at 15.18 (Overall Rate), no Overall Total. total = 4410 × 15.18 = 66,943.80
+  "140x45mm H3.2 timber plate  1130  m  11.76  0.28  42  13,288.80  6.88  7,774.40  18.64"
+  → total = 1130 × 18.64 = 21,063.20
+  "100mm wide DPC  4410  m  3.36  0.08  42  14,817.60  0.45  1,984.50  3.81"
+  → total = 4410 × 3.81 = 16,802.10
+  "Joist Hanger  1157  no.  6.30  0.15  42  7,289.10  5.45  6,305.65  11.75"
+  → total = 1157 × 11.75 = 13,593.75
+  "M12 Bolt  1502  no.  5.04  0.12  42  7,570.08  3.43  5,151.86  8.47"
+  → total = 1502 × 8.47 = 12,721.94
+  "13mm GIB Fyreline  882  m2  29.40  0.70  42  25,930.80  13.30  11,730.60  42.70"
+  → total = 882 × 42.70 = 37,661.40
+  "90x45mm H3.2 timber plate  3,458.33  m  10.50  0.25  42  36,312.50  4.68  16185  15.18"
+  → total = 3458.33 × 15.18 = 52,497.25
+  "90x45mm H3.2 timber plate  756  m  10.50  0.25  42  7938  4.88  3,689.28  15.38"
+  → total = 756 × 15.38 = 11,627.28
+  "140x45mm H3.2 timber plate  1701  m  11.76  0.28  42  20,003.76  6.88  11,702.88  18.64"
+  → total = 1701 × 18.64 = 31,706.64
+  "140x45mm H3.2 timber plate  2,939.58  m  11.76  0.28  42  34,569.50  6.88  20,224.33  18.64"
+  → total = 2939.58 × 18.64 = 54,793.77
+  "140x45mm H3.2 timber plate  636.16  m  11.76  0.28  42  7,481.24  6.88  4,376.78  18.64"
+  → total = 636.16 × 18.64 = 11,858.02
+  "150mm DPC  227  m  4.20  0.10  42  953.40  0.55  124.85  4.75"
+  → total = 227 × 4.75 = 1,078.25
+  "M12 Bolt and Washer  378.33  no.  5.04  0.12  42  1,906.80  3.43  1,297.68  8.47"
+  → total = 378.33 × 8.47 = 3,204.46
+  "Metal flashing  227.20  m  10.50  0.25  42  2,385.60  26  5,907.20  36.50"
+  → total = 227.20 × 36.50 = 8,292.80
+  "140x45mm H3.2 timber plate  931.50  m  11.76  0.28  42  10,954.44  6.88  6,408.72  18.64"
+  → total = 931.50 × 18.64 = 17,363.16
+  "Metal flashing  102  m  10.50  0.25  42  1071  0.25  25.50  10.75"
+  → total = 102 × 10.75 = 1,096.50
+  "M12 Bolt and washer  156  no.  5.04  0.12  42  786.24  0.12  18.72  5.16"
+  → total = 156 × 5.16 = 805.00 (approx)
+  "Angel fillet  89  m  8.40  0.20  42  747.60  2.65  235.85  11.05"
+  → total = 89 × 11.05 = 983.45
+  "Metal flashing  225  m  10.50  0.25  42  2,362.50  26  5850  36.50"
+  → total = 225 × 36.50 = 8,212.50
+  "6mm RAB board  55  m2  25.20  0.60  42  1386  19.25  1,058.75  44.45"
+  → total = 55 × 44.45 = 2,444.75
+  "6mm RAB board  86  m2  25.20  0.60  42  2,167.20  19.25  1,655.50  44.45"
+  → total = 86 × 44.45 = 3,822.70
+  "CPC40  352  no.  5.04  0.12  42  1,774.08  2.25  792  7.29"
+  → total = 352 × 7.29 = 2,566.08
+  "90x45mm H1.2 Timber packer to steel beam / column  4856  m  10.50  0.25  42  50988  4.88  23,697.28  15.38"
+  → total = 4856 × 15.38 = 74,685.28
+  "M12 Bolt and washer  2,697.78  no.  5.04  0.12  42  13,596.80  3.43  9,253.38  8.47"
+  → total = 2697.78 × 8.47 = 22,850.30
+  "90x45mm H1.2 Timber frame Bulkhead  3252  m  10.50  0.25  42  34146  4.88  15,869.76  15.38"
+  → total = 3252 × 15.38 = 50,033.76
+  "Joist Hanger  1065  no.  6.30  0.15  42  6,709.50  5.25  5,591.25  11.55"
+  → total = 1065 × 11.55 = 12,301.75
+  "CPC40  922  no.  4.20  0.10  42  3,872.40  2.25  2,074.50  6.45"
+  → total = 922 × 6.45 = 5,946.90
+  "M12 Bolt and washer  1880  no.  5.04  0.12  42  9,475.20  3.43  6,448.40  8.47"
+  → total = 1880 × 8.47 = 15,923.60
+  "140x45mm H1.2 Timber packer to window jamb, head and sill  4705  m  11.76  0.28  42  55,330.80  6.88  32,370.40  18.64"
+  → total = 4705 × 18.64 = 87,701.20
+  "150mm DPC  4705  m  4.20  0.10  42  19761  0.55  2,587.75  4.75"
+  → total = 4705 × 4.75 = 22,348.75
+  "M12 Bolt and washer  3,920.83  no.  5.04  0.12  42  19761  3.43  13,448.46  8.47"
+  → total = 3920.83 × 8.47 = 33,209.42
+
+FORMAT C — NO OVERALL TOTAL COLUMN (GIB Stopping style — Labour Total + Material Total only, Overall Rate present):
+These rows end with the Overall Rate but have no Overall Total. You can identify them by context (GIB Stopping section) or because the last number is a small unit rate.
+Calculate: total = Labour Total + Material Total
+Examples:
+  "10mm GIB Standard - W33, W34, W35  30384  m2  16.50  0.33  50  501336  0.52  15,799.68  17.02"
+  → Labour Total=501336, Material Total=15799.68, total = 501336 + 15799.68 = 517,135.68, rate=17.02
+  "10mm GIB Aqualine - W33, W34, W35  3952  m2  16.50  0.33  50  65208  0.52  2,055.04  17.02"
+  → total = 65208 + 2055.04 = 67,263.04, rate=17.02
+  "13mm GIB Fyreline - W30, W31, W32, W36  13,254.40  m2  16.50  0.33  50  218,697.60  0.52  6,892.29  17.02"
+  → total = 218697.60 + 6892.29 = 225,589.89, rate=17.02
+  "13mm GIB Aqualine  889  m2  16.50  0.33  50  14,668.50  0.52  462.28  17.02"
+  → total = 14668.50 + 462.28 = 15,130.78, rate=17.02
+  "13mm GIB Fyreline  10568  m2  16.50  0.33  50  174372  0.52  5,495.36  17.02"
+  → total = 174372 + 5495.36 = 179,867.36, rate=17.02
+
+FORMAT D — MATERIAL-ONLY ROW (GIB Supply style — no labour columns, Material Rate = Overall Rate = Overall Total / Qty):
+Example: "10mm GIB Standard - W33, W34, W35  30384  m2  8.06  244760  8.06  244760"
+→ qty=30384, unit="m2", rate=8.06, total=244760
+
+FORMAT E — LUMP SUM:
+- "General Fixings (nails, screws) - 6%  1  sum  76,651.49  76,651.49" → qty=1, unit="LS", total=76651.49
+- "Wastage - 10%  1  sum  127,752.48  127,752.48" → qty=1, unit="LS", total=127752.48
+- "Wall framing  1.00  Sum  $1,387,477.30" → qty=1, unit="LS", total=1387477.30
+- "Single door  460  no  189  4.50  42  86940  0  189  86940" → qty=460, unit="no", rate=189, total=86940
 
 ALWAYS SKIP:
-- Grand totals, GST lines, subtotals that aggregate already-listed items
+- Grand totals / section subtotals that sum other items (e.g. "1,926,482.09  1,481,928.81  2,617,826.06")
 - "No allowance to..." exclusion notes
 - Column header rows (Description, Qty, Unit, Rate, Total, Labour, Material, Overall)
-- Blank separator rows (row contains only a number like "42" or "50" with no description)
-- Contact details, addresses, dates, payment terms, warranty/compliance text
+- Standalone "42" or "50" separator rows with no description
+- Contact details, addresses, payment terms, note text
+
+CRITICAL: Do NOT produce duplicate rows. If the same description+qty+unit combination appears in both a GIB Supply block and a GIB Fixing block, they are DIFFERENT items with different scope — keep both. But do NOT extract the same physical row twice.
 
 Return JSON: {"items": [{"description": "...", "qty": 4096, "unit": "m", "rate": 9.30, "total": 38076.42, "confidence": 0.95}]}`
     : `You are a line item normalizer for construction quotes.
