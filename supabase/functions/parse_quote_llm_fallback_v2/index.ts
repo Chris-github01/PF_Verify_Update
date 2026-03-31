@@ -154,12 +154,19 @@ Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`
 
 Carpentry quotes cover: timber framing, steel stud framing, GIB/plasterboard supply/fixing/stopping, insulation, ceiling suspension systems, internal doors, skirting/architrave, bulkheads, and associated hardware. They appear in multiple formats — you must handle ALL of them.
 
-FORMAT 1 — LEVEL-BASED LUMP SUMS (e.g. Cloud10 style):
-Each floor or zone is a separate line with only a description and dollar total.
-Example rows to INCLUDE:
+FORMAT 1 — LEVEL-BASED LUMP SUMS where PRICES and DESCRIPTIONS are separated (e.g. Cloud10 style):
+The PDF may list prices in a column first (under a "TOTAL" header) and descriptions in a separate column or section.
+You MUST pair them by their sequential order: 1st price → 1st description, 2nd price → 2nd description, etc.
+The descriptions are typically level/zone labels like "LGF, UGF", "Lv1-9", "Lv10", "Lv11,12", "Lv13,14", "Lv15,16,17".
+Even if they appear on different parts of the page, match them in order and return one combined row per item.
+Example output rows (after pairing):
   "LGF, UGF  $13,700.00"
   "Lv1-9 ($77400 Each)  $696,600.00"
   "Lv10  $61,000.00"
+  "Lv11,12  $102,000.00"
+  "Lv13,14  $73,600.00"
+  "Lv15,16,17  $78,600.00"
+CRITICAL: If you see a TOTAL column with 6 prices and a separate list of 6 level labels, ALL 6 must be included.
 
 FORMAT 2 — FULLY ITEMISED with LABOUR + MATERIAL + OVERALL columns (e.g. SERO Redesigned style):
 Columns are: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate | Overall Total
