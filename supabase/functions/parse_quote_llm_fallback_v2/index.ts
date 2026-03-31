@@ -150,32 +150,55 @@ DO NOT extract:
 
 Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`
     : isCarpentry
-    ? `You are a line item detector for carpentry and interior lining construction quotes.
+    ? `You are a line item detector for carpentry and interior lining construction quotes (NZ/AU market).
 
-Carpentry quotes typically cover: timber framing, GIB/plasterboard fixing and stopping, insulation, ceiling battens, and related interior lining trades. They are commonly presented as LUMP SUM packages or UNIT RATE items broken down by level, zone, wall type, or trade section.
+Carpentry quotes cover: timber framing, steel stud framing, GIB/plasterboard supply/fixing/stopping, insulation, ceiling suspension systems, internal doors, skirting/architrave, bulkheads, and associated hardware. They appear in multiple formats — you must handle ALL of them.
 
-A valid carpentry line item can be ANY of these formats:
-1. LUMP SUM SECTION: A trade or scope description with a total price (e.g. "Framing Level 3 $45,000", "GIB Fixing - Apartments $120,000")
-2. UNIT RATE: Description + quantity + unit + rate + total (e.g. "W30 Intertenancy Wall 2400 m2 $28.50 $68,400")
-3. LEVEL-BASED: Work priced per floor or zone (e.g. "Level 1 Carpentry $38,500", "Ground Floor Framing & Lining $52,000")
-4. TRADE SECTION: A section heading with a total (e.g. "Carpentry $485,000", "Plasterboard $320,000", "Insulation $95,000")
-5. NUMBERED SCOPE: Numbered work items with a price (e.g. "1. Structural Framing $210,000", "2. GIB Fixing $180,000")
-6. SUMMARY LINE: A single price covering the whole quote if no breakdown is given (e.g. "Total Lump Sum $850,000 + GST")
+FORMAT 1 — LEVEL-BASED LUMP SUMS (e.g. Cloud10 style):
+Each floor or zone is a separate line with only a description and dollar total.
+Example rows to INCLUDE:
+  "LGF, UGF  $13,700.00"
+  "Lv1-9 ($77400 Each)  $696,600.00"
+  "Lv10  $61,000.00"
 
-INCLUDE:
-- Any line that contains a description of carpentry/framing/GIB/plasterboard/insulation/lining work AND a dollar amount
-- Lump sum work packages even if no qty or unit rate is visible
-- Level-based rows where each floor is priced separately
-- Section subtotals where each section (Carpentry, Plasterboard, Insulation) represents a distinct trade scope
-- Hourly rate lines if they include an estimated total (e.g. "Carpenter $75/hr x 400hrs = $30,000")
-- The overall quote total if no individual items are broken out
+FORMAT 2 — FULLY ITEMISED with LABOUR + MATERIAL + OVERALL columns (e.g. SERO Redesigned style):
+Columns are: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate | Overall Total
+The LAST dollar value on each row is the "Overall Total" — this is the correct total to extract.
+Rows that have a Qty, Unit, and a non-zero Overall Total are valid line items.
+Example: "51mm 0.75BMT Bottom Track  4096  m  5.88  0.14  42  24,084.48  3.42  13,991.94  9.30  38,076.42"
+→ description="51mm 0.75BMT Bottom Track", qty=4096, unit="m", rate=9.30, total=38076.42
 
-DO NOT extract:
-- Pure header lines with no dollar amount
-- Inclusions/exclusions lists with no price
-- GST lines or grand totals that are clearly the sum of already-listed sections
-- Payment terms, warranty text, contact details, project addresses
-- Rate-only lines with no quantity or total (e.g. "Carpenter $75/hr" with no hours or total)
+FORMAT 3 — HIGH-LEVEL SECTION LUMP SUMS (e.g. TBH Construction style):
+Trade sections each have a lump sum total. Qty=1, unit="sum" or "LS".
+Example rows to INCLUDE:
+  "Wall framing  1.00  Sum  $1,387,477.30"
+  "Ceiling  1.00  sum  $402,979.50"
+  "Interior  1.00  sum  $477,832.30"
+  "Door installation(Labour only)  $337,252.50"
+  "Gib Plasterboard Supply  1.00  Sum  $946,680.00"
+  "Pink Batts Classic Wall insulation R2.2  1.00  Sum  $538,949.73"
+
+FORMAT 4 — ITEMISED with Qty | Unit | U/Rate | Total, sometimes COMMA as decimal separator:
+European number format may be used: "$ 373 819,07" means $373,819.07 (comma = decimal point, space = thousands separator).
+Example rows to INCLUDE:
+  "1  Internal Wall Framing  373 819,07"
+  "5  Plasterboard  186 485,89"
+  "37  Ceiling height 2.4-2.7m  676  m2  $93.14  $62,961.58"
+
+ALWAYS INCLUDE:
+- Any row with a description of carpentry/framing/GIB/plasterboard/insulation/ceiling/door/skirting work AND a dollar amount
+- Lump sum lines (even if just description + total, no qty/rate)
+- Itemised lines with qty + unit + rate + total (use the Overall/rightmost total column)
+- Percentage-based allowances: "General Fixings (nails, screws) - 6%  1  sum  76,651.49" and "Wastage - 10%  1  sum  127,752.48"
+- Section totals that represent a distinct trade scope (Wall framing, Ceiling, Interior, GIB Fixing, Insulation etc.)
+
+DO NOT INCLUDE:
+- "No allowance to..." exclusion notes with no dollar amount
+- Lines that are purely scope/exclusion text with no price
+- Grand totals, GST lines, subtotals that clearly sum already-listed items
+- Payment terms, contact details, project addresses, warranty text
+- Column header rows (Description, Qty, Unit, Rate, Total)
+- Section headers with no price (e.g. "INTERNAL WALL FRAME" on its own line with no total)
 
 Return JSON: {"rows": ["raw line 1", "raw line 2", ...]}`
     : `You are a line item detector for construction quotes.
@@ -270,31 +293,49 @@ Example: "Non-Potable Cold Water system $85,000" → description="Non-Potable Co
 
 Return JSON: {"items": [{"description": "...", "qty": 1, "unit": "LS", "rate": 250000, "total": 250000, "confidence": 0.9}]}`
     : isCarpentry
-    ? `You are a line item normalizer for carpentry and interior lining construction quotes.
+    ? `You are a line item normalizer for carpentry and interior lining construction quotes (NZ/AU market).
 
-For each raw text line, extract:
-- description: The scope of work, trade section, or product/service name (clean, concise). Include level or zone if present (e.g. "GIB Fixing - Level 3", "Framing - Ground Floor").
-- qty: Quantity as a number. For lump sum items use 1. If a real quantity is present (e.g. m2, LM, sheets), use it.
-- unit: Unit of measure. Use "LS" for lump sum items, "m2" for square metres, "LM" for lineal metres, "ea" for each, etc.
-- rate: Unit price as a number. For lump sums where only a total is given, set rate equal to the total.
-- total: The total dollar amount for this line item.
+For each raw text row, extract:
+- description: Clean, concise name. Include level/zone/wall-type if present (e.g. "51mm 0.75BMT Bottom Track", "GIB Fixing - Level 3", "W30 Intertenancy Wall Frame").
+- qty: Numeric quantity. Use 1 for lump sums. Use the real qty when columns are present.
+- unit: "m", "m2", "no", "ea", "LS", "sum" as appropriate.
+- rate: The OVERALL/COMBINED unit rate (labour + material combined). For lump sums set rate = total.
+- total: The OVERALL total dollar amount for this line item (rightmost money column when multiple exist).
 
-CRITICAL RULES:
-1. NUMBER FORMAT: Commas are THOUSAND separators, NOT decimal separators
-   - "$485,000" = 485000 (NOT 485)
-   - "$1,200,000" = 1200000
-2. Lump sum items are VALID — if a line has a description and a dollar amount with no qty/rate, extract it as qty=1, unit="LS", rate=total.
-3. Level-based rows are valid line items — "Level 1 Carpentry $38,500" → description="Level 1 Carpentry", qty=1, unit="LS", rate=38500, total=38500.
-4. Section totals (Carpentry, Plasterboard, Insulation) ARE valid line items if they represent distinct trade scopes.
-5. SKIP grand totals, GST lines, and summary rows that are the sum of already-extracted sections.
-6. SKIP contact details, addresses, dates, payment terms, inclusions/exclusions lists with no price.
-7. If only one total is found for the whole quote, return it as a single lump sum item.
+CRITICAL NUMBER FORMAT RULES:
+1. Standard format — comma = thousands separator:  "$38,076.42" = 38076.42,  "$1,025,500" = 1025500
+2. European format — comma = decimal, space = thousands:  "38 076,42" = 38076.42,  "373 819,07" = 373819.07
+   Detect European format when numbers contain a comma followed by exactly 2 digits at the end (e.g. "819,07").
+3. Never interpret a comma-separated number as a small decimal.
 
-Example: "Framing Level 3 $45,000" → description="Framing Level 3", qty=1, unit="LS", rate=45000, total=45000, confidence=0.9
-Example: "W30 Intertenancy Wall 2400 m2 $28.50 $68,400" → description="W30 Intertenancy Wall", qty=2400, unit="m2", rate=28.50, total=68400, confidence=0.95
-Example: "GIB Fixing $120,000" → description="GIB Fixing", qty=1, unit="LS", rate=120000, total=120000, confidence=0.9
+MULTI-COLUMN LABOUR/MATERIAL FORMAT (Quote 2 style):
+Columns: Description | Qty | Unit | Labour Rate | Labour Constant | Hourly Rate | Labour Total | Material Rate | Material Total | Overall Rate | Overall Total
+- The LAST dollar value on the row is the Overall Total — use that as "total"
+- The second-to-last value is the Overall Rate — use that as "rate"
+- Example row: "51mm 0.75BMT Bottom Track  4096  m  5.88  0.14  42  24,084.48  3.42  13,991.94  9.30  38,076.42"
+  → description="51mm 0.75BMT Bottom Track", qty=4096, unit="m", rate=9.30, total=38076.42
+- If the Overall Total column is blank/missing but Labour Total and Material Total are present, sum them for the total.
+- Rows where the Hourly Rate column contains a standalone "42" or "50" (with no other numbers on that row) are blank separator rows — SKIP them.
 
-Return JSON: {"items": [{"description": "...", "qty": 1, "unit": "LS", "rate": 45000, "total": 45000, "confidence": 0.9}]}`
+LUMP SUM FORMAT (Quote 1 and 3 style):
+- "LGF, UGF  $13,700.00" → description="LGF, UGF", qty=1, unit="LS", rate=13700, total=13700
+- "Wall framing  1.00  Sum  $1,387,477.30" → description="Wall framing", qty=1, unit="LS", rate=1387477.30, total=1387477.30
+- "Gib Plasterboard Supply  1.00  Sum  $946,680.00" → description="Gib Plasterboard Supply", qty=1, unit="LS", rate=946680, total=946680
+- "General Fixings (nails, screws) - 6%  1  sum  76,651.49  76,651.49" → description="General Fixings - 6%", qty=1, unit="LS", rate=76651.49, total=76651.49
+- "Wastage - 10%  1  sum  127,752.48  127,752.48" → description="Wastage - 10%", qty=1, unit="LS", rate=127752.48, total=127752.48
+
+ITEMISED FORMAT (Quote 4 style, may use European number format):
+- "5  Plasterboard  186 485,89" → description="Plasterboard", qty=1, unit="LS", rate=186485.89, total=186485.89
+- "37  Ceiling height 2.4-2.7m  676  m2  93,14  62 961,58" → description="Ceiling height 2.4-2.7m", qty=676, unit="m2", rate=93.14, total=62961.58
+
+ALWAYS SKIP:
+- Grand totals, GST lines, subtotals that aggregate already-listed items
+- "No allowance to..." exclusion notes
+- Column header rows (Description, Qty, Unit, Rate, Total, Labour, Material, Overall)
+- Blank separator rows (row contains only a number like "42" or "50" with no description)
+- Contact details, addresses, dates, payment terms, warranty/compliance text
+
+Return JSON: {"items": [{"description": "...", "qty": 4096, "unit": "m", "rate": 9.30, "total": 38076.42, "confidence": 0.95}]}`
     : `You are a line item normalizer for construction quotes.
 
 For each raw text line, extract:
