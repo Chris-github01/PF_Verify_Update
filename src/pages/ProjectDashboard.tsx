@@ -125,8 +125,18 @@ export default function ProjectDashboard({
       const hasProcessedData = processedItems.length > 0;
 
       // Only show workflow steps as complete if this trade has actual data
-      const hasEqualisation = hasQuotesForTrade && !!settings?.settings?.last_equalisation_run;
-      const hasScopeMatrix = hasProcessedData && !!settings?.settings?.scope_matrix_completed;
+      const tradeSettings = settings?.settings?.[currentTrade];
+      const hasTradeKey = tradeSettings !== undefined;
+      const hasAnyTradeKey = settings?.settings && Object.keys(settings.settings).some(k =>
+        typeof settings.settings[k] === 'object' && settings.settings[k] !== null
+      );
+      const getFlag = (flag: string): boolean => {
+        if (hasTradeKey) return !!tradeSettings?.[flag];
+        if (hasAnyTradeKey) return false;
+        return !!settings?.settings?.[flag];
+      };
+      const hasEqualisation = hasQuotesForTrade && getFlag('last_equalisation_run');
+      const hasScopeMatrix = hasProcessedData && getFlag('scope_matrix_completed');
       const hasReports = hasQuotesForTrade && !!latestReport;
 
       setStats({

@@ -244,11 +244,15 @@ export default function QuantityIntelligencePage({ projectId, onNavigateNext }: 
         .eq('project_id', projectId)
         .maybeSingle();
 
+      const baseSettings = existingSettings?.settings || {};
       await supabase.from('project_settings').upsert({
         project_id: projectId,
         settings: {
-          ...(existingSettings?.settings || {}),
-          quantity_intelligence_completed: true,
+          ...baseSettings,
+          [currentTrade]: {
+            ...(baseSettings[currentTrade] || {}),
+            quantity_intelligence_completed: true,
+          },
         },
         updated_at: new Date().toISOString(),
       }, { onConflict: 'project_id' });

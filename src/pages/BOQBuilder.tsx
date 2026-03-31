@@ -98,13 +98,23 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
           .maybeSingle();
 
         if (!(proj as any)?.boq_builder_completed) {
-          await supabase
-            .from('projects')
-            .update({
-              boq_builder_completed: true,
-              boq_builder_completed_at: new Date().toISOString()
-            })
-            .eq('id', projectId);
+          const { data: existingSettings } = await supabase
+            .from('project_settings')
+            .select('settings')
+            .eq('project_id', projectId)
+            .maybeSingle();
+          const baseSettings = existingSettings?.settings || {};
+          await supabase.from('project_settings').upsert({
+            project_id: projectId,
+            settings: {
+              ...baseSettings,
+              [currentTrade]: {
+                ...(baseSettings[currentTrade] || {}),
+                boq_builder_completed: true,
+              },
+            },
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'project_id' });
         }
       }
 
@@ -233,13 +243,23 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
       setGenerationResult(result);
       await loadBOQData();
 
-      await supabase
-        .from('projects')
-        .update({
-          boq_builder_completed: true,
-          boq_builder_completed_at: new Date().toISOString()
-        })
-        .eq('id', projectId);
+      const { data: existingSettings2 } = await supabase
+        .from('project_settings')
+        .select('settings')
+        .eq('project_id', projectId)
+        .maybeSingle();
+      const baseSettings2 = existingSettings2?.settings || {};
+      await supabase.from('project_settings').upsert({
+        project_id: projectId,
+        settings: {
+          ...baseSettings2,
+          [currentTrade]: {
+            ...(baseSettings2[currentTrade] || {}),
+            boq_builder_completed: true,
+          },
+        },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'project_id' });
     } catch (error) {
       console.error('Error generating BOQ:', error);
       alert('Failed to generate BOQ. Please ensure quotes have been imported.');
@@ -341,15 +361,27 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
         throw new Error(`Failed to delete tags: ${deleteTagsError.message}`);
       }
 
-      // Step 3: Reset project BOQ completion flags
+      // Step 3: Reset project BOQ completion flags (trade-scoped)
       console.log('Step 3: Resetting project flags...');
+      const { data: resetSettings } = await supabase
+        .from('project_settings')
+        .select('settings')
+        .eq('project_id', projectId)
+        .maybeSingle();
+      const baseResetSettings = resetSettings?.settings || {};
       const { error: updateProjectError } = await supabase
-        .from('projects')
-        .update({
-          boq_builder_completed: false,
-          boq_builder_completed_at: null
-        })
-        .eq('id', projectId);
+        .from('project_settings')
+        .upsert({
+          project_id: projectId,
+          settings: {
+            ...baseResetSettings,
+            [currentTrade]: {
+              ...(baseResetSettings[currentTrade] || {}),
+              boq_builder_completed: false,
+            },
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'project_id' });
 
       if (updateProjectError) {
         console.error('Error updating project:', updateProjectError);
@@ -374,14 +406,24 @@ export default function BOQBuilder({ projectId }: BOQBuilderProps = {}) {
       console.log('Step 6: Reloading data...');
       await loadBOQData();
 
-      // Step 7: Mark BOQ Builder as completed
-      await supabase
-        .from('projects')
-        .update({
-          boq_builder_completed: true,
-          boq_builder_completed_at: new Date().toISOString()
-        })
-        .eq('id', projectId);
+      // Step 7: Mark BOQ Builder as completed (trade-scoped)
+      const { data: finalSettings } = await supabase
+        .from('project_settings')
+        .select('settings')
+        .eq('project_id', projectId)
+        .maybeSingle();
+      const baseFinalSettings = finalSettings?.settings || {};
+      await supabase.from('project_settings').upsert({
+        project_id: projectId,
+        settings: {
+          ...baseFinalSettings,
+          [currentTrade]: {
+            ...(baseFinalSettings[currentTrade] || {}),
+            boq_builder_completed: true,
+          },
+        },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'project_id' });
 
       // Success notification
       console.log('Regeneration complete!');

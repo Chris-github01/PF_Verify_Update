@@ -334,15 +334,27 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
 
     await handleGenerateMatrix();
 
-    // Update project workflow status to mark scope matrix as completed
+    // Update project workflow status to mark scope matrix as completed (trade-scoped)
     try {
+      const { data: existingSettings } = await supabase
+        .from('project_settings')
+        .select('settings')
+        .eq('project_id', projectId)
+        .maybeSingle();
+      const baseSettings = existingSettings?.settings || {};
       await supabase
-        .from('projects')
-        .update({
-          scope_matrix_completed: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', projectId);
+        .from('project_settings')
+        .upsert({
+          project_id: projectId,
+          settings: {
+            ...baseSettings,
+            [currentTrade]: {
+              ...(baseSettings[currentTrade] || {}),
+              scope_matrix_completed: true,
+            },
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'project_id' });
     } catch (error) {
       console.error('Failed to update workflow status:', error);
     }
@@ -594,7 +606,10 @@ export default function ScopeMatrix({ projectId, onNavigateBack, onNavigateNext,
           project_id: projectId,
           settings: {
             ...currentSettings,
-            scope_matrix_completed: true,
+            [currentTrade]: {
+              ...(currentSettings[currentTrade] || {}),
+              scope_matrix_completed: true,
+            },
           },
           updated_at: new Date().toISOString(),
         }, {

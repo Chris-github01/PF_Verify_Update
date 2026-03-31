@@ -189,8 +189,11 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         .eq('project_id', projectId)
         .maybeSingle();
 
-      if (data?.settings?.equalisation_mode) {
-        setMode(data.settings.equalisation_mode as EqualisationMode);
+      const tradeMode = data?.settings?.[currentTrade]?.equalisation_mode;
+      const legacyMode = data?.settings?.equalisation_mode;
+      const resolvedMode = tradeMode || legacyMode;
+      if (resolvedMode) {
+        setMode(resolvedMode as EqualisationMode);
       }
     } catch (error) {
       console.error('Error loading equalisation mode:', error);
@@ -219,8 +222,11 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
           project_id: projectId,
           settings: {
             ...currentSettings,
-            equalisation_mode: newMode,
-            last_equalisation_run: now,
+            [currentTrade]: {
+              ...(currentSettings[currentTrade] || {}),
+              equalisation_mode: newMode,
+              last_equalisation_run: now,
+            },
           },
           updated_at: now,
         }, {

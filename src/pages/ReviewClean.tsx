@@ -245,7 +245,10 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
           project_id: projectId,
           settings: {
             ...currentSettings,
-            review_clean_completed: true,
+            [currentTrade]: {
+              ...(currentSettings[currentTrade] || {}),
+              review_clean_completed: true,
+            },
           },
           updated_at: new Date().toISOString(),
         }, {

@@ -237,18 +237,35 @@ export default function NewProjectDashboard({
       const hasLineItems = lineItems.length > 0;
       const hasQuotesForTrade = quoteCount > 0;
 
-      // All downstream steps are gated on the current trade having quotes.
-      // project_settings and projects flags are NOT trade-scoped, so without this
-      // gate they would show as completed when switching to a trade with no quotes.
-      const hasReviewCleanCompleted = hasQuotesForTrade && !!settings?.settings?.review_clean_completed;
-      const hasQuoteIntelligenceCompleted = hasQuotesForTrade && !!settings?.settings?.quote_intelligence_completed;
-      const hasQuantityIntelligenceCompleted = hasQuotesForTrade && !!settings?.settings?.quantity_intelligence_completed;
-      const hasScopeMatrixCompleted = hasQuotesForTrade && !!(projectRecord as any)?.scope_matrix_completed;
+      // Helper: read a trade-scoped flag from project_settings.
+      // Checks settings.[trade].[flag] first (new per-trade format).
+      // Falls back to settings.[flag] ONLY when the trade-scoped key is explicitly absent
+      // AND no other trade has set a trade-scoped key yet (i.e. legacy single-trade projects).
+      const tradeSettings = settings?.settings?.[currentTrade];
+      const hasTradeKey = tradeSettings !== undefined;
+      const getFlag = (flag: string): boolean => {
+        if (hasTradeKey) return !!tradeSettings?.[flag];
+        // Legacy: only trust global flag if there are no per-trade keys at all
+        const hasAnyTradeKey = settings?.settings &&
+          Object.keys(settings.settings).some(k =>
+            typeof settings.settings[k] === 'object' && settings.settings[k] !== null
+          );
+        if (hasAnyTradeKey) return false;
+        return !!settings?.settings?.[flag];
+      };
 
-      // For trade isolation: only show equalisation, BOQ and reports as complete if THIS TRADE has quotes
-      const hasEqualisation = hasQuotesForTrade && !!settings?.settings?.last_equalisation_run;
+      // Project-level flags also need trade-scoping. Read from project_settings trade key first.
+      const hasReviewCleanCompleted = hasQuotesForTrade && getFlag('review_clean_completed');
+      const hasQuoteIntelligenceCompleted = hasQuotesForTrade && getFlag('quote_intelligence_completed');
+      const hasQuantityIntelligenceCompleted = hasQuotesForTrade && getFlag('quantity_intelligence_completed');
+      const hasScopeMatrixCompleted = hasQuotesForTrade && (
+        hasTradeKey ? !!tradeSettings?.scope_matrix_completed : !!(projectRecord as any)?.scope_matrix_completed
+      );
+      const hasEqualisation = hasQuotesForTrade && getFlag('last_equalisation_run');
+      const hasBOQ = hasQuotesForTrade && (
+        hasTradeKey ? !!tradeSettings?.boq_builder_completed : !!(projectRecord as any)?.boq_builder_completed
+      );
       const hasReports = hasQuotesForTrade && (reportsList?.length || 0) > 0;
-      const hasBOQ = hasQuotesForTrade && !!(projectRecord as any)?.boq_builder_completed;
 
       const newStats: ProjectStats = {
         quoteCount,

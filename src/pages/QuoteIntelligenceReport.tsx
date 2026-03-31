@@ -68,7 +68,10 @@ export default function QuoteIntelligenceReport({ projectId, projectName, onNavi
           project_id: projectId,
           settings: {
             ...currentSettings,
-            quote_intelligence_completed: true,
+            [currentTrade]: {
+              ...(currentSettings[currentTrade] || {}),
+              quote_intelligence_completed: true,
+            },
           },
           updated_at: new Date().toISOString(),
         }, { onConflict: 'project_id' });

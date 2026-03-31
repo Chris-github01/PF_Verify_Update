@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTrade } from '../lib/tradeContext';
 import { Award, FileText, Download, Printer, TrendingUp, AlertTriangle, CheckCircle, Info, Sparkles, Brain, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { t } from '../i18n';
@@ -70,6 +71,7 @@ interface AwardReportV2Props {
 }
 
 export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisation, onNavigateBack, onNavigateNext }: AwardReportV2Props) {
+  const { currentTrade } = useTrade();
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +165,9 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         .eq('project_id', projectId)
         .maybeSingle();
 
-      if (!settings?.settings?.last_equalisation_run) {
+      const tradeEqRun = settings?.settings?.[currentTrade]?.last_equalisation_run;
+      const legacyEqRun = settings?.settings?.last_equalisation_run;
+      if (!tradeEqRun && !legacyEqRun) {
         setError('Equalisation has not been completed for this project yet. Please run Equalisation before generating an Award Report.');
         setLoading(false);
         return;
