@@ -190,10 +190,8 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
         .maybeSingle();
 
       const tradeMode = data?.settings?.[currentTrade]?.equalisation_mode;
-      const legacyMode = data?.settings?.equalisation_mode;
-      const resolvedMode = tradeMode || legacyMode;
-      if (resolvedMode) {
-        setMode(resolvedMode as EqualisationMode);
+      if (tradeMode) {
+        setMode(tradeMode as EqualisationMode);
       }
     } catch (error) {
       console.error('Error loading equalisation mode:', error);

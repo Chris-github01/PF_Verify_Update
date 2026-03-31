@@ -166,8 +166,7 @@ export default function AwardReportV2({ projectId, onToast, onNavigateToEqualisa
         .maybeSingle();
 
       const tradeEqRun = settings?.settings?.[currentTrade]?.last_equalisation_run;
-      const legacyEqRun = settings?.settings?.last_equalisation_run;
-      if (!tradeEqRun && !legacyEqRun) {
+      if (!tradeEqRun) {
         setError('Equalisation has not been completed for this project yet. Please run Equalisation before generating an Award Report.');
         setLoading(false);
         return;

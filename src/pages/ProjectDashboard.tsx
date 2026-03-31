@@ -124,17 +124,9 @@ export default function ProjectDashboard({
       const hasQuotesForTrade = quoteCount > 0;
       const hasProcessedData = processedItems.length > 0;
 
-      // Only show workflow steps as complete if this trade has actual data
+      // Read trade-scoped flags only. Legacy flat flags migrated by DB migration.
       const tradeSettings = settings?.settings?.[currentTrade];
-      const hasTradeKey = tradeSettings !== undefined;
-      const hasAnyTradeKey = settings?.settings && Object.keys(settings.settings).some(k =>
-        typeof settings.settings[k] === 'object' && settings.settings[k] !== null
-      );
-      const getFlag = (flag: string): boolean => {
-        if (hasTradeKey) return !!tradeSettings?.[flag];
-        if (hasAnyTradeKey) return false;
-        return !!settings?.settings?.[flag];
-      };
+      const getFlag = (flag: string): boolean => !!tradeSettings?.[flag];
       const hasEqualisation = hasQuotesForTrade && getFlag('last_equalisation_run');
       const hasScopeMatrix = hasProcessedData && getFlag('scope_matrix_completed');
       const hasReports = hasQuotesForTrade && !!latestReport;
