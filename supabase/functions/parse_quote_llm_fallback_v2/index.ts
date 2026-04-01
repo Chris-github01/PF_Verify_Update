@@ -487,26 +487,31 @@ FORMAT E — LUMP SUM:
 - "Wall framing  1.00  Sum  $1,387,477.30" → qty=1, unit="LS", total=1387477.30
 - "Single door  460  no  189  4.50  42  86940  0  189  86940" → qty=460, unit="no", rate=189, total=86940
 
-FORMAT F — NUMBERED ITEMS WITHOUT INLINE DESCRIPTION (Western-style, "Item" column is description column):
-Some carpentry quotes have a table with header "Item   Dwg Ref   U/Rate" where rows are ONLY:
-  item_number   qty   unit   $ total
-The "Item" column IS the description column — but the actual description text is in a separate
-"Summary of Quantity" section earlier in the document. Match the item number to the summary.
-The summary section uses the format: "N   Description text   $ section_total"
-e.g. "1   Internal Wall Framing   $ 373 819,07"
-     "2   Insulation to wall   $ 143 020,26"
-     "3   Timber Trim   $ 24 628,30"
-     "4   Interior Timber Door (Installation only)   $ 17 326,82"
-     "5   Plasterboard   $ 186 485,89"
-     "6   Ceiling Suspended Grid System   $ 62 961,58"
-When you see rows like "1   110   m2   $ 23 872,91", look up item 1 → "Internal Wall Framing".
-Use that as the description. If no summary entry exists for that number, use "Item N" as fallback.
-Examples (after lookup):
-  "1   110   m2   $ 23 872,91"   → description="Internal Wall Framing", qty=110, unit="m2", total=23872.91
-  "5   709   m2   $ 150 364,66"  → description="Plasterboard", qty=709, unit="m2", total=150364.66
-  "12  857   m    $ 14 848,48"   → description="Timber Trim", qty=857, unit="m", total=14848.48
-  "37  676   m2   $ 62 961,58"   → description="Ceiling Suspended Grid System", qty=676, unit="m2", total=62961.58
-IMPORTANT: Apply this lookup for ALL rows that match this pattern, using the item number to determine description.
+FORMAT F — NUMBERED ITEMS: The "Item" column in these quotes IS the description column and contains the actual description text inline.
+The table header is: "No   Item   Dwg Ref   Qty   Unit   U/Rate   Total"
+Each row has the actual description text in the Item cell — multi-line text extracted from a PDF table.
+
+CRITICAL RULE: If the detected row already contains actual description text (e.g. wall spec, material spec, door size), USE THAT TEXT as the description. Do NOT replace it with a category name from the summary table.
+
+The document also has a SUMMARY table at the top: "No | Description | Amount" (e.g. "1 Internal Wall Framing $373,819"). That is a SUMMARY OVERVIEW, not the actual line item descriptions. The real descriptions are the detailed specs in the detail table.
+
+ONLY use "Item N" as the description if a raw row truly has nothing but a number and prices (i.e. the row contains only digits and dollar amounts with absolutely no text description). This is rare.
+
+Examples of rows with INLINE descriptions (USE the description text as-is):
+  "1   150x0.75 Rondo steel stud wall @600mm crs, nog @ 800mm crs with 150mm dpc and M6 Hilti bolt @ 600 crs   110   m2   $ 217,98   $ 23 872,91"
+  → description="150x0.75 Rondo steel stud wall @600mm crs, nog @ 800mm crs with 150mm dpc and M6 Hilti bolt @ 600 crs", qty=110, unit="m2", rate=217.98, total=23872.91
+
+  "8   140mm R3.2 Pink Batt Ultra   110   m2   $ 40,76   $ 4 463,97"
+  → description="140mm R3.2 Pink Batt Ultra", qty=110, unit="m2", rate=40.76, total=4463.97
+
+  "12   60x10mm timber single bevel skirting   857   m   $ 17,32   $ 14 848,48"
+  → description="60x10mm timber single bevel skirting", qty=857, unit="m", rate=17.32, total=14848.48
+
+  "37   Ceiling height 2.4-2.7m   676   m2   $ 93,14   $ 62 961,58"
+  → description="Ceiling height 2.4-2.7m", qty=676, unit="m2", rate=93.14, total=62961.58
+
+  "18   760x2200mm single leaf door   19   no   $ 217,41   $ 4 130,72"
+  → description="760x2200mm single leaf door", qty=19, unit="no", rate=217.41, total=4130.72
 
 ALWAYS SKIP:
 - Grand totals / section subtotals that sum other items (e.g. "1,926,482.09  1,481,928.81  2,617,826.06")
