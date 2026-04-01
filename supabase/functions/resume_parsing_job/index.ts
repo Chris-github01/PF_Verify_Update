@@ -407,7 +407,7 @@ Deno.serve(async (req: Request) => {
     const normalizedItems = keptItems.map((item, index) => normalizeLine(item, index));
     console.log(`[Resume] After normalization: ${normalizedItems.length} items`);
 
-    // ✅ Deduplicate using improved key
+    // ✅ Deduplicate using improved key (raw_text-based)
     const seenKeys = new Set();
     const dedupedItems = normalizedItems.filter(item => {
       const key = dedupeKey(item);
@@ -416,26 +416,39 @@ Deno.serve(async (req: Request) => {
       return true;
     });
 
-    // ✅ Secondary dedup: remove items whose description is a bare "qty unit" stub
-    // (e.g. "709 m2", "110 m2") when another item with the same total already exists.
-    // These arise when the PDF has the qty+unit on a line separate from the description
-    // and the LLM picks up both the stub line AND the proper "Item N" row.
-    const bareQtyUnitRe = /^\d[\d\s]*\s*(m2|m|no|ea|lm|sum|ls)\s*$/i;
-    const totalsSeen = new Set<string>();
-    // First pass: register totals of non-stub items
+    // ✅ Cross-chunk dedup by total_price:
+    // When the same total_price appears in items from multiple different chunks,
+    // keep only the "best" item (prefer higher chunk number with proper "Item N" desc,
+    // drop items with MISMATCH flag when a non-MISMATCH duplicate total exists).
+    // This handles the case where the first chunk contains a summary section
+    // that lists subtotals matching the actual line items in later chunks.
+    const totalPriceChunkMap = new Map<string, { chunkNum: number; hasMismatch: boolean }>();
     for (const item of dedupedItems) {
-      const desc = String(item.description ?? '').trim();
-      if (!bareQtyUnitRe.test(desc)) {
-        totalsSeen.add(Number(item.total ?? 0).toFixed(2));
+      const totalKey = Number(item.total ?? 0).toFixed(2);
+      if (Number(item.total ?? 0) < 100) continue; // skip tiny rate-schedule amounts
+      const chunkNum = item.originalChunkNumber ?? 0;
+      const hasMismatch = Array.isArray(item.validation_flags) && item.validation_flags.includes('MISMATCH');
+      const existing = totalPriceChunkMap.get(totalKey);
+      if (!existing) {
+        totalPriceChunkMap.set(totalKey, { chunkNum, hasMismatch });
+      } else {
+        // Prefer: later chunk over earlier chunk, non-MISMATCH over MISMATCH
+        if (chunkNum > existing.chunkNum || (!hasMismatch && existing.hasMismatch)) {
+          totalPriceChunkMap.set(totalKey, { chunkNum, hasMismatch });
+        }
       }
     }
-    // Second pass: drop stub items whose total is already covered by a real item
+
     const afterStubDedup = dedupedItems.filter(item => {
-      const desc = String(item.description ?? '').trim();
-      if (bareQtyUnitRe.test(desc)) {
-        const totalKey = Number(item.total ?? 0).toFixed(2);
-        if (totalsSeen.has(totalKey)) return false;
-      }
+      const totalKey = Number(item.total ?? 0).toFixed(2);
+      if (Number(item.total ?? 0) < 100) return true; // always keep tiny items
+      const best = totalPriceChunkMap.get(totalKey);
+      if (!best) return true;
+      const itemChunk = item.originalChunkNumber ?? 0;
+      const itemHasMismatch = Array.isArray(item.validation_flags) && item.validation_flags.includes('MISMATCH');
+      // Drop this item if a better version exists in another chunk
+      if (itemChunk < best.chunkNum) return false;
+      if (itemHasMismatch && !best.hasMismatch && itemChunk === best.chunkNum) return false;
       return true;
     });
 
