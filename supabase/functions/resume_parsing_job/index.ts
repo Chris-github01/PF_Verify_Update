@@ -119,7 +119,9 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     || /^\$/.test(s)
     || /^[\d\s,.$]+$/.test(s)
     || /^to\s+[A-Z]/i.test(s)
-    || /\b(pty ltd|ltd|limited|properties|holdings|group)\b/i.test(s);
+    || /\b(pty ltd|ltd|limited|properties|holdings|group)\b/i.test(s)
+    || /^[xX×]\s*\d+\s*levels?/i.test(s)
+    || /^level\s+\d+\s+to\s+\d+/i.test(s);
 
   // A standalone "Item" or "Item/Description" column-header line (no description text around it)
   const isItemHeaderLine = (s: string): boolean =>
@@ -771,27 +773,16 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Carpentry levels multiplier: detect "x N levels" across full combined text and append multiplier line item
+    // Carpentry levels multiplier: detect "x N levels" across full combined text
+    let detectedLevelsMultiplier: number | null = null;
     if (isCarpentry && afterStubDedup.length > 0) {
       const combinedText = allChunkTexts.join('\n');
       const rawSubtotal = afterStubDedup.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
       const levelsResult = detectCarpentryLevelsMultiplier(combinedText, rawSubtotal);
       if (levelsResult) {
         const { multiplier, documentTotal: levelsDocTotal } = levelsResult;
+        detectedLevelsMultiplier = multiplier;
         console.log(`[Resume] Carpentry levels multiplier detected: x${multiplier} (subtotal=${rawSubtotal.toFixed(2)} × ${multiplier} = ${levelsDocTotal.toFixed(2)})`);
-        afterStubDedup.push({
-          description: `Levels Multiplier (x${multiplier} levels — subtotal applied across all ${multiplier} identical levels)`,
-          qty: multiplier - 1,
-          unit: 'LS',
-          rate: rawSubtotal,
-          total: rawSubtotal * (multiplier - 1),
-          section: 'Levels Multiplier',
-          confidence: 0.95,
-          source: 'levels_multiplier',
-          raw_text: `x${multiplier} levels`,
-          validation_flags: ['LEVELS_MULTIPLIER'],
-        });
-        // Use the multiplied total as document total for validation
         documentTotal = levelsDocTotal;
       }
     }
@@ -828,30 +819,33 @@ Deno.serve(async (req: Request) => {
           sum + (parseFloat(line.total) || 0), 0
         );
 
-        // V5: total_amount = sum(items), NOT document_total
+        // For multiplier quotes, persist the document total (all levels combined) as total_amount
+        const persistedTotal = (detectedLevelsMultiplier && documentTotal) ? documentTotal : itemsSum;
         const tolerance = documentTotal ? Math.max(100, documentTotal * 0.02) : 100;
         const missingAmount = documentTotal ? documentTotal - itemsSum : 0;
-        const needsReview = documentTotal !== null && Math.abs(missingAmount) > tolerance;
+        const needsReview = !detectedLevelsMultiplier && documentTotal !== null && Math.abs(missingAmount) > tolerance;
 
-        // ✅ Update quote with V5 validation fields
         await supabase
           .from("quotes")
           .update({
-            total_amount: itemsSum, // V5: Use actual sum, not document total
-            total_price: itemsSum,
-            document_total: documentTotal, // Store for reference
+            total_amount: persistedTotal,
+            total_price: persistedTotal,
+            document_total: documentTotal,
             missing_amount: needsReview ? missingAmount : 0,
             needs_review: needsReview,
             items_count: quoteItems.length,
             raw_items_count: rawItemsCount,
             inserted_items_count: quoteItems.length,
+            levels_multiplier: detectedLevelsMultiplier,
           })
           .eq("id", quoteId);
 
         console.log(`[Resume V5] Replaced ${quoteItems.length} items in quote ${quoteId}`);
         console.log(`[Resume V5] Sum(items): $${itemsSum.toLocaleString()}`);
         console.log(`[Resume V5] Document total: $${documentTotal?.toLocaleString() || 'not found'}`);
-
+        if (detectedLevelsMultiplier) {
+          console.log(`[Resume V5] Levels multiplier x${detectedLevelsMultiplier} — persisted total=$${persistedTotal.toLocaleString()}`);
+        }
         if (needsReview) {
           console.warn(`[Resume V5] ⚠️ NEEDS REVIEW: Missing $${Math.abs(missingAmount).toLocaleString()} (${((Math.abs(missingAmount) / documentTotal!) * 100).toFixed(1)}% gap)`);
         } else {
