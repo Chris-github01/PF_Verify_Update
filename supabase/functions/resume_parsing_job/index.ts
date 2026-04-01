@@ -121,7 +121,9 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     || /^to\s+[A-Z]/i.test(s)
     || /\b(pty ltd|ltd|limited|properties|holdings|group)\b/i.test(s)
     || /^[xX×]\s*\d+\s*levels?/i.test(s)
-    || /^level\s+\d+\s+to\s+\d+/i.test(s);
+    || /^level\s+\d+\s+to\s+\d+/i.test(s)
+    || /^item\b.*\b(dwg|ref|u\/rate|urate|rate|draw)/i.test(s)
+    || /^(item\s+)?(dwg\s+ref|drawing\s+ref)/i.test(s);
 
   // A standalone "Item" or "Item/Description" column-header line (no description text around it)
   const isItemHeaderLine = (s: string): boolean =>

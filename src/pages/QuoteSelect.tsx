@@ -74,7 +74,8 @@ export default function QuoteSelect({
         const { data: allItems } = await supabase
           .from('quote_items')
           .select('quote_id, description, quantity, unit_price, total_price')
-          .in('quote_id', quoteIds);
+          .in('quote_id', quoteIds)
+          .limit(5000);
 
         if (allItems) {
           for (const item of allItems) {
@@ -98,7 +99,8 @@ export default function QuoteSelect({
           main_scope_count = summary.counts.main_scope;
         } else if (quote.levels_multiplier && quote.document_total) {
           main_scope_total = Number(quote.document_total);
-          main_scope_count = rawItems.filter(item => Number(item.total_price ?? 0) > 0).length;
+          const pricedCount = rawItems.filter(item => Number(item.total_price ?? 0) > 0).length;
+          main_scope_count = pricedCount > 0 ? pricedCount : (quote.inserted_items_count ?? quote.items_count ?? 0);
         } else {
           const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0);
           main_scope_total = priced.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
