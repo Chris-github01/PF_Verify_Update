@@ -56,8 +56,11 @@ function BenchmarkSetRow({ set, onDelete }: SetRowProps) {
 
   async function handleDeleteQuote(quoteId: string) {
     if (!confirm('Remove this benchmark quote?')) return;
-    await supabase.from('benchmark_quotes').delete().eq('id', quoteId);
-    loadDetail();
+    try {
+      await supabase.from('benchmark_quotes').delete().eq('id', quoteId);
+      loadDetail();
+    } catch {
+    }
   }
 
   return (
@@ -195,8 +198,11 @@ export default function ShadowBenchmarksPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this benchmark set and all its quotes?')) return;
-    await supabase.from('benchmark_sets').delete().eq('id', id);
-    load();
+    try {
+      await supabase.from('benchmark_sets').delete().eq('id', id);
+      load();
+    } catch {
+    }
   }
 
   return (

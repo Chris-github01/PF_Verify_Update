@@ -12,6 +12,7 @@ interface ModuleOption {
 export default function ShadowRecommendationsPage() {
   const [modules, setModules] = useState<ModuleOption[]>([]);
   const [selectedModule, setSelectedModule] = useState<string | undefined>(undefined);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -19,10 +20,21 @@ export default function ShadowRecommendationsPage() {
       .select('module_key, display_name')
       .eq('is_active', true)
       .order('display_name')
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { setLoadError(error.message); return; }
         if (data) setModules(data as ModuleOption[]);
       });
   }, []);
+
+  if (loadError) {
+    return (
+      <ShadowLayout>
+        <div className="rounded-lg bg-red-900/20 border border-red-800/40 px-4 py-3 text-sm text-red-400">
+          Failed to load modules: {loadError}
+        </div>
+      </ShadowLayout>
+    );
+  }
 
   return (
     <ShadowLayout>

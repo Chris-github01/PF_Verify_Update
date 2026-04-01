@@ -61,12 +61,10 @@ export default function PlumbingReviewDashboard() {
   }
 
   function handleSelectCase(id: string) {
-    window.location.hash = `/shadow/modules/plumbing_parser/review/cases/${id}`;
     setSelectedCaseId(id);
   }
 
   if (selectedCaseId) {
-    window.location.pathname = `/shadow/modules/plumbing_parser/review/cases/${selectedCaseId}`;
     return null;
   }
 

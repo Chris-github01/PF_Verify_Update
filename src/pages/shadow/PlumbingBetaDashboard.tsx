@@ -50,6 +50,7 @@ export default function PlumbingBetaDashboard() {
   const [summary, setSummary] = useState<BetaHealthSummary | null>(null);
   const [recommendation, setRecommendation] = useState<RecommendationResult | null>(null);
   const [recentRuns, setRecentRuns] = useState<BetaEventRecord[]>([]);
+  const [latestRegressionRunAt, setLatestRegressionRunAt] = useState<Date | undefined>(undefined);
   const [anomalyFilters, setAnomalyFilters] = useState<AnomalyFilters>({
     severity: '',
     anomalyType: '',
@@ -82,6 +83,7 @@ export default function PlumbingBetaDashboard() {
       : undefined;
 
     setRecommendation(recommendAdminAction(s, regressionAgeMs, !!rollout.latestApproval));
+    setLatestRegressionRunAt(latestRun?.created_at ? new Date(latestRun.created_at) : undefined);
   }, []);
 
   const loadAnomalies = useCallback(async (filters: AnomalyFilters, page: number) => {
@@ -142,9 +144,8 @@ export default function PlumbingBetaDashboard() {
   const healthStatus = recommendation?.healthStatus ?? 'watch';
   const anomalyRateRising = summary?.trendDirection === 'degrading';
 
-  const latestRegressionRunDate = undefined as Date | undefined;
-  const regressionStale = latestRegressionRunDate
-    ? Date.now() - latestRegressionRunDate.getTime() > 7 * 24 * 60 * 60 * 1000
+  const regressionStale = latestRegressionRunAt
+    ? Date.now() - latestRegressionRunAt.getTime() > 7 * 24 * 60 * 60 * 1000
     : false;
 
   return (

@@ -39,6 +39,7 @@ export default function PlumbingLearningDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const [clusters, setClusters] = useState<PatternClusterRecord[]>([]);
   const [suggestions, setSuggestions] = useState<RuleSuggestionRecord[]>([]);
@@ -69,21 +70,24 @@ export default function PlumbingLearningDashboard() {
 
   async function handleRunAnalysis() {
     setAnalyzing(true);
+    setAnalysisError(null);
     try {
       const events = await dbGetLearningEvents({ periodDays: 30 });
       const existingClusters = await dbGetPatternClusters();
       const newClusterData = buildClusterRecords('plumbing_parser', events, existingClusters);
 
-      for (const cluster of newClusterData) {
+      for (const cluster of newClusterData ?? []) {
         await dbUpsertPatternCluster(cluster);
       }
 
       const freshClusters = await dbGetPatternClusters();
       const existingSuggestions = await dbGetRuleSuggestions();
-      const newSuggestions = generateAllSuggestions(freshClusters, existingSuggestions);
+      const newSuggestions = generateAllSuggestions(freshClusters ?? [], existingSuggestions ?? []);
       await dbInsertRuleSuggestions(newSuggestions);
 
       await load();
+    } catch (e) {
+      setAnalysisError(e instanceof Error ? e.message : 'Analysis failed');
     } finally {
       setAnalyzing(false);
     }
@@ -146,6 +150,12 @@ export default function PlumbingLearningDashboard() {
               </button>
             </div>
           </div>
+
+          {analysisError && (
+            <div className="rounded-lg bg-red-900/20 border border-red-800/40 px-4 py-2 text-sm text-red-400">
+              Analysis failed: {analysisError}
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

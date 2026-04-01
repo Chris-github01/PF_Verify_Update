@@ -91,16 +91,20 @@ export default function PlumbingOptimizationDashboard() {
       await load();
       setTab('simulation');
       const detail = await dbGetBundleWithDetails(bundleId);
-      setSelectedBundleDetail(detail);
+      if (detail) setSelectedBundleDetail(detail);
+    } catch {
     } finally {
       setRunningBundleId(null);
     }
   }
 
   async function handleSelectBundle(bundleId: string) {
-    const detail = await dbGetBundleWithDetails(bundleId);
-    setSelectedBundleDetail(detail);
-    setTab('simulation');
+    try {
+      const detail = await dbGetBundleWithDetails(bundleId);
+      if (detail) setSelectedBundleDetail(detail);
+      setTab('simulation');
+    } catch {
+    }
   }
 
   async function handleRunAllRankings() {

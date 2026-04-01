@@ -69,7 +69,7 @@ export default function PlumbingReleaseDashboard() {
     const criticalLast7d = anomaliesData.data.filter((a) => a.severity === 'critical').length;
     const evalInput = {
       regressionSuiteRecentlyPassed: regressionPassed,
-      regressionSuiteAgeMs,
+      regressionSuiteAgeMs: regressionAgeMs,
       criticalAnomaliesLast7Days: criticalLast7d,
       anomalyRateLast7Days: summary.anomalyRate,
       unresolvedCriticalCount: summary.unresolvedCriticalCount,
@@ -94,7 +94,7 @@ export default function PlumbingReleaseDashboard() {
       anomalyRateLast7Days: summary.anomalyRate,
       criticalAnomaliesTotal: summary.criticalAnomalyCount,
       regressionPassRate: regressionPassed ? 1.0 : 0,
-      regressionSuiteAgeMs,
+      regressionSuiteAgeMs: regressionAgeMs,
       healthScore: rec.healthScore,
       approvalExists: !!rollout.latestApproval,
     });
