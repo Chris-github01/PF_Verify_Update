@@ -70,116 +70,156 @@ function extractPlumbingLevelTable(text: string): any[] {
 }
 
 /**
- * Parses the European-format number used in this PDF supplier's quotes.
- * "$ 217,98" → 217.98, "$ 23 872,91" → 23872.91
+ * Parses a European-format amount string to a number.
+ * "$ 217,98" → 217.98, "$ 23 872,91" → 23872.91, "13 740 112,59" → 13740112.59
  */
 function parseEuropeanAmount(raw: string): number {
   const s = raw.replace(/\$/g, '').replace(/\s/g, '').trim();
-  if (/^[\d]+,\d{1,2}$/.test(s)) {
+  // European: digits with optional spaces as thousands separator, comma as decimal
+  if (/^[\d\s]+,\d{1,2}$/.test(raw.replace(/\$/g, '').trim())) {
     return parseFloat(s.replace(',', '.'));
   }
+  // Standard: commas as thousands separator
   return parseFloat(s.replace(/,/g, '')) || 0;
 }
 
 /**
- * Extracts a rate-schedule map from carpentry PDF text.
+ * Deterministic parser for the Sero Apartments carpentry PDF format.
  *
- * In this PDF format, the line-item table has ONLY: No | Qty | Unit | Total (no description).
- * The actual descriptions live in a separate rate-schedule section formatted as:
- *   "Description text   $ U/Rate"
- * e.g. "150x0.75 Rondo steel stud wall @600mm crs...   $ 217,98"
- *      "140mm R3.2 Pink Batt Ultra   $ 40,76"
- *      "60x10mm timber single bevel skirting   $ 17,32"
+ * This PDF has a very specific layout that pdfjs scrambles:
+ * 1. A "Quotation" section with line items: "N   qty   unit   $ total"
+ *    (NO inline descriptions — the "No | Description | Amount" header is misleading;
+ *     the description column is actually blank for all numbered rows)
+ * 2. A "Summary of Quantity" / rate-schedule section with:
+ *    "Description text   $ U/Rate" pairs (multi-line descriptions possible)
  *
- * We extract all description+rate pairs, then when a line item has "Item N" as its
- * description we compute its implied rate (total/qty) and find the closest matching
- * description from the rate schedule.
- *
- * Returns: Map<rateKey, description> where rateKey = rate.toFixed(2)
+ * Strategy:
+ * - Extract all numbered line items (N   qty   unit   $ total) from the combined text
+ * - Extract the rate schedule (desc → rate) from the rate schedule section
+ * - For each line item, compute implied rate = total/qty and match to rate schedule
+ * - Return only the 37 real line items with proper descriptions, zero garbage
  */
-function extractRateScheduleDescriptions(chunkTexts: string[]): Map<string, string> {
-  const rateMap = new Map<string, string>();
+function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   const combined = chunkTexts.join('\n');
+
+  // ── Step 1: Extract numbered line items ──────────────────────────────────────
+  // Pattern: line starting with a number, then qty (with optional space as thousands sep),
+  // then unit (m2|m|no|ea|lm|sum), then $ total (European format)
+  // e.g. "1   110   m2   $ 23 872,91" or "37   676   m2   $ 62 961,58"
+  const lineItemRe = /^\s*(\d{1,2})\s{1,6}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/gim;
+  const lineItems: { num: number; qty: number; unit: string; total: number }[] = [];
+  const seenNums = new Set<number>();
+
+  let m: RegExpExecArray | null;
+  while ((m = lineItemRe.exec(combined)) !== null) {
+    const num = parseInt(m[1], 10);
+    const qty = parseFloat(m[2].replace(/\s/g, ''));
+    const unit = m[3].trim().toLowerCase();
+    const total = parseEuropeanAmount(m[4]);
+
+    // Skip if total is 0, or if we've already seen this item number
+    // (chunks overlap so the same row may appear twice)
+    if (total <= 0 || qty <= 0) continue;
+    if (seenNums.has(num)) continue;
+    seenNums.add(num);
+
+    lineItems.push({ num, qty, unit, total });
+  }
+
+  if (lineItems.length === 0) return null;
+
+  // Sort by item number
+  lineItems.sort((a, b) => a.num - b.num);
+
+  // ── Step 2: Extract rate schedule (description → rate) ──────────────────────
+  // Rate schedule lines end with "$ XX,XX" (European unit rate, < $5000).
+  // Descriptions may span multiple lines (no leading digit, no $).
+  const rateSchedule: { desc: string; rate: number }[] = [];
   const lines = combined.split('\n');
 
-  // We scan for lines that look like: "Some description text   $ XX,XX" or "Some description text   $ X XXX,XX"
-  // The description is text-only (no leading digit), the rate is a small dollar amount (< $10,000)
-  // This matches lines from the rate schedule / summary-of-quantity rate column
+  // Skip everything before the first rate-schedule marker
+  // The rate schedule appears after "Item   Dwg Ref   U/Rate" header lines
+  const rateLineRe = /^(.*?)\s+\$\s*([\d][\d ]*,\d{2})\s*$/;
+  // Exclude lines that are section headers, boilerplate, or column headers
+  const skipDescRe = /^(no|qty|unit|total|amount|item|description|subtotal|grand total|gst|supply & install|quotation|to\s|project|date|wall legend|location|wall type|dwg ref|u\/rate|summary of quantity|carpentry work|green tga|allowed \d|apt\.|service nogging)\b/i;
 
-  let pendingDesc = '';
+  let pendingDescLines: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (!line) { pendingDesc = ''; continue; }
+    if (!line) { pendingDescLines = []; continue; }
 
-    // Match: ends with "$ XX,XX" or "$ X XXX,XX" style European amount
-    const rateLineRe = /\$\s*([\d][\d\s]*,\d{2})\s*$/;
     const rateMatch = line.match(rateLineRe);
-
     if (rateMatch) {
-      const amount = parseEuropeanAmount(rateMatch[1]);
-      // Only treat as a unit rate if it's < $5000 (unit rates, not line totals)
-      if (amount > 0 && amount < 5000) {
-        // The description is everything before the $ amount
-        const descPart = line.replace(/\$\s*[\d\s,]+$/, '').trim();
-        // If this line has no description text itself, combine with pending multi-line desc
-        const fullDesc = descPart
-          ? (pendingDesc ? pendingDesc + ' ' + descPart : descPart)
-          : pendingDesc;
+      const descPart = rateMatch[1].trim();
+      const rate = parseEuropeanAmount(rateMatch[2]);
 
-        if (fullDesc && fullDesc.length > 3 && !/^\d+$/.test(fullDesc)) {
-          // Skip section headings, column headers, boilerplate
-          if (!/^(no|qty|unit|total|amount|item|description|subtotal|grand total|gst|supply|quotation|to\s|project|date|wall legend|location|wall type)/i.test(fullDesc)) {
-            const key = amount.toFixed(2);
-            if (!rateMap.has(key)) {
-              rateMap.set(key, fullDesc);
-            }
-          }
+      // Only unit rates (< $5000)
+      if (rate > 0 && rate < 5000) {
+        const fullDesc = [...pendingDescLines, descPart].join(' ').trim();
+
+        if (fullDesc.length > 3 && !/^\d+$/.test(fullDesc) && !skipDescRe.test(fullDesc)) {
+          rateSchedule.push({ desc: fullDesc, rate });
         }
-        pendingDesc = '';
-      } else {
-        pendingDesc = '';
       }
-    } else if (!/\$/.test(line) && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line)) {
-      // Potential multi-line description continuation (no $ sign, has text, doesn't start with a number)
-      // Accumulate as pending description for next line
-      if (line.length > 3 && line.length < 120) {
-        pendingDesc = pendingDesc ? pendingDesc + ' ' + line : line;
-      } else {
-        pendingDesc = '';
-      }
+      pendingDescLines = [];
+    } else if (!/\$/.test(line) && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line) && line.length < 120) {
+      // Possible multi-line description fragment
+      pendingDescLines.push(line);
     } else {
-      pendingDesc = '';
+      pendingDescLines = [];
     }
   }
 
-  return rateMap;
-}
-
-/**
- * Given a line item with "Item N" description, tries to find the real description
- * by matching the computed unit rate (total/qty) against the rate schedule map.
- */
-function lookupDescriptionByRate(item: any, rateMap: Map<string, string>): string | null {
-  const qty = parseFloat(item.qty) || 0;
-  const total = parseFloat(item.total) || 0;
-  if (qty <= 0 || total <= 0) return null;
-
-  const computedRate = total / qty;
-
-  // Try exact match first
-  const exactKey = computedRate.toFixed(2);
-  if (rateMap.has(exactKey)) return rateMap.get(exactKey)!;
-
-  // Try within 1% tolerance
-  for (const [key, desc] of rateMap) {
-    const schedRate = parseFloat(key);
-    if (Math.abs(schedRate - computedRate) / computedRate < 0.01) {
-      return desc;
+  // ── Step 3: Build rate → description lookup (best match wins) ───────────────
+  const rateMap = new Map<string, string>();
+  for (const entry of rateSchedule) {
+    const key = entry.rate.toFixed(2);
+    if (!rateMap.has(key)) {
+      rateMap.set(key, entry.desc);
     }
   }
 
-  return null;
+  // ── Step 4: Match each line item to a description ────────────────────────────
+  const result: any[] = [];
+  for (const item of lineItems) {
+    const impliedRate = item.total / item.qty;
+
+    // Find closest rate within 2% tolerance
+    let bestDesc = '';
+    let bestDiff = Infinity;
+    for (const [key, desc] of rateMap) {
+      const schedRate = parseFloat(key);
+      const diff = Math.abs(schedRate - impliedRate);
+      const relDiff = diff / impliedRate;
+      if (relDiff < 0.02 && diff < bestDiff) {
+        bestDiff = diff;
+        bestDesc = desc;
+      }
+    }
+
+    // Clean up multi-line description artifacts
+    const cleanDesc = bestDesc
+      .replace(/\s+/g, ' ')
+      .replace(/^(W\d+\s+for\s+)/i, '')
+      .replace(/^(Assumed\s+W\d+\s+for\s+)/i, '')
+      .trim();
+
+    result.push({
+      description: cleanDesc || `Item ${item.num}`,
+      qty: item.qty,
+      unit: item.unit,
+      rate: impliedRate,
+      total: item.total,
+      section: 'Main',
+      confidence: 0.95,
+      source: 'deterministic_carpentry_parser',
+      raw_text: `${item.num}   ${item.qty}   ${item.unit}   ${item.total}`,
+      validation_flags: cleanDesc ? [] : ['NO_DESC_MATCH'],
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -506,89 +546,80 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ✅ Keep items if they have description OR money
-    const safeItems = allItems.filter(item => hasDesc(item) || hasMoney(item));
-    console.log(`[Resume] After safe filter: ${safeItems.length} items (removed ${allItems.length - safeItems.length} empty rows)`);
+    // ✅ For carpentry: attempt deterministic parse directly from raw chunk text.
+    // This bypasses all the LLM noise — the Sero/Western PDF format is structured
+    // enough to parse with regex (numbered items + rate schedule).
+    let afterStubDedup: any[];
+    if (isCarpentry) {
+      const deterministicItems = parseCarpentrySeraFormat(allChunkTexts);
+      if (deterministicItems && deterministicItems.length >= 10) {
+        console.log(`[Resume] Carpentry deterministic parser: ${deterministicItems.length} items extracted, discarding LLM output`);
+        afterStubDedup = deterministicItems;
+      } else {
+        console.log(`[Resume] Carpentry deterministic parser yielded ${deterministicItems?.length ?? 0} items, falling back to LLM output`);
+        // Fall back to LLM-based pipeline
+        const safeItems = allItems.filter((item: any) => hasDesc(item) || hasMoney(item));
+        const { kept: keptItems } = filterTotalRows(safeItems);
+        const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));
+        const seenKeys = new Set();
+        afterStubDedup = normalizedItems.filter((item: any) => {
+          const key = dedupeKey(item);
+          if (seenKeys.has(key)) return false;
+          seenKeys.add(key);
+          return true;
+        });
+      }
+    } else {
+      // Non-carpentry: standard LLM pipeline
+      const safeItems = allItems.filter((item: any) => hasDesc(item) || hasMoney(item));
+      console.log(`[Resume] After safe filter: ${safeItems.length} items (removed ${allItems.length - safeItems.length} empty rows)`);
 
-    // ✅ Remove total/summary rows (Total, Grand Total, Sub Total, etc.)
-    const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(safeItems);
-    if (totalRowsRemoved > 0) {
-      console.log(`[Resume] Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
-    }
+      const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(safeItems);
+      if (totalRowsRemoved > 0) {
+        console.log(`[Resume] Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
+      }
 
-    // ✅ For carpentry: build a rate-schedule map (description → unit rate) to resolve
-    // "Item N" placeholders. In this PDF format the line-item table has no inline descriptions —
-    // the actual descriptions live in a separate rate-schedule section alongside unit rates.
-    // We match by computing implied rate (total / qty) and looking up the closest rate in the schedule.
-    const rateScheduleMap = isCarpentry ? extractRateScheduleDescriptions(allChunkTexts) : new Map<string, string>();
-    if (rateScheduleMap.size > 0) {
-      console.log(`[Resume] Carpentry: extracted ${rateScheduleMap.size} rate-schedule entries`);
-    }
+      const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));
+      console.log(`[Resume] After normalization: ${normalizedItems.length} items`);
 
-    // ✅ Normalize items to fill empty descriptions from raw_text
-    const normalizedItems = keptItems.map((item, index) => {
-      const norm = normalizeLine(item, index);
-      // Replace "Item N" placeholder with the real description from the rate schedule
-      if (isCarpentry && rateScheduleMap.size > 0) {
-        const isPlaceholder = /^Item\s+\d+$/i.test(String(norm.description ?? '').trim());
-        const isGenericSection = /^(Internal Wall Framing|Insulation to wall|Timber Trim|Interior Timber Door|Plasterboard|Ceiling Suspended Grid)$/i.test(String(norm.description ?? '').trim());
-        if (isPlaceholder || isGenericSection) {
-          const realDesc = lookupDescriptionByRate(norm, rateScheduleMap);
-          if (realDesc) {
-            return { ...norm, description: realDesc };
+      const seenKeys = new Set();
+      const dedupedItems = normalizedItems.filter((item: any) => {
+        const key = dedupeKey(item);
+        if (seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
+      });
+
+      const totalPriceChunkMap = new Map<string, { chunkNum: number; hasMismatch: boolean }>();
+      for (const item of dedupedItems) {
+        const totalKey = Number(item.total ?? 0).toFixed(2);
+        if (Number(item.total ?? 0) < 100) continue;
+        const chunkNum = item.originalChunkNumber ?? 0;
+        const hasMismatch = Array.isArray(item.validation_flags) && item.validation_flags.includes('MISMATCH');
+        const existing = totalPriceChunkMap.get(totalKey);
+        if (!existing) {
+          totalPriceChunkMap.set(totalKey, { chunkNum, hasMismatch });
+        } else {
+          if (chunkNum > existing.chunkNum || (!hasMismatch && existing.hasMismatch)) {
+            totalPriceChunkMap.set(totalKey, { chunkNum, hasMismatch });
           }
         }
       }
-      return norm;
-    });
-    console.log(`[Resume] After normalization: ${normalizedItems.length} items`);
 
-    // ✅ Deduplicate using improved key (raw_text-based)
-    const seenKeys = new Set();
-    const dedupedItems = normalizedItems.filter(item => {
-      const key = dedupeKey(item);
-      if (seenKeys.has(key)) return false;
-      seenKeys.add(key);
-      return true;
-    });
+      afterStubDedup = dedupedItems.filter((item: any) => {
+        const totalKey = Number(item.total ?? 0).toFixed(2);
+        if (Number(item.total ?? 0) < 100) return true;
+        const best = totalPriceChunkMap.get(totalKey);
+        if (!best) return true;
+        const itemChunk = item.originalChunkNumber ?? 0;
+        const itemHasMismatch = Array.isArray(item.validation_flags) && item.validation_flags.includes('MISMATCH');
+        if (itemChunk < best.chunkNum) return false;
+        if (itemHasMismatch && !best.hasMismatch && itemChunk === best.chunkNum) return false;
+        return true;
+      });
 
-    // ✅ Cross-chunk dedup by total_price:
-    // When the same total_price appears in items from multiple different chunks,
-    // keep only the "best" item (prefer higher chunk number with proper "Item N" desc,
-    // drop items with MISMATCH flag when a non-MISMATCH duplicate total exists).
-    // This handles the case where the first chunk contains a summary section
-    // that lists subtotals matching the actual line items in later chunks.
-    const totalPriceChunkMap = new Map<string, { chunkNum: number; hasMismatch: boolean }>();
-    for (const item of dedupedItems) {
-      const totalKey = Number(item.total ?? 0).toFixed(2);
-      if (Number(item.total ?? 0) < 100) continue; // skip tiny rate-schedule amounts
-      const chunkNum = item.originalChunkNumber ?? 0;
-      const hasMismatch = Array.isArray(item.validation_flags) && item.validation_flags.includes('MISMATCH');
-      const existing = totalPriceChunkMap.get(totalKey);
-      if (!existing) {
-        totalPriceChunkMap.set(totalKey, { chunkNum, hasMismatch });
-      } else {
-        // Prefer: later chunk over earlier chunk, non-MISMATCH over MISMATCH
-        if (chunkNum > existing.chunkNum || (!hasMismatch && existing.hasMismatch)) {
-          totalPriceChunkMap.set(totalKey, { chunkNum, hasMismatch });
-        }
-      }
+      console.log(`[Resume] After dedup: ${afterStubDedup.length} items`);
     }
-
-    const afterStubDedup = dedupedItems.filter(item => {
-      const totalKey = Number(item.total ?? 0).toFixed(2);
-      if (Number(item.total ?? 0) < 100) return true; // always keep tiny items
-      const best = totalPriceChunkMap.get(totalKey);
-      if (!best) return true;
-      const itemChunk = item.originalChunkNumber ?? 0;
-      const itemHasMismatch = Array.isArray(item.validation_flags) && item.validation_flags.includes('MISMATCH');
-      // Drop this item if a better version exists in another chunk
-      if (itemChunk < best.chunkNum) return false;
-      if (itemHasMismatch && !best.hasMismatch && itemChunk === best.chunkNum) return false;
-      return true;
-    });
-
-    console.log(`[Resume] After dedup: ${afterStubDedup.length} items (removed ${normalizedItems.length - afterStubDedup.length} duplicates/stubs)`);
 
     // Create or update quote
     let quoteId = job.quote_id;
