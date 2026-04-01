@@ -70,6 +70,77 @@ function extractPlumbingLevelTable(text: string): any[] {
 }
 
 /**
+ * Detects a "x N levels" multiplier pattern in a carpentry quote.
+ * Handles both standard ($13,740,112.59) and European (13 740 112,59) number formats.
+ * Returns the multiplier and validated document total, or null if not found/validated.
+ */
+function detectCarpentryLevelsMultiplier(text: string, parsedSubtotal: number): { multiplier: number; documentTotal: number } | null {
+  if (parsedSubtotal <= 0) return null;
+  const flat = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
+
+  // Pattern A: explicit "x 17 levels" or "× 17 levels"
+  const xMatch = flat.match(/[xX×]\s*(\d+)\s*levels?/i);
+  // Pattern B: "Level 1 to 17" or inside parens "(Level 1 to 17)"
+  const rangeMatch = flat.match(/[Ll]evel\s+1\s+to\s+(\d+)/i);
+
+  const rawMultiplier = xMatch
+    ? parseInt(xMatch[1], 10)
+    : rangeMatch
+    ? parseInt(rangeMatch[1], 10)
+    : null;
+
+  if (!rawMultiplier || rawMultiplier < 2 || rawMultiplier > 100) return null;
+
+  // Parse a number that may be in standard ($13,740,112.59) or European (13 740 112,59) format
+  const parseAmount = (raw: string): number => {
+    const s = raw.trim();
+    // European: ends with comma + 2 digits, spaces as thousands separators
+    if (/^[\d\s]+,\d{2}$/.test(s)) {
+      return parseFloat(s.replace(/\s/g, '').replace(',', '.'));
+    }
+    // Standard: commas as thousands separators
+    return parseFloat(s.replace(/,/g, ''));
+  };
+
+  // Try to find the stated grand total in the text
+  // Handles: "Total $ 13 740 112,59" / "Total $13,740,112.59" / "Total 13740112.59"
+  const totalPatterns = [
+    /Total\s+\$?\s*([\d\s,]+[.,]\d{2})/gi,
+    /Grand\s+Total\s+\$?\s*([\d\s,]+[.,]\d{2})/gi,
+  ];
+
+  let documentTotal = 0;
+  for (const pattern of totalPatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(flat)) !== null) {
+      const val = parseAmount(m[1]);
+      if (val > parsedSubtotal * 1.5) {
+        documentTotal = val;
+        break;
+      }
+    }
+    if (documentTotal > 0) break;
+  }
+
+  if (documentTotal > 0) {
+    const expected = parsedSubtotal * rawMultiplier;
+    const tolerance = expected * 0.03; // 3% tolerance for rounding
+    if (Math.abs(expected - documentTotal) > tolerance) {
+      console.log(`[Resume] Levels multiplier candidate x${rawMultiplier} rejected: subtotal×${rawMultiplier}=${expected.toFixed(2)} but doc total=${documentTotal.toFixed(2)}`);
+      return null;
+    }
+    return { multiplier: rawMultiplier, documentTotal };
+  }
+
+  // Trust explicit "x N levels" even without a parseable document total
+  if (xMatch) {
+    return { multiplier: rawMultiplier, documentTotal: parsedSubtotal * rawMultiplier };
+  }
+
+  return null;
+}
+
+/**
  * Resume/Retry a stuck or partially completed parsing job
  * Retries only the failed chunks instead of reprocessing the entire file
  */
@@ -305,6 +376,7 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[Resume] Total items after retry: ${allItems.length}`);
 
+    const isCarpentry = (job.trade ?? '').toLowerCase() === 'carpentry';
     // For plumbing quotes: if LLM missed the level-table rows, inject them from raw text
     const isPlumbing = (job.trade ?? '').toLowerCase() === 'plumbing';
     if (isPlumbing) {
@@ -395,6 +467,33 @@ Deno.serve(async (req: Request) => {
             }
           }
         }
+      }
+    }
+
+    // Carpentry levels multiplier: detect "x N levels" across full combined text and append multiplier line item
+    let levelsMultiplierApplied = false;
+    if (isCarpentry && dedupedItems.length > 0) {
+      const combinedText = allChunkTexts.join('\n');
+      const rawSubtotal = dedupedItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+      const levelsResult = detectCarpentryLevelsMultiplier(combinedText, rawSubtotal);
+      if (levelsResult) {
+        const { multiplier, documentTotal } = levelsResult;
+        console.log(`[Resume] Carpentry levels multiplier detected: x${multiplier} (subtotal=${rawSubtotal.toFixed(2)} × ${multiplier} = ${documentTotal.toFixed(2)})`);
+        dedupedItems.push({
+          description: `Levels Multiplier (x${multiplier} levels — subtotal applied across all ${multiplier} identical levels)`,
+          qty: multiplier - 1,
+          unit: 'LS',
+          rate: rawSubtotal,
+          total: rawSubtotal * (multiplier - 1),
+          section: 'Levels Multiplier',
+          confidence: 0.95,
+          source: 'levels_multiplier',
+          raw_text: `x${multiplier} levels`,
+          validation_flags: ['LEVELS_MULTIPLIER'],
+        });
+        levelsMultiplierApplied = true;
+        // Override the document total so the quote shows the correct final value
+        documentTotal && (documentTotal = documentTotal);
       }
     }
 

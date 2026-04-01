@@ -199,6 +199,13 @@ Example rows to INCLUDE:
   "1  Internal Wall Framing  373 819,07"
   "37  Ceiling height 2.4-2.7m  676  m2  $93.14  $62,961.58"
 
+CRITICAL — NEVER INCLUDE these rows even if they contain numbers:
+- "Subtotal", "Sub Total", "Sub-total" lines — these are sums of the line items above, NOT a line item
+- "x N levels", "x 17 levels" — this is a multiplier annotation, NOT a line item
+- "Total", "Grand Total" lines
+- "GST", "After GST" lines
+- Any line whose ONLY content is a dollar amount with no description of work
+
 ALWAYS INCLUDE:
 - Any row with a description AND a dollar amount or enough numbers to calculate a total
 - All rows in Format 2A (full columns) and 2B (material-only), including page-truncated rows
@@ -598,6 +605,88 @@ function extractPlumbingLevelTable(text: string): LineItem[] {
   return results;
 }
 
+/**
+ * Detects a "x N levels" multiplier pattern in a carpentry quote.
+ *
+ * Some quotes price a single representative level and then state the total
+ * is that subtotal × N levels (e.g. "Supply & install (Level 1 to 17)" with
+ * "x 17 levels" shown next to the subtotal and a grand Total = subtotal × 17).
+ *
+ * Detection strategy:
+ * 1. Look for "x N levels", "× N levels", "Level 1 to N", "Levels 1-N" etc. in the raw text.
+ * 2. Optionally validate by checking whether documentTotal ≈ parsedSubtotal × N.
+ * 3. Return the multiplier if found and consistent; otherwise return null.
+ */
+function detectLevelsMultiplier(text: string, parsedSubtotal: number): { multiplier: number; documentTotal: number } | null {
+  const flat = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
+
+  // Pattern A: explicit "x 17 levels" or "× 17 levels" or "x17 levels"
+  const xLevelsMatch = flat.match(/[xX×]\s*(\d+)\s*levels?/i);
+
+  // Pattern B: "Level 1 to 17" or "Levels 1-17" — infer count = end number
+  const levelRangeMatch = flat.match(/[Ll]evels?\s+1\s+(?:to|-)\s+(\d+)/i);
+
+  // Pattern C: "Supply & install (Level 1 to 17)" inside parens
+  const parenRangeMatch = flat.match(/\(\s*[Ll]evels?\s+1\s+(?:to|-)\s+(\d+)\s*\)/i);
+
+  const rawMultiplier = xLevelsMatch
+    ? parseInt(xLevelsMatch[1], 10)
+    : levelRangeMatch
+    ? parseInt(levelRangeMatch[1], 10)
+    : parenRangeMatch
+    ? parseInt(parenRangeMatch[1], 10)
+    : null;
+
+  if (!rawMultiplier || rawMultiplier < 2 || rawMultiplier > 100) return null;
+
+  // Parse a number that may be standard ($13,740,112.59) or European (13 740 112,59)
+  const parseAmount = (raw: string): number => {
+    const s = raw.trim();
+    if (/^[\d\s]+,\d{2}$/.test(s)) {
+      return parseFloat(s.replace(/\s/g, '').replace(',', '.'));
+    }
+    return parseFloat(s.replace(/,/g, ''));
+  };
+
+  // Try to extract the stated grand total from the document text
+  // Match lines like: "Total  13 740 112,59" or "Total $13,740,112.59"
+  const totalPatterns = [
+    /Total\s+\$?\s*([\d\s,]+[.,]\d{2})/gi,
+    /Grand\s+Total\s+\$?\s*([\d\s,]+[.,]\d{2})/gi,
+  ];
+
+  let documentTotal = 0;
+  for (const pattern of totalPatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(flat)) !== null) {
+      const val = parseAmount(m[1]);
+      if (val > parsedSubtotal * 1.5) {
+        documentTotal = val;
+        break;
+      }
+    }
+    if (documentTotal > 0) break;
+  }
+
+  // Validate: if we found a document total, check it's close to subtotal × multiplier
+  if (documentTotal > 0 && parsedSubtotal > 0) {
+    const expected = parsedSubtotal * rawMultiplier;
+    const tolerance = expected * 0.02; // allow 2% rounding tolerance
+    if (Math.abs(expected - documentTotal) > tolerance) {
+      console.log(`[LLM v2] Levels multiplier candidate ${rawMultiplier} rejected: expected ${expected.toFixed(2)} but document total is ${documentTotal.toFixed(2)}`);
+      return null;
+    }
+    return { multiplier: rawMultiplier, documentTotal };
+  }
+
+  // No document total found but pattern was clear — trust the explicit "x N levels" marker
+  if (xLevelsMatch) {
+    return { multiplier: rawMultiplier, documentTotal: parsedSubtotal * rawMultiplier };
+  }
+
+  return null;
+}
+
 function validateAndFixItem(item: LineItem, trade?: string): LineItem {
   const flags: string[] = [];
   const isLumpSum = item.unit === 'LS' || item.qty === 1;
@@ -742,6 +831,31 @@ Deno.serve(async (req: Request) => {
       if (levelItems.length > 0) {
         console.log(`[LLM v2] Regex fallback extracted ${levelItems.length} level rows`);
         allItems = levelItems;
+      }
+    }
+
+    // Carpentry levels multiplier: detect "x N levels" pattern and scale items accordingly
+    if (isCarpentry && allItems.length > 0) {
+      const rawSubtotal = allItems.reduce((sum, item) => sum + (item.total || 0), 0);
+      const levelsResult = detectLevelsMultiplier(text, rawSubtotal);
+      if (levelsResult) {
+        const { multiplier, documentTotal } = levelsResult;
+        console.log(`[LLM v2] Carpentry levels multiplier detected: x${multiplier} (subtotal ${rawSubtotal.toFixed(2)} × ${multiplier} = ${documentTotal.toFixed(2)})`);
+
+        // Append a synthetic "Levels Multiplier" line item so the total reconciles
+        const multiplierItem: LineItem = {
+          description: `Levels Multiplier (x${multiplier} levels — subtotal applied across all ${multiplier} identical levels)`,
+          qty: multiplier - 1,
+          unit: 'LS',
+          rate: rawSubtotal,
+          total: rawSubtotal * (multiplier - 1),
+          section: 'Levels Multiplier',
+          confidence: 0.95,
+          source: 'levels_multiplier',
+          raw_text: `x${multiplier} levels`,
+          validation_flags: ['LEVELS_MULTIPLIER'],
+        };
+        allItems = [...allItems, multiplierItem];
       }
     }
 
