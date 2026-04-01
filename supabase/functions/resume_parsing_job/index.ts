@@ -114,17 +114,36 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   // NOTE: "item" is intentionally NOT in this list — items like "Item" as the column header
   // are only skipped when they appear as standalone column header rows (handled by context),
   // not when "item" appears as part of a real description fetched from the numbered table.
-  const isBoilerplateLine = (s: string): boolean =>
-    /^(no\b|qty\b|unit\b|total\b|amount\b|description\b|subtotal\b|sub total\b|grand total\b|gst\b|supply & install\b|quotation\b|project\b|date\b|wall legend\b|location\b|wall type\b|dwg ref\b|u\/rate\b|summary of quantity\b|carpentry work\b|green tga\b|allowed \d|apt\.\s*\d|service nogging\b|internal wall framing\b|insulation\b|timber trim\b|interior timber door\b|plasterboard\b|ceiling suspended grid\b|ceiling lining\b)\b/i.test(s)
-    || /^\$/.test(s)
-    || /^[\d\s,.$]+$/.test(s)
-    || /^to\s+[A-Z]/i.test(s)
-    || /\b(pty ltd|ltd|limited|properties|holdings|group)\b/i.test(s)
-    || /^[xX×]\s*\d+\s*levels?/i.test(s)
-    || /^level\s+\d+\s+to\s+\d+/i.test(s)
-    || /^item\b.*\b(dwg|ref|u\/rate|urate|rate|draw)/i.test(s)
-    || /^(item\s+)?(dwg\s+ref|drawing\s+ref)/i.test(s)
-    || /^item\s+\d+\s*$/i.test(s);
+  const isBoilerplateLine = (s: string): boolean => {
+    // Only reject lines that are pure column headers / metadata labels with no real spec content.
+    // Do NOT reject lines that happen to start with a section keyword but contain real spec detail.
+    const lower = s.toLowerCase().trim();
+
+    // Pure column-header / table-label words (exact or anchored):
+    if (/^(no|qty|unit|total|amount|description|subtotal|sub total|grand total|gst|supply & install|quotation|project|date|wall legend|location|wall type|dwg ref|u\/rate|summary of quantity|carpentry work)\s*$/i.test(lower)) return true;
+
+    // Section-header-only lines that never have spec content after them on the same line:
+    if (/^(allowed \d|apt\.\s*\d)/i.test(lower)) return true;
+
+    // Lines that are purely numeric / dollar amounts:
+    if (/^\$/.test(s)) return true;
+    if (/^[\d\s,.$]+$/.test(s)) return true;
+
+    // Company / client address lines:
+    if (/^to\s+[A-Z]/i.test(s)) return true;
+    if (/\b(pty ltd|ltd|limited|properties|holdings|group)\b/i.test(s)) return true;
+
+    // Level multiplier lines:
+    if (/^[xX×]\s*\d+\s*levels?/i.test(s)) return true;
+    if (/^level\s+\d+\s+to\s+\d+/i.test(s)) return true;
+
+    // Column header variants:
+    if (/^item\b.*\b(dwg|ref|u\/rate|urate|rate|draw)/i.test(s)) return true;
+    if (/^(item\s+)?(dwg\s+ref|drawing\s+ref)/i.test(s)) return true;
+    if (/^item\s+\d+\s*$/i.test(s)) return true;
+
+    return false;
+  };
 
   // A standalone "Item" or "Item/Description" column-header line (no description text around it)
   const isItemHeaderLine = (s: string): boolean =>
