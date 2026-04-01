@@ -110,11 +110,18 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
 
   // ── Shared helpers ────────────────────────────────────────────────────────────
 
-  // Section/boilerplate lines that must never become item descriptions
+  // Lines that must never become item descriptions (column headers, section labels, metadata).
+  // NOTE: "item" is intentionally NOT in this list — items like "Item" as the column header
+  // are only skipped when they appear as standalone column header rows (handled by context),
+  // not when "item" appears as part of a real description fetched from the numbered table.
   const isBoilerplateLine = (s: string): boolean =>
-    /^(no|qty|unit|total|amount|item\b|description|subtotal|grand total|gst|supply & install|quotation|to\s|project|date|wall legend|location|wall type|dwg ref|u\/rate|summary of quantity|carpentry work|green tga|allowed \d|apt\.|service nogging|internal wall framing|insulation|timber trim|interior timber door|plasterboard|ceiling suspended grid|ceiling lining)\b/i.test(s)
+    /^(no\b|qty\b|unit\b|total\b|amount\b|description\b|subtotal\b|sub total\b|grand total\b|gst\b|supply & install\b|quotation\b|project\b|date\b|wall legend\b|location\b|wall type\b|dwg ref\b|u\/rate\b|summary of quantity\b|carpentry work\b|green tga\b|allowed \d|apt\.\s*\d|service nogging\b|internal wall framing\b|insulation\b|timber trim\b|interior timber door\b|plasterboard\b|ceiling suspended grid\b|ceiling lining\b)\b/i.test(s)
     || /^\$/.test(s)
     || /^[\d\s,.$]+$/.test(s);
+
+  // A standalone "Item" or "Item/Description" column-header line (no description text around it)
+  const isItemHeaderLine = (s: string): boolean =>
+    /^(item\/description|item|description)\s*$/i.test(s);
 
   // ── Step 1: Scan lines to build two datasets in one pass ─────────────────────
   //
@@ -127,10 +134,10 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   // Strict numeric-only row: "1   110   m2   $ 23 872,91"
   const strictRowRe = /^\s*(\d{1,2})\s{1,6}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
 
-  // Rich inline row: "1   <description>   110   m2   $ 217,98   $ 23 872,91"
-  // The description is text between the item number and the qty/unit/rate/total block.
-  // We anchor on the trailing "qty  unit  $ rate  $ total" pattern.
-  const richRowRe = /^\s*(\d{1,2})\s{2,8}(.+?)\s{2,8}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*[\d][\d ]*,\d{2}\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
+  // Rich inline row: "1 <description> 110 m2 $ 217,98 $ 23 872,91"
+  // Allow 1–10 spaces between segments (PDF extractors often collapse multiple spaces).
+  // Requires TWO dollar amounts at the end (unit rate + total).
+  const richRowRe = /^\s*(\d{1,2})\s{1,10}(.+?)\s{1,10}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*[\d][\d ]*,\d{2}\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
 
   // Rate-schedule line ending with "$ XX,XX" where amount < $5000
   const rateLineRe = /^(.*?)\s+\$\s*([\d][\d ]*,\d{2})\s*$/;
@@ -141,10 +148,19 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
 
   const rateSchedule: { desc: string; rate: number }[] = [];
   let pendingDescLines: string[] = [];
+  // Also keep a rolling window of ALL recent non-numeric text lines (not just pending buffer),
+  // so the look-back can find descriptions that were consumed as rate-schedule entries.
+  let recentTextLines: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) { pendingDescLines = []; continue; }
+
+    // Skip standalone column-header lines ("Item", "Item/Description", "Description")
+    if (isItemHeaderLine(line)) {
+      pendingDescLines = [];
+      continue;
+    }
 
     // ── Try rich inline row first (Priority 1 source) ────────────────────────
     const richMatch = line.match(richRowRe);
@@ -155,9 +171,14 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
       const unit = richMatch[4].trim().toLowerCase();
       const total = parseEuropeanAmount(richMatch[5]);
 
-      if (total > 0 && qty > 0 && !seenNums.has(num) && !isBoilerplateLine(rawDesc)) {
+      // Accept the inline description even if it starts with a word that looks like a header,
+      // as long as the overall row parsed correctly (num + qty + unit + rate + total all present).
+      // Only filter out pure boilerplate (pure numeric strings, dollar-only lines, etc.).
+      const descIsUsable = rawDesc.length > 2 && !/^[\d\s,.$]+$/.test(rawDesc) && !/^\$/.test(rawDesc);
+
+      if (total > 0 && qty > 0 && !seenNums.has(num)) {
         seenNums.add(num);
-        lineItems.push({ num, qty, unit, total, inlineDesc: rawDesc });
+        lineItems.push({ num, qty, unit, total, inlineDesc: descIsUsable ? rawDesc : '' });
       }
       pendingDescLines = [];
       continue;
@@ -173,12 +194,18 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
 
       if (total > 0 && qty > 0 && !seenNums.has(num)) {
         seenNums.add(num);
-        // Look back up to 5 lines for a description that was extracted on its own line
-        // (PDF extractor sometimes places the description on the preceding line)
+        // Look back through BOTH pending buffer AND recent text window for a description
+        // that the PDF extractor placed on the line(s) immediately before this row.
         let lookaheadDesc = '';
-        for (let j = pendingDescLines.length - 1; j >= 0; j--) {
-          const candidate = pendingDescLines[j].trim();
-          if (candidate && !isBoilerplateLine(candidate) && /[A-Za-z]/.test(candidate)) {
+        const searchPool = [...pendingDescLines, ...recentTextLines];
+        for (let j = searchPool.length - 1; j >= 0; j--) {
+          const candidate = searchPool[j].trim();
+          if (
+            candidate &&
+            !isBoilerplateLine(candidate) &&
+            !isItemHeaderLine(candidate) &&
+            /[A-Za-z]/.test(candidate)
+          ) {
             lookaheadDesc = candidate;
             break;
           }
@@ -199,6 +226,11 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
         const fullDesc = [...pendingDescLines, descPart].join(' ').trim();
         if (fullDesc.length > 3 && !/^\d+$/.test(fullDesc) && !isBoilerplateLine(fullDesc)) {
           rateSchedule.push({ desc: fullDesc, rate });
+          // Also keep the description text available for look-back
+          if (descPart && /[A-Za-z]/.test(descPart)) {
+            recentTextLines.push(descPart);
+            if (recentTextLines.length > 10) recentTextLines.shift();
+          }
         }
       }
       pendingDescLines = [];
@@ -208,6 +240,8 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     // ── Buffer potential multi-line description fragment ─────────────────────
     if (!/\$/.test(line) && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line) && line.length < 120) {
       pendingDescLines.push(line);
+      recentTextLines.push(line);
+      if (recentTextLines.length > 10) recentTextLines.shift();
     } else {
       pendingDescLines = [];
     }
