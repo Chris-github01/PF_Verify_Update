@@ -7,7 +7,7 @@ import ShadowDiffSummary from '../../components/shadow/ShadowDiffSummary';
 import type { ShadowRunRecord, ShadowRunResultRecord, ModuleDiff, RunStatus, RunMode } from '../../types/shadow';
 
 function getModuleKeyFromPath(): string | undefined {
-  const m = window.location.pathname.match(/^\/shadow\/modules\/([^/]+)\/runs$/);
+  const m = window.location.pathname.match(/^\/shadow\/modules\/([^/?#]+)\/runs\/?$/);
   return m ? m[1] : undefined;
 }
 
@@ -105,9 +105,10 @@ export default function ShadowModuleRuns() {
     note: string | null;
   } | null {
     const liveResult = results.find((r) => r.result_type === 'live');
-    if (!liveResult?.metrics_json) return null;
-    const m = liveResult.metrics_json as Record<string, unknown>;
-    if (!m.passthrough) return null;
+    if (!liveResult) return null;
+    const m = (liveResult.metrics_json ?? {}) as Record<string, unknown>;
+    const hasAnyMetric = m.itemCount != null || m.parsedValue != null || m.resolvedVia != null;
+    if (!hasAnyMetric) return null;
     return {
       itemCount: typeof m.itemCount === 'number' ? m.itemCount : null,
       parsedValue: typeof m.parsedValue === 'number' ? m.parsedValue : null,

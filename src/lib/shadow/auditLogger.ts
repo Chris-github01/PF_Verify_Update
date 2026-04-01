@@ -31,6 +31,7 @@ export async function getAuditLog(filters?: {
   moduleKey?: string;
   entityType?: string;
   actorUserId?: string;
+  action?: string;
   limit?: number;
 }) {
   let q = supabase
@@ -41,6 +42,7 @@ export async function getAuditLog(filters?: {
   if (filters?.moduleKey) q = q.eq('module_key', filters.moduleKey);
   if (filters?.entityType) q = q.eq('entity_type', filters.entityType);
   if (filters?.actorUserId) q = q.eq('actor_user_id', filters.actorUserId);
+  if (filters?.action) q = q.ilike('action', `%${filters.action}%`);
   q = q.limit(filters?.limit ?? 200);
 
   const { data } = await q;

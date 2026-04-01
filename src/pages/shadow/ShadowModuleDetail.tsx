@@ -39,7 +39,7 @@ interface RecentQuote {
 }
 
 function getModuleKeyFromPath(): string | undefined {
-  const m = window.location.pathname.match(/^\/shadow\/modules\/([^/]+)$/);
+  const m = window.location.pathname.match(/^\/shadow\/modules\/([^/?#]+)\/?$/);
   return m ? m[1] : undefined;
 }
 

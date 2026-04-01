@@ -54,7 +54,8 @@ export async function resolveFlag(
       case 'percentage': {
         const basis = context.orgId ?? context.userId ?? '';
         const hash = simpleHash(flagKey + basis);
-        const pct = (flag.config_json as { percentage?: number }).percentage ?? 0;
+        const rawPct = (flag.config_json as { percentage?: number }).percentage ?? 0;
+        const pct = Math.min(100, Math.max(0, rawPct));
         if (hash % 100 < pct) {
           return { enabled: flag.enabled, config: flag.config_json };
         }

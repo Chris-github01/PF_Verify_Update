@@ -91,7 +91,7 @@ export async function completeShadowRun(
     shadowOutput,
     diff,
     liveVersion: run?.live_version ?? 'v1',
-    shadowVersion: run?.shadow_version ?? 'v2',
+    shadowVersion: run?.shadow_version ?? 'unknown',
     completedAt: new Date().toISOString(),
   };
 }
@@ -142,9 +142,12 @@ export async function resolveVersionForExecution(moduleKey: string): Promise<{
     .eq('module_key', moduleKey)
     .maybeSingle();
 
+  const shadowStatuses = new Set(['shadow_only', 'internal_beta', 'org_beta', 'partial_rollout']);
+  const isShadowMode = ver?.rollout_status && shadowStatuses.has(ver.rollout_status) && !!ver.shadow_version;
+
   return {
-    version: ver?.live_version ?? 'v1',
-    mode: 'live',
+    version: isShadowMode ? (ver!.shadow_version!) : (ver?.live_version ?? 'v1'),
+    mode: isShadowMode ? 'shadow' : 'live',
     killed: false,
   };
 }
@@ -178,7 +181,8 @@ function diffOutputs(live: ComparableModuleOutput, shadow: ComparableModuleOutpu
   const itemCountDelta = (shadow.totals.itemCount ?? 0) - (live.totals.itemCount ?? 0);
 
   let passRating: 'pass' | 'warn' | 'fail' = 'pass';
-  if (!totalsMatch || Math.abs(totalsDelta) > liveTotal * 0.05) passRating = 'fail';
+  const threshold = liveTotal > 0 ? liveTotal * 0.05 : 1;
+  if (!totalsMatch || Math.abs(totalsDelta) > threshold) passRating = 'fail';
   else if (addedItems.length > 0 || removedItems.length > 0 || changedItems.length > 0) passRating = 'warn';
 
   return {

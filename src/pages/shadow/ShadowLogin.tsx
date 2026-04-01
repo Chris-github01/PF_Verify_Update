@@ -25,10 +25,11 @@ export default function ShadowLogin() {
       const userId = data.session.user.id;
 
       const { data: adminCheck, error: adminError } = await supabase
-        .from('platform_admins')
-        .select('is_active')
+        .from('admin_roles')
+        .select('role')
         .eq('user_id', userId)
-        .eq('is_active', true)
+        .in('role', ['god_mode', 'internal_admin'])
+        .limit(1)
         .maybeSingle();
 
       if (adminError || !adminCheck) {

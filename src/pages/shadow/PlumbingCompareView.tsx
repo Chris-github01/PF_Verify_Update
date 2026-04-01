@@ -17,7 +17,7 @@ import type { ShadowRunRecord } from '../../types/shadow';
 import type { PlumbingDiff, ReviewStatus } from '../../types/plumbingDiscrepancy';
 
 function getRunIdFromPath(): string | undefined {
-  const m = window.location.pathname.match(/^\/shadow\/plumbing\/compare\/([^/]+)$/);
+  const m = window.location.pathname.match(/^\/shadow\/plumbing\/compare\/([^/?#]+)\/?$/);
   return m ? m[1] : undefined;
 }
 

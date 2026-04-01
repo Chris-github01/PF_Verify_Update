@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Shield, Layers, Activity, GitBranch, Zap,
-  AlertTriangle, CheckCircle, Clock, ArrowRight
+  AlertTriangle, CheckCircle, Clock, ArrowRight, RefreshCw
 } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import { getAllModules } from '../../lib/shadow/moduleRegistry';
@@ -17,9 +17,16 @@ export default function ShadowHome() {
   const [recentRuns, setRecentRuns] = useState<ShadowRunRecord[]>([]);
   const [auditLog, setAuditLog] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
+    load();
+  }, []);
+
+  async function load() {
+    setLoading(true);
+    setLoadError(null);
+    try {
       const [allMods, runs, audit] = await Promise.all([
         getAllModules(),
         getShadowRuns(undefined, 10),
@@ -34,9 +41,13 @@ export default function ShadowHome() {
       setModules(modsWithKill);
       setRecentRuns(runs);
       setAuditLog(audit);
+    } catch (e) {
+      console.error('[shadow] ShadowHome load failed:', e);
+      setLoadError(e instanceof Error ? e.message : 'Failed to load shadow dashboard data');
+    } finally {
       setLoading(false);
-    })();
-  }, []);
+    }
+  }
 
   const withShadow = modules.filter((m) => m.version?.shadow_version);
   const inBeta = modules.filter((m) =>
@@ -68,6 +79,22 @@ export default function ShadowHome() {
             <StatCard icon={Activity}     label="In Beta"           value={String(inBeta.length)}         color="green" />
             <StatCard icon={Zap}          label="Kill Switches On"  value={String(killSwitchCount)}       color={killSwitchCount > 0 ? 'red' : 'gray'} />
           </div>
+
+          {loadError && (
+            <div className="bg-red-950/50 border border-red-800 rounded-xl p-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-red-300 mb-1">Failed to load dashboard data</div>
+                <p className="text-xs text-red-400/80 break-words">{loadError}</p>
+              </div>
+              <button
+                onClick={load}
+                className="flex items-center gap-1.5 text-xs text-red-300 hover:text-red-200 border border-red-700 px-3 py-1.5 rounded-lg shrink-0 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Retry
+              </button>
+            </div>
+          )}
 
           {/* Kill switch alerts */}
           {killSwitchCount > 0 && (
