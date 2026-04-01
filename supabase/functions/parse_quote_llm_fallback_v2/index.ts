@@ -487,17 +487,27 @@ FORMAT E — LUMP SUM:
 - "Wall framing  1.00  Sum  $1,387,477.30" → qty=1, unit="LS", total=1387477.30
 - "Single door  460  no  189  4.50  42  86940  0  189  86940" → qty=460, unit="no", rate=189, total=86940
 
-FORMAT F — NUMBERED ITEMS: The "Item" column in these quotes IS the description column and contains the actual description text inline.
-The table header is: "No   Item   Dwg Ref   Qty   Unit   U/Rate   Total"
-Each row has the actual description text in the Item cell — multi-line text extracted from a PDF table.
+FORMAT F — NUMBERED ITEMS (Western/Sero style):
+The table header may read either "No | Item | Dwg Ref | Qty | Unit | U/Rate | Total"
+or "No | Description | Dwg Ref | Qty | Unit | U/Rate | Total" or "No | Item/Description | ...".
+"Item" and "Description" are the same column — they both carry the description of the work.
+Treat all three header variants identically.
 
-CRITICAL RULE: If the detected row already contains actual description text (e.g. wall spec, material spec, door size), USE THAT TEXT as the description. Do NOT replace it with a category name from the summary table.
+DESCRIPTION RESOLUTION — STRICT PRIORITY ORDER:
+Priority 1 — INLINE TEXT: If the row already contains actual description text between the item
+  number and the numeric columns (qty/unit/rate/total), use that text directly as the description.
+  Do NOT replace inline text with a summary category name or an inferred label.
+Priority 2 — RATE MATCH: If the row has no inline description (only a number + qty + unit +
+  total), infer the description by matching the implied unit rate (total ÷ qty) to the rate
+  schedule entries elsewhere in the document.
+Priority 3 — PLACEHOLDER: Only if neither Priority 1 nor Priority 2 applies, fall back to
+  "Item N" as the description.
 
-The document also has a SUMMARY table at the top: "No | Description | Amount" (e.g. "1 Internal Wall Framing $373,819"). That is a SUMMARY OVERVIEW, not the actual line item descriptions. The real descriptions are the detailed specs in the detail table.
+The document also contains a SUMMARY table (e.g. "1 Internal Wall Framing $373,819"). That is a
+high-level overview — do NOT use summary labels as line-item descriptions. The real descriptions
+are the detailed specs in the numbered item table itself.
 
-ONLY use "Item N" as the description if a raw row truly has nothing but a number and prices (i.e. the row contains only digits and dollar amounts with absolutely no text description). This is rare.
-
-Examples of rows with INLINE descriptions (USE the description text as-is):
+Examples where INLINE text is present — use it exactly:
   "1   150x0.75 Rondo steel stud wall @600mm crs, nog @ 800mm crs with 150mm dpc and M6 Hilti bolt @ 600 crs   110   m2   $ 217,98   $ 23 872,91"
   → description="150x0.75 Rondo steel stud wall @600mm crs, nog @ 800mm crs with 150mm dpc and M6 Hilti bolt @ 600 crs", qty=110, unit="m2", rate=217.98, total=23872.91
 
@@ -513,12 +523,20 @@ Examples of rows with INLINE descriptions (USE the description text as-is):
   "18   760x2200mm single leaf door   19   no   $ 217,41   $ 4 130,72"
   → description="760x2200mm single leaf door", qty=19, unit="no", rate=217.41, total=4130.72
 
+Examples where the row has NO inline text — use rate matching, not summary categories:
+  "1   110   m2   $ 23 872,91"  (no description text present)
+  → infer description from rate schedule: implied rate = 23872.91 ÷ 110 = 217.03 ≈ 217.98 → match
+
 ALWAYS SKIP:
 - Grand totals / section subtotals that sum other items (e.g. "1,926,482.09  1,481,928.81  2,617,826.06")
 - "No allowance to..." exclusion notes
-- Column header rows (Description, Qty, Unit, Rate, Total, Labour, Material, Overall)
+- Column header rows (Description, Item, Qty, Unit, Rate, Total, Labour, Material, Overall)
 - Standalone "42" or "50" separator rows with no description
 - Contact details, addresses, payment terms, note text
+- Rate-schedule reference rows with only a description and a unit rate but no qty and no line total
+  (e.g. "W30 for Intertenancy wall  $292.46", "710x2200mm single leaf door  $217.41")
+- Section headers with no numbers (e.g. "INTERNAL WALL FRAMING", "INSULATION", "TIMBER TRIM")
+- Sub-section notes (e.g. "W30 for Intertenancy wall", "Assumed W32 for Interior shaft wall")
 
 CRITICAL: Do NOT produce duplicate rows. If the same description+qty+unit combination appears in both a GIB Supply block and a GIB Fixing block, they are DIFFERENT items with different scope — keep both. But do NOT extract the same physical row twice.
 

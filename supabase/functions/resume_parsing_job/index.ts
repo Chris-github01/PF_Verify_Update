@@ -84,46 +84,133 @@ function parseEuropeanAmount(raw: string): number {
 }
 
 /**
- * Deterministic parser for the Sero Apartments carpentry PDF format.
+ * Deterministic parser for Western/Sero-style carpentry PDF quotes.
  *
- * This PDF has a very specific layout that pdfjs scrambles:
- * 1. A "Quotation" section with line items: "N   qty   unit   $ total"
- *    (NO inline descriptions — the "No | Description | Amount" header is misleading;
- *     the description column is actually blank for all numbered rows)
- * 2. A "Summary of Quantity" / rate-schedule section with:
- *    "Description text   $ U/Rate" pairs (multi-line descriptions possible)
+ * These PDFs have two layouts that pdfjs scrambles together:
  *
- * Strategy:
- * - Extract all numbered line items (N   qty   unit   $ total) from the combined text
- * - Extract the rate schedule (desc → rate) from the rate schedule section
- * - For each line item, compute implied rate = total/qty and match to rate schedule
- * - Return only the 37 real line items with proper descriptions, zero garbage
+ * Layout A — numbered item table: "N   qty   unit   $ total"
+ *   The column heading may be "No | Item | Dwg Ref | Qty | Unit | U/Rate | Total"
+ *   or "No | Description | Amount". Both are equivalent. When the PDF preserves
+ *   the description text, the row looks like:
+ *     "1   150x0.75 Rondo steel stud wall ... 110   m2   $ 217,98   $ 23 872,91"
+ *   When the extractor collapses it, only the numeric row survives:
+ *     "1   110   m2   $ 23 872,91"
+ *
+ * Layout B — rate schedule: "Description text   $ U/Rate"
+ *   Descriptions may span multiple lines. These are reference pricing only.
+ *
+ * Description resolution priority (per spec):
+ *   Priority 1 — inline description present in the numbered row itself → use it directly
+ *   Priority 2 — no inline description → match implied rate (total/qty) to rate schedule
+ *   Priority 3 — neither works → fall back to "Item N" placeholder
  */
 function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   const combined = chunkTexts.join('\n');
+  const lines = combined.split('\n');
 
-  // ── Step 1: Extract numbered line items ──────────────────────────────────────
-  // Pattern: line starting with a number, then qty (with optional space as thousands sep),
-  // then unit (m2|m|no|ea|lm|sum), then $ total (European format)
-  // e.g. "1   110   m2   $ 23 872,91" or "37   676   m2   $ 62 961,58"
-  const lineItemRe = /^\s*(\d{1,2})\s{1,6}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/gim;
-  const lineItems: { num: number; qty: number; unit: string; total: number }[] = [];
+  // ── Shared helpers ────────────────────────────────────────────────────────────
+
+  // Section/boilerplate lines that must never become item descriptions
+  const isBoilerplateLine = (s: string): boolean =>
+    /^(no|qty|unit|total|amount|item\b|description|subtotal|grand total|gst|supply & install|quotation|to\s|project|date|wall legend|location|wall type|dwg ref|u\/rate|summary of quantity|carpentry work|green tga|allowed \d|apt\.|service nogging|internal wall framing|insulation|timber trim|interior timber door|plasterboard|ceiling suspended grid|ceiling lining)\b/i.test(s)
+    || /^\$/.test(s)
+    || /^[\d\s,.$]+$/.test(s);
+
+  // ── Step 1: Scan lines to build two datasets in one pass ─────────────────────
+  //
+  // Dataset A: numbered line items, with optional inline description
+  //   strict form:  /^\s*N  qty  unit  $ total$/
+  //   rich form:    /^\s*N  <desc text>  qty  unit  $ rate  $ total$/
+  //
+  // Dataset B: rate-schedule entries (desc → unit rate < $5000)
+
+  // Strict numeric-only row: "1   110   m2   $ 23 872,91"
+  const strictRowRe = /^\s*(\d{1,2})\s{1,6}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
+
+  // Rich inline row: "1   <description>   110   m2   $ 217,98   $ 23 872,91"
+  // The description is text between the item number and the qty/unit/rate/total block.
+  // We anchor on the trailing "qty  unit  $ rate  $ total" pattern.
+  const richRowRe = /^\s*(\d{1,2})\s{2,8}(.+?)\s{2,8}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*[\d][\d ]*,\d{2}\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
+
+  // Rate-schedule line ending with "$ XX,XX" where amount < $5000
+  const rateLineRe = /^(.*?)\s+\$\s*([\d][\d ]*,\d{2})\s*$/;
+
+  type LineItemRaw = { num: number; qty: number; unit: string; total: number; inlineDesc: string };
+  const lineItems: LineItemRaw[] = [];
   const seenNums = new Set<number>();
 
-  let m: RegExpExecArray | null;
-  while ((m = lineItemRe.exec(combined)) !== null) {
-    const num = parseInt(m[1], 10);
-    const qty = parseFloat(m[2].replace(/\s/g, ''));
-    const unit = m[3].trim().toLowerCase();
-    const total = parseEuropeanAmount(m[4]);
+  const rateSchedule: { desc: string; rate: number }[] = [];
+  let pendingDescLines: string[] = [];
 
-    // Skip if total is 0, or if we've already seen this item number
-    // (chunks overlap so the same row may appear twice)
-    if (total <= 0 || qty <= 0) continue;
-    if (seenNums.has(num)) continue;
-    seenNums.add(num);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) { pendingDescLines = []; continue; }
 
-    lineItems.push({ num, qty, unit, total });
+    // ── Try rich inline row first (Priority 1 source) ────────────────────────
+    const richMatch = line.match(richRowRe);
+    if (richMatch) {
+      const num = parseInt(richMatch[1], 10);
+      const rawDesc = richMatch[2].trim();
+      const qty = parseFloat(richMatch[3].replace(/\s/g, ''));
+      const unit = richMatch[4].trim().toLowerCase();
+      const total = parseEuropeanAmount(richMatch[5]);
+
+      if (total > 0 && qty > 0 && !seenNums.has(num) && !isBoilerplateLine(rawDesc)) {
+        seenNums.add(num);
+        lineItems.push({ num, qty, unit, total, inlineDesc: rawDesc });
+      }
+      pendingDescLines = [];
+      continue;
+    }
+
+    // ── Try strict numeric-only row ──────────────────────────────────────────
+    const strictMatch = line.match(strictRowRe);
+    if (strictMatch) {
+      const num = parseInt(strictMatch[1], 10);
+      const qty = parseFloat(strictMatch[2].replace(/\s/g, ''));
+      const unit = strictMatch[3].trim().toLowerCase();
+      const total = parseEuropeanAmount(strictMatch[4]);
+
+      if (total > 0 && qty > 0 && !seenNums.has(num)) {
+        seenNums.add(num);
+        // Look back up to 5 lines for a description that was extracted on its own line
+        // (PDF extractor sometimes places the description on the preceding line)
+        let lookaheadDesc = '';
+        for (let j = pendingDescLines.length - 1; j >= 0; j--) {
+          const candidate = pendingDescLines[j].trim();
+          if (candidate && !isBoilerplateLine(candidate) && /[A-Za-z]/.test(candidate)) {
+            lookaheadDesc = candidate;
+            break;
+          }
+        }
+        lineItems.push({ num, qty, unit, total, inlineDesc: lookaheadDesc });
+      }
+      pendingDescLines = [];
+      continue;
+    }
+
+    // ── Try rate-schedule entry ──────────────────────────────────────────────
+    const rateMatch = line.match(rateLineRe);
+    if (rateMatch) {
+      const descPart = rateMatch[1].trim();
+      const rate = parseEuropeanAmount(rateMatch[2]);
+
+      if (rate > 0 && rate < 5000) {
+        const fullDesc = [...pendingDescLines, descPart].join(' ').trim();
+        if (fullDesc.length > 3 && !/^\d+$/.test(fullDesc) && !isBoilerplateLine(fullDesc)) {
+          rateSchedule.push({ desc: fullDesc, rate });
+        }
+      }
+      pendingDescLines = [];
+      continue;
+    }
+
+    // ── Buffer potential multi-line description fragment ─────────────────────
+    if (!/\$/.test(line) && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line) && line.length < 120) {
+      pendingDescLines.push(line);
+    } else {
+      pendingDescLines = [];
+    }
   }
 
   if (lineItems.length === 0) return null;
@@ -131,47 +218,7 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   // Sort by item number
   lineItems.sort((a, b) => a.num - b.num);
 
-  // ── Step 2: Extract rate schedule (description → rate) ──────────────────────
-  // Rate schedule lines end with "$ XX,XX" (European unit rate, < $5000).
-  // Descriptions may span multiple lines (no leading digit, no $).
-  const rateSchedule: { desc: string; rate: number }[] = [];
-  const lines = combined.split('\n');
-
-  // Skip everything before the first rate-schedule marker
-  // The rate schedule appears after "Item   Dwg Ref   U/Rate" header lines
-  const rateLineRe = /^(.*?)\s+\$\s*([\d][\d ]*,\d{2})\s*$/;
-  // Exclude lines that are section headers, boilerplate, or column headers
-  const skipDescRe = /^(no|qty|unit|total|amount|item|description|subtotal|grand total|gst|supply & install|quotation|to\s|project|date|wall legend|location|wall type|dwg ref|u\/rate|summary of quantity|carpentry work|green tga|allowed \d|apt\.|service nogging)\b/i;
-
-  let pendingDescLines: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) { pendingDescLines = []; continue; }
-
-    const rateMatch = line.match(rateLineRe);
-    if (rateMatch) {
-      const descPart = rateMatch[1].trim();
-      const rate = parseEuropeanAmount(rateMatch[2]);
-
-      // Only unit rates (< $5000)
-      if (rate > 0 && rate < 5000) {
-        const fullDesc = [...pendingDescLines, descPart].join(' ').trim();
-
-        if (fullDesc.length > 3 && !/^\d+$/.test(fullDesc) && !skipDescRe.test(fullDesc)) {
-          rateSchedule.push({ desc: fullDesc, rate });
-        }
-      }
-      pendingDescLines = [];
-    } else if (!/\$/.test(line) && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line) && line.length < 120) {
-      // Possible multi-line description fragment
-      pendingDescLines.push(line);
-    } else {
-      pendingDescLines = [];
-    }
-  }
-
-  // ── Step 3: Build rate → description lookup (best match wins) ───────────────
+  // ── Step 2: Build rate → description lookup from rate schedule ───────────────
   const rateMap = new Map<string, string>();
   for (const entry of rateSchedule) {
     const key = entry.rate.toFixed(2);
@@ -180,33 +227,46 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     }
   }
 
-  // ── Step 4: Match each line item to a description ────────────────────────────
+  // ── Step 3: Resolve description for each item using priority order ───────────
+  const cleanupDesc = (s: string): string =>
+    s.replace(/\s+/g, ' ')
+     .replace(/^(W\d+\s+for\s+)/i, '')
+     .replace(/^(Assumed\s+W\d+\s+for\s+)/i, '')
+     .trim();
+
   const result: any[] = [];
   for (const item of lineItems) {
     const impliedRate = item.total / item.qty;
 
-    // Find closest rate within 2% tolerance
-    let bestDesc = '';
-    let bestDiff = Infinity;
-    for (const [key, desc] of rateMap) {
-      const schedRate = parseFloat(key);
-      const diff = Math.abs(schedRate - impliedRate);
-      const relDiff = diff / impliedRate;
-      if (relDiff < 0.02 && diff < bestDiff) {
-        bestDiff = diff;
-        bestDesc = desc;
+    // Priority 1: inline description from the row itself
+    let finalDesc = '';
+    if (item.inlineDesc && item.inlineDesc.length > 2) {
+      finalDesc = cleanupDesc(item.inlineDesc);
+    }
+
+    // Priority 2: rate-schedule match (only if Priority 1 missed)
+    if (!finalDesc) {
+      let bestDesc = '';
+      let bestDiff = Infinity;
+      for (const [key, desc] of rateMap) {
+        const schedRate = parseFloat(key);
+        const diff = Math.abs(schedRate - impliedRate);
+        const relDiff = diff / impliedRate;
+        if (relDiff < 0.02 && diff < bestDiff) {
+          bestDiff = diff;
+          bestDesc = desc;
+        }
+      }
+      if (bestDesc) {
+        finalDesc = cleanupDesc(bestDesc);
       }
     }
 
-    // Clean up multi-line description artifacts
-    const cleanDesc = bestDesc
-      .replace(/\s+/g, ' ')
-      .replace(/^(W\d+\s+for\s+)/i, '')
-      .replace(/^(Assumed\s+W\d+\s+for\s+)/i, '')
-      .trim();
+    // Priority 3: placeholder
+    const usedFallback = !finalDesc;
 
     result.push({
-      description: cleanDesc || `Item ${item.num}`,
+      description: finalDesc || `Item ${item.num}`,
       qty: item.qty,
       unit: item.unit,
       rate: impliedRate,
@@ -214,8 +274,10 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
       section: 'Main',
       confidence: 0.95,
       source: 'deterministic_carpentry_parser',
-      raw_text: `${item.num}   ${item.qty}   ${item.unit}   ${item.total}`,
-      validation_flags: cleanDesc ? [] : ['NO_DESC_MATCH'],
+      raw_text: item.inlineDesc
+        ? `${item.num}   ${item.inlineDesc}   ${item.qty}   ${item.unit}   ${item.total}`
+        : `${item.num}   ${item.qty}   ${item.unit}   ${item.total}`,
+      validation_flags: usedFallback ? ['NO_DESC_MATCH'] : [],
     });
   }
 
