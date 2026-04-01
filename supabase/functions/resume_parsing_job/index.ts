@@ -105,8 +105,8 @@ function detectCarpentryLevelsMultiplier(text: string, parsedSubtotal: number): 
   // Try to find the stated grand total in the text
   // Handles: "Total $ 13 740 112,59" / "Total $13,740,112.59" / "Total 13740112.59"
   const totalPatterns = [
-    /Total\s+\$?\s*([\d\s,]+[.,]\d{2})/gi,
-    /Grand\s+Total\s+\$?\s*([\d\s,]+[.,]\d{2})/gi,
+    /\bTotal\s+\$?\s*([\d][\d\s]*[.,]\d{2})\b/gi,
+    /Grand\s+Total\s+\$?\s*([\d][\d\s]*[.,]\d{2})\b/gi,
   ];
 
   let documentTotal = 0;
@@ -416,7 +416,30 @@ Deno.serve(async (req: Request) => {
       return true;
     });
 
-    console.log(`[Resume] After dedup: ${dedupedItems.length} items (removed ${normalizedItems.length - dedupedItems.length} duplicates)`);
+    // ✅ Secondary dedup: remove items whose description is a bare "qty unit" stub
+    // (e.g. "709 m2", "110 m2") when another item with the same total already exists.
+    // These arise when the PDF has the qty+unit on a line separate from the description
+    // and the LLM picks up both the stub line AND the proper "Item N" row.
+    const bareQtyUnitRe = /^\d[\d\s]*\s*(m2|m|no|ea|lm|sum|ls)\s*$/i;
+    const totalsSeen = new Set<string>();
+    // First pass: register totals of non-stub items
+    for (const item of dedupedItems) {
+      const desc = String(item.description ?? '').trim();
+      if (!bareQtyUnitRe.test(desc)) {
+        totalsSeen.add(Number(item.total ?? 0).toFixed(2));
+      }
+    }
+    // Second pass: drop stub items whose total is already covered by a real item
+    const afterStubDedup = dedupedItems.filter(item => {
+      const desc = String(item.description ?? '').trim();
+      if (bareQtyUnitRe.test(desc)) {
+        const totalKey = Number(item.total ?? 0).toFixed(2);
+        if (totalsSeen.has(totalKey)) return false;
+      }
+      return true;
+    });
+
+    console.log(`[Resume] After dedup: ${afterStubDedup.length} items (removed ${normalizedItems.length - afterStubDedup.length} duplicates/stubs)`);
 
     // Create or update quote
     let quoteId = job.quote_id;
@@ -428,7 +451,7 @@ Deno.serve(async (req: Request) => {
           project_id: job.project_id,
           supplier_name: job.supplier_name,
           total_amount: 0,
-          items_count: dedupedItems.length,
+          items_count: afterStubDedup.length,
           status: "pending",
           created_by: job.user_id || job.created_by,
           organisation_id: job.organisation_id,
@@ -471,15 +494,14 @@ Deno.serve(async (req: Request) => {
     }
 
     // Carpentry levels multiplier: detect "x N levels" across full combined text and append multiplier line item
-    let levelsMultiplierApplied = false;
-    if (isCarpentry && dedupedItems.length > 0) {
+    if (isCarpentry && afterStubDedup.length > 0) {
       const combinedText = allChunkTexts.join('\n');
-      const rawSubtotal = dedupedItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+      const rawSubtotal = afterStubDedup.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
       const levelsResult = detectCarpentryLevelsMultiplier(combinedText, rawSubtotal);
       if (levelsResult) {
-        const { multiplier, documentTotal } = levelsResult;
-        console.log(`[Resume] Carpentry levels multiplier detected: x${multiplier} (subtotal=${rawSubtotal.toFixed(2)} × ${multiplier} = ${documentTotal.toFixed(2)})`);
-        dedupedItems.push({
+        const { multiplier, documentTotal: levelsDocTotal } = levelsResult;
+        console.log(`[Resume] Carpentry levels multiplier detected: x${multiplier} (subtotal=${rawSubtotal.toFixed(2)} × ${multiplier} = ${levelsDocTotal.toFixed(2)})`);
+        afterStubDedup.push({
           description: `Levels Multiplier (x${multiplier} levels — subtotal applied across all ${multiplier} identical levels)`,
           qty: multiplier - 1,
           unit: 'LS',
@@ -491,14 +513,13 @@ Deno.serve(async (req: Request) => {
           raw_text: `x${multiplier} levels`,
           validation_flags: ['LEVELS_MULTIPLIER'],
         });
-        levelsMultiplierApplied = true;
-        // Override the document total so the quote shows the correct final value
-        documentTotal && (documentTotal = documentTotal);
+        // Use the multiplied total as document total for validation
+        documentTotal = levelsDocTotal;
       }
     }
 
     // ✅ V5: Use deduped items AS-IS (no band-aid remainder adjustment)
-    const finalItems = dedupedItems;
+    const finalItems = afterStubDedup;
     const rawItemsCount = allItems.length;
 
     // Replace ALL items with complete deduplicated set
@@ -581,7 +602,7 @@ Deno.serve(async (req: Request) => {
       quote_id: quoteId,
       status: finalStatus,
       progress: finalProgress,
-      parsed_lines: dedupedItems,
+      parsed_lines: afterStubDedup,
       updated_at: new Date().toISOString(),
       error_message: errorMessage
     };
@@ -603,7 +624,7 @@ Deno.serve(async (req: Request) => {
         quoteId,
         retriedChunks: retriedCount,
         successfulRetries: successCount,
-        totalItems: dedupedItems.length,
+        totalItems: afterStubDedup.length,
         newItems: newItems.length,
         stillFailed: incompleteCount,
         message: allChunksComplete
