@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
+import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
@@ -10,6 +10,8 @@ interface Quote {
   supplier_name: string;
   quote_reference: string;
   total_amount: number;
+  document_total?: number;
+  levels_multiplier?: number;
   items_count: number;
   final_items_count?: number;
   inserted_items_count?: number;
@@ -94,6 +96,9 @@ export default function QuoteSelect({
           const { summary } = classifyParsedQuoteRows(rawItems);
           main_scope_total = summary.main_scope_total;
           main_scope_count = summary.counts.main_scope;
+        } else if (quote.levels_multiplier && quote.document_total) {
+          main_scope_total = Number(quote.document_total);
+          main_scope_count = rawItems.filter(item => Number(item.total_price ?? 0) > 0).length;
         } else {
           const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0);
           main_scope_total = priced.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
@@ -375,7 +380,7 @@ export default function QuoteSelect({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-4 text-xs">
+                    <div className="flex items-center gap-4 text-xs flex-wrap">
                       <div className="flex items-center gap-1.5">
                         <span className="text-slate-400">Main Scope:</span>
                         <span className="font-semibold text-slate-100">
@@ -388,6 +393,12 @@ export default function QuoteSelect({
                           {(quote.main_scope_count ?? quote.items_count).toLocaleString()}
                         </span>
                       </div>
+                      {quote.levels_multiplier && (
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-blue-300 font-medium">
+                          <Layers size={10} />
+                          <span>×{quote.levels_multiplier} levels</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

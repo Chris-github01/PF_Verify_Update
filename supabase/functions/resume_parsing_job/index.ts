@@ -117,7 +117,9 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   const isBoilerplateLine = (s: string): boolean =>
     /^(no\b|qty\b|unit\b|total\b|amount\b|description\b|subtotal\b|sub total\b|grand total\b|gst\b|supply & install\b|quotation\b|project\b|date\b|wall legend\b|location\b|wall type\b|dwg ref\b|u\/rate\b|summary of quantity\b|carpentry work\b|green tga\b|allowed \d|apt\.\s*\d|service nogging\b|internal wall framing\b|insulation\b|timber trim\b|interior timber door\b|plasterboard\b|ceiling suspended grid\b|ceiling lining\b)\b/i.test(s)
     || /^\$/.test(s)
-    || /^[\d\s,.$]+$/.test(s);
+    || /^[\d\s,.$]+$/.test(s)
+    || /^to\s+[A-Z]/i.test(s)
+    || /\b(pty ltd|ltd|limited|properties|holdings|group)\b/i.test(s);
 
   // A standalone "Item" or "Item/Description" column-header line (no description text around it)
   const isItemHeaderLine = (s: string): boolean =>

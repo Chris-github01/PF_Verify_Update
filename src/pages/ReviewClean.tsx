@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, CreditCard as Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckCircle, Shield, Download } from 'lucide-react';
+import { Trash2, CreditCard as Edit2, Check, X, Wand2, AlertCircle, Target, Sparkles, Zap, Play, RefreshCw, ChevronDown, ChevronUp, CheckCircle, Shield, Download, Layers } from 'lucide-react';
 import { exportSafeClassificationAudit } from '../lib/export/safeClassificationExport';
 import ClassificationAuditView from '../components/ClassificationAuditView';
 import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
@@ -22,6 +22,8 @@ interface Quote {
   supplier_name: string;
   quote_reference: string;
   total_amount: number;
+  document_total?: number;
+  levels_multiplier?: number;
   items_count: number;
   status: string;
   is_selected: boolean;
@@ -316,6 +318,9 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
           const { summary } = classifyParsedQuoteRows(rawItems, { trade: currentTrade });
           main_scope_total = summary.main_scope_total;
           main_scope_count = summary.counts.main_scope;
+        } else if (q.levels_multiplier && q.document_total) {
+          main_scope_total = Number(q.document_total);
+          main_scope_count = rawItems.filter(item => Number(item.total_price ?? 0) > 0).length;
         } else {
           const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0);
           main_scope_total = priced.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
@@ -1253,6 +1258,12 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                           <Trash2 size={12} />
                         </button>
                       </div>
+                      {quote.levels_multiplier && (
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs mb-1.5 w-fit font-medium">
+                          <Layers size={10} />
+                          <span>×{quote.levels_multiplier} levels</span>
+                        </div>
+                      )}
                       <div
                         className="flex items-center justify-between cursor-pointer"
                         onClick={() => setSelectedQuote(quote.id)}
