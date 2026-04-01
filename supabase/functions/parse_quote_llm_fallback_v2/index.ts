@@ -193,32 +193,38 @@ Example rows to INCLUDE:
   "Ceiling  1.00  sum  $402,979.50"
   "Gib Plasterboard Supply  1.00  Sum  $946,680.00"
 
-FORMAT 4 — ITEMISED with Item/No | Qty | Unit | U/Rate | Total, sometimes COMMA as decimal separator:
+FORMAT 4 — ITEMISED table with columns: No | Item/Description | Dwg Ref | Qty | Unit | U/Rate | Total
 European number format may be used: "$ 373 819,07" means $373,819.07 (comma = decimal point, space = thousands separator).
 
-CRITICAL — COLUMN HEADER "Item" IS THE DESCRIPTION COLUMN:
-Some quotes use "Item" as the column header instead of "Description". The "Item" column contains the actual description of the work.
-When a table header row says "Item   Dwg Ref   U/Rate" (or similar), the "Item" column holds the description text.
-When you see a line-item row where the first column (Item/Description) contains descriptive text (not just a number),
-that text IS the description. Include it verbatim.
+CRITICAL — "Item" AND "Description" ARE THE SAME COLUMN:
+The column header may be called either "Item" or "Description" — both mean the same thing: the description of the work.
+The table header row looks like: "No   Item   Dwg Ref   Qty   Unit   U/Rate   Total"
+or:                               "No   Description   Amount"
 
-IMPORTANT — WHEN "Item" COLUMN IS BLANK OR JUST A NUMBER:
-Some quotes (e.g. Western-style carpentry) have a numbered item table where each row is ONLY:
-  No   Qty   Unit   Total
-  1    110   m2     $ 23 872,91
-In this case there is NO description in the line item rows — descriptions appear in a separate
-"Summary of Quantity" section that maps item numbers to section names, e.g.:
-  "1   Internal Wall Framing   $ 373 819,07"
-  "2   Insulation to wall   $ 143 020,26"
-When you detect this pattern, OUTPUT each row including the item number so the downstream
-normalizer can match descriptions, e.g.:
-  "1   110   m2   $ 23 872,91"   (include the item number prefix — do NOT discard it)
+CRITICAL — PDF TEXT EXTRACTION SPLITS ROWS ACROSS MULTIPLE LINES:
+Because this is a PDF table, the text extractor outputs each cell on its own line.
+A single line item may appear in the raw text as:
+  1
+  150x0.75 Rondo steel stud wall @600mm crs,
+  nog @ 800mm crs with 150mm dpc and M6 Hilti bolt @
+  600 crs
+  110   m2   $ 217,98   $ 23 872,91
 
-Example rows to INCLUDE:
-  "1  Internal Wall Framing  373 819,07"
-  "37  Ceiling height 2.4-2.7m  676  m2  $93.14  $62,961.58"
-  "1   110   m2   $ 23 872,91"
-  "5   709   m2   $ 150 364,66"
+You MUST join these fragments into a single row:
+  "1   150x0.75 Rondo steel stud wall @600mm crs, nog @ 800mm crs with 150mm dpc and M6 Hilti bolt @ 600 crs   110   m2   $ 217,98   $ 23 872,91"
+
+The description (Item column) is the multi-line text that comes AFTER the row number and BEFORE the numeric columns (Qty, Unit, U/Rate, Total).
+
+SECTION HEADERS within the table (e.g. "INTERNAL WALL FRAMING", "INSULATION", "TIMBER TRIM") appear as rows with NO numeric columns — these are category headings, NOT line items. SKIP them.
+Sub-section notes (e.g. "W30 for Intertenancy wall", "Assumed W32 for Interior shaft wall") are also NOT line items — SKIP them.
+
+Example rows to INCLUDE (after joining multi-line fragments):
+  "1   150x0.75 Rondo steel stud wall @600mm crs, nog @ 800mm crs with 150mm dpc and M6 Hilti bolt @ 600 crs   110   m2   $ 217,98   $ 23 872,91"
+  "5   92x0.55 Rondo steel stud wall @600mm crs, nog @ 800mm (Gib rondo Quiet stud GBQSA 45) with 100mm dpc and M6 Hilti bolt @ 600 crs   709   m2   $ 212,13   $ 150 364,66"
+  "8   140mm R3.2 Pink Batt Ultra   110   m2   $ 40,76   $ 4 463,97"
+  "12   60x10mm timber single bevel skirting   857   m   $ 17,32   $ 14 848,48"
+  "37   Ceiling height 2.4-2.7m   676   m2   $ 93,14   $ 62 961,58"
+  "18   760x2200mm single leaf door   19   no   $ 217,41   $ 4 130,72"
 
 CRITICAL — NEVER INCLUDE these rows even if they contain numbers:
 - "Subtotal", "Sub Total", "Sub-total" lines — these are sums of the line items above, NOT a line item
