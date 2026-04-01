@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Zap, GitBranch, Users, Globe, ChevronRight, Clock, ArrowRight } from 'lucide-react';
+import { Zap, GitBranch, Users, Globe, ChevronRight, Clock, ArrowRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import ShadowLayout from '../../components/shadow/ShadowLayout';
 import ModuleVersionBadge from '../../components/shadow/ModuleVersionBadge';
 import { getAllModules, updateModuleVersion } from '../../lib/shadow/moduleRegistry';
@@ -33,29 +33,49 @@ export default function ShadowRolloutPage() {
   const [modules, setModules] = useState<Row[]>([]);
   const [recentEvents, setRecentEvents] = useState<RolloutEventRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      getAllModules(),
-      dbGetRecentRolloutEvents(30),
-    ]).then(([mods, events]) => {
-      setModules(mods);
-      setRecentEvents(events);
-      setLoading(false);
-    });
+    loadData();
   }, []);
+
+  async function loadData() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [mods, events] = await Promise.all([
+        getAllModules(),
+        dbGetRecentRolloutEvents(30),
+      ]);
+      setModules(mods as Row[]);
+      setRecentEvents(events);
+    } catch (e) {
+      console.error('[shadow] ShadowRolloutPage load failed:', e);
+      setLoadError(e instanceof Error ? e.message : 'Failed to load rollout data');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function updateStatus(moduleKey: string, rollout_status: RolloutStatus) {
     setUpdating(moduleKey);
-    await updateModuleVersion(moduleKey, { rollout_status });
-    const [updated, events] = await Promise.all([
-      getAllModules() as Promise<Row[]>,
-      dbGetRecentRolloutEvents(30),
-    ]);
-    setModules(updated);
-    setRecentEvents(events);
-    setUpdating(null);
+    setUpdateError(null);
+    try {
+      await updateModuleVersion(moduleKey, { rollout_status });
+      const [updated, events] = await Promise.all([
+        getAllModules(),
+        dbGetRecentRolloutEvents(30),
+      ]);
+      setModules(updated as Row[]);
+      setRecentEvents(events);
+    } catch (e) {
+      console.error('[shadow] updateStatus failed:', e);
+      setUpdateError(e instanceof Error ? e.message : 'Failed to update rollout status');
+    } finally {
+      setUpdating(null);
+    }
   }
 
   if (loading) return (
@@ -64,9 +84,35 @@ export default function ShadowRolloutPage() {
     </ShadowLayout>
   );
 
-  return (
+  if (loadError) return (
     <ShadowLayout>
       <div className="max-w-6xl mx-auto">
+        <div className="bg-red-950/50 border border-red-800 rounded-xl p-5 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-red-300 mb-1">Failed to load rollout data</div>
+            <p className="text-xs text-red-400/80">{loadError}</p>
+          </div>
+          <button
+            onClick={loadData}
+            className="flex items-center gap-1.5 text-xs text-red-300 hover:text-red-200 border border-red-700 px-3 py-1.5 rounded-lg shrink-0 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
+        </div>
+      </div>
+    </ShadowLayout>
+  );
+
+  return (
+    <ShadowLayout>
+      <div className="max-w-6xl mx-auto space-y-4">
+          {updateError && (
+            <div className="bg-red-950/40 border border-red-800 rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {updateError}
+            </div>
+          )}
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-8">
               <div>
