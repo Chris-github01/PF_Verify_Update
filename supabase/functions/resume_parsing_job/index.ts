@@ -239,6 +239,7 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
 
       if (rate > 0 && rate < 5000) {
         const fullDesc = [...pendingDescLines, descPart].join(' ').trim();
+        console.log(`[CarpentryParser] RATE MATCH: rate=${rate}, descPart="${descPart}", pending=${JSON.stringify(pendingDescLines)}, fullDesc="${fullDesc}", boilerplate=${isBoilerplateLine(fullDesc)}`);
         if (fullDesc.length > 3 && !/^\d+$/.test(fullDesc) && !isBoilerplateLine(fullDesc)) {
           rateSchedule.push({ desc: fullDesc, rate });
           // Also keep the description text available for look-back
@@ -247,6 +248,8 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
             if (recentTextLines.length > 10) recentTextLines.shift();
           }
         }
+      } else {
+        console.log(`[CarpentryParser] RATE REJECTED: rate=${rate} (out of 0-5000 range), line="${line}"`);
       }
       pendingDescLines = [];
       continue;
@@ -283,6 +286,9 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
      .replace(/^(Assumed\s+W\d+\s+for\s+)/i, '')
      .trim();
 
+  console.log(`[CarpentryParser] rateSchedule has ${rateSchedule.length} entries:`, rateSchedule.map(e => `${e.rate}="${e.desc.substring(0,40)}"`).join(', '));
+  console.log(`[CarpentryParser] lineItems:`, lineItems.map(i => `#${i.num} qty=${i.qty} total=${i.total} implied=${(i.total/i.qty).toFixed(2)} inline="${i.inlineDesc?.substring(0,30)}"`).join(' | '));
+
   const result: any[] = [];
   for (const item of lineItems) {
     const impliedRate = item.total / item.qty;
@@ -301,6 +307,7 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
         const schedRate = parseFloat(key);
         const diff = Math.abs(schedRate - impliedRate);
         const relDiff = diff / impliedRate;
+        console.log(`[CarpentryParser] Item #${item.num} implied=${impliedRate.toFixed(2)} vs schedRate=${schedRate} diff=${diff.toFixed(2)} relDiff=${(relDiff*100).toFixed(1)}%`);
         if (relDiff < 0.02 && diff < bestDiff) {
           bestDiff = diff;
           bestDesc = desc;
