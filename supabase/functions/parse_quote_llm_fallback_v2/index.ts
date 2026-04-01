@@ -209,6 +209,12 @@ DO NOT INCLUDE:
 - GIB Stopping section rows — these are rows under the "GIB Stopping" heading that follow the pattern: GIB description + qty + m2 + labour columns ending at Overall Rate ~17.02 with NO Overall Total after it. These rows are NOT in scope for this subcontract. Examples to EXCLUDE:
     "10mm GIB Standard - W33, W34, W35  30384  m2  16.50  0.33  50  501336  0.52  15,799.68  17.02"
     "13mm GIB Fyreline - W30, W31, W32, W36  13,254.40  m2  16.50  0.33  50  218,697.60  0.52  6,892.29  17.02"
+- Rate schedule / pricing reference rows — rows that appear in a wall legend, door schedule, or rate table at the END of the document after the final subtotal line. These rows contain only a description and a unit rate (or a single dollar amount) with NO quantity column and NO line total. They are reference pricing for use in variations — they are NOT priced line items. Examples to EXCLUDE:
+    "710x2200mm single leaf door  $217.41"
+    "W30 for Intertenancy wall  $292.46"
+    Any row that has a wall type code (W1, W2, W30, etc.) or door size (e.g. "760x2100mm") paired with a single dollar rate
+    Any row appearing in a section explicitly labelled "Wall Legend", "Door Schedule", "Rate Schedule", or "Schedule of Rates"
+    CRITICAL: These rows appear AFTER the document's last subtotal — if a row has only a description and one dollar value and no explicit quantity field, and it appears after all subtotal lines, EXCLUDE IT.
 - "No allowance to..." exclusion notes with no dollar amount
 - Grand totals, GST lines, or lines whose value equals the sum of preceding items in the same section (e.g. "1,926,482.09  1,481,928.81  2,617,826.06")
 - Payment terms, contact details, project addresses, warranty text
