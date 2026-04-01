@@ -70,37 +70,116 @@ function extractPlumbingLevelTable(text: string): any[] {
 }
 
 /**
- * Extracts item number → description mappings from the "Summary of Quantity" section
- * in carpentry quotes. Only used as a last-resort fallback when the LLM output has
- * a bare "Item N" placeholder with no real description text.
- *
- * IMPORTANT: This only maps the 6 top-level section numbers (1–6) from the summary
- * overview table. It does NOT attempt to assign section headings to individual line
- * items — those items have their own detailed descriptions in the detail table that
- * the LLM should have already extracted.
+ * Parses the European-format number used in this PDF supplier's quotes.
+ * "$ 217,98" → 217.98, "$ 23 872,91" → 23872.91
  */
-function extractSummaryDescriptions(chunkTexts: string[]): Map<number, string> {
-  const descMap = new Map<number, string>();
-  const combined = chunkTexts.join('\n');
+function parseEuropeanAmount(raw: string): number {
+  const s = raw.replace(/\$/g, '').replace(/\s/g, '').trim();
+  if (/^[\d]+,\d{1,2}$/.test(s)) {
+    return parseFloat(s.replace(',', '.'));
+  }
+  return parseFloat(s.replace(/,/g, '')) || 0;
+}
 
-  // Only Strategy 1: Summary of Quantity overview table
-  // Pattern: "N   Description text   $ amount" — matches the top-level section summary only
-  // e.g. "1   Internal Wall Framing   $ 373 819,07"
-  // We restrict to numbers 1–9 to avoid matching detail item rows
-  const summaryRe = /^\s*([1-9])\s{2,}([A-Za-z(][^\n]{3,80}?)\s{2,}\$\s*[\d\s,]+/gm;
-  let m: RegExpExecArray | null;
-  while ((m = summaryRe.exec(combined)) !== null) {
-    const num = parseInt(m[1], 10);
-    const raw = m[2].trim();
-    // Reject boilerplate inclusions/exclusions list items
-    if (/^please|^any changes|^delay|^day jobs|^p&g|^no liquid|^no retention|^water and|^variations will|^please note/i.test(raw)) continue;
-    if (/^site hoarding|^bins|^site access|^temporary|^all services|^work below|^vertical|^waterproof|^insitu|^precast|^no framing|^external|^tiling|^ceiling hatch|^seismic|^stopping|^cut out|^roof|^insulation to ceil|^bulkhead|^window/i.test(raw)) continue;
-    if (!descMap.has(num)) {
-      descMap.set(num, raw);
+/**
+ * Extracts a rate-schedule map from carpentry PDF text.
+ *
+ * In this PDF format, the line-item table has ONLY: No | Qty | Unit | Total (no description).
+ * The actual descriptions live in a separate rate-schedule section formatted as:
+ *   "Description text   $ U/Rate"
+ * e.g. "150x0.75 Rondo steel stud wall @600mm crs...   $ 217,98"
+ *      "140mm R3.2 Pink Batt Ultra   $ 40,76"
+ *      "60x10mm timber single bevel skirting   $ 17,32"
+ *
+ * We extract all description+rate pairs, then when a line item has "Item N" as its
+ * description we compute its implied rate (total/qty) and find the closest matching
+ * description from the rate schedule.
+ *
+ * Returns: Map<rateKey, description> where rateKey = rate.toFixed(2)
+ */
+function extractRateScheduleDescriptions(chunkTexts: string[]): Map<string, string> {
+  const rateMap = new Map<string, string>();
+  const combined = chunkTexts.join('\n');
+  const lines = combined.split('\n');
+
+  // We scan for lines that look like: "Some description text   $ XX,XX" or "Some description text   $ X XXX,XX"
+  // The description is text-only (no leading digit), the rate is a small dollar amount (< $10,000)
+  // This matches lines from the rate schedule / summary-of-quantity rate column
+
+  let pendingDesc = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) { pendingDesc = ''; continue; }
+
+    // Match: ends with "$ XX,XX" or "$ X XXX,XX" style European amount
+    const rateLineRe = /\$\s*([\d][\d\s]*,\d{2})\s*$/;
+    const rateMatch = line.match(rateLineRe);
+
+    if (rateMatch) {
+      const amount = parseEuropeanAmount(rateMatch[1]);
+      // Only treat as a unit rate if it's < $5000 (unit rates, not line totals)
+      if (amount > 0 && amount < 5000) {
+        // The description is everything before the $ amount
+        const descPart = line.replace(/\$\s*[\d\s,]+$/, '').trim();
+        // If this line has no description text itself, combine with pending multi-line desc
+        const fullDesc = descPart
+          ? (pendingDesc ? pendingDesc + ' ' + descPart : descPart)
+          : pendingDesc;
+
+        if (fullDesc && fullDesc.length > 3 && !/^\d+$/.test(fullDesc)) {
+          // Skip section headings, column headers, boilerplate
+          if (!/^(no|qty|unit|total|amount|item|description|subtotal|grand total|gst|supply|quotation|to\s|project|date|wall legend|location|wall type)/i.test(fullDesc)) {
+            const key = amount.toFixed(2);
+            if (!rateMap.has(key)) {
+              rateMap.set(key, fullDesc);
+            }
+          }
+        }
+        pendingDesc = '';
+      } else {
+        pendingDesc = '';
+      }
+    } else if (!/\$/.test(line) && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line)) {
+      // Potential multi-line description continuation (no $ sign, has text, doesn't start with a number)
+      // Accumulate as pending description for next line
+      if (line.length > 3 && line.length < 120) {
+        pendingDesc = pendingDesc ? pendingDesc + ' ' + line : line;
+      } else {
+        pendingDesc = '';
+      }
+    } else {
+      pendingDesc = '';
     }
   }
 
-  return descMap;
+  return rateMap;
+}
+
+/**
+ * Given a line item with "Item N" description, tries to find the real description
+ * by matching the computed unit rate (total/qty) against the rate schedule map.
+ */
+function lookupDescriptionByRate(item: any, rateMap: Map<string, string>): string | null {
+  const qty = parseFloat(item.qty) || 0;
+  const total = parseFloat(item.total) || 0;
+  if (qty <= 0 || total <= 0) return null;
+
+  const computedRate = total / qty;
+
+  // Try exact match first
+  const exactKey = computedRate.toFixed(2);
+  if (rateMap.has(exactKey)) return rateMap.get(exactKey)!;
+
+  // Try within 1% tolerance
+  for (const [key, desc] of rateMap) {
+    const schedRate = parseFloat(key);
+    if (Math.abs(schedRate - computedRate) / computedRate < 0.01) {
+      return desc;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -437,22 +516,24 @@ Deno.serve(async (req: Request) => {
       console.log(`[Resume] Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
     }
 
-    // ✅ For carpentry: extract real descriptions from the "Summary of Quantity" section
-    // and use them to replace generic "Item N" placeholders
-    const summaryDescMap = isCarpentry ? extractSummaryDescriptions(allChunkTexts) : new Map<number, string>();
-    if (summaryDescMap.size > 0) {
-      console.log(`[Resume] Carpentry: extracted ${summaryDescMap.size} descriptions from summary section`);
+    // ✅ For carpentry: build a rate-schedule map (description → unit rate) to resolve
+    // "Item N" placeholders. In this PDF format the line-item table has no inline descriptions —
+    // the actual descriptions live in a separate rate-schedule section alongside unit rates.
+    // We match by computing implied rate (total / qty) and looking up the closest rate in the schedule.
+    const rateScheduleMap = isCarpentry ? extractRateScheduleDescriptions(allChunkTexts) : new Map<string, string>();
+    if (rateScheduleMap.size > 0) {
+      console.log(`[Resume] Carpentry: extracted ${rateScheduleMap.size} rate-schedule entries`);
     }
 
     // ✅ Normalize items to fill empty descriptions from raw_text
     const normalizedItems = keptItems.map((item, index) => {
       const norm = normalizeLine(item, index);
-      // Replace "Item N" placeholder with the real description from the summary section
-      if (isCarpentry && summaryDescMap.size > 0) {
-        const itemNumMatch = String(norm.description ?? '').match(/^Item\s+(\d+)$/i);
-        if (itemNumMatch) {
-          const num = parseInt(itemNumMatch[1], 10);
-          const realDesc = summaryDescMap.get(num);
+      // Replace "Item N" placeholder with the real description from the rate schedule
+      if (isCarpentry && rateScheduleMap.size > 0) {
+        const isPlaceholder = /^Item\s+\d+$/i.test(String(norm.description ?? '').trim());
+        const isGenericSection = /^(Internal Wall Framing|Insulation to wall|Timber Trim|Interior Timber Door|Plasterboard|Ceiling Suspended Grid)$/i.test(String(norm.description ?? '').trim());
+        if (isPlaceholder || isGenericSection) {
+          const realDesc = lookupDescriptionByRate(norm, rateScheduleMap);
           if (realDesc) {
             return { ...norm, description: realDesc };
           }
