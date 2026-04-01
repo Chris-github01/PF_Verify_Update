@@ -74,30 +74,70 @@ function extractPlumbingLevelTable(text: string): any[] {
  * Handles the pattern: "N   Description text   $ amount" used in carpentry quotes
  * where the main line-item table only has No/Qty/Unit/Total columns (no description).
  */
+/**
+ * Extracts item number → description mappings from carpentry quote raw text.
+ *
+ * Two strategies:
+ * 1. Summary of Quantity section: lines like "1   Internal Wall Framing   $ 373 819,07"
+ *    where item number maps directly to a named section total.
+ * 2. Section headings in the detail pages: the numbered items appear under section
+ *    headings like "INTERNAL WALL FRAMING", "INSULATION TO WALL", etc. We scan for
+ *    item-number ranges that follow each section heading and label them accordingly.
+ */
 function extractSummaryDescriptions(chunkTexts: string[]): Map<number, string> {
   const descMap = new Map<number, string>();
   const combined = chunkTexts.join('\n');
 
-  // Extract from the "Summary of Quantity" / section breakdown table
-  // Pattern: item_number   description_text   $ amount
-  // e.g. "1   Internal Wall Framing   $ 373 819,07"
-  // e.g. "4   Interior Timber Door (Installation only)   $ 17 326,82"
-  const summaryRe = /^\s*(\d+)\s{2,}([A-Za-z][^\n$]{3,60?}?)\s{2,}\$\s*[\d\s,]+/gm;
+  // Strategy 1: Summary of Quantity table
+  // Pattern: "N   Description text   $ amount" — number + 2+ spaces + text + spaces + $ + amount
+  // The description text may contain letters, spaces, parens, ampersands, slashes, hyphens
+  // number range: 1–9 only (section-level items in the summary)
+  const summaryRe = /^\s*(\d{1,2})\s{2,}([A-Za-z(][^\n]{3,80}?)\s{2,}\$\s*[\d\s,]+/gm;
   let m: RegExpExecArray | null;
   while ((m = summaryRe.exec(combined)) !== null) {
     const num = parseInt(m[1], 10);
-    const desc = m[2].trim();
-    if (desc && !descMap.has(num)) {
-      descMap.set(num, desc);
+    const raw = m[2].trim();
+    // Reject if the "description" looks like a numbered list item (e.g. "Please refer to SOQ")
+    if (/^please|^any changes|^delay|^day jobs|^p&g|^no liquid|^no retention|^water and|^variations will|^please note/i.test(raw)) continue;
+    // Reject if it looks like an exclusion/inclusion line
+    if (/^site hoarding|^bins|^site access|^temporary|^all services|^work below|^vertical|^waterproof|^insitu|^precast|^no framing|^external|^tiling|^ceiling hatch|^seismic|^stopping|^cut out|^roof|^insulation to ceil|^bulkhead|^window/i.test(raw)) continue;
+    if (!descMap.has(num)) {
+      descMap.set(num, raw);
     }
   }
 
-  // Also extract from the detailed wall/ceiling legend in later chunks
-  // Pattern: "Description of work   W-type   spec details"
-  // e.g. "Internal wall framing to concrete walls", "Internal fire rated circulation"
-  // These typically appear as section headings in the spec section
-  const sectionRe = /\b(INTERNAL WALL FRAMING|INSULATION|TIMBER TRIM|INTERIOR TIMBER DOOR[^\n]*|PLASTERBOARD|CEILING SUSPENDED GRID SYSTEM)\b/gi;
-  // (These are section headers, not per-item descriptions — skip for now)
+  // Strategy 2: Section headings → item number ranges
+  // Scan lines sequentially for ALL-CAPS section headers and the item numbers that follow them
+  const lines = combined.split('\n');
+  const sectionKeywords: { pattern: RegExp; label: string }[] = [
+    { pattern: /\bINTERNAL WALL FRAMING\b/i, label: 'Internal Wall Framing' },
+    { pattern: /\bINSULATION\b(?!\s+to\s+ceil)/i, label: 'Insulation to Wall' },
+    { pattern: /\bTIMBER TRIM\b/i, label: 'Timber Trim' },
+    { pattern: /\bINTERIOR TIMBER DOOR\b/i, label: 'Interior Timber Door (Installation only)' },
+    { pattern: /\bPLASTERBOARD\b/i, label: 'Plasterboard' },
+    { pattern: /\bCEILING SUSPENDED GRID\b/i, label: 'Ceiling Suspended Grid System' },
+  ];
+
+  let currentSection = '';
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    for (const sk of sectionKeywords) {
+      if (sk.pattern.test(line)) {
+        currentSection = sk.label;
+        break;
+      }
+    }
+    // Detect a numbered item row: "N   qty   unit   $ amount" or "N   qty   unit   amount"
+    // Only label items that don't already have a description from strategy 1
+    const itemRe = /^\s*(\d{1,2})\s{2,}\d[\d\s]*\s+(m2|m\b|no\b|ea\b|lm\b)\s/i;
+    const itemMatch = line.match(itemRe);
+    if (itemMatch && currentSection) {
+      const num = parseInt(itemMatch[1], 10);
+      if (!descMap.has(num)) {
+        descMap.set(num, currentSection);
+      }
+    }
+  }
 
   return descMap;
 }
