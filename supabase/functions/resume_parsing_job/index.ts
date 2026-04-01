@@ -70,6 +70,39 @@ function extractPlumbingLevelTable(text: string): any[] {
 }
 
 /**
+ * Extracts item number → description mappings from a "Summary of Quantity" section.
+ * Handles the pattern: "N   Description text   $ amount" used in carpentry quotes
+ * where the main line-item table only has No/Qty/Unit/Total columns (no description).
+ */
+function extractSummaryDescriptions(chunkTexts: string[]): Map<number, string> {
+  const descMap = new Map<number, string>();
+  const combined = chunkTexts.join('\n');
+
+  // Extract from the "Summary of Quantity" / section breakdown table
+  // Pattern: item_number   description_text   $ amount
+  // e.g. "1   Internal Wall Framing   $ 373 819,07"
+  // e.g. "4   Interior Timber Door (Installation only)   $ 17 326,82"
+  const summaryRe = /^\s*(\d+)\s{2,}([A-Za-z][^\n$]{3,60?}?)\s{2,}\$\s*[\d\s,]+/gm;
+  let m: RegExpExecArray | null;
+  while ((m = summaryRe.exec(combined)) !== null) {
+    const num = parseInt(m[1], 10);
+    const desc = m[2].trim();
+    if (desc && !descMap.has(num)) {
+      descMap.set(num, desc);
+    }
+  }
+
+  // Also extract from the detailed wall/ceiling legend in later chunks
+  // Pattern: "Description of work   W-type   spec details"
+  // e.g. "Internal wall framing to concrete walls", "Internal fire rated circulation"
+  // These typically appear as section headings in the spec section
+  const sectionRe = /\b(INTERNAL WALL FRAMING|INSULATION|TIMBER TRIM|INTERIOR TIMBER DOOR[^\n]*|PLASTERBOARD|CEILING SUSPENDED GRID SYSTEM)\b/gi;
+  // (These are section headers, not per-item descriptions — skip for now)
+
+  return descMap;
+}
+
+/**
  * Detects a "x N levels" multiplier pattern in a carpentry quote.
  * Handles both standard ($13,740,112.59) and European (13 740 112,59) number formats.
  * Returns the multiplier and validated document total, or null if not found/validated.
@@ -403,8 +436,29 @@ Deno.serve(async (req: Request) => {
       console.log(`[Resume] Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
     }
 
+    // ✅ For carpentry: extract real descriptions from the "Summary of Quantity" section
+    // and use them to replace generic "Item N" placeholders
+    const summaryDescMap = isCarpentry ? extractSummaryDescriptions(allChunkTexts) : new Map<number, string>();
+    if (summaryDescMap.size > 0) {
+      console.log(`[Resume] Carpentry: extracted ${summaryDescMap.size} descriptions from summary section`);
+    }
+
     // ✅ Normalize items to fill empty descriptions from raw_text
-    const normalizedItems = keptItems.map((item, index) => normalizeLine(item, index));
+    const normalizedItems = keptItems.map((item, index) => {
+      const norm = normalizeLine(item, index);
+      // Replace "Item N" placeholder with the real description from the summary section
+      if (isCarpentry && summaryDescMap.size > 0) {
+        const itemNumMatch = String(norm.description ?? '').match(/^Item\s+(\d+)$/i);
+        if (itemNumMatch) {
+          const num = parseInt(itemNumMatch[1], 10);
+          const realDesc = summaryDescMap.get(num);
+          if (realDesc) {
+            return { ...norm, description: realDesc };
+          }
+        }
+      }
+      return norm;
+    });
     console.log(`[Resume] After normalization: ${normalizedItems.length} items`);
 
     // ✅ Deduplicate using improved key (raw_text-based)
