@@ -147,7 +147,8 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   const richRowRe = /^\s*(\d{1,2})\s{1,10}(.+?)\s{1,10}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*[\d][\d ]*,\d{2}\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
 
   // Rate-schedule line ending with "$ XX,XX" where amount < $5000
-  const rateLineRe = /^(.*?)\s+\$\s*([\d][\d ]*,\d{2})\s*$/;
+  // Also handles lines that are JUST "$ XX,XX" (desc is on preceding lines in pendingDescLines)
+  const rateLineRe = /^(.*?)\s*\$\s*([\d][\d ]*,\d{2})\s*$/;
 
   type LineItemRaw = { num: number; qty: number; unit: string; total: number; inlineDesc: string };
   const lineItems: LineItemRaw[] = [];
