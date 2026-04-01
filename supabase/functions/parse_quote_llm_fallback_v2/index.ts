@@ -193,11 +193,32 @@ Example rows to INCLUDE:
   "Ceiling  1.00  sum  $402,979.50"
   "Gib Plasterboard Supply  1.00  Sum  $946,680.00"
 
-FORMAT 4 — ITEMISED with Qty | Unit | U/Rate | Total, sometimes COMMA as decimal separator:
+FORMAT 4 — ITEMISED with Item/No | Qty | Unit | U/Rate | Total, sometimes COMMA as decimal separator:
 European number format may be used: "$ 373 819,07" means $373,819.07 (comma = decimal point, space = thousands separator).
+
+CRITICAL — COLUMN HEADER "Item" IS THE DESCRIPTION COLUMN:
+Some quotes use "Item" as the column header instead of "Description". The "Item" column contains the actual description of the work.
+When a table header row says "Item   Dwg Ref   U/Rate" (or similar), the "Item" column holds the description text.
+When you see a line-item row where the first column (Item/Description) contains descriptive text (not just a number),
+that text IS the description. Include it verbatim.
+
+IMPORTANT — WHEN "Item" COLUMN IS BLANK OR JUST A NUMBER:
+Some quotes (e.g. Western-style carpentry) have a numbered item table where each row is ONLY:
+  No   Qty   Unit   Total
+  1    110   m2     $ 23 872,91
+In this case there is NO description in the line item rows — descriptions appear in a separate
+"Summary of Quantity" section that maps item numbers to section names, e.g.:
+  "1   Internal Wall Framing   $ 373 819,07"
+  "2   Insulation to wall   $ 143 020,26"
+When you detect this pattern, OUTPUT each row including the item number so the downstream
+normalizer can match descriptions, e.g.:
+  "1   110   m2   $ 23 872,91"   (include the item number prefix — do NOT discard it)
+
 Example rows to INCLUDE:
   "1  Internal Wall Framing  373 819,07"
   "37  Ceiling height 2.4-2.7m  676  m2  $93.14  $62,961.58"
+  "1   110   m2   $ 23 872,91"
+  "5   709   m2   $ 150 364,66"
 
 CRITICAL — NEVER INCLUDE these rows even if they contain numbers:
 - "Subtotal", "Sub Total", "Sub-total" lines — these are sums of the line items above, NOT a line item
@@ -459,6 +480,27 @@ FORMAT E — LUMP SUM:
 - "Wastage - 10%  1  sum  127,752.48  127,752.48" → qty=1, unit="LS", total=127752.48
 - "Wall framing  1.00  Sum  $1,387,477.30" → qty=1, unit="LS", total=1387477.30
 - "Single door  460  no  189  4.50  42  86940  0  189  86940" → qty=460, unit="no", rate=189, total=86940
+
+FORMAT F — NUMBERED ITEMS WITHOUT INLINE DESCRIPTION (Western-style, "Item" column is description column):
+Some carpentry quotes have a table with header "Item   Dwg Ref   U/Rate" where rows are ONLY:
+  item_number   qty   unit   $ total
+The "Item" column IS the description column — but the actual description text is in a separate
+"Summary of Quantity" section earlier in the document. Match the item number to the summary.
+The summary section uses the format: "N   Description text   $ section_total"
+e.g. "1   Internal Wall Framing   $ 373 819,07"
+     "2   Insulation to wall   $ 143 020,26"
+     "3   Timber Trim   $ 24 628,30"
+     "4   Interior Timber Door (Installation only)   $ 17 326,82"
+     "5   Plasterboard   $ 186 485,89"
+     "6   Ceiling Suspended Grid System   $ 62 961,58"
+When you see rows like "1   110   m2   $ 23 872,91", look up item 1 → "Internal Wall Framing".
+Use that as the description. If no summary entry exists for that number, use "Item N" as fallback.
+Examples (after lookup):
+  "1   110   m2   $ 23 872,91"   → description="Internal Wall Framing", qty=110, unit="m2", total=23872.91
+  "5   709   m2   $ 150 364,66"  → description="Plasterboard", qty=709, unit="m2", total=150364.66
+  "12  857   m    $ 14 848,48"   → description="Timber Trim", qty=857, unit="m", total=14848.48
+  "37  676   m2   $ 62 961,58"   → description="Ceiling Suspended Grid System", qty=676, unit="m2", total=62961.58
+IMPORTANT: Apply this lookup for ALL rows that match this pattern, using the item number to determine description.
 
 ALWAYS SKIP:
 - Grand totals / section subtotals that sum other items (e.g. "1,926,482.09  1,481,928.81  2,617,826.06")
