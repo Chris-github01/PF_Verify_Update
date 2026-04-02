@@ -132,14 +132,18 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     // Lines that are purely "No Description Amount ..." (PDF header row collapsed into one line):
     if (/^no\s+description\s+amount/i.test(s)) return true;
 
-    // All-caps section label lines (e.g. "INTERNAL WALL FRAMING", "TIMBER TRIM", "PLASTERBOARD"):
-    if (/^(internal wall framing|insulation|timber trim|plasterboard|interior timber door|ceiling suspended grid system|ceiling lining|wall lining|carpentry work|summary of quantity)\b/i.test(lower)) return true;
+    // All-caps section label lines — only reject when the ENTIRE line is a bare section header
+    // (no product spec detail). "Insulation" alone is a header; "50mm Kooltherm K5 insulation" is not.
+    if (/^(internal wall framing|timber trim|interior timber door|ceiling suspended grid system|ceiling lining|wall lining|carpentry work|summary of quantity)\s*$/i.test(lower)) return true;
+    // "insulation" and "plasterboard" alone (no other words) are section headers
+    if (/^insulation\s*$/i.test(lower)) return true;
+    if (/^plasterboard\s*$/i.test(lower)) return true;
 
     // "Supply & install" section lines (e.g. "Supply & install (Level 1 to 17)"):
     if (/^\(?level\s+\d+\s+to\s+\d+\)?/i.test(s)) return true;
 
-    // Section-header-only lines that never have spec content after them on the same line:
-    if (/^(allowed \d|apt\.\s*\d)/i.test(lower)) return true;
+    // Section-header-only lines that are purely "Allowed N..." or "Apt. N..." (no spec detail):
+    if (/^allowed\s+\d/i.test(lower)) return true;
 
     // Lines that are purely numeric / dollar amounts:
     if (/^\$/.test(s)) return true;
