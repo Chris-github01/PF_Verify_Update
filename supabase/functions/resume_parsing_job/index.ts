@@ -173,13 +173,13 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   //
   // Dataset B: rate-schedule entries (desc → unit rate < $5000)
 
-  // Strict numeric-only row: "1   110   m2   $ 23 872,91"
-  const strictRowRe = /^\s*(\d{1,2})\s{1,6}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
+  // Strict numeric-only row: "1   110   m2   $ 23 872,91" or "1   110   m2   $ 23872.91"
+  const strictRowRe = /^\s*(\d{1,2})\s{1,6}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*([\d][\d ]*[.,]\d{2})\s*$/i;
 
-  // Rich inline row: "1 <description> 110 m2 $ 217,98 $ 23 872,91"
+  // Rich inline row: "1 <description> 110 m2 $ 217,98 $ 23 872,91" (comma or dot decimal)
   // Allow 1–10 spaces between segments (PDF extractors often collapse multiple spaces).
   // Requires TWO dollar amounts at the end (unit rate + total).
-  const richRowRe = /^\s*(\d{1,2})\s{1,10}(.+?)\s{1,10}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*[\d][\d ]*,\d{2}\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
+  const richRowRe = /^\s*(\d{1,2})\s{1,10}(.+?)\s{1,10}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*[\d][\d ]*[.,]\d{2}\s{1,6}\$\s*([\d][\d ]*[.,]\d{2})\s*$/i;
 
   // Rate-schedule line ending with "$ XX,XX" or "$ XX.XX" where amount < $5000
   // Handles European comma-decimal and standard dot-decimal formats.
