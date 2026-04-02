@@ -10,6 +10,7 @@ import { extractAttributes } from '../lib/normaliser/attributeExtractor';
 import { calculateConfidence, getConfidenceColor, getConfidenceLabel } from '../lib/normaliser/confidenceScorer';
 import { matchLineToSystem } from '../lib/mapping/systemMatcher';
 import { SYSTEM_TEMPLATES } from '../lib/mapping/systemTemplates';
+import { matchCarpentryLineToSystem } from '../lib/mapping/carpentrySystemMatcher';
 import WorkflowNav from '../components/WorkflowNav';
 import { needsQuantity } from '../lib/quoteUtils';
 import { getStatusColor, getStatusLabel, type QuoteStatus } from '../lib/quoteProcessing/quotePipeline';
@@ -603,16 +604,44 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
     const targetItems = itemsToProcess || items;
     console.log('mapAllItemsToSystems: Processing', targetItems.length, 'items');
 
+    const isCarpentry = currentTrade === 'carpentry';
+
     try {
       const updates = targetItems.map(item => {
-        const mappingResult = matchLineToSystem({
-          description: item.description,
-          size: item.size,
-          frr: item.frr,
-          service: item.service,
-          subclass: item.subclass,
-          material: item.material,
-        });
+        let mappingResult: {
+          systemId: string | null;
+          systemLabel: string | null;
+          confidence: number;
+          needsReview: boolean;
+          matchedFactors: string[];
+          missedFactors: string[];
+        };
+
+        if (isCarpentry) {
+          const carpentryResult = matchCarpentryLineToSystem({
+            description: item.description,
+            canonical_unit: item.canonical_unit,
+            subclass: item.subclass,
+            material: item.material,
+          });
+          mappingResult = {
+            systemId: carpentryResult.systemId,
+            systemLabel: carpentryResult.systemLabel,
+            confidence: carpentryResult.confidence,
+            needsReview: carpentryResult.needsReview,
+            matchedFactors: carpentryResult.matchedFactors,
+            missedFactors: carpentryResult.missedFactors,
+          };
+        } else {
+          mappingResult = matchLineToSystem({
+            description: item.description,
+            size: item.size,
+            frr: item.frr,
+            service: item.service,
+            subclass: item.subclass,
+            material: item.material,
+          });
+        }
 
         return {
           id: item.id,
