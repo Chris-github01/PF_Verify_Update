@@ -1,4 +1,4 @@
-export type ModuleKey = 'passive_fire' | 'active_fire' | 'electrical' | 'plumbing' | 'hvac';
+export type ModuleKey = 'passive_fire' | 'active_fire' | 'electrical' | 'plumbing' | 'hvac' | 'carpentry';
 
 export type IncludedStatus = 'included' | 'excluded' | 'unclear' | 'missing';
 

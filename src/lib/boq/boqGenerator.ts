@@ -605,7 +605,7 @@ function normalizeItems(items: any[], moduleKey: ModuleKey): Partial<BOQLine>[] 
 
     normalizedLines.push({
       trade: moduleKey,
-      system_group: extractSystemGroup(systemForGrouping),
+      system_group: extractSystemGroup(systemForGrouping, moduleKey),
       system_name: itemDescription,
       drawing_spec_ref: representative.drawing_ref || null,
       location_zone: representative.location || null,
@@ -678,11 +678,21 @@ function createGroupingKey(item: any): string {
   return parts.join('|');
 }
 
-function extractSystemGroup(systemName: string): string {
-  // Extract system group from system name
+function extractSystemGroup(systemName: string, moduleKey?: string): string {
   if (!systemName) return 'General';
 
   const lowerName = systemName.toLowerCase();
+
+  if (moduleKey === 'carpentry') {
+    if (lowerName.includes('wall framing') || lowerName.includes('wall - ')) return 'Wall Framing';
+    if (lowerName.includes('ceiling')) return 'Ceiling';
+    if (lowerName.includes('gib') || lowerName.includes('plasterboard')) return 'GIB Fixing';
+    if (lowerName.includes('insulation') || lowerName.includes('batt') || lowerName.includes('glasswool')) return 'Insulation';
+    if (lowerName.includes('interior') || lowerName.includes('door') || lowerName.includes('hardware') || lowerName.includes('wardrobe') || lowerName.includes('villaboard') || lowerName.includes('toilet')) return 'Interior';
+    if (lowerName.includes('finishing') || lowerName.includes('architrave') || lowerName.includes('skirting')) return 'Finishing';
+    if (lowerName.includes('p&g') || lowerName.includes('prelim')) return 'P&G';
+    return 'Miscellaneous';
+  }
 
   if (lowerName.includes('penetration')) return 'Penetrations';
   if (lowerName.includes('door') || lowerName.includes('fire door')) return 'Fire Doors';
