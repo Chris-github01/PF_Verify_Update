@@ -181,9 +181,9 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
   // Requires TWO dollar amounts at the end (unit rate + total).
   const richRowRe = /^\s*(\d{1,2})\s{1,10}(.+?)\s{1,10}([\d][\d ]*)\s{1,6}(m2|m\b|no\b|ea\b|lm\b|sum\b)\s{1,6}\$\s*[\d][\d ]*,\d{2}\s{1,6}\$\s*([\d][\d ]*,\d{2})\s*$/i;
 
-  // Rate-schedule line ending with "$ XX,XX" where amount < $5000
-  // Also handles lines that are JUST "$ XX,XX" (desc is on preceding lines in pendingDescLines)
-  const rateLineRe = /^(.*?)\s*\$\s*([\d][\d ]*,\d{2})\s*$/;
+  // Rate-schedule line ending with "$ XX,XX" or "$ XX.XX" where amount < $5000
+  // Handles European comma-decimal and standard dot-decimal formats.
+  const rateLineRe = /^(.*?)\s*\$\s*([\d][\d ]*[.,]\d{2})\s*$/;
 
   type LineItemRaw = { num: number; qty: number; unit: string; total: number; inlineDesc: string };
   const lineItems: LineItemRaw[] = [];
@@ -322,7 +322,7 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
         const diff = Math.abs(schedRate - impliedRate);
         const relDiff = diff / impliedRate;
         console.log(`[CarpentryParser] Item #${item.num} implied=${impliedRate.toFixed(2)} vs schedRate=${schedRate} diff=${diff.toFixed(2)} relDiff=${(relDiff*100).toFixed(1)}%`);
-        if (relDiff < 0.02 && diff < bestDiff) {
+        if (relDiff < 0.05 && diff < bestDiff) {
           bestDiff = diff;
           bestDesc = desc;
         }
