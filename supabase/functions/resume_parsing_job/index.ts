@@ -237,30 +237,9 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
 
       if (total > 0 && qty > 0 && !seenNums.has(num)) {
         seenNums.add(num);
-        // Look back through BOTH pending buffer AND recent text window for a description.
-        // Collect ALL consecutive non-boilerplate lines from the look-back to form a
-        // complete multi-line description (PDF layouts often split descriptions across lines).
-        const searchPool = [...pendingDescLines, ...recentTextLines];
-        const descFragments: string[] = [];
-        for (let j = searchPool.length - 1; j >= 0; j--) {
-          const candidate = searchPool[j].trim();
-          if (!candidate) break; // blank line = stop collecting
-          if (
-            candidate &&
-            !isBoilerplateLine(candidate) &&
-            !isItemHeaderLine(candidate) &&
-            /[A-Za-z]/.test(candidate)
-          ) {
-            descFragments.unshift(candidate);
-            // Cap at 4 lines to avoid pulling in unrelated text
-            if (descFragments.length >= 4) break;
-          } else {
-            // Hit a boilerplate/header line — stop collecting
-            if (descFragments.length > 0) break;
-          }
-        }
-        const lookaheadDesc = descFragments.join(' ').replace(/\s+/g, ' ').trim();
-        lineItems.push({ num, qty, unit, total, inlineDesc: lookaheadDesc });
+        // No look-back: description must be inline (same line) or matched via rate schedule.
+        // Grabbing preceding text lines is unreliable — they belong to table headers/sections.
+        lineItems.push({ num, qty, unit, total, inlineDesc: '' });
       }
       pendingDescLines = [];
       continue;
