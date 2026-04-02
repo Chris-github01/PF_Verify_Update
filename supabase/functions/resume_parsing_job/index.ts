@@ -252,11 +252,17 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
       const rate = parseEuropeanAmount(rateMatch[2]);
 
       if (rate > 0 && rate < 5000) {
-        const fullDesc = [...pendingDescLines, descPart].join(' ').trim();
+        // Build description from pending lines + inline desc part.
+        // If both are empty (desc was on lines containing "$" that reset the buffer),
+        // fall back to the rolling recentTextLines window.
+        let descSource = [...pendingDescLines, descPart].filter(Boolean).join(' ').trim();
+        if (descSource.length <= 3 && recentTextLines.length > 0) {
+          descSource = recentTextLines.slice(-3).join(' ').trim();
+        }
+        const fullDesc = descSource;
         console.log(`[CarpentryParser] RATE MATCH: rate=${rate}, descPart="${descPart}", pending=${JSON.stringify(pendingDescLines)}, fullDesc="${fullDesc}", boilerplate=${isBoilerplateLine(fullDesc)}`);
         if (fullDesc.length > 3 && !/^\d+$/.test(fullDesc) && !isBoilerplateLine(fullDesc)) {
           rateSchedule.push({ desc: fullDesc, rate });
-          // Also keep the description text available for look-back
           if (descPart && /[A-Za-z]/.test(descPart)) {
             recentTextLines.push(descPart);
             if (recentTextLines.length > 10) recentTextLines.shift();
@@ -270,11 +276,14 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     }
 
     // ── Buffer potential multi-line description fragment ─────────────────────
-    if (!/\$/.test(line) && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line) && line.length < 120) {
+    // Allow lines with inline $ references (e.g. "$15/no") into the buffer —
+    // only reset on lines that look like standalone dollar amounts or numeric rows.
+    const looksLikeStandaloneDollar = /^\s*\$\s*[\d]/.test(line) || /^\s*[\d][\d ]*[.,]\d{2}\s*$/.test(line);
+    if (!looksLikeStandaloneDollar && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line) && line.length < 120) {
       pendingDescLines.push(line);
       recentTextLines.push(line);
       if (recentTextLines.length > 10) recentTextLines.shift();
-    } else {
+    } else if (looksLikeStandaloneDollar) {
       pendingDescLines = [];
     }
   }
