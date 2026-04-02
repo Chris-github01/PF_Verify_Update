@@ -126,6 +126,18 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     if (/^project\s+\S+/i.test(s)) return true;
     if (/^date\s+\d/i.test(s)) return true;
 
+    // Lines containing "supply & install" (section headers, not item descriptions):
+    if (/supply\s*&\s*install/i.test(s)) return true;
+
+    // Lines that are purely "No Description Amount ..." (PDF header row collapsed into one line):
+    if (/^no\s+description\s+amount/i.test(s)) return true;
+
+    // All-caps section label lines (e.g. "INTERNAL WALL FRAMING", "TIMBER TRIM", "PLASTERBOARD"):
+    if (/^(internal wall framing|insulation|timber trim|plasterboard|interior timber door|ceiling suspended grid system|ceiling lining|wall lining|carpentry work|summary of quantity)\b/i.test(lower)) return true;
+
+    // "Supply & install" section lines (e.g. "Supply & install (Level 1 to 17)"):
+    if (/^\(?level\s+\d+\s+to\s+\d+\)?/i.test(s)) return true;
+
     // Section-header-only lines that never have spec content after them on the same line:
     if (/^(allowed \d|apt\.\s*\d)/i.test(lower)) return true;
 
