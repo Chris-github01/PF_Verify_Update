@@ -280,10 +280,12 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     }
 
     // ── Buffer potential multi-line description fragment ─────────────────────
-    // Allow lines with inline $ references (e.g. "$15/no") into the buffer —
-    // only reset on lines that look like standalone dollar amounts or numeric rows.
+    // Only reset on standalone dollar-amount lines.
+    // Exclude pure filler/note lines (e.g. "Allowed 80 no...") from the buffer —
+    // they are supplementary notes that corrupt the description if included.
     const looksLikeStandaloneDollar = /^\s*\$\s*[\d]/.test(line) || /^\s*[\d][\d ]*[.,]\d{2}\s*$/.test(line);
-    if (!looksLikeStandaloneDollar && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line) && line.length < 120) {
+    const isFillerNote = /^(allowed\s+\d|additional\s+\w+\s+will\s+be)/i.test(line);
+    if (!looksLikeStandaloneDollar && !isFillerNote && /[A-Za-z]/.test(line) && !/^\d+\s/.test(line) && line.length < 120) {
       pendingDescLines.push(line);
       recentTextLines.push(line);
       if (recentTextLines.length > 10) recentTextLines.shift();
