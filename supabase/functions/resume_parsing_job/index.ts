@@ -122,6 +122,10 @@ function parseCarpentrySeraFormat(chunkTexts: string[]): any[] | null {
     // Pure column-header / table-label words (exact or anchored):
     if (/^(no|qty|unit|total|amount|description|subtotal|sub total|grand total|gst|supply & install|quotation|project|date|wall legend|location|wall type|dwg ref|u\/rate|summary of quantity|carpentry work)\s*$/i.test(lower)) return true;
 
+    // Document header metadata lines (e.g. "Project Sero Apartment", "Date 23/6/2023"):
+    if (/^project\s+\S+/i.test(s)) return true;
+    if (/^date\s+\d/i.test(s)) return true;
+
     // Section-header-only lines that never have spec content after them on the same line:
     if (/^(allowed \d|apt\.\s*\d)/i.test(lower)) return true;
 
