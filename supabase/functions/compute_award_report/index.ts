@@ -64,7 +64,12 @@ const SUMMARY_PHRASES = ['extra over for fire stopping required not shown on lay
 const SUMMARY_PHRASES_ALWAYS_EXCLUDE = ['extra over for fire stopping required not shown on layout'];
 const OPTIONAL_KEYWORDS = ['door perimeter seal','lift door seal','flush box intumescent pad','flushbox intumescent pad','intumescent flushbox pad','intumescent flush box','intumescent flushbox','ryanfire power pad'];
 
-const PASSIVE_FIRE_TRADES = ['passive_fire', 'passive-fire', 'passive fire', 'fire stopping', 'firestopping'];
+const PASSIVE_FIRE_TRADE_KEYS = new Set(['passive_fire', 'passive-fire', 'passive fire', 'fire stopping', 'firestopping']);
+
+function isPassiveFireTrade(trade: string): boolean {
+  const t = trade.toLowerCase().trim();
+  return PASSIVE_FIRE_TRADE_KEYS.has(t);
+}
 
 function isMainScopeItem(item: QuoteItem, trade?: string): boolean {
   const desc = (item.description ?? '').toLowerCase();
@@ -85,10 +90,9 @@ function isMainScopeItem(item: QuoteItem, trade?: string): boolean {
   }
   if (!hasPricing) return false;
 
-  // For passive fire: require passive-fire-specific content signals
-  const tradeLower = (trade ?? '').toLowerCase();
-  const isPassiveFire = PASSIVE_FIRE_TRADES.some(t => tradeLower.includes(t)) || tradeLower === '';
-  if (isPassiveFire) {
+  // Passive fire trade: require passive-fire-specific content signals
+  // Only triggers on an EXACT match to passive fire trade keys — never by default
+  if (trade && isPassiveFireTrade(trade)) {
     const hasFRR = FRR_PATTERN.test(item.description ?? '');
     const hasSubstrate = SUBSTRATE_KEYWORDS.some(kw => desc.includes(kw));
     const hasMeasurable = MEASURABLE_ELEMENT_PATTERNS.some(p => p.test(item.description ?? ''));
@@ -97,7 +101,7 @@ function isMainScopeItem(item: QuoteItem, trade?: string): boolean {
     return nonPricingSignals >= 2;
   }
 
-  // For all other trades (plumbing, HVAC, electrical, etc.):
+  // All other trades (carpentry, plumbing, HVAC, electrical, active fire, etc.):
   // Any priced item that is not a grand-total summary line is main scope
   const isSummaryTotal = /^\s*(total|grand total|sub.?total|contract sum|lump sum price)\b/i.test(desc) && qty === 1 && rate === total;
   if (isSummaryTotal) return false;
