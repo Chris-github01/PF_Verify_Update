@@ -43,12 +43,6 @@ export const PROJECT_WORKFLOW_STEPS: WorkflowStep[] = [
     description: 'Normalize quotes for fair comparison'
   },
   {
-    id: 'quantity-intelligence',
-    name: 'Quantity Intelligence',
-    route: 'quantity-intelligence',
-    description: 'Analyse supplier quantity deviations and variance'
-  },
-  {
     id: 'boq-builder',
     name: 'BOQ Builder',
     route: 'boq-builder',

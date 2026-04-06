@@ -303,9 +303,6 @@ export default function NewProjectDashboard({
           // Completed if equalisation analysis has been run
           status = projectStats.hasEqualisation ? 'completed' : projectStats.hasScopeMatrix ? 'in_progress' : 'not_started';
           break;
-        case 'quantity-intelligence':
-          status = projectStats.hasQuantityIntelligence ? 'completed' : projectStats.hasEqualisation ? 'in_progress' : 'not_started';
-          break;
         case 'boq-builder':
           // Completed if BOQ has been generated
           status = projectStats.hasBOQ ? 'completed' : projectStats.hasEqualisation ? 'in_progress' : 'not_started';

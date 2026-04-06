@@ -27,13 +27,39 @@ export default function Equalisation({ projectId, onNavigateBack, onNavigateNext
 
   const handleNavigateNext = async () => {
     try {
+      const now = new Date().toISOString();
+
       await supabase
         .from('projects')
         .update({
           equalisation_completed: true,
-          updated_at: new Date().toISOString()
+          updated_at: now
         })
         .eq('id', projectId);
+
+      const { data: existing } = await supabase
+        .from('project_settings')
+        .select('settings')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      const currentSettings = existing?.settings || {};
+
+      await supabase
+        .from('project_settings')
+        .upsert({
+          project_id: projectId,
+          settings: {
+            ...currentSettings,
+            [currentTrade]: {
+              ...(currentSettings[currentTrade] || {}),
+              last_equalisation_run: now,
+            },
+          },
+          updated_at: now,
+        }, {
+          onConflict: 'project_id'
+        });
 
       window.dispatchEvent(new Event('refresh-dashboard'));
     } catch (error) {
