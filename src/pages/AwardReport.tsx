@@ -1229,11 +1229,18 @@ export default function AwardReport({
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Tenderer Summary</p>
                 <div className="space-y-2 text-sm">
                   {awardSummary.suppliers.slice(0, 4).map((s, i) => (
-                    <div key={s.supplierName} className="flex items-center justify-between">
-                      <span className={`${s.supplierName === approvalData.final_approved_supplier ? 'text-green-400 font-semibold' : 'text-slate-400'}`}>
-                        {i + 1}. {s.supplierName}
-                      </span>
-                      <span className="text-slate-300 font-mono text-xs">{formatCurrency(s.adjustedTotal)}</span>
+                    <div key={s.supplierName} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`truncate ${s.supplierName === approvalData.final_approved_supplier ? 'text-green-400 font-semibold' : 'text-slate-400'}`}>
+                          {i + 1}. {s.supplierName}
+                        </span>
+                        {s.isMultiplierQuote && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded bg-amber-600/20 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
+                            ×{s.levelsMultiplier}L
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-slate-300 font-mono text-xs shrink-0">{formatCurrency(s.adjustedTotal)}</span>
                     </div>
                   ))}
                   {awardSummary.suppliers.length > 4 && (
@@ -1258,10 +1265,23 @@ export default function AwardReport({
                   {bestValue?.supplier.supplierName || 'N/A'}
                 </p>
                 <div className="space-y-2 text-sm">
+                  {bestValue?.supplier.isMultiplierQuote && (
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-600/20 border border-green-500/40 text-green-300 text-xs font-bold">
+                        ×{bestValue.supplier.levelsMultiplier} Levels Multiplier
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Price</span>
+                    <span className="text-slate-400">{bestValue?.supplier.isMultiplierQuote ? 'Total (All Levels)' : 'Price'}</span>
                     <span className="font-bold text-green-400">{bestValue ? formatCurrency(bestValue.supplier.adjustedTotal) : 'N/A'}</span>
                   </div>
+                  {bestValue?.supplier.isMultiplierQuote && bestValue.supplier.itemsTotal != null && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Per-Level Price</span>
+                      <span className="text-slate-300 text-xs">{formatCurrency(bestValue.supplier.itemsTotal)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Coverage</span>
                     <span className="font-bold text-white">{bestValue ? `${Math.round(bestValue.supplier.coveragePercent)}%` : 'N/A'}</span>
@@ -1284,10 +1304,23 @@ export default function AwardReport({
                   {lowestRisk?.supplier.supplierName || 'N/A'}
                 </p>
                 <div className="space-y-2 text-sm">
+                  {lowestRisk?.supplier.isMultiplierQuote && (
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs font-bold">
+                        ×{lowestRisk.supplier.levelsMultiplier} Levels Multiplier
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Price</span>
+                    <span className="text-slate-400">{lowestRisk?.supplier.isMultiplierQuote ? 'Total (All Levels)' : 'Price'}</span>
                     <span className="font-bold text-blue-400">{lowestRisk ? formatCurrency(lowestRisk.supplier.adjustedTotal) : 'N/A'}</span>
                   </div>
+                  {lowestRisk?.supplier.isMultiplierQuote && lowestRisk.supplier.itemsTotal != null && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Per-Level Price</span>
+                      <span className="text-slate-300 text-xs">{formatCurrency(lowestRisk.supplier.itemsTotal)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Coverage</span>
                     <span className="font-bold text-white">{lowestRisk ? `${Math.round(lowestRisk.supplier.coveragePercent)}%` : 'N/A'}</span>
@@ -1349,10 +1382,23 @@ export default function AwardReport({
                     : balanced?.supplier.supplierName || 'N/A'}
                 </p>
                 <div className="space-y-2 text-sm mb-4">
+                  {balanced?.supplier.isMultiplierQuote && (
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-600/20 border border-orange-500/40 text-orange-300 text-xs font-bold">
+                        ×{balanced.supplier.levelsMultiplier} Levels Multiplier
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Price</span>
+                    <span className="text-slate-400">{balanced?.supplier.isMultiplierQuote ? 'Total (All Levels)' : 'Price'}</span>
                     <span className="font-bold text-orange-400">{balanced ? formatCurrency(balanced.supplier.adjustedTotal) : 'N/A'}</span>
                   </div>
+                  {balanced?.supplier.isMultiplierQuote && balanced.supplier.itemsTotal != null && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Per-Level Price</span>
+                      <span className="text-slate-300 text-xs">{formatCurrency(balanced.supplier.itemsTotal)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Coverage</span>
                     <span className="font-bold text-white">{balanced ? `${Math.round(balanced.supplier.coveragePercent)}%` : 'N/A'}</span>
@@ -1685,10 +1731,22 @@ export default function AwardReport({
                               1
                             </div>
                           )}
-                          <span className="font-semibold text-white">{supplier.supplierName}</span>
+                          <div>
+                            <span className="font-semibold text-white">{supplier.supplierName}</span>
+                            {supplier.isMultiplierQuote && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-amber-600/20 border border-amber-500/40 text-amber-300 text-xs font-bold">
+                                ×{supplier.levelsMultiplier} Levels
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right font-bold text-green-400">{formatCurrency(supplier.adjustedTotal)}</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="font-bold text-green-400">{formatCurrency(supplier.adjustedTotal)}</div>
+                        {supplier.isMultiplierQuote && supplier.itemsTotal != null && (
+                          <div className="text-xs text-slate-500 mt-0.5">{formatCurrency(supplier.itemsTotal)} per level</div>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-right text-slate-300">{supplier.itemsQuoted} / {supplier.totalItems}</td>
                       <td className="px-6 py-4 text-right text-slate-300">{Math.round(supplier.coveragePercent)}%</td>
                       <td className="px-6 py-4 text-right">

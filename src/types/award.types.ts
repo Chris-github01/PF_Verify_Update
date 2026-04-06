@@ -12,6 +12,9 @@ export interface SupplierAward {
   supplierId: string;
   supplierName: string;
   adjustedTotal: number;
+  itemsTotal?: number;
+  levelsMultiplier?: number | null;
+  isMultiplierQuote?: boolean;
   riskScore: number;
   riskFactors: SupplierRiskFactors;
   coveragePercent: number;

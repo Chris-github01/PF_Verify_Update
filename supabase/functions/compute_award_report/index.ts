@@ -28,6 +28,8 @@ interface Quote {
   id: string;
   supplier_name: string;
   items: QuoteItem[];
+  levels_multiplier?: number | null;
+  document_total?: number | null;
 }
 
 interface ComparisonRow {
@@ -163,7 +165,7 @@ Deno.serve(async (req: Request) => {
 
     let quotesQuery = supabase
       .from("quotes")
-      .select("id, supplier_name")
+      .select("id, supplier_name, levels_multiplier, document_total")
       .eq("project_id", projectId)
       .eq("is_selected", true)
       .eq("is_latest", true)
@@ -210,6 +212,8 @@ Deno.serve(async (req: Request) => {
         id: quote.id,
         supplier_name: quote.supplier_name,
         items: mainScopeItems,
+        levels_multiplier: quote.levels_multiplier ?? null,
+        document_total: quote.document_total ?? null,
       });
     }
 
@@ -358,9 +362,13 @@ Deno.serve(async (req: Request) => {
         row.suppliers[q.supplier_name]?.unitPrice !== null
       );
 
-      const total = quotedItems.reduce((sum, row) =>
+      const itemsTotal = quotedItems.reduce((sum, row) =>
         sum + (row.suppliers[q.supplier_name]?.total || 0), 0
       );
+
+      // Apply levels multiplier if present — multiplier quotes price per level, total = per-level × levels
+      const multiplier = q.levels_multiplier && q.levels_multiplier > 1 ? q.levels_multiplier : null;
+      const total = multiplier ? itemsTotal * multiplier : itemsTotal;
 
       // Calculate total quantity (sum of all quantities across all quoted items)
       const totalQuantity = quotedItems.reduce((sum, row) =>
@@ -369,14 +377,19 @@ Deno.serve(async (req: Request) => {
 
       const missingItems = comparisonData.length - quotedItems.length;
 
+      console.log(`📊 ${q.supplier_name}: itemsTotal=${itemsTotal}, multiplier=${multiplier}, adjustedTotal=${total}`);
+
       return {
         quoteId: q.id,
         supplierName: q.supplier_name,
         supplierId: q.supplier_name,
         adjustedTotal: total,
+        itemsTotal: itemsTotal,
+        levelsMultiplier: multiplier,
+        isMultiplierQuote: !!multiplier,
         itemsQuoted: quotedItems.length,
         totalItems: comparisonData.length,
-        totalQuantity: totalQuantity, // NEW: Total sum of quantities for accurate per-unit pricing
+        totalQuantity: totalQuantity,
         coveragePercent: Math.round((quotedItems.length / comparisonData.length) * 100),
         riskScore: missingItems,
         riskFactors: {
@@ -432,23 +445,33 @@ Deno.serve(async (req: Request) => {
       (a, b) => b.weightedTotal - a.weightedTotal
     );
 
+    const bvSupplier = sortedByPrice[0];
+    const lrSupplier = sortedByRisk[0];
+    const baSupplier = sortedByWeightedScore[0];
+
     const recommendations = [
       {
         type: "BEST_VALUE",
-        supplier: sortedByPrice[0],
-        reason: `Lowest total price at $${sortedByPrice[0].adjustedTotal.toLocaleString()}`,
+        supplier: bvSupplier,
+        reason: bvSupplier.isMultiplierQuote
+          ? `Lowest total price at $${bvSupplier.adjustedTotal.toLocaleString()} (×${bvSupplier.levelsMultiplier} levels multiplier applied to per-level price of $${bvSupplier.itemsTotal.toLocaleString()})`
+          : `Lowest total price at $${bvSupplier.adjustedTotal.toLocaleString()}`,
         confidence: 85,
       },
       {
         type: "LOWEST_RISK",
-        supplier: sortedByRisk[0],
-        reason: `Lowest risk with ${sortedByRisk[0].riskScore} missing scope items and ${sortedByRisk[0].coveragePercent.toFixed(1)}% coverage`,
+        supplier: lrSupplier,
+        reason: lrSupplier.isMultiplierQuote
+          ? `Lowest risk with ${lrSupplier.riskScore} missing scope items and ${lrSupplier.coveragePercent.toFixed(1)}% coverage. Total $${lrSupplier.adjustedTotal.toLocaleString()} includes ×${lrSupplier.levelsMultiplier} levels multiplier`
+          : `Lowest risk with ${lrSupplier.riskScore} missing scope items and ${lrSupplier.coveragePercent.toFixed(1)}% coverage`,
         confidence: 80,
       },
       {
         type: "BALANCED",
-        supplier: sortedByWeightedScore[0],
-        reason: `Highest weighted score (${sortedByWeightedScore[0].weightedTotal.toFixed(1)}/100) combining price, compliance, coverage, and risk factors`,
+        supplier: baSupplier,
+        reason: baSupplier.isMultiplierQuote
+          ? `Highest weighted score (${baSupplier.weightedTotal.toFixed(1)}/100) combining price, compliance, coverage, and risk factors. Total $${baSupplier.adjustedTotal.toLocaleString()} includes ×${baSupplier.levelsMultiplier} levels multiplier`
+          : `Highest weighted score (${baSupplier.weightedTotal.toFixed(1)}/100) combining price, compliance, coverage, and risk factors`,
         confidence: 85,
       },
     ];
