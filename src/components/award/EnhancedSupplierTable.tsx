@@ -117,9 +117,12 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                         )}
                       </div>
                       <div className="text-xs text-slate-400 mt-1">
-                        {supplier.systemsCovered} / {supplier.totalSystems} systems
+                        {supplier.itemsQuoted != null ? supplier.itemsQuoted : supplier.systemsCovered} line items
                         {supplier.isMultiplierQuote && (
                           <span className="ml-1 text-amber-400/70">— per-level rate ×{supplier.levelsMultiplier}</span>
+                        )}
+                        {supplier.isLumpSumQuote && (
+                          <span className="ml-1 text-slate-500">— lump sum pricing</span>
                         )}
                       </div>
                     </div>

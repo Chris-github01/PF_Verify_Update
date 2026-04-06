@@ -412,7 +412,7 @@ Deno.serve(async (req: Request) => {
         levelsMultiplier: multiplier,
         isMultiplierQuote: !!multiplier,
         isLumpSumQuote: matchedItemsTotal === 0 && total > 0 && !multiplier,
-        itemsQuoted: quotedItems.length,
+        itemsQuoted: q.items.length,
         totalItems: comparisonData.length,
         totalQuantity: totalQuantity,
         coveragePercent: effectiveCoverage,
