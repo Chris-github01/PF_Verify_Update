@@ -39,7 +39,6 @@ export type SidebarTab =
   | 'quoteselect'
   | 'review'
   | 'quoteintel'
-  | 'quantity-intelligence'
   | 'scope'
   | 'equalisation'
   | 'boq-builder'
@@ -89,7 +88,6 @@ const mainContractorMenu = [
       { id: 'quoteselect' as SidebarTab, label: 'Quote Select', icon: CheckSquare },
       { id: 'review' as SidebarTab, label: 'Review & Clean', icon: ClipboardCheck },
       { id: 'quoteintel' as SidebarTab, label: 'Quote Intelligence', icon: Sparkles },
-      { id: 'quantity-intelligence' as SidebarTab, label: 'Quantity Intelligence', icon: Layers },
       { id: 'scope' as SidebarTab, label: 'Scope Matrix', icon: Grid3x3 },
       { id: 'equalisation' as SidebarTab, label: 'Equalisation Analysis', icon: BarChart3 },
       { id: 'boq-builder' as SidebarTab, label: 'BOQ Builder', icon: FileSpreadsheet },

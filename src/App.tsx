@@ -12,7 +12,6 @@ import EnhancedImportQuotes from './pages/EnhancedImportQuotes';
 import QuoteSelect from './pages/QuoteSelect';
 import ReviewClean from './pages/ReviewClean';
 import QuoteIntelligence from './pages/QuoteIntelligence';
-import QuantityIntelligencePage from './pages/QuantityIntelligencePage';
 import ScopeMatrix from './pages/ScopeMatrix';
 import Equalisation from './pages/Equalisation';
 import BOQBuilder from './pages/BOQBuilder';
@@ -650,9 +649,6 @@ function AppContent() {
           onNavigateToReports={() => {
             if (handleNavigationGuard('reports')) setActiveTab('reports');
           }}
-          onNavigateToQuantityIntelligence={() => {
-            if (handleNavigationGuard('quantity-intelligence')) setActiveTab('quantity-intelligence');
-          }}
           dashboardMode={dashboardMode}
         />;
 
@@ -762,27 +758,11 @@ function AppContent() {
         return <QuoteIntelligence
           projectId={projectId}
           onNavigateBack={() => setActiveTab('review')}
-          onNavigateNext={() => setActiveTab('quantity-intelligence')}
+          onNavigateNext={() => setActiveTab('scope')}
           dashboardMode={dashboardMode}
           onQuotesSelected={setSelectedQuoteIds}
-          nextLabel="Next: Quantity Intelligence"
+          nextLabel="Next: Scope Matrix"
         />;
-
-      case 'quantity-intelligence':
-        if (!projectId) {
-          return <NewProjectDashboard
-            projectId={null}
-            projectName={undefined}
-            allProjects={allProjects}
-            onProjectSelect={handleProjectSelect}
-            onCreateProject={handleCreateProject}
-            onNavigateToQuotes={() => { if (handleNavigationGuard('quotes')) setActiveTab('quotes'); }}
-            onNavigateToMatrix={() => { if (handleNavigationGuard('scope')) setActiveTab('scope'); }}
-            onNavigateToReports={() => { if (handleNavigationGuard('reports')) setActiveTab('reports'); }}
-            dashboardMode={dashboardMode}
-          />;
-        }
-        return <QuantityIntelligencePage projectId={projectId} onNavigateNext={() => setActiveTab('scope')} />;
 
       case 'scope':
         if (!projectId) {

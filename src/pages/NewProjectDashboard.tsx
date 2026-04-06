@@ -29,7 +29,6 @@ interface NewProjectDashboardProps {
   onNavigateToQuotes: () => void;
   onNavigateToMatrix: () => void;
   onNavigateToReports: () => void;
-  onNavigateToQuantityIntelligence?: () => void;
   dashboardMode?: 'original' | 'revisions';
 }
 
@@ -69,7 +68,6 @@ export default function NewProjectDashboard({
   onNavigateToQuotes,
   onNavigateToMatrix,
   onNavigateToReports,
-  onNavigateToQuantityIntelligence,
   dashboardMode = 'original',
 }: NewProjectDashboardProps) {
   const { currentOrganisation } = useOrganisation();
@@ -341,9 +339,6 @@ export default function NewProjectDashboard({
         break;
       case 'reports':
         onNavigateToReports();
-        break;
-      case 'quantity-intelligence':
-        if (onNavigateToQuantityIntelligence) onNavigateToQuantityIntelligence();
         break;
       default:
         console.log('Navigation to', route, 'not yet implemented');
