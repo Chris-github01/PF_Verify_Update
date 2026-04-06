@@ -53,6 +53,10 @@ export interface EnhancedSupplierMetrics {
   rank: number;
   isBestValue: boolean;
   isLowestRisk: boolean;
+  isMultiplierQuote?: boolean;
+  levelsMultiplier?: number | null;
+  isLumpSumQuote?: boolean;
+  itemsTotal?: number;
 }
 
 export interface ScoringWeights {

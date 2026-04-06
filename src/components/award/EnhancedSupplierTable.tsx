@@ -95,7 +95,7 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     <div>
                       <div className="font-semibold text-white flex items-center gap-2">
                         {supplier.supplierName}
-                        {isBestValue && (
+                          {isBestValue && (
                           <span className="px-2 py-0.5 bg-green-600/20 text-green-400 text-xs font-bold rounded border border-green-600/50">
                             BEST VALUE
                           </span>
@@ -105,9 +105,22 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                             LOWEST RISK
                           </span>
                         )}
+                        {supplier.isMultiplierQuote && (
+                          <span className="px-2 py-0.5 bg-amber-600/20 text-amber-300 text-xs font-bold rounded border border-amber-500/40">
+                            ×{supplier.levelsMultiplier} LEVELS
+                          </span>
+                        )}
+                        {supplier.isLumpSumQuote && (
+                          <span className="px-2 py-0.5 bg-slate-600/30 text-slate-400 text-xs font-bold rounded border border-slate-500/40">
+                            LUMP SUM
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-slate-400 mt-1">
                         {supplier.systemsCovered} / {supplier.totalSystems} systems
+                        {supplier.isMultiplierQuote && (
+                          <span className="ml-1 text-amber-400/70">— per-level rate ×{supplier.levelsMultiplier}</span>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -116,6 +129,11 @@ export default function EnhancedSupplierTable({ suppliers, onSupplierClick }: En
                     <div className="font-bold text-green-400 text-base">
                       {formatCurrency(supplier.totalPrice)}
                     </div>
+                    {supplier.isMultiplierQuote && supplier.itemsTotal != null && (
+                      <div className="text-xs text-amber-400/70 mt-0.5">
+                        {formatCurrency(supplier.itemsTotal)} per level
+                      </div>
+                    )}
                   </td>
 
                   <td className="px-3 py-4 text-right">

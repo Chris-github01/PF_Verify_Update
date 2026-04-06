@@ -308,23 +308,42 @@ export default function AwardReportEnhanced({
         systemsBreakdown: generateSystemsBreakdown(supplierItems, supplier.totalItems),
         scopeGaps: estimateScopeGapCosts(
           missingItems,
-          actualTotalQuantity > 0 ? supplier.adjustedTotal / actualTotalQuantity : 0, // Average rate per unit
-          supplier.itemsQuoted || actualTotalQuantity, // Line items covered
-          supplier.totalItems // Total line items
+          actualTotalQuantity > 0 ? supplier.adjustedTotal / actualTotalQuantity : 0,
+          supplier.itemsQuoted || actualTotalQuantity,
+          supplier.totalItems
         ),
 
         rank: 0,
         isBestValue: false,
         isLowestRisk: false,
+        isMultiplierQuote: !!(supplier as any).isMultiplierQuote,
+        levelsMultiplier: (supplier as any).levelsMultiplier ?? null,
+        isLumpSumQuote: !!(supplier as any).isLumpSumQuote,
+        itemsTotal: (supplier as any).itemsTotal ?? undefined,
       };
     });
 
     // Sort and rank
     enhanced.sort((a, b) => b.weightedTotal - a.weightedTotal);
+
+    // Assign Best Value: strictly the single lowest-priced supplier
+    const minPrice = Math.min(...enhanced.map(s => s.totalPrice));
+    // Assign Lowest Risk: strictly the single supplier with the fewest missing items.
+    // If multiple suppliers tie on rawRiskScore, break the tie by highest coverage,
+    // then lowest price. Only ONE supplier gets the badge.
+    const minRiskScore = Math.min(...enhanced.map(s => s.rawRiskScore));
+    const lowestRiskCandidates = enhanced.filter(s => s.rawRiskScore === minRiskScore);
+    const lowestRiskWinner = lowestRiskCandidates.sort((a, b) => {
+      if (b.coveragePercent !== a.coveragePercent) return b.coveragePercent - a.coveragePercent;
+      return a.totalPrice - b.totalPrice;
+    })[0];
+
     enhanced.forEach((s, idx) => {
       s.rank = idx + 1;
-      s.isBestValue = s.totalPrice === lowestPrice;
-      s.isLowestRisk = s.rawRiskScore === Math.min(...enhanced.map(x => x.rawRiskScore));
+      s.isBestValue = s.totalPrice === minPrice && enhanced.filter(x => x.totalPrice === minPrice).length === 1
+        ? true
+        : s.totalPrice === minPrice && s === enhanced.filter(x => x.totalPrice === minPrice).sort((a, b) => b.weightedTotal - a.weightedTotal)[0];
+      s.isLowestRisk = s === lowestRiskWinner;
     });
 
     return enhanced;
