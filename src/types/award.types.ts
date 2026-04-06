@@ -15,6 +15,7 @@ export interface SupplierAward {
   itemsTotal?: number;
   levelsMultiplier?: number | null;
   isMultiplierQuote?: boolean;
+  isLumpSumQuote?: boolean;
   riskScore: number;
   riskFactors: SupplierRiskFactors;
   coveragePercent: number;

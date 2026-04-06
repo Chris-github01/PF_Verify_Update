@@ -1738,6 +1738,11 @@ export default function AwardReport({
                                 ×{supplier.levelsMultiplier} Levels
                               </span>
                             )}
+                            {supplier.isLumpSumQuote && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-slate-600/40 border border-slate-500/40 text-slate-300 text-xs font-bold">
+                                Lump Sum
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>

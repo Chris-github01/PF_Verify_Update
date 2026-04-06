@@ -30,6 +30,7 @@ interface Quote {
   items: QuoteItem[];
   levels_multiplier?: number | null;
   document_total?: number | null;
+  total_amount?: number | null;
 }
 
 interface ComparisonRow {
@@ -165,7 +166,7 @@ Deno.serve(async (req: Request) => {
 
     let quotesQuery = supabase
       .from("quotes")
-      .select("id, supplier_name, levels_multiplier, document_total")
+      .select("id, supplier_name, levels_multiplier, document_total, total_amount")
       .eq("project_id", projectId)
       .eq("is_selected", true)
       .eq("is_latest", true)
@@ -214,6 +215,7 @@ Deno.serve(async (req: Request) => {
         items: mainScopeItems,
         levels_multiplier: quote.levels_multiplier ?? null,
         document_total: quote.document_total ?? null,
+        total_amount: quote.total_amount ?? null,
       });
     }
 
@@ -362,22 +364,44 @@ Deno.serve(async (req: Request) => {
         row.suppliers[q.supplier_name]?.unitPrice !== null
       );
 
-      const itemsTotal = quotedItems.reduce((sum, row) =>
+      const matchedItemsTotal = quotedItems.reduce((sum, row) =>
         sum + (row.suppliers[q.supplier_name]?.total || 0), 0
       );
 
-      // Apply levels multiplier if present — multiplier quotes price per level, total = per-level × levels
+      // For multiplier quotes: use document_total directly (authoritative), or multiply items × levels
+      // For non-matching quotes (lump sum / level-grouped): fall back to total_amount from DB
       const multiplier = q.levels_multiplier && q.levels_multiplier > 1 ? q.levels_multiplier : null;
-      const total = multiplier ? itemsTotal * multiplier : itemsTotal;
+
+      let itemsTotal: number;
+      let total: number;
+
+      if (multiplier) {
+        // Multiplier quote: per-level items × number of levels
+        // Prefer document_total as the authoritative all-levels total
+        itemsTotal = matchedItemsTotal > 0 ? matchedItemsTotal : (Number(q.total_amount) / multiplier) || matchedItemsTotal;
+        total = Number(q.document_total) || (itemsTotal * multiplier);
+      } else if (matchedItemsTotal === 0 && q.total_amount) {
+        // No item matches (lump sum / differently structured quote) — use the quote's own total
+        itemsTotal = Number(q.total_amount);
+        total = itemsTotal;
+      } else {
+        itemsTotal = matchedItemsTotal;
+        total = matchedItemsTotal;
+      }
 
       // Calculate total quantity (sum of all quantities across all quoted items)
       const totalQuantity = quotedItems.reduce((sum, row) =>
         sum + (row.quantity || 0), 0
       );
 
-      const missingItems = comparisonData.length - quotedItems.length;
+      // Coverage: if we used the fallback total_amount, treat as 100% lump sum coverage
+      const effectiveCoverage = matchedItemsTotal === 0 && total > 0
+        ? 100
+        : Math.round((quotedItems.length / comparisonData.length) * 100);
 
-      console.log(`📊 ${q.supplier_name}: itemsTotal=${itemsTotal}, multiplier=${multiplier}, adjustedTotal=${total}`);
+      const missingItems = matchedItemsTotal === 0 && total > 0 ? 0 : comparisonData.length - quotedItems.length;
+
+      console.log(`📊 ${q.supplier_name}: matchedItemsTotal=${matchedItemsTotal}, multiplier=${multiplier}, document_total=${q.document_total}, total_amount=${q.total_amount}, adjustedTotal=${total}`);
 
       return {
         quoteId: q.id,
@@ -387,10 +411,11 @@ Deno.serve(async (req: Request) => {
         itemsTotal: itemsTotal,
         levelsMultiplier: multiplier,
         isMultiplierQuote: !!multiplier,
+        isLumpSumQuote: matchedItemsTotal === 0 && total > 0 && !multiplier,
         itemsQuoted: quotedItems.length,
         totalItems: comparisonData.length,
         totalQuantity: totalQuantity,
-        coveragePercent: Math.round((quotedItems.length / comparisonData.length) * 100),
+        coveragePercent: effectiveCoverage,
         riskScore: missingItems,
         riskFactors: {
           redCells: 0,
