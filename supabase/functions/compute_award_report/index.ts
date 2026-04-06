@@ -162,7 +162,8 @@ Deno.serve(async (req: Request) => {
       risk: 10
     };
 
-    // Use trade from request body, fall back to project's trade field
+    // effectiveTrade is used only for isMainScopeItem filtering logic, NOT for quote filtering
+    // Quote filtering by trade uses only the explicitly-passed trade from the request body
     const effectiveTrade: string = trade || projectData?.trade || '';
 
     console.log("📊 Using scoring weights:", scoringWeights);
@@ -176,10 +177,10 @@ Deno.serve(async (req: Request) => {
       .eq("is_latest", true)
       .order("created_at", { ascending: true });
 
-    // Filter by trade if provided
-    if (effectiveTrade) {
-      console.log("📊 Filtering to trade:", effectiveTrade);
-      quotesQuery = quotesQuery.eq("trade", effectiveTrade);
+    // Only filter by trade if explicitly passed in the request body
+    if (trade) {
+      console.log("📊 Filtering to trade:", trade);
+      quotesQuery = quotesQuery.eq("trade", trade);
     }
 
     // Filter by specific quote IDs if provided
