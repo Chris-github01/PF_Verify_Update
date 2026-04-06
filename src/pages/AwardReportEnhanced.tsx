@@ -436,7 +436,7 @@ export default function AwardReportEnhanced({
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ projectId, force: true }),
+        body: JSON.stringify({ projectId, force: true, trade: currentProject?.trade ?? currentTrade ?? undefined }),
       });
 
       if (!response.ok) throw new Error('Failed to regenerate report');

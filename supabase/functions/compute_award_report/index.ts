@@ -147,10 +147,10 @@ Deno.serve(async (req: Request) => {
 
     console.log("📊 compute_award_report: Generating report", { projectId, quoteIds, trade });
 
-    // Load project scoring weights
+    // Load project scoring weights and trade
     const { data: projectData } = await supabase
       .from("projects")
-      .select("scoring_weights")
+      .select("scoring_weights, trade")
       .eq("id", projectId)
       .maybeSingle();
 
@@ -162,7 +162,11 @@ Deno.serve(async (req: Request) => {
       risk: 10
     };
 
+    // Use trade from request body, fall back to project's trade field
+    const effectiveTrade: string = trade || projectData?.trade || '';
+
     console.log("📊 Using scoring weights:", scoringWeights);
+    console.log("📊 Using trade:", effectiveTrade, "(from request:", trade, ", project:", projectData?.trade, ")");
 
     let quotesQuery = supabase
       .from("quotes")
@@ -173,9 +177,9 @@ Deno.serve(async (req: Request) => {
       .order("created_at", { ascending: true });
 
     // Filter by trade if provided
-    if (trade) {
-      console.log("📊 Filtering to trade:", trade);
-      quotesQuery = quotesQuery.eq("trade", trade);
+    if (effectiveTrade) {
+      console.log("📊 Filtering to trade:", effectiveTrade);
+      quotesQuery = quotesQuery.eq("trade", effectiveTrade);
     }
 
     // Filter by specific quote IDs if provided
@@ -206,7 +210,7 @@ Deno.serve(async (req: Request) => {
 
       if (itemsError) throw itemsError;
 
-      const mainScopeItems = (items || []).filter((item) => isMainScopeItem(item, trade));
+      const mainScopeItems = (items || []).filter((item) => isMainScopeItem(item, effectiveTrade));
       console.log(`📊 ${quote.supplier_name}: ${items?.length ?? 0} total items → ${mainScopeItems.length} main scope items`);
 
       quotesWithItems.push({
