@@ -12,7 +12,8 @@ import {
   Layers,
   Target,
   Grid3x3,
-  List
+  List,
+  Pencil
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { supabase } from '../lib/supabase';
@@ -77,6 +78,11 @@ export default function NewProjectDashboard({
   const [newProjectClient, setNewProjectClient] = useState('');
   const [newProjectReference, setNewProjectReference] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editProjectName, setEditProjectName] = useState('');
+  const [editProjectClient, setEditProjectClient] = useState('');
+  const [editProjectReference, setEditProjectReference] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -353,6 +359,59 @@ export default function NewProjectDashboard({
     setNewProjectReference('');
   };
 
+  const handleOpenEditModal = () => {
+    const current = allProjects.find(p => p.id === projectId);
+    setEditProjectName(current?.name || projectName || '');
+    setEditProjectClient(current?.client_reference !== 'No client' ? (current?.client_reference || '') : '');
+    setEditProjectReference('');
+    if (projectId) {
+      supabase
+        .from('projects')
+        .select('name, client, reference')
+        .eq('id', projectId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setEditProjectName(data.name || '');
+            setEditProjectClient(data.client || '');
+            setEditProjectReference(data.reference || '');
+          }
+        });
+    }
+    setShowEditModal(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setEditProjectName('');
+    setEditProjectClient('');
+    setEditProjectReference('');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId || !editProjectName.trim()) return;
+    setIsSavingEdit(true);
+    try {
+      await supabase
+        .from('projects')
+        .update({
+          name: editProjectName.trim(),
+          client: editProjectClient.trim() || null,
+          reference: editProjectReference.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', projectId);
+      handleCloseEditModal();
+      window.dispatchEvent(new CustomEvent('refresh-dashboard'));
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { projectId, name: editProjectName.trim() } }));
+    } catch (err) {
+      console.error('Error saving project:', err);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectName.trim()) return;
@@ -377,6 +436,7 @@ export default function NewProjectDashboard({
   };
 
   return (
+    <>
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#020617)] p-6">
       <div className="max-w-7xl mx-auto px-6 py-6 rounded-xl border border-slate-700">
         {projectId && (
@@ -396,6 +456,16 @@ export default function NewProjectDashboard({
             title={projectId ? projectName || 'Project Dashboard' : 'All Projects'}
             subtitle={projectId ? 'Manage your quote analysis workflow' : 'Select or create a project'}
           />
+          {projectId && (
+            <button
+              onClick={handleOpenEditModal}
+              className="flex items-center gap-2 px-3 py-2 bg-slate-800/60 border border-slate-700 rounded-lg text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-all text-sm"
+              title="Edit project details"
+            >
+              <Pencil size={14} />
+              <span>Edit Project</span>
+            </button>
+          )}
           {!projectId && (
             <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg border border-slate-700 p-1">
               <button
@@ -701,5 +771,88 @@ export default function NewProjectDashboard({
         )}
       </div>
     </div>
+
+    {showEditModal && (
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-lg font-bold text-slate-100">Edit Project</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Update project details</p>
+            </div>
+            <button
+              onClick={handleCloseEditModal}
+              className="text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSaveEdit}>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Project Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editProjectName}
+                  onChange={(e) => setEditProjectName(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  placeholder="Enter project name"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Client Name
+                </label>
+                <input
+                  type="text"
+                  value={editProjectClient}
+                  onChange={(e) => setEditProjectClient(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  placeholder="Enter client name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  Project Reference
+                </label>
+                <input
+                  type="text"
+                  value={editProjectReference}
+                  onChange={(e) => setEditProjectReference(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  placeholder="Enter project reference"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={handleCloseEditModal}
+                className="flex-1 px-4 py-2.5 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-800 transition-colors"
+                disabled={isSavingEdit}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                disabled={isSavingEdit || !editProjectName.trim()}
+              >
+                {isSavingEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

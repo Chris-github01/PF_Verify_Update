@@ -239,6 +239,18 @@ function AppContent() {
     }
   }, [currentOrganisation?.id]);
 
+  useEffect(() => {
+    const handleProjectUpdated = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.projectId) {
+        loadProjectInfo(detail.projectId);
+        loadAllProjects();
+      }
+    };
+    window.addEventListener('project-updated', handleProjectUpdated);
+    return () => window.removeEventListener('project-updated', handleProjectUpdated);
+  }, [currentOrganisation?.id]);
+
   const loadOrgLicensing = async () => {
     if (!currentOrganisation) return;
 
