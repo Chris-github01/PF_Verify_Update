@@ -689,15 +689,28 @@ Deno.serve(async (req: Request) => {
     } // end if (needsRetry)
 
     // Aggregate ALL items (previously completed + newly recovered)
-    const allCompletedChunks = await supabase
+    // IMPORTANT: deduplicate by chunk_number to avoid double-processing when the job
+    // was triggered multiple times and created duplicate chunk records.
+    const allCompletedChunksRaw = await supabase
       .from("parsing_chunks")
-      .select("parsed_items, chunk_text")
+      .select("chunk_number, parsed_items, chunk_text")
       .eq("job_id", jobId)
-      .eq("status", "completed");
+      .eq("status", "completed")
+      .order("chunk_number");
+
+    // Keep only the first completed record per chunk_number
+    const seenChunkNumbers = new Set<number>();
+    const dedupedCompletedChunks = (allCompletedChunksRaw.data || []).filter(chunk => {
+      if (seenChunkNumbers.has(chunk.chunk_number)) return false;
+      seenChunkNumbers.add(chunk.chunk_number);
+      return true;
+    });
+
+    console.log(`[Resume] Completed chunks: ${allCompletedChunksRaw.data?.length || 0} raw, ${dedupedCompletedChunks.length} after dedup by chunk_number`);
 
     const allItems: any[] = [];
     const allChunkTexts: string[] = [];
-    for (const chunk of allCompletedChunks.data || []) {
+    for (const chunk of dedupedCompletedChunks) {
       if (chunk.parsed_items) {
         allItems.push(...chunk.parsed_items);
       }
@@ -709,12 +722,25 @@ Deno.serve(async (req: Request) => {
     console.log(`[Resume] Total items after retry: ${allItems.length}`);
 
     const isCarpentry = (job.trade ?? '').toLowerCase() === 'carpentry';
-    // For plumbing quotes: if LLM missed the level-table rows, inject them from raw text
     const isPlumbing = (job.trade ?? '').toLowerCase() === 'plumbing';
+
+    // For plumbing quotes: ALWAYS use the regex level-table parser as the authoritative
+    // source. The LLM frequently misreads the summary table values (e.g. reading "1490"
+    // instead of "61490" for Level 13). If the regex finds >= 5 level rows, replace ALL
+    // LLM level items with the regex results.
     if (isPlumbing) {
       const combinedText = allChunkTexts.join('\n');
       const levelItems = extractPlumbingLevelTable(combinedText);
-      if (levelItems.length > 0) {
+      if (levelItems.length >= 5) {
+        console.log(`[Resume] Plumbing: regex found ${levelItems.length} level rows — replacing ALL LLM items with regex results`);
+        // Remove any LLM-parsed level/ground/roof items that could conflict
+        const nonLevelItems = allItems.filter((item: any) =>
+          !/level|ground|roof|basement|floor/i.test(item.description || '')
+        );
+        allItems.length = 0;
+        allItems.push(...nonLevelItems, ...levelItems);
+        console.log(`[Resume] Plumbing: kept ${nonLevelItems.length} non-level LLM items + ${levelItems.length} regex level items`);
+      } else if (levelItems.length > 0) {
         const hasLevelItems = allItems.some((item: any) =>
           /level|ground|roof|basement|floor/i.test(item.description || '')
         );
