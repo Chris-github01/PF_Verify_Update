@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen, FileSpreadsheet, MoreVertical, Tag, Loader2, Edit, Eye, Lock } from 'lucide-react';
+import { ArrowLeft, FileText, CheckCircle, AlertCircle, FileCheck, Download, Users, Briefcase, PieChart, BarChart3, Plus, CreditCard as Edit2, Trash2, Save, X, Send, Upload, Shield, Clock, UserCheck, ChevronRight, ChevronLeft, PackageOpen, FileSpreadsheet, MoreVertical, Tag, Loader2, CreditCard as Edit, Eye, Lock, Layers } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generatePdfWithPrint } from '../lib/reports/modernPdfTemplate';
 import { generateAndDownloadPdf } from '../lib/reports/pdfGenerator';
 import { useOrganisation } from '../lib/organisationContext';
 import { useTrade } from '../lib/tradeContext';
+import { getTradeSpec, applyGroupingRules } from '../lib/tradeSpec';
+import type { TradeModule } from '../lib/tradeSpec/types';
 import { exportTagsClarificationsToExcel } from '../lib/export/tagsExcelExport';
 import EnhancedAllowancesTab from '../components/EnhancedAllowancesTab';
 import ContractWorkflowStepper from '../components/ContractWorkflowStepper';
@@ -264,35 +266,48 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             .eq('quote_id', approvedQuoteId);
 
         if (quoteItems && quoteItems.length > 0) {
-          const systemsMap = new Map<string, ScopeSystem>();
+          const rawSystemsMap = new Map<string, ScopeSystem>();
 
           quoteItems.forEach((item: any) => {
-            // Use service field first, then scope_category, then default to "Other Systems"
             const category = item.service?.trim() || item.scope_category || 'Other Systems';
-            if (!systemsMap.has(category)) {
-              systemsMap.set(category, {
+            if (!rawSystemsMap.has(category)) {
+              rawSystemsMap.set(category, {
                 service_type: category,
                 coverage: 'full',
                 item_count: 0,
                 details: []
               });
             }
-            const system = systemsMap.get(category)!;
+            const system = rawSystemsMap.get(category)!;
             system.item_count += 1;
             if (system.details.length < 5 && item.description) {
-              // Format: Description | Service | Type | Material | Qty | Unit
               const serviceStr = item.service || 'N/A';
               const typeStr = item.subclass || 'N/A';
               const materialStr = item.material || 'N/A';
               const qtyStr = item.quantity != null ? String(item.quantity) : 'N/A';
               const unitStr = item.unit || 'N/A';
-
               const formattedDetail = `${item.description} | ${serviceStr} | ${typeStr} | ${materialStr} | ${qtyStr} | ${unitStr}`;
               system.details.push(formattedDetail);
             }
           });
 
-          setScopeSystems(Array.from(systemsMap.values()));
+          const rawSystems = Array.from(rawSystemsMap.values());
+
+          const validTradeModules: TradeModule[] = ['passive_fire', 'electrical', 'active_fire', 'hvac', 'plumbing', 'carpentry'];
+          if (validTradeModules.includes(currentTrade as TradeModule)) {
+            const grouped = applyGroupingRules(rawSystems, currentTrade as TradeModule);
+            const flatSystems: ScopeSystem[] = grouped.flatMap(group =>
+              group.items.map(item => ({
+                service_type: item.service_type,
+                coverage: item.coverage as 'full' | 'partial' | 'none',
+                item_count: item.item_count,
+                details: item.details
+              }))
+            );
+            setScopeSystems(flatSystems);
+          } else {
+            setScopeSystems(rawSystems);
+          }
         } else {
           // No quote items, clear scope systems
           setScopeSystems([]);
@@ -538,7 +553,21 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             unit: item.unit || 'N/A'
           }));
 
+          const validTradeModulesJunior: TradeModule[] = ['passive_fire', 'electrical', 'active_fire', 'hvac', 'plumbing', 'carpentry'];
+          const isValidTradeJunior = validTradeModulesJunior.includes(currentTrade as TradeModule);
+          const tradeSpecJunior = isValidTradeJunior ? getTradeSpec(currentTrade as TradeModule) : null;
           const defaultData = getDefaultJuniorPackData(currentTrade);
+
+          const juniorChecklists = tradeSpecJunior
+            ? tradeSpecJunior.checklistPhases.map(phase => ({
+                title: phase.title,
+                items: phase.items.map(item => item.text)
+              }))
+            : (defaultData.checklists || []);
+
+          const juniorSafetyNotes = tradeSpecJunior
+            ? [`Follow all ${tradeSpecJunior.name} standards and manufacturer requirements`, ...((defaultData.safetyNotes || []).slice(0, 2))]
+            : (defaultData.safetyNotes || []);
 
           console.log('Building junior data object...');
           const juniorData = {
@@ -555,8 +584,8 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             lineItems: lineItems,
             inclusions: inclusionsList,
             exclusions: exclusionsList,
-            safetyNotes: defaultData.safetyNotes || [],
-            checklists: defaultData.checklists || [],
+            safetyNotes: juniorSafetyNotes,
+            checklists: juniorChecklists,
             organisationLogoUrl: organisationLogoUrl,
             supplierContact: awardInfo.supplier_contact,
             supplierEmail: awardInfo.supplier_email,
@@ -806,8 +835,19 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
           amount: (awardInfo.total_amount * percentages[idx]) / 100
         }));
 
-        // Get default risks from generator based on current trade
+        const validTradeModulesSenior: TradeModule[] = ['passive_fire', 'electrical', 'active_fire', 'hvac', 'plumbing', 'carpentry'];
+        const isValidTradeSenior = validTradeModulesSenior.includes(currentTrade as TradeModule);
+        const tradeSpecSenior = isValidTradeSenior ? getTradeSpec(currentTrade as TradeModule) : null;
         const defaults = getDefaultSeniorReportData(currentTrade);
+
+        const seniorRisks = tradeSpecSenior
+          ? tradeSpecSenior.riskRegister.map(r => ({
+              category: r.category,
+              description: r.risk,
+              mitigation: r.mitigation,
+              severity: (r.impact === 'critical' ? 'high' : r.impact) as 'high' | 'medium' | 'low'
+            }))
+          : (defaults.risks || []);
 
         const retentionDescription = retentionMethod === 'flat'
           ? `${retentionPercentage}% standard retention held until practical completion`
@@ -848,7 +888,7 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
             { term: 'Variations', value: 'Rate-based as per schedule of rates' },
             { term: 'Insurance', value: insuranceDescription }
           ],
-          risks: defaults.risks || [],
+          risks: seniorRisks,
           lineItems: lineItems,
           supplierContact: awardInfo.supplier_contact,
           supplierEmail: awardInfo.supplier_email,
@@ -1022,6 +1062,25 @@ export default function ContractManager({ projectId, onNavigateBack, dashboardMo
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-white mb-3">Contract Manager</h1>
           <p className="text-xl text-slate-300 mb-6">Subcontract Scope & Handover Management</p>
+
+          {(() => {
+            const validTradeModules: TradeModule[] = ['passive_fire', 'electrical', 'active_fire', 'hvac', 'plumbing', 'carpentry'];
+            const isValidTrade = validTradeModules.includes(currentTrade as TradeModule);
+            const spec = isValidTrade ? getTradeSpec(currentTrade as TradeModule) : null;
+            if (!spec) return null;
+            const accentStyle = { backgroundColor: spec.accentHex + '22', borderColor: spec.accentHex + '55', color: spec.accentHex };
+            return (
+              <div className="flex justify-center mb-4">
+                <span
+                  className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold border"
+                  style={accentStyle}
+                >
+                  <Layers size={14} />
+                  Trade Module: {spec.name}
+                </span>
+              </div>
+            );
+          })()}
 
           <div className="inline-flex items-center gap-6 text-sm text-slate-400 bg-slate-800/40 px-8 py-3 rounded-lg border border-slate-700/50">
             <div>

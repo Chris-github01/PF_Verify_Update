@@ -1,3 +1,6 @@
+import { getTradeSpec } from '../tradeSpec';
+import type { TradeModule } from '../tradeSpec/types';
+
 export interface LineItem {
   description: string;
   service: string;
@@ -1878,8 +1881,29 @@ function getActiveFireRisks() {
   ];
 }
 
+const VALID_SENIOR_TRADES: TradeModule[] = ['passive_fire', 'electrical', 'active_fire', 'hvac', 'plumbing', 'carpentry'];
+
 export function getDefaultSeniorReportData(trade?: string): Partial<SeniorReportData> {
-  // Determine risks based on trade
+  if (trade && VALID_SENIOR_TRADES.includes(trade as TradeModule)) {
+    const spec = getTradeSpec(trade as TradeModule);
+    const risks = spec.riskRegister.map(r => ({
+      category: r.category,
+      description: r.risk,
+      mitigation: r.mitigation,
+      severity: (r.impact === 'critical' ? 'high' : r.impact) as 'high' | 'medium' | 'low'
+    }));
+    return {
+      keyTerms: [
+        { term: 'Payment Terms', value: '20th following month, 22 working days' },
+        { term: 'Retention', value: '3% standard retention held until practical completion' },
+        { term: 'Liquidated Damages', value: 'None specified - back-to-back with head contract' },
+        { term: 'Variations', value: 'Rate-based as per schedule of rates' },
+        { term: 'Insurance', value: 'Public liability $10M, Professional indemnity as required' }
+      ],
+      risks
+    };
+  }
+
   let risks;
 
   if (trade === 'electrical') {

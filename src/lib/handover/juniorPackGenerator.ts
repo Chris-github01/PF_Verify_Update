@@ -1,3 +1,6 @@
+import { getTradeSpec } from '../tradeSpec';
+import type { TradeModule } from '../tradeSpec/types';
+
 export interface LineItem {
   description: string;
   service: string;
@@ -1367,8 +1370,25 @@ function getActiveFireChecklists() {
   ];
 }
 
+const VALID_TRADE_MODULES: TradeModule[] = ['passive_fire', 'electrical', 'active_fire', 'hvac', 'plumbing', 'carpentry'];
+
 export function getDefaultJuniorPackData(trade?: string): Partial<JuniorPackData> {
-  // Determine checklists based on trade
+  if (trade && VALID_TRADE_MODULES.includes(trade as TradeModule)) {
+    const spec = getTradeSpec(trade as TradeModule);
+    const checklists = spec.checklistPhases.map(phase => ({
+      title: phase.title,
+      items: phase.items.map(item => item.text)
+    }));
+    return {
+      safetyNotes: [
+        'All personnel must complete site induction before commencing work',
+        'Use appropriate PPE: Hard hat, safety glasses, high-vis vest, safety boots',
+        `Follow all ${spec.name} standards and manufacturer requirements`
+      ],
+      checklists
+    };
+  }
+
   let checklists;
   let safetyNote = 'Follow manufacturer\'s instructions for all fire protection materials';
 
