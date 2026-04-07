@@ -855,7 +855,7 @@ Deno.serve(async (req: Request) => {
     // ✅ Extract document total from chunk text
     // Try ALL chunks (not just last) since Grand Total could be anywhere
     let documentTotal: number | null = null;
-    if (allCompletedChunks.data && allCompletedChunks.data.length > 0) {
+    if (allCompletedChunksRaw.data && allCompletedChunksRaw.data.length > 0) {
       const allChunksText = await supabase
         .from("parsing_chunks")
         .select("chunk_text, chunk_number")
