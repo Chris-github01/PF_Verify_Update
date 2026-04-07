@@ -19,6 +19,9 @@ interface SupplierRow {
   rank: number;
   supplierName: string;
   adjustedTotal: number;
+  comparablePrice?: number;
+  comparisonMode?: 'FULLY_ITEMISED' | 'PARTIAL_BREAKDOWN' | 'LUMP_SUM';
+  confidenceScore?: number;
   riskScore: number;
   coveragePercent: number;
   itemsQuoted: number;
@@ -42,6 +45,7 @@ interface ScoringWeightsForPdf {
   compliance: number;
   coverage: number;
   risk: number;
+  confidence?: number;
 }
 
 interface ModernPdfOptions {
@@ -242,10 +246,21 @@ function pageExecutiveDecision(opts: ModernPdfOptions): string {
   const snapshotRows = opts.suppliers.slice(0, 4).map(s => {
     const projTotal = s.projectedTotal ?? s.adjustedTotal;
     const varExp = s.variationExposureValue;
+    const modeLabel = s.comparisonMode === 'FULLY_ITEMISED' ? 'Detailed'
+      : s.comparisonMode === 'PARTIAL_BREAKDOWN' ? 'Partial'
+      : s.comparisonMode === 'LUMP_SUM' ? 'Lump Sum' : '';
+    const modeBg = s.comparisonMode === 'FULLY_ITEMISED' ? GREEN_BG
+      : s.comparisonMode === 'PARTIAL_BREAKDOWN' ? AMBER_BG : LIGHT_BG;
+    const modeColor = s.comparisonMode === 'FULLY_ITEMISED' ? GREEN
+      : s.comparisonMode === 'PARTIAL_BREAKDOWN' ? AMBER : MUTED;
+    const comparableDisplay = s.comparablePrice != null ? fmt(s.comparablePrice) : fmt(s.adjustedTotal);
     return `<tr style="border-bottom:1px solid ${BORDER};">
-      <td style="padding:10px 12px;font-weight:600;color:${DARK};font-size:13px;">${s.supplierName}</td>
-      <td style="padding:10px 12px;text-align:right;font-weight:700;color:${DARK};font-size:13px;">${fmt(s.adjustedTotal)}</td>
-      <td style="padding:10px 12px;text-align:right;font-weight:700;color:${s.adjustedTotal !== projTotal ? AMBER : GREEN};font-size:13px;">${fmt(projTotal)}</td>
+      <td style="padding:10px 12px;font-weight:600;color:${DARK};font-size:13px;">
+        <div>${s.supplierName}</div>
+        ${modeLabel ? `<span style="display:inline-block;margin-top:3px;padding:2px 7px;border-radius:3px;background:${modeBg};color:${modeColor};font-size:9px;font-weight:700;text-transform:uppercase;">${modeLabel}</span>` : ''}
+      </td>
+      <td style="padding:10px 12px;text-align:right;font-weight:600;color:${MUTED};font-size:12px;">${fmt(s.adjustedTotal)}</td>
+      <td style="padding:10px 12px;text-align:right;font-weight:700;color:${GREEN};font-size:13px;">${comparableDisplay}</td>
       <td style="padding:10px 12px;text-align:right;font-size:13px;color:${varExp && varExp > 0 ? RED : MUTED};">${varExp !== undefined ? fmt(varExp) : '—'}</td>
       <td style="padding:10px 12px;text-align:center;">
         <span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;background:${s.rank === 1 ? GREEN_BG : LIGHT_BG};color:${s.rank === 1 ? GREEN : MUTED};">
@@ -269,7 +284,8 @@ function pageExecutiveDecision(opts: ModernPdfOptions): string {
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:${MUTED};margin-bottom:8px;">Commercial Position</div>
         <div style="font-size:16px;font-weight:800;color:${posText};margin-bottom:${top ? '14px' : '0'};">${posLabel}</div>
         ${top ? `<div style="font-size:24px;font-weight:800;color:${DARK};">${top.supplierName}</div>
-        <div style="font-size:13px;color:${MUTED};margin-top:6px;">Quoted total: <strong style="color:${DARK};">${fmt(top.adjustedTotal)}</strong></div>` : ''}
+        <div style="font-size:13px;color:${MUTED};margin-top:6px;">Comparable price: <strong style="color:${GREEN};">${fmt(top.comparablePrice ?? top.adjustedTotal)}</strong></div>
+        ${top.comparablePrice != null && top.comparablePrice !== top.adjustedTotal ? `<div style="font-size:11px;color:${MUTED};margin-top:2px;">Quoted total: ${fmt(top.adjustedTotal)}</div>` : ''}` : ''}
       </div>
       <div style="background:${LIGHT_BG};border:1px solid ${BORDER};border-radius:10px;padding:24px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:${MUTED};margin-bottom:16px;">Key Metrics</div>
@@ -306,7 +322,7 @@ function pageExecutiveDecision(opts: ModernPdfOptions): string {
           <tr>
             <th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Tenderer</th>
             <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Quoted Total</th>
-            <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Projected Final</th>
+            <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Comparable Price</th>
             <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Variation Exposure</th>
             <th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;color:${MUTED};text-transform:uppercase;letter-spacing:0.5px;">Rank</th>
           </tr>
@@ -330,15 +346,25 @@ function pageCommercialComparison(opts: ModernPdfOptions): string {
     const rColor = riskColor(s.riskScore, maxRisk);
     const rLabel = riskLabel(s.riskScore, maxRisk);
     const isTop = s.rank === 1;
+    const modeLabel = s.comparisonMode === 'FULLY_ITEMISED' ? 'Detailed'
+      : s.comparisonMode === 'PARTIAL_BREAKDOWN' ? 'Partial'
+      : s.comparisonMode === 'LUMP_SUM' ? 'Lump Sum' : '—';
+    const modeBg = s.comparisonMode === 'FULLY_ITEMISED' ? GREEN_BG
+      : s.comparisonMode === 'PARTIAL_BREAKDOWN' ? AMBER_BG : LIGHT_BG;
+    const modeColor = s.comparisonMode === 'FULLY_ITEMISED' ? GREEN
+      : s.comparisonMode === 'PARTIAL_BREAKDOWN' ? AMBER : MUTED;
+    const comparableDisplay = s.comparablePrice != null ? fmt(s.comparablePrice) : fmt(s.adjustedTotal);
+    const isAdjusted = s.comparablePrice != null && s.comparablePrice !== s.adjustedTotal;
 
     const drivers: string[] = [];
     if (isTop) drivers.push('Highest composite score');
     if (s.coveragePercent >= 90) drivers.push('Full scope coverage');
-    else if (s.coveragePercent < 70) drivers.push(`Scope coverage gap (${pct(s.coveragePercent)})`);
+    else if (s.coveragePercent < 70 && s.comparisonMode !== 'LUMP_SUM') drivers.push(`Scope coverage gap (${pct(s.coveragePercent)})`);
     if (s.riskScore === 0) drivers.push('No risk factors identified');
     else if (rLabel === 'High') drivers.push(`High risk classification (${s.riskScore} factors)`);
     if (s.variationExposurePct !== undefined && s.variationExposurePct > 0.1) drivers.push(`Elevated variation exposure (${pct(s.variationExposurePct * 100)})`);
     if (s.underallowanceFlag) drivers.push('Quantity under-allowance flagged');
+    if (s.comparisonMode === 'LUMP_SUM') drivers.push('Lump sum — price is scope-adjusted');
 
     return `<tr style="border-bottom:1px solid ${BORDER};${isTop ? `background:linear-gradient(90deg,${GREEN_BG} 0%,transparent 40%);` : ''}">
       <td style="padding:12px 14px;font-weight:700;color:${DARK};font-size:13px;">
@@ -346,13 +372,18 @@ function pageCommercialComparison(opts: ModernPdfOptions): string {
           <span style="display:inline-block;width:26px;height:26px;border-radius:5px;background:${isTop ? GREEN : '#e5e7eb'};color:${isTop ? 'white' : MID};font-size:11px;font-weight:700;text-align:center;line-height:26px;">${s.rank}</span>
           <span>${s.supplierName}</span>
         </div>
+        <span style="display:inline-block;margin-top:4px;padding:2px 7px;border-radius:3px;background:${modeBg};color:${modeColor};font-size:9px;font-weight:700;text-transform:uppercase;">${modeLabel}</span>
       </td>
-      <td style="padding:12px 14px;text-align:right;font-weight:700;font-size:14px;color:${DARK};">${fmt(s.adjustedTotal)}</td>
+      <td style="padding:12px 14px;text-align:right;font-size:12px;color:${MUTED};">${fmt(s.adjustedTotal)}</td>
+      <td style="padding:12px 14px;text-align:right;font-weight:700;font-size:14px;color:${GREEN};">
+        ${comparableDisplay}
+        ${isAdjusted ? `<div style="font-size:9px;color:${MUTED};font-weight:400;">scope-adjusted</div>` : ''}
+      </td>
       <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:13px;color:${rColor};">${rLabel}</td>
-      <td style="padding:12px 14px;text-align:center;font-weight:700;color:${s.coveragePercent >= 85 ? GREEN : AMBER};font-size:13px;">${pct(s.coveragePercent)}</td>
+      <td style="padding:12px 14px;text-align:center;font-weight:700;color:${s.coveragePercent >= 85 ? GREEN : AMBER};font-size:13px;">${s.comparisonMode === 'LUMP_SUM' ? '<span style="color:#9ca3af;">N/A</span>' : pct(s.coveragePercent)}</td>
       <td style="padding:12px 14px;text-align:center;font-weight:700;font-size:14px;color:${DARK};">${s.weightedScore !== undefined ? `${Math.round(s.weightedScore)}/100` : '—'}</td>
-      <td style="padding:12px 14px;font-size:12px;color:${MID};max-width:200px;">
-        ${drivers.length > 0 ? drivers.slice(0, 2).map(d => `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;"><span style="color:${ORANGE};font-weight:700;flex-shrink:0;">&#8250;</span>${d}</div>`).join('') : '<span style="color:${MUTED};">—</span>'}
+      <td style="padding:12px 14px;font-size:12px;color:${MID};max-width:180px;">
+        ${drivers.length > 0 ? drivers.slice(0, 2).map(d => `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;"><span style="color:${ORANGE};font-weight:700;flex-shrink:0;">&#8250;</span>${d}</div>`).join('') : '<span style="color:#9ca3af;">—</span>'}
       </td>
     </tr>`;
   }).join('');
@@ -362,8 +393,8 @@ function pageCommercialComparison(opts: ModernPdfOptions): string {
     ${sectionTitle('2', 'Commercial Comparison')}
 
     <div style="background:${LIGHT_BG};border:1px solid ${BORDER};border-radius:8px;padding:14px 18px;margin-bottom:20px;font-size:12px;color:${MID};line-height:1.7;">
-      Composite Score is calculated using: Price <strong>${weights.price}%</strong>, Coverage <strong>${weights.coverage}%</strong>, Compliance <strong>${weights.compliance}%</strong>, Risk <strong>${weights.risk}%</strong>.
-      Higher scores indicate stronger commercial and technical position.
+      Composite Score is calculated using: Price <strong>${weights.price}%</strong>, Compliance <strong>${weights.compliance}%</strong>, Coverage <strong>${weights.coverage}%</strong>, Risk <strong>${weights.risk}%</strong>, Confidence <strong>${weights.confidence ?? 15}%</strong>.
+      Comparable Price is scope-adjusted for apples-to-apples comparison. Higher scores indicate stronger commercial and technical position.
     </div>
 
     <div style="border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:28px;">
@@ -372,6 +403,7 @@ function pageCommercialComparison(opts: ModernPdfOptions): string {
           <tr>
             <th style="padding:12px 14px;text-align:left;font-size:10px;font-weight:700;color:white;text-transform:uppercase;letter-spacing:0.5px;">Tenderer</th>
             <th style="padding:12px 14px;text-align:right;font-size:10px;font-weight:700;color:white;text-transform:uppercase;letter-spacing:0.5px;">Quoted Total</th>
+            <th style="padding:12px 14px;text-align:right;font-size:10px;font-weight:700;color:white;text-transform:uppercase;letter-spacing:0.5px;">Comparable Price</th>
             <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;color:white;text-transform:uppercase;letter-spacing:0.5px;">Risk Level</th>
             <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;color:white;text-transform:uppercase;letter-spacing:0.5px;">Scope Coverage</th>
             <th style="padding:12px 14px;text-align:center;font-size:10px;font-weight:700;color:white;text-transform:uppercase;letter-spacing:0.5px;">Composite Score</th>
@@ -499,16 +531,26 @@ function pageScopeIntelligence(opts: ModernPdfOptions): string {
   );
 
   const coverageRows = opts.suppliers.map(s => {
+    const isLumpSum = s.comparisonMode === 'LUMP_SUM';
     const barWidth = Math.round(s.coveragePercent);
     const barColor = s.coveragePercent >= 85 ? GREEN : s.coveragePercent >= 70 ? AMBER : RED;
+    const modeLabel = s.comparisonMode === 'FULLY_ITEMISED' ? 'Detailed'
+      : s.comparisonMode === 'PARTIAL_BREAKDOWN' ? 'Partial'
+      : s.comparisonMode === 'LUMP_SUM' ? 'Lump Sum' : '';
     return `<tr style="border-bottom:1px solid ${BORDER};">
-      <td style="padding:12px 14px;font-weight:600;color:${DARK};font-size:13px;">${s.supplierName}</td>
-      <td style="padding:12px 14px;text-align:center;font-weight:700;color:${barColor};font-size:13px;">${pct(s.coveragePercent)}</td>
-      <td style="padding:12px 14px;text-align:center;font-size:12px;color:${MID};">${s.itemsQuoted} / ${s.totalItems}</td>
+      <td style="padding:12px 14px;font-weight:600;color:${DARK};font-size:13px;">
+        <div>${s.supplierName}</div>
+        ${modeLabel ? `<span style="display:inline-block;margin-top:3px;padding:2px 7px;border-radius:3px;background:${isLumpSum ? LIGHT_BG : s.comparisonMode === 'FULLY_ITEMISED' ? GREEN_BG : AMBER_BG};color:${isLumpSum ? MUTED : s.comparisonMode === 'FULLY_ITEMISED' ? GREEN : AMBER};font-size:9px;font-weight:700;text-transform:uppercase;">${modeLabel}</span>` : ''}
+      </td>
+      <td style="padding:12px 14px;text-align:center;font-weight:700;color:${isLumpSum ? MUTED : barColor};font-size:13px;">${isLumpSum ? 'N/A' : pct(s.coveragePercent)}</td>
+      <td style="padding:12px 14px;text-align:center;font-size:12px;color:${MID};">${isLumpSum ? '—' : `${s.itemsQuoted} / ${s.totalItems}`}</td>
       <td style="padding:12px 14px;">
-        <div style="background:${BORDER};border-radius:3px;height:8px;width:100%;overflow:hidden;">
-          <div style="background:${barColor};height:100%;width:${barWidth}%;border-radius:3px;"></div>
-        </div>
+        ${isLumpSum
+          ? `<span style="font-size:11px;color:${MUTED};font-style:italic;">Not applicable for lump sum quotes</span>`
+          : `<div style="background:${BORDER};border-radius:3px;height:8px;width:100%;overflow:hidden;">
+               <div style="background:${barColor};height:100%;width:${barWidth}%;border-radius:3px;"></div>
+             </div>`
+        }
       </td>
     </tr>`;
   }).join('');

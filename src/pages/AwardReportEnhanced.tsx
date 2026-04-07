@@ -476,13 +476,16 @@ export default function AwardReportEnhanced({
       ['Client:', currentProject.client || 'N/A'],
       ['Generated:', new Date().toLocaleString()],
       [],
-      ['Supplier', 'Rank', 'Weighted Score', 'Total Price', 'Coverage %', 'Risk Score'],
+      ['Supplier', 'Rank', 'Quote Type', 'Weighted Score', 'Raw Price', 'Comparable Price', 'Coverage %', 'Confidence Score', 'Risk Score'],
       ...enhancedSuppliers.map(s => [
         s.supplierName,
         s.rank,
+        s.comparisonMode === 'FULLY_ITEMISED' ? 'Detailed' : s.comparisonMode === 'PARTIAL_BREAKDOWN' ? 'Partial' : 'Lump Sum',
         s.weightedTotal.toFixed(1),
         s.totalPrice,
-        s.coveragePercent.toFixed(1),
+        s.comparablePrice,
+        s.comparisonMode === 'LUMP_SUM' ? 'N/A' : s.coveragePercent.toFixed(1) + '%',
+        s.confidenceScore.toFixed(0) + '/10',
         s.riskMitigationScore.toFixed(1),
       ]),
     ];
@@ -772,10 +775,13 @@ export default function AwardReportEnhanced({
       }
 
       // Transform suppliers to match PDF template format
-      const suppliers = enhancedSuppliers.map((s, idx) => ({
-        rank: idx + 1,
+      const suppliers = enhancedSuppliers.map((s) => ({
+        rank: s.rank,
         supplierName: s.supplierName,
         adjustedTotal: s.totalPrice,
+        comparablePrice: s.comparablePrice,
+        comparisonMode: s.comparisonMode,
+        confidenceScore: s.confidenceScore,
         riskScore: s.riskMitigationScore,
         coveragePercent: s.coveragePercent,
         itemsQuoted: s.itemsQuoted,
@@ -872,7 +878,13 @@ export default function AwardReportEnhanced({
           'Multi-Criteria Scoring'
         ],
         additionalSections,
-        scoringWeights: weights
+        scoringWeights: {
+          price: weights.price,
+          compliance: weights.compliance,
+          coverage: weights.coverage,
+          risk: weights.risk,
+          confidence: weights.confidence
+        }
       });
 
       const filename = `Award_Report_${currentProject.name.replace(/[^a-z0-9]/gi, '_')}`;
