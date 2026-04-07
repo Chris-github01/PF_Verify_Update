@@ -39,22 +39,32 @@ function extractPlumbingLevelTable(text: string): any[] {
    */
   /**
    * Parse the SUM column from a number run that may have PDF space-split artifacts.
-   * Examples: "21600 20 540 10490 8860 6 1490" → last real number is 61490
+   * Examples: "21600 20540 10490 8860 6 1490" → last real number is 61490
    *           "35020 43415 21760 28680 128875" → last number is 128875
    *           "545660 568378 148050 108540 140470 1511 33 8" → last number is 1511338
    *
-   * Strategy: scan tokens right-to-left, greedily merging adjacent short digit tokens
-   * (1-4 digits) into a candidate number, stop when the candidate >= 1000 (a valid total).
+   * Strategy: scan tokens right-to-left, always merging the preceding token when it is
+   * a short fragment (1-2 digits), because a short leading token is a PDF split artifact.
+   * Continue until the preceding token is long (≥3 digits), which means it is a real
+   * separate column value and not a fragment of the SUM.
    */
   function parseSumFromNumberRun(raw: string): number {
     const tokens = raw.trim().replace(/,/g, '').split(/\s+/).filter(t => /^\d+$/.test(t));
     if (tokens.length === 0) return 0;
 
-    // Walk right-to-left merging tokens greedily until we get a value >= 1000
     let i = tokens.length - 1;
     let candidate = tokens[i];
     let val = parseFloat(candidate);
 
+    // Always merge when the preceding token is a short fragment (1-2 digits) — those
+    // are PDF split artifacts and never represent a real separate column value.
+    while (i > 0 && tokens[i - 1].length <= 2) {
+      i--;
+      candidate = tokens[i] + candidate;
+      val = parseFloat(candidate);
+    }
+
+    // If we still haven't reached >= 1000, keep merging until we do
     while (val < 1000 && i > 0) {
       i--;
       candidate = tokens[i] + candidate;

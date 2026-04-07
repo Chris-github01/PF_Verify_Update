@@ -608,6 +608,34 @@ Return JSON: {"items": [{"description": "...", "qty": 10, "unit": "ea", "rate": 
 }
 
 /**
+ * Parse the SUM column from an array of number tokens that may contain PDF split artifacts.
+ * e.g. ["21600","20540","10490","8860","6","1490"] → 61490 (not 1490)
+ *
+ * A short preceding token (1-2 digits) is always a fragment of the number to its right,
+ * never a real separate column value. Merge these right-to-left before returning.
+ */
+function parseSumFromTokens(numbers: string[]): number {
+  const tokens = numbers.map(n => n.replace(/,/g, ''));
+  let i = tokens.length - 1;
+  let candidate = tokens[i];
+  let val = parseFloat(candidate);
+
+  while (i > 0 && tokens[i - 1].length <= 2) {
+    i--;
+    candidate = tokens[i] + candidate;
+    val = parseFloat(candidate);
+  }
+
+  while (val < 1000 && i > 0) {
+    i--;
+    candidate = tokens[i] + candidate;
+    val = parseFloat(candidate);
+  }
+
+  return val >= 1000 ? val : 0;
+}
+
+/**
  * Regex fallback: extract level-based pricing table rows from plumbing quotes.
  * Used when the LLM returns 0 items on a plumbing quote.
  *
@@ -643,9 +671,9 @@ function extractPlumbingLevelTable(text: string): LineItem[] {
     const numbers = numberStr.match(/[\d,]+(?:\.\d+)?/g);
     if (!numbers || numbers.length < 1) continue;
 
-    // The last number is the SUM column
-    const sumStr = numbers[numbers.length - 1].replace(/,/g, '');
-    const sumVal = parseFloat(sumStr);
+    // The last number is the SUM column — but PDF extractors may split a number like
+    // "61490" into two tokens "6" and "1490". Merge short leading fragments right-to-left.
+    const sumVal = parseSumFromTokens(numbers);
     if (!sumVal || sumVal < 1000) continue;
 
     // Deduplicate by label

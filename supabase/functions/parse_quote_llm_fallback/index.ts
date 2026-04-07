@@ -45,6 +45,34 @@ interface ParseResponse {
 }
 
 /**
+ * Parse the SUM column from an array of number tokens that may contain PDF split artifacts.
+ * e.g. ["21600","20540","10490","8860","6","1490"] → 61490 (not 1490)
+ *
+ * A short preceding token (1-2 digits) is always a fragment of the number to its right,
+ * never a real separate column value. Merge these right-to-left before returning.
+ */
+function parseSumFromTokens(numbers: string[]): number {
+  const tokens = numbers.map(n => n.replace(/,/g, ''));
+  let i = tokens.length - 1;
+  let candidate = tokens[i];
+  let val = parseFloat(candidate);
+
+  while (i > 0 && tokens[i - 1].length <= 2) {
+    i--;
+    candidate = tokens[i] + candidate;
+    val = parseFloat(candidate);
+  }
+
+  while (val < 1000 && i > 0) {
+    i--;
+    candidate = tokens[i] + candidate;
+    val = parseFloat(candidate);
+  }
+
+  return val >= 1000 ? val : 0;
+}
+
+/**
  * Regex fallback: extract level-based pricing table rows from plumbing quotes.
  * Handles formats like:
  *   "LOWER GROUND LEVEL  13800  15355  1760  7620  32000  70535"
@@ -71,9 +99,8 @@ function extractPlumbingLevelTable(text: string): LineItem[] {
     const numbers = line.match(/[\d,]+(?:\.\d+)?/g);
     if (!numbers || numbers.length < 1) continue;
 
-    const sumStr = numbers[numbers.length - 1].replace(/,/g, '');
-    const sumVal = parseFloat(sumStr);
-    if (!sumVal || sumVal <= 0 || sumVal < 1000) continue;
+    const sumVal = parseSumFromTokens(numbers);
+    if (!sumVal || sumVal < 1000) continue;
 
     // Build a clean description from the level label
     const rawLabel = levelMatch[0].trim();
