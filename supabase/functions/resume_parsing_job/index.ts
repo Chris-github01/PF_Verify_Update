@@ -32,6 +32,35 @@ function extractPlumbingLevelTable(text: string): any[] {
   const seen = new Set<string>();
   let match: RegExpExecArray | null;
 
+  /**
+   * PDF extractors often split a single number across spaces, e.g. "61 490" instead of "61490"
+   * or "1 234 567" instead of "1234567". This function collapses runs of short digit tokens
+   * (1–3 digits) that are separated by a single space into one number, then picks the last value.
+   */
+  function parseSumFromNumberRun(raw: string): number {
+    const tokens = raw.trim().split(/\s+/);
+    const grouped: string[] = [];
+    let i = 0;
+    while (i < tokens.length) {
+      const tok = tokens[i].replace(/,/g, '');
+      // If this token is 1-3 digits and the NEXT token is also 1-3 digits (thousands group),
+      // they might be parts of a space-split number. Collapse them.
+      if (/^\d{1,3}$/.test(tok) && i + 1 < tokens.length && /^\d{3}$/.test(tokens[i + 1].replace(/,/g, ''))) {
+        let merged = tok;
+        while (i + 1 < tokens.length && /^\d{3}$/.test(tokens[i + 1].replace(/,/g, ''))) {
+          merged += tokens[i + 1].replace(/,/g, '');
+          i++;
+        }
+        grouped.push(merged);
+      } else {
+        grouped.push(tok);
+      }
+      i++;
+    }
+    const last = grouped[grouped.length - 1];
+    return parseFloat(last.replace(/,/g, '')) || 0;
+  }
+
   while ((match = LEVEL_RE.exec(flat)) !== null) {
     const rawLabel = match[1].trim();
     if (/^levels?\s*$/i.test(rawLabel)) continue;
@@ -39,7 +68,7 @@ function extractPlumbingLevelTable(text: string): any[] {
     const numbers = match[2].trim().match(/[\d,]+(?:\.\d+)?/g);
     if (!numbers || numbers.length < 1) continue;
 
-    const sumVal = parseFloat(numbers[numbers.length - 1].replace(/,/g, ''));
+    const sumVal = parseSumFromNumberRun(match[2].trim());
     if (!sumVal || sumVal < 1000) continue;
 
     const labelKey = rawLabel.toLowerCase().replace(/\s+/g, ' ');
