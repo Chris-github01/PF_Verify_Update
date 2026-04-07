@@ -1,36 +1,55 @@
 /**
  * Enhanced Award Report Calculations and Utilities
  * Provides advanced metrics, visuals data, and scoring for QS/Commercial Director reports
+ *
+ * COMPARISON MODE LOGIC:
+ * Suppliers are classified by how much of the scope they've itemised:
+ *   FULLY_ITEMISED  → itemised coverage > 70%
+ *   PARTIAL_BREAKDOWN → 20–70%
+ *   LUMP_SUM        → < 20%
+ *
+ * This drives price normalisation, confidence scoring, and hard ranking rules.
  */
+
+export type ComparisonMode = 'FULLY_ITEMISED' | 'PARTIAL_BREAKDOWN' | 'LUMP_SUM';
 
 export interface EnhancedSupplierMetrics {
   supplierName: string;
   totalPrice: number;
-  systemsCovered: number; // CRITICAL: This is total QUANTITY (sum of all quantities), NOT line items count
+  systemsCovered: number;
   totalSystems: number;
   coveragePercent: number;
   quoteId?: string;
-  itemsQuoted?: number; // Number of line items (for reference only)
+  itemsQuoted?: number;
 
-  // NEW: Normalized metrics
-  normalizedPricePerSystem: number; // Price divided by total QUANTITY (systemsCovered)
-  variancePercent: number; // vs. average price
+  // Comparison mode classification
+  comparisonMode: ComparisonMode;
+
+  // Comparable price (scope-adjusted for apples-to-apples comparison)
+  comparablePrice: number;
+
+  // Confidence in the price comparison (0-10)
+  confidenceScore: number;
+
+  // Normalized metrics
+  normalizedPricePerSystem: number;
+  variancePercent: number;  // vs. FULLY_ITEMISED median benchmark
   varianceFromLowest: number;
 
-  // NEW: Risk scoring (0-10 where HIGHER is better for display)
-  rawRiskScore: number; // Original count of missing items (lower = better)
-  riskMitigationScore: number; // 10 - (rawRiskScore normalized) for display
+  // Risk scoring (0-10 where HIGHER is better)
+  rawRiskScore: number;
+  riskMitigationScore: number;
 
-  // NEW: Detailed scores (0-10)
-  priceScore: number; // 10 = cheapest, 0 = most expensive
-  complianceScore: number; // Based on risk factors
-  coverageScore: number; // Based on % covered
-  riskScore: number; // Based on gaps/missing items
+  // Detailed scores (0-10)
+  priceScore: number;
+  complianceScore: number;
+  coverageScore: number;
+  riskScore: number;
 
-  // NEW: Weighted total (0-100)
+  // Weighted total (0-100)
   weightedTotal: number;
 
-  // Coverage breakdown by major systems for pie chart
+  // Coverage breakdown by major systems for chart
   systemsBreakdown: Array<{
     category: string;
     count: number;
@@ -60,104 +79,156 @@ export interface EnhancedSupplierMetrics {
 }
 
 export interface ScoringWeights {
-  price: number; // Default: 40%
-  compliance: number; // Default: 25%
-  coverage: number; // Default: 20%
-  risk: number; // Default: 15%
+  price: number;       // Default: 35%
+  compliance: number;  // Default: 20%
+  coverage: number;    // Default: 15%
+  risk: number;        // Default: 15%
+  confidence: number;  // Default: 15%
 }
 
 export const DEFAULT_WEIGHTS: ScoringWeights = {
-  price: 40,
-  compliance: 25,
-  coverage: 20,
+  price: 35,
+  compliance: 20,
+  coverage: 15,
   risk: 15,
+  confidence: 15,
 };
 
 /**
- * Calculate normalized price per unit/quantity
- * CRITICAL: systemsCovered should be the SUM of all quantities, NOT the count of line items
- * Example: If quote has 3 line items with quantities [100, 50, 25], systemsCovered = 175
+ * Determine comparison mode from coverage percentage.
+ * Uses the itemised coverage to classify how thoroughly a supplier has broken down their price.
  */
-export function calculateNormalizedPrice(totalPrice: number, systemsCovered: number): number {
-  if (systemsCovered === 0) return 0;
-  return totalPrice / systemsCovered;
+export function determineComparisonMode(coveragePercent: number): ComparisonMode {
+  if (coveragePercent > 70) return 'FULLY_ITEMISED';
+  if (coveragePercent >= 20) return 'PARTIAL_BREAKDOWN';
+  return 'LUMP_SUM';
 }
 
 /**
- * Calculate variance percentage vs average
+ * Confidence score (0-10) based on comparison mode.
+ * Fully itemised quotes are fully trustworthy; lump sums carry significant pricing uncertainty.
  */
-export function calculateVariancePercent(supplierPrice: number, averagePrice: number): number {
-  if (averagePrice === 0) return 0;
-  return ((supplierPrice - averagePrice) / averagePrice) * 100;
+export function calculateConfidenceScore(mode: ComparisonMode): number {
+  switch (mode) {
+    case 'FULLY_ITEMISED':    return 10;
+    case 'PARTIAL_BREAKDOWN': return 7;
+    case 'LUMP_SUM':          return 4;
+  }
 }
 
 /**
- * Calculate price score (0-10, where 10 = cheapest)
- * Uses inverse linear scaling
+ * Calculate comparable price — scope-adjusted so all suppliers are measured on the same basis.
+ *
+ * FULLY_ITEMISED:    use normalized BOQ total (no adjustment needed)
+ * PARTIAL_BREAKDOWN: use adjusted total from equalisation (already scope-adjusted by caller)
+ *                    — if no equalisation available, apply same scopeFactor logic
+ * LUMP_SUM:          apply scopeFactor = average coverage of FULLY_ITEMISED suppliers
+ *                    comparablePrice = totalPrice × scopeFactor
  */
-export function calculatePriceScore(price: number, lowestPrice: number, highestPrice: number): number {
-  // Edge case: if all prices are the same, everyone gets full marks
-  if (highestPrice === lowestPrice) return 10;
+export function calculateComparablePrice(
+  totalPrice: number,
+  mode: ComparisonMode,
+  scopeFactor: number
+): number {
+  switch (mode) {
+    case 'FULLY_ITEMISED':
+      return totalPrice;
+    case 'PARTIAL_BREAKDOWN':
+      // Apply a partial adjustment — halfway between raw and fully normalised
+      return totalPrice * ((1 + scopeFactor) / 2);
+    case 'LUMP_SUM':
+      return totalPrice * scopeFactor;
+  }
+}
 
-  // Edge case: if price is lowest, give full marks
-  if (price === lowestPrice) return 10;
+/**
+ * Calculate variance against the FULLY_ITEMISED median benchmark.
+ * Falls back to average of all comparablePrices if no fully itemised suppliers exist.
+ */
+export function calculateVariancePercent(supplierComparablePrice: number, benchmark: number): number {
+  if (benchmark === 0) return 0;
+  return ((supplierComparablePrice - benchmark) / benchmark) * 100;
+}
 
-  // Edge case: if price is highest, give minimum score (but not zero for single item difference)
-  if (price === highestPrice && highestPrice > lowestPrice) {
-    // Give at least 2.0 if there are only minor differences
-    const range = highestPrice - lowestPrice;
-    const avgPrice = (highestPrice + lowestPrice) / 2;
-    if (range / avgPrice < 0.05) return 8; // Within 5% of average
+/**
+ * Calculate price score (0-10, where 10 = cheapest).
+ * Uses comparable prices for fair comparison, then applies mode-based confidence multiplier.
+ *
+ * Mode penalties (confidence multipliers):
+ *   FULLY_ITEMISED:    × 1.0 (no penalty)
+ *   PARTIAL_BREAKDOWN: × 0.8
+ *   LUMP_SUM:          × 0.6
+ */
+export function calculatePriceScore(
+  comparablePrice: number,
+  lowestComparablePrice: number,
+  highestComparablePrice: number,
+  mode: ComparisonMode
+): number {
+  let rawScore: number;
+
+  if (highestComparablePrice === lowestComparablePrice) {
+    rawScore = 10;
+  } else if (comparablePrice === lowestComparablePrice) {
+    rawScore = 10;
+  } else {
+    const range = highestComparablePrice - lowestComparablePrice;
+    const avgPrice = (highestComparablePrice + lowestComparablePrice) / 2;
+    if (comparablePrice === highestComparablePrice && range / avgPrice < 0.05) {
+      rawScore = 8;
+    } else {
+      const normalized = (comparablePrice - lowestComparablePrice) / range;
+      rawScore = Math.max(0, 10 - (normalized * 10));
+    }
   }
 
-  const normalized = (price - lowestPrice) / (highestPrice - lowestPrice);
-  return Math.max(0, 10 - (normalized * 10));
+  // Apply mode-based confidence multiplier
+  const multiplier = mode === 'FULLY_ITEMISED' ? 1.0
+    : mode === 'PARTIAL_BREAKDOWN' ? 0.8
+    : 0.6;
+
+  return rawScore * multiplier;
 }
 
 /**
- * Calculate compliance score (0-10)
- * Based on risk factors and quality indicators
+ * Calculate compliance score (0-10).
+ * Based on missing scope items relative to the worst performer.
+ * Gentler formula than risk — can only drop to 5 (suppliers always partially pass).
  */
 export function calculateComplianceScore(rawRiskScore: number, maxRisk: number): number {
-  // Edge case: no risk anywhere, everyone gets full marks
   if (maxRisk === 0) return 10;
-
-  // Edge case: if this supplier has no missing items, full marks
   if (rawRiskScore === 0) return 10;
 
-  // Edge case: very low risk overall (1-3 items), be more lenient
   if (maxRisk <= 3) {
-    const penalty = (rawRiskScore / maxRisk) * 2; // Max 2 point penalty
+    const penalty = (rawRiskScore / maxRisk) * 2;
     return Math.max(8, 10 - penalty);
   }
 
   const normalized = Math.min(rawRiskScore / maxRisk, 1);
-  return Math.max(5, 10 - (normalized * 5)); // Cap at 50% reduction, minimum 5.0
+  return Math.max(5, 10 - (normalized * 5));
 }
 
 /**
- * Calculate coverage score (0-10)
- * Direct mapping from percentage
+ * Calculate coverage score (0-10).
+ *
+ * LUMP_SUM: fixed at 5 (can't evaluate scope completeness from a single number)
+ * Others:   direct mapping from percentage
  */
-export function calculateCoverageScore(coveragePercent: number): number {
+export function calculateCoverageScore(coveragePercent: number, mode: ComparisonMode): number {
+  if (mode === 'LUMP_SUM') return 5;
   return (coveragePercent / 100) * 10;
 }
 
 /**
- * Calculate risk mitigation score (0-10, where HIGHER is better)
- * This inverts the raw risk score for display purposes
+ * Calculate risk mitigation score (0-10, where HIGHER is better).
+ * Inverts the raw missing-items count for display.
  */
 export function calculateRiskMitigationScore(rawRiskScore: number, maxRisk: number): number {
-  // Edge case: no risk anywhere, everyone gets full marks
   if (maxRisk === 0) return 10;
-
-  // Edge case: if this supplier has no missing items, full marks
   if (rawRiskScore === 0) return 10;
 
-  // Edge case: if this supplier has the max risk but it's only a few items, don't penalize too harshly
   if (rawRiskScore === maxRisk && maxRisk <= 3) {
-    // With only 1-3 missing items max, give partial credit
-    return Math.max(7, 10 - (maxRisk * 1.5)); // Gentler penalty for small numbers
+    return Math.max(7, 10 - (maxRisk * 1.5));
   }
 
   const normalized = Math.min(rawRiskScore / maxRisk, 1);
@@ -165,22 +236,79 @@ export function calculateRiskMitigationScore(rawRiskScore: number, maxRisk: numb
 }
 
 /**
- * Calculate weighted total score (0-100)
+ * Calculate weighted total score (0-100).
+ * New formula includes confidence as a distinct criterion (15% default).
+ *
+ * weightedScore =
+ *   priceScore      × (price / 100)      × 10
+ *   complianceScore × (compliance / 100) × 10
+ *   coverageScore   × (coverage / 100)   × 10
+ *   riskScore       × (risk / 100)       × 10
+ *   confidenceScore × (confidence / 100) × 10
  */
 export function calculateWeightedTotal(
   priceScore: number,
   complianceScore: number,
   coverageScore: number,
   riskScore: number,
+  confidenceScore: number,
   weights: ScoringWeights = DEFAULT_WEIGHTS
 ): number {
   const total = (
-    (priceScore * weights.price / 100) * 10 +
-    (complianceScore * weights.compliance / 100) * 10 +
-    (coverageScore * weights.coverage / 100) * 10 +
-    (riskScore * weights.risk / 100) * 10
+    (priceScore      * weights.price       / 100) * 10 +
+    (complianceScore * weights.compliance  / 100) * 10 +
+    (coverageScore   * weights.coverage    / 100) * 10 +
+    (riskScore       * weights.risk        / 100) * 10 +
+    (confidenceScore * (weights.confidence ?? 15) / 100) * 10
   );
-  return Math.round(total * 10) / 10; // Round to 1 decimal
+  return Math.round(total * 10) / 10;
+}
+
+/**
+ * Compute the benchmark price for variance calculation.
+ * Preferred: median of FULLY_ITEMISED comparable prices.
+ * Fallback:  median of all comparable prices.
+ */
+export function computeBenchmarkPrice(
+  suppliers: Array<{ comparablePrice: number; comparisonMode: ComparisonMode }>
+): number {
+  const fullyItemised = suppliers
+    .filter(s => s.comparisonMode === 'FULLY_ITEMISED')
+    .map(s => s.comparablePrice);
+
+  const prices = fullyItemised.length > 0
+    ? fullyItemised
+    : suppliers.map(s => s.comparablePrice);
+
+  if (prices.length === 0) return 0;
+
+  const sorted = [...prices].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Compute the scope factor used to normalise lump sum / partial quotes.
+ * = average coverage % of FULLY_ITEMISED suppliers (as a decimal, e.g. 0.95)
+ * Falls back to 1.0 if no fully itemised suppliers exist.
+ */
+export function computeScopeFactor(
+  suppliers: Array<{ coveragePercent: number; comparisonMode: ComparisonMode }>
+): number {
+  const fullyItemised = suppliers.filter(s => s.comparisonMode === 'FULLY_ITEMISED');
+  if (fullyItemised.length === 0) return 1.0;
+  const avg = fullyItemised.reduce((sum, s) => sum + s.coveragePercent, 0) / fullyItemised.length;
+  return avg / 100;
+}
+
+/**
+ * Calculate normalized price per unit/quantity
+ */
+export function calculateNormalizedPrice(totalPrice: number, systemsCovered: number): number {
+  if (systemsCovered === 0) return 0;
+  return totalPrice / systemsCovered;
 }
 
 /**
@@ -200,14 +328,14 @@ export function generateSystemsBreakdown(
   });
 
   const colors = [
-    '#10b981', // green
-    '#3b82f6', // blue
-    '#f59e0b', // orange
-    '#8b5cf6', // purple
-    '#ef4444', // red
-    '#06b6d4', // cyan
-    '#f97316', // deep orange
-    '#6366f1', // indigo
+    '#10b981',
+    '#3b82f6',
+    '#f59e0b',
+    '#06b6d4',
+    '#ef4444',
+    '#f97316',
+    '#84cc16',
+    '#14b8a6',
   ];
 
   const breakdown: Array<{ category: string; count: number; percentage: number; color: string }> = [];
@@ -227,36 +355,23 @@ export function generateSystemsBreakdown(
 }
 
 /**
- * Estimate scope gap costs using actual item-specific data
- *
- * METHODOLOGY:
- * 1. For each missing item, calculate base cost using market rates from other suppliers
- * 2. Apply 20% markup to account for procurement risk and administrative overhead
- * 3. Prioritize gaps by cost impact (highest estimated cost first)
- *
- * CALCULATION EXAMPLE:
- * Missing Item: "Ryanfire Rokwrap & Mastic (Steel pipe)" - 5 ea @ $65.50
- * - Base cost: $65.50 × 5 = $327.50
- * - With 20% markup: $327.50 × 1.20 = $393.00
- * - Market adjustment (if other suppliers quoted higher): $393.00 × 1.72 = $675.96
- *
- * This gives stakeholders a realistic estimate of the additional cost to fill scope gaps.
+ * Estimate scope gap costs using actual item-specific data.
+ * Rate sourced from: market average from other suppliers → project average as fallback.
+ * Cost = baseRate × quantity × 1.2 (20% procurement markup)
  */
 export function estimateScopeGapCosts(
   missingItems: Array<{ description: string; category?: string; quantity?: number; suppliers?: Record<string, any> }>,
   averageUnitRate: number,
   systemsCovered: number,
   totalSystems: number
-): Array<{ description: string; estimatedCost: number; severity: 'low' | 'medium' | 'high' }> {
+): Array<{ description: string; estimatedCost: number; severity: 'low' | 'medium' | 'high'; system?: string; category?: string; itemsCount?: number; estimatedImpact?: string; details?: string[] }> {
   const coveragePercent = (systemsCovered / totalSystems) * 100;
-  const markup = 1.2; // 20% markup for procurement risk and administrative overhead
+  const markup = 1.2;
 
-  // Calculate individual costs for each missing item
   const gaps = missingItems.map((item, index) => {
     let baseRate = averageUnitRate;
     const quantity = item.quantity || 1;
 
-    // Try to use market rate from other suppliers who quoted this item
     if (item.suppliers) {
       const supplierRates: number[] = [];
       Object.values(item.suppliers).forEach((supplierData: any) => {
@@ -264,17 +379,13 @@ export function estimateScopeGapCosts(
           supplierRates.push(supplierData.unitPrice);
         }
       });
-
       if (supplierRates.length > 0) {
-        // Use average of other suppliers' rates for this specific item
         baseRate = supplierRates.reduce((sum, rate) => sum + rate, 0) / supplierRates.length;
       }
     }
 
-    // Calculate total cost: baseRate * quantity * markup
     const estimatedCost = baseRate * quantity * markup;
 
-    // Determine severity based on cost magnitude and coverage
     let severity: 'low' | 'medium' | 'high' = 'medium';
     if (estimatedCost > 10000 || (coveragePercent < 70 && index < 2)) {
       severity = 'high';
@@ -287,11 +398,10 @@ export function estimateScopeGapCosts(
       estimatedCost: Math.round(estimatedCost),
       severity,
       category: item.category,
-      _sortCost: estimatedCost, // For sorting
+      _sortCost: estimatedCost,
     };
   });
 
-  // Sort by cost (highest first) and return all gaps
   return gaps
     .sort((a, b) => b._sortCost - a._sortCost)
     .map(({ description, estimatedCost, severity, ...item }) => ({
@@ -308,7 +418,6 @@ export function estimateScopeGapCosts(
 
 /**
  * Calculate estimated full-scope cost for supplier
- * Estimates cost if supplier were to cover all missing items
  */
 export function calculateFullScopeCost(
   currentTotal: number,
@@ -317,11 +426,9 @@ export function calculateFullScopeCost(
   averageMarketRate: number
 ): number {
   if (systemsCovered === totalSystems) return currentTotal;
-
   const missingItems = totalSystems - systemsCovered;
   const avgPricePerSystem = currentTotal / systemsCovered;
-  const estimatedMissingCost = missingItems * avgPricePerSystem * 1.15; // 15% premium
-
+  const estimatedMissingCost = missingItems * avgPricePerSystem * 1.15;
   return currentTotal + estimatedMissingCost;
 }
 
@@ -334,10 +441,8 @@ export function calculatePotentialSavings(
   recommendedCoverage: number,
   highestCoverage: number
 ): number {
-  // Normalize both to same scope for fair comparison
   const normalizedRecommended = recommendedPrice / (recommendedCoverage / 100);
   const normalizedHighest = highestPrice / (highestCoverage / 100);
-
   return Math.max(0, normalizedHighest - normalizedRecommended);
 }
 
@@ -345,10 +450,10 @@ export function calculatePotentialSavings(
  * Generate color for score (0-10)
  */
 export function getScoreColor(score: number): string {
-  if (score >= 8) return '#10b981'; // green
-  if (score >= 6) return '#3b82f6'; // blue
-  if (score >= 4) return '#f59e0b'; // orange
-  return '#ef4444'; // red
+  if (score >= 8) return '#10b981';
+  if (score >= 6) return '#3b82f6';
+  if (score >= 4) return '#f59e0b';
+  return '#ef4444';
 }
 
 /**
@@ -356,9 +461,9 @@ export function getScoreColor(score: number): string {
  */
 export function getSeverityColor(severity: 'low' | 'medium' | 'high' | 'critical'): string {
   switch (severity) {
-    case 'low': return '#10b981';
-    case 'medium': return '#f59e0b';
-    case 'high': return '#ef4444';
+    case 'low':      return '#10b981';
+    case 'medium':   return '#f59e0b';
+    case 'high':     return '#ef4444';
     case 'critical': return '#991b1b';
   }
 }
@@ -380,4 +485,29 @@ export function formatCurrency(amount: number): string {
  */
 export function formatPercent(value: number, decimals: number = 1): string {
   return `${value.toFixed(decimals)}%`;
+}
+
+/**
+ * Human-readable label for comparison mode
+ */
+export function comparisonModeLabel(mode: ComparisonMode): string {
+  switch (mode) {
+    case 'FULLY_ITEMISED':    return 'Detailed';
+    case 'PARTIAL_BREAKDOWN': return 'Partial';
+    case 'LUMP_SUM':          return 'Lump Sum';
+  }
+}
+
+/**
+ * Color classes for comparison mode badge
+ */
+export function comparisonModeBadgeClasses(mode: ComparisonMode): string {
+  switch (mode) {
+    case 'FULLY_ITEMISED':
+      return 'bg-green-600/20 text-green-400 border-green-600/50';
+    case 'PARTIAL_BREAKDOWN':
+      return 'bg-amber-600/20 text-amber-400 border-amber-600/50';
+    case 'LUMP_SUM':
+      return 'bg-slate-600/30 text-slate-400 border-slate-500/40';
+  }
 }

@@ -1,6 +1,6 @@
-import { X, Award, AlertTriangle, CheckCircle2, DollarSign, BarChart3, PieChart } from 'lucide-react';
+import { X, Award, AlertTriangle, CheckCircle2, DollarSign, BarChart3, PieChart, Star } from 'lucide-react';
 import type { EnhancedSupplierMetrics } from '../../lib/reports/awardReportEnhancements';
-import { formatCurrency, formatPercent } from '../../lib/reports/awardReportEnhancements';
+import { formatCurrency, formatPercent, comparisonModeLabel, comparisonModeBadgeClasses } from '../../lib/reports/awardReportEnhancements';
 
 interface SupplierDetailModalProps {
   supplier: EnhancedSupplierMetrics | null;
@@ -50,6 +50,11 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
                 }`}>
                   RANK #{supplier.rank}
                 </span>
+                {supplier.comparisonMode && (
+                  <span className={`px-3 py-1 text-xs font-bold rounded-full border ${comparisonModeBadgeClasses(supplier.comparisonMode)}`}>
+                    {comparisonModeLabel(supplier.comparisonMode).toUpperCase()}
+                  </span>
+                )}
               </div>
             </div>
             <button
@@ -64,19 +69,47 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8">
           {/* Key Metrics Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700">
-              <div className="text-slate-400 text-xs font-medium mb-1">Total Price</div>
-              <div className="text-green-400 text-2xl font-bold">{formatCurrency(supplier.totalPrice)}</div>
+              <div className="text-slate-400 text-xs font-medium mb-1">Raw Price</div>
+              <div className="text-slate-300 text-xl font-semibold">{formatCurrency(supplier.totalPrice)}</div>
             </div>
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700">
+              <div className="text-slate-400 text-xs font-medium mb-1">Comparable Price</div>
+              <div className="text-green-400 text-xl font-bold">{formatCurrency(supplier.comparablePrice ?? supplier.totalPrice)}</div>
+              {supplier.comparisonMode !== 'FULLY_ITEMISED' && (
+                <div className="text-slate-500 text-xs mt-1">scope-adjusted</div>
+              )}
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700">
+              <div className="text-slate-400 text-xs font-medium mb-1">Confidence Score</div>
+              <div className={`text-xl font-bold flex items-center gap-2 ${
+                (supplier.confidenceScore ?? 0) >= 9 ? 'text-green-400' :
+                (supplier.confidenceScore ?? 0) >= 6 ? 'text-amber-400' : 'text-red-400'
+              }`}>
+                <Star className="w-4 h-4" />
+                {(supplier.confidenceScore ?? 0).toFixed(0)}/10
+              </div>
+              <div className="text-slate-500 text-xs mt-1">
+                {supplier.comparisonMode ? comparisonModeLabel(supplier.comparisonMode) : 'N/A'}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700">
               <div className="text-slate-400 text-xs font-medium mb-1">Coverage</div>
-              <div className="text-blue-400 text-2xl font-bold">{formatPercent(supplier.coveragePercent)}</div>
-              <div className="text-slate-500 text-xs mt-1">{supplier.systemsCovered}/{supplier.totalSystems} systems</div>
+              {supplier.comparisonMode === 'LUMP_SUM' ? (
+                <div className="text-slate-500 text-xl font-semibold">N/A</div>
+              ) : (
+                <>
+                  <div className="text-blue-400 text-xl font-bold">{formatPercent(supplier.coveragePercent)}</div>
+                  <div className="text-slate-500 text-xs mt-1">{supplier.systemsCovered}/{supplier.totalSystems} items</div>
+                </>
+              )}
             </div>
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700">
               <div className="text-slate-400 text-xs font-medium mb-1">Risk Score</div>
-              <div className={`text-2xl font-bold ${
+              <div className={`text-xl font-bold ${
                 supplier.riskMitigationScore >= 8 ? 'text-green-400' :
                 supplier.riskMitigationScore >= 6 ? 'text-blue-400' :
                 supplier.riskMitigationScore >= 4 ? 'text-yellow-400' : 'text-red-400'
@@ -86,7 +119,7 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
             </div>
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700">
               <div className="text-slate-400 text-xs font-medium mb-1">Weighted Score</div>
-              <div className="text-orange-400 text-2xl font-bold">{supplier.weightedTotal.toFixed(1)}</div>
+              <div className="text-orange-400 text-xl font-bold">{supplier.weightedTotal.toFixed(1)}</div>
               <div className="text-slate-500 text-xs mt-1">out of 100</div>
             </div>
           </div>
@@ -256,16 +289,27 @@ export default function SupplierDetailModal({ supplier, onClose }: SupplierDetai
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                <span className="text-slate-300 text-sm">Price Score (40%)</span>
+                <span className="text-slate-300 text-sm">Price Score (35%)</span>
                 <span className="text-white font-semibold">{supplier.priceScore?.toFixed(1) || 'N/A'}/10</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                <span className="text-slate-300 text-sm">Coverage Score (35%)</span>
+                <span className="text-slate-300 text-sm">Compliance Score (20%)</span>
+                <span className="text-white font-semibold">{supplier.complianceScore?.toFixed(1) || 'N/A'}/10</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                <span className="text-slate-300 text-sm">Coverage Score (15%)</span>
                 <span className="text-white font-semibold">{supplier.coverageScore?.toFixed(1) || 'N/A'}/10</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                <span className="text-slate-300 text-sm">Risk Mitigation Score (25%)</span>
+                <span className="text-slate-300 text-sm">Risk Mitigation (15%)</span>
                 <span className="text-white font-semibold">{supplier.riskMitigationScore.toFixed(1)}/10</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+                <span className="text-slate-300 text-sm flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-amber-400" />
+                  Confidence Score (15%)
+                </span>
+                <span className="text-white font-semibold">{(supplier.confidenceScore ?? 0).toFixed(1)}/10</span>
               </div>
             </div>
           </div>

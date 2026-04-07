@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Edit2, Check, X, Info, TrendingDown, Shield, Target, AlertTriangle, RefreshCw } from 'lucide-react';
+import { CreditCard as Edit2, Check, X, Info, TrendingDown, Shield, Target, AlertTriangle, RefreshCw, Star } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 
@@ -8,6 +8,7 @@ interface ScoringWeights {
   compliance: number;
   coverage: number;
   risk: number;
+  confidence: number;
 }
 
 interface ScoringWeightsEditorProps {
@@ -16,17 +17,19 @@ interface ScoringWeightsEditorProps {
 }
 
 const DEFAULT_WEIGHTS: ScoringWeights = {
-  price: 45,
+  price: 35,
   compliance: 20,
-  coverage: 25,
-  risk: 10,
+  coverage: 15,
+  risk: 15,
+  confidence: 15,
 };
 
 const RECOMMENDED_WEIGHTS: ScoringWeights = {
-  price: 45,
+  price: 35,
   compliance: 20,
-  coverage: 25,
-  risk: 10,
+  coverage: 15,
+  risk: 15,
+  confidence: 15,
 };
 
 export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: ScoringWeightsEditorProps) {
@@ -148,12 +151,12 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
   };
 
   const handleReset = () => {
-    if (confirm('Reset to recommended weights (45/20/25/10)?')) {
+    if (confirm('Reset to recommended weights (35/20/15/15/15)?')) {
       setEditWeights(DEFAULT_WEIGHTS);
     }
   };
 
-  const totalWeight = editWeights.price + editWeights.compliance + editWeights.coverage + editWeights.risk;
+  const totalWeight = editWeights.price + editWeights.compliance + editWeights.coverage + editWeights.risk + (editWeights.confidence ?? 0);
   const isValidTotal = Math.abs(totalWeight - 100) < 0.01;
 
   const criteriaData = [
@@ -184,6 +187,13 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
       icon: AlertTriangle,
       color: 'red',
       description: 'Based on missing items and risk flags identified.',
+    },
+    {
+      key: 'confidence' as keyof ScoringWeights,
+      label: 'Pricing Confidence',
+      icon: Star,
+      color: 'amber',
+      description: 'Detailed=10, Partial=7, Lump Sum=4. Rewards itemised quotes.',
     },
   ];
 
@@ -260,6 +270,7 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
               blue: 'border-blue-500/50 bg-blue-900/20',
               green: 'border-green-500/50 bg-green-900/20',
               red: 'border-red-500/50 bg-red-900/20',
+              amber: 'border-amber-500/50 bg-amber-900/20',
             }[criteria.color];
 
             const iconColorClasses = {
@@ -267,6 +278,7 @@ export default function ScoringWeightsEditor({ projectId, onWeightsChanged }: Sc
               blue: 'text-blue-400',
               green: 'text-green-400',
               red: 'text-red-400',
+              amber: 'text-amber-400',
             }[criteria.color];
 
             return (

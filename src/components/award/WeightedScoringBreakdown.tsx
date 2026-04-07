@@ -1,6 +1,6 @@
-import { TrendingUp, DollarSign, Shield, CheckCircle, AlertTriangle } from 'lucide-react';
+import { TrendingUp, DollarSign, Shield, CheckCircle, AlertTriangle, Star } from 'lucide-react';
 import type { EnhancedSupplierMetrics, ScoringWeights } from '../../lib/reports/awardReportEnhancements';
-import { getScoreColor } from '../../lib/reports/awardReportEnhancements';
+import { getScoreColor, comparisonModeLabel, comparisonModeBadgeClasses } from '../../lib/reports/awardReportEnhancements';
 
 interface WeightedScoringBreakdownProps {
   suppliers: EnhancedSupplierMetrics[];
@@ -32,6 +32,8 @@ export default function WeightedScoringBreakdown({ suppliers, weights }: Weighte
         return <TrendingUp className="w-5 h-5" />;
       case 'Risk Mitigation':
         return <Shield className="w-5 h-5" />;
+      case 'Confidence':
+        return <Star className="w-5 h-5" />;
       default:
         return <TrendingUp className="w-5 h-5" />;
     }
@@ -58,25 +60,31 @@ export default function WeightedScoringBreakdown({ suppliers, weights }: Weighte
               name: 'Price',
               score: supplier.priceScore,
               weight: weights.price,
-              description: 'Competitive pricing vs. market',
+              description: 'Scope-adjusted comparable price vs. field',
             },
             {
               name: 'Compliance',
               score: supplier.complianceScore,
               weight: weights.compliance,
-              description: 'Technical adherence & quality',
+              description: 'Technical adherence & scope completeness',
             },
             {
               name: 'Coverage',
               score: supplier.coverageScore,
               weight: weights.coverage,
-              description: 'Scope completeness',
+              description: 'Itemised scope coverage (N/A for lump sum)',
             },
             {
               name: 'Risk Mitigation',
               score: supplier.riskScore,
               weight: weights.risk,
-              description: 'Delivery & commercial risk',
+              description: 'Delivery & commercial risk (missing items)',
+            },
+            {
+              name: 'Confidence',
+              score: supplier.confidenceScore ?? 0,
+              weight: weights.confidence ?? 15,
+              description: 'Pricing confidence: Detailed=10, Partial=7, Lump Sum=4',
             },
           ];
 
@@ -103,7 +111,14 @@ export default function WeightedScoringBreakdown({ suppliers, weights }: Weighte
                     {supplier.rank}
                   </div>
                   <div>
-                    <h4 className="text-xl font-bold text-white">{supplier.supplierName}</h4>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xl font-bold text-white">{supplier.supplierName}</h4>
+                      {supplier.comparisonMode && (
+                        <span className={`px-2 py-0.5 text-xs font-bold rounded border ${comparisonModeBadgeClasses(supplier.comparisonMode)}`}>
+                          {comparisonModeLabel(supplier.comparisonMode)}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-slate-400 mt-0.5">
                       {supplier.systemsCovered} of {supplier.totalSystems} systems ({supplier.coveragePercent.toFixed(1)}%)
                     </p>
@@ -165,7 +180,7 @@ export default function WeightedScoringBreakdown({ suppliers, weights }: Weighte
               <div className="mt-6 pt-5 border-t border-slate-600">
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-slate-400">
-                    Formula: (Price × {weights.price}%) + (Compliance × {weights.compliance}%) + (Coverage × {weights.coverage}%) + (Risk × {weights.risk}%)
+                    Formula: (Price × {weights.price}%) + (Compliance × {weights.compliance}%) + (Coverage × {weights.coverage}%) + (Risk × {weights.risk}%) + (Confidence × {weights.confidence ?? 15}%)
                   </div>
                   <div className="flex items-center gap-2">
                     {supplier.rank === 1 && (

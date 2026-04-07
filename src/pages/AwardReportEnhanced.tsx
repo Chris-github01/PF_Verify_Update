@@ -34,6 +34,11 @@ import {
   calculateVariancePercent,
   generateSystemsBreakdown,
   estimateScopeGapCosts,
+  determineComparisonMode,
+  calculateConfidenceScore,
+  calculateComparablePrice,
+  computeBenchmarkPrice,
+  computeScopeFactor,
   DEFAULT_WEIGHTS,
   formatCurrency,
   type EnhancedSupplierMetrics,
@@ -204,97 +209,94 @@ export default function AwardReportEnhanced({
   };
 
   const processSupplierData = (suppliers: any[], comparisonData: ComparisonRow[]): EnhancedSupplierMetrics[] => {
-    const prices = suppliers.map(s => s.adjustedTotal);
-    const averagePrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
-    const lowestPrice = Math.min(...prices);
-    const highestPrice = Math.max(...prices);
+    if (suppliers.length === 0) return [];
+
     const maxRisk = Math.max(...suppliers.map(s => s.riskScore));
-    const minRisk = Math.min(...suppliers.map(s => s.riskScore));
 
-    // Debug logging for scoring
-    console.log('📊 Award Scoring Debug:', {
-      supplierCount: suppliers.length,
-      priceRange: { lowest: lowestPrice, highest: highestPrice, average: averagePrice },
-      riskRange: { min: minRisk, max: maxRisk },
-      suppliers: suppliers.map(s => ({
-        name: s.supplierName,
-        price: s.adjustedTotal,
-        riskScore: s.riskScore,
-        coverage: s.coveragePercent
-      }))
-    });
+    // ── STEP 1: Classify each supplier by comparison mode ──────────────────────
+    const withMode = suppliers.map(s => ({
+      ...s,
+      comparisonMode: determineComparisonMode(s.coveragePercent),
+    }));
 
-    const enhanced = suppliers.map((supplier) => {
-      // Calculate scores (0-10)
-      const priceScore = calculatePriceScore(supplier.adjustedTotal, lowestPrice, highestPrice);
+    // ── STEP 2: Compute scope factor from FULLY_ITEMISED suppliers ─────────────
+    const scopeFactor = computeScopeFactor(withMode);
+
+    // ── STEP 3: Compute comparable prices (scope-adjusted) ────────────────────
+    const withComparable = withMode.map(s => ({
+      ...s,
+      comparablePrice: calculateComparablePrice(s.adjustedTotal, s.comparisonMode, scopeFactor),
+    }));
+
+    // ── STEP 4: Compute benchmark = median of FULLY_ITEMISED comparable prices ─
+    const benchmark = computeBenchmarkPrice(withComparable);
+
+    // ── STEP 5: Price scoring ranges use comparable prices ────────────────────
+    const comparablePrices = withComparable.map(s => s.comparablePrice);
+    const lowestComparablePrice = Math.min(...comparablePrices);
+    const highestComparablePrice = Math.max(...comparablePrices);
+
+    const enhanced = withComparable.map((supplier) => {
+      const mode = supplier.comparisonMode;
+      const confidenceScore = calculateConfidenceScore(mode);
+
+      // Scores (0-10)
+      const priceScore      = calculatePriceScore(supplier.comparablePrice, lowestComparablePrice, highestComparablePrice, mode);
       const complianceScore = calculateComplianceScore(supplier.riskScore, maxRisk);
-      const coverageScore = calculateCoverageScore(supplier.coveragePercent);
-      const riskScore = calculateRiskMitigationScore(supplier.riskScore, maxRisk);
+      const coverageScore   = calculateCoverageScore(supplier.coveragePercent, mode);
+      const riskScore       = calculateRiskMitigationScore(supplier.riskScore, maxRisk);
 
-      // Debug individual supplier scoring
-      console.log(`📊 ${supplier.supplierName} scores:`, {
-        priceScore: priceScore.toFixed(2),
-        complianceScore: complianceScore.toFixed(2),
-        coverageScore: coverageScore.toFixed(2),
-        riskScore: riskScore.toFixed(2),
-        rawPrice: supplier.adjustedTotal,
-        rawRiskScore: supplier.riskScore,
-        coverage: supplier.coveragePercent
-      });
-
-      // Calculate weighted total (0-100)
+      // Weighted total (0-100) now includes confidenceScore at 15% weight
       const weightedTotal = calculateWeightedTotal(
         priceScore,
         complianceScore,
         coverageScore,
         riskScore,
+        confidenceScore,
         weights
       );
 
-      // Get items for this supplier
+      // Resolve total quantity for per-unit normalisation
+      let actualTotalQuantity = (supplier as any).totalQuantity;
+      if (!actualTotalQuantity || actualTotalQuantity === 0) {
+        actualTotalQuantity = comparisonData
+          .filter(row => row.suppliers[supplier.supplierName]?.unitPrice !== null)
+          .reduce((sum, row) => sum + (row.quantity || 0), 0);
+      }
+      if (actualTotalQuantity === 0) {
+        actualTotalQuantity = supplier.itemsQuoted || 1;
+      }
+
       const supplierItems = comparisonData.map(row => ({
         category: row.category || 'General',
-        isQuoted: row.suppliers[supplier.supplierName]?.unitPrice !== null
+        isQuoted: row.suppliers[supplier.supplierName]?.unitPrice !== null,
       }));
 
-      // Get missing items with full context for accurate cost estimation
       const missingItems = comparisonData
         .filter(row => !row.suppliers[supplier.supplierName]?.unitPrice)
         .map(row => ({
           description: row.description,
           category: row.category,
           quantity: row.quantity,
-          suppliers: row.suppliers, // Include all supplier data for market rate calculation
+          suppliers: row.suppliers,
         }));
-
-      // CRITICAL FIX: Calculate total quantity from comparison data if not provided
-      // This is the sum of all quantities across all quoted items, NOT the line item count
-      let actualTotalQuantity = (supplier as any).totalQuantity;
-
-      if (!actualTotalQuantity || actualTotalQuantity === 0) {
-        // Fallback: Calculate from comparison data
-        actualTotalQuantity = comparisonData
-          .filter(row => row.suppliers[supplier.supplierName]?.unitPrice !== null)
-          .reduce((sum, row) => sum + (row.quantity || 0), 0);
-      }
-
-      // If still 0, use items count as last resort
-      if (actualTotalQuantity === 0) {
-        actualTotalQuantity = supplier.itemsQuoted || 1;
-      }
 
       return {
         supplierName: supplier.supplierName,
         totalPrice: supplier.adjustedTotal,
-        systemsCovered: actualTotalQuantity, // FIXED: Use total quantity sum
+        systemsCovered: actualTotalQuantity,
         totalSystems: supplier.totalItems,
         coveragePercent: supplier.coveragePercent,
         quoteId: supplier.quoteId,
         itemsQuoted: supplier.itemsQuoted,
 
-        normalizedPricePerSystem: calculateNormalizedPrice(supplier.adjustedTotal, actualTotalQuantity), // FIXED: Divide by total quantity
-        variancePercent: calculateVariancePercent(supplier.adjustedTotal, averagePrice),
-        varianceFromLowest: supplier.adjustedTotal - lowestPrice,
+        comparisonMode: mode,
+        comparablePrice: supplier.comparablePrice,
+        confidenceScore,
+
+        normalizedPricePerSystem: calculateNormalizedPrice(supplier.adjustedTotal, actualTotalQuantity),
+        variancePercent: calculateVariancePercent(supplier.comparablePrice, benchmark),
+        varianceFromLowest: supplier.comparablePrice - lowestComparablePrice,
 
         rawRiskScore: supplier.riskScore,
         riskMitigationScore: riskScore,
@@ -320,17 +322,25 @@ export default function AwardReportEnhanced({
         levelsMultiplier: (supplier as any).levelsMultiplier ?? null,
         isLumpSumQuote: !!(supplier as any).isLumpSumQuote,
         itemsTotal: (supplier as any).itemsTotal ?? undefined,
-      };
+      } as EnhancedSupplierMetrics;
     });
 
-    // Sort and rank
+    // ── STEP 6: Sort by weighted total ─────────────────────────────────────────
     enhanced.sort((a, b) => b.weightedTotal - a.weightedTotal);
 
-    // Assign Best Value: strictly the single lowest-priced supplier
+    // ── STEP 7: Hard ranking rule — LUMP_SUM cannot hold rank #1 if a
+    //            FULLY_ITEMISED supplier exists ─────────────────────────────────
+    const hasFullyItemised = enhanced.some(s => s.comparisonMode === 'FULLY_ITEMISED');
+    if (hasFullyItemised && enhanced[0].comparisonMode === 'LUMP_SUM') {
+      const firstNonLumpSum = enhanced.findIndex(s => s.comparisonMode !== 'LUMP_SUM');
+      if (firstNonLumpSum > 0) {
+        const [demoted] = enhanced.splice(0, 1);
+        enhanced.splice(firstNonLumpSum, 0, demoted);
+      }
+    }
+
+    // ── STEP 8: Assign ranks, best-value, lowest-risk badges ──────────────────
     const minPrice = Math.min(...enhanced.map(s => s.totalPrice));
-    // Assign Lowest Risk: strictly the single supplier with the fewest missing items.
-    // If multiple suppliers tie on rawRiskScore, break the tie by highest coverage,
-    // then lowest price. Only ONE supplier gets the badge.
     const minRiskScore = Math.min(...enhanced.map(s => s.rawRiskScore));
     const lowestRiskCandidates = enhanced.filter(s => s.rawRiskScore === minRiskScore);
     const lowestRiskWinner = lowestRiskCandidates.sort((a, b) => {
