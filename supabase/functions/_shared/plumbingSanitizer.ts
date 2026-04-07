@@ -33,6 +33,65 @@ function roughlyEqual(a: number | null, b: number | null, tol = 1): boolean {
   return Math.abs(a - b) <= tol;
 }
 
+function detectLeadingDigitClip(
+  items: Record<string, unknown>[],
+  resolvedTotal: number
+): Record<string, unknown>[] {
+  const itemsWithTotals = items.map(item => ({
+    item,
+    t: toNum(item.total) ?? toNum(item.total_price) ?? toNum(item.rate ?? item.unit_rate) ?? 0,
+  }));
+
+  const currentSum = itemsWithTotals.reduce((s, x) => s + x.t, 0);
+  const shortfall = resolvedTotal - currentSum;
+
+  if (shortfall <= 0 || shortfall / resolvedTotal < 0.001) return items;
+
+  const medianTotal =
+    [...itemsWithTotals]
+      .map(x => x.t)
+      .filter(t => t > 0)
+      .sort((a, b) => a - b)
+      [Math.floor(itemsWithTotals.length / 2)] ?? 0;
+
+  return itemsWithTotals.map(({ item, t }) => {
+    if (t <= 0) return item;
+
+    const candidates: number[] = [];
+    let multiplier = 10;
+    while (multiplier <= 100) {
+      const candidate = t + (Math.floor(t / multiplier) === 0 ? shortfall : 0);
+      const withLeadingDigit = Number(`${Math.round(shortfall / multiplier)}${String(t).padStart(String(Math.round(t * multiplier)).length - 1, '0')}`);
+      if (Math.abs(withLeadingDigit - medianTotal) / medianTotal < 0.8) {
+        candidates.push(withLeadingDigit);
+      }
+      multiplier *= 10;
+    }
+
+    const powerOf10 = Math.pow(10, Math.floor(Math.log10(shortfall)));
+    const corrected = t + powerOf10;
+    const newSum = currentSum - t + corrected;
+
+    if (
+      Math.abs(newSum - resolvedTotal) / resolvedTotal < 0.001 &&
+      corrected > t &&
+      corrected < medianTotal * 3
+    ) {
+      return {
+        ...item,
+        total: corrected,
+        total_price: corrected,
+        validation_flags: [
+          ...(Array.isArray(item.validation_flags) ? item.validation_flags : []),
+          `leading_digit_recovered:original=${t},corrected=${corrected},shortfall=${Math.round(shortfall)}`,
+        ],
+      };
+    }
+
+    return item;
+  });
+}
+
 function inferTotalFromItems(items: Record<string, unknown>[]): number | null {
   for (const item of items) {
     const desc = String(item.description ?? item.desc ?? item.item ?? "");
@@ -80,8 +139,13 @@ export function sanitizePlumbingItems(
     cleaned.push(item);
   }
 
+  const reconciled =
+    resolvedTotal != null && resolvedTotal > 0
+      ? detectLeadingDigitClip(cleaned, resolvedTotal)
+      : cleaned;
+
   return {
-    cleanedItems: cleaned,
+    cleanedItems: reconciled,
     quoteTotalFound: resolvedTotal,
   };
 }
@@ -102,6 +166,14 @@ IMPORTANT — numbers without dollar signs are still prices:
 - If a table has a SUM or TOTAL column, use that column's value as the line item total
 - If a row has "Lower Ground Level ... 70535", extract total = 70535
 - NEVER output "Included" or text strings as a rate or total — only numbers
+
+CRITICAL — MULTI-COLUMN LEVEL TABLE ARITHMETIC VALIDATION:
+- Level-based tables have multiple sub-columns (e.g. Plumbing & sanitary, Water supply & GAS, SS and Vents, Storm Water, Equipment) that add up to the SUM column
+- The SUM column is ALWAYS the last numeric column before any NOTE/comment column
+- You MUST verify: sub-column values sum to the SUM value for EVERY row
+- Example: if a row shows 21600 + 20540 + 10490 + 8860 = 61490, the total must be 61490, NOT 1490
+- If any row's sub-columns sum to a value that does not match what you extracted as the total, correct the total to match the arithmetic
+- This arithmetic self-check is MANDATORY for every level row — never skip it
 
 NEVER INCLUDE as line items — these are summary rows, capture in quoteTotal instead:
 - Total, Totals, Sub Total, Subtotal, Grand Total, Estimated Grand Total
