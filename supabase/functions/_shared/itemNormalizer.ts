@@ -137,33 +137,62 @@ export function parseMoney(raw: string): number {
 }
 
 /**
+ * Collapse space-split digit groups into a single number.
+ * Handles PDF artifacts like "1,511, 33 8" → 1511338, "6 1490" → 61490,
+ * "1511 33 8" → 1511338. Strategy: strip commas, split on spaces, join all
+ * digit-only tokens that together form a plausible large number (>= 1000).
+ */
+function collapseSpaceSplitNumber(raw: string): number {
+  const cleaned = raw.replace(/,/g, '').trim();
+  const tokens = cleaned.split(/\s+/);
+  const merged = tokens.join('');
+  const val = parseFloat(merged);
+  return Number.isFinite(val) ? val : 0;
+}
+
+/**
  * Extract document total from full text
  */
 export function extractDocumentTotal(text: string): number | null {
-  // Normalize all types of spaces (non-breaking spaces, tabs, multiple spaces)
+  // Normalize non-breaking spaces but keep internal spaces for split-number handling
   const t = text
-    .replace(/\u00A0/g, " ")  // non-breaking space
-    .replace(/\s+/g, " ")      // normalize multiple spaces to single space
+    .replace(/\u00A0/g, " ")
+    .replace(/\t/g, " ")
     .trim();
 
-  // Try various patterns for Grand Total
-  // Using \s+ to match one or more whitespace characters
-  const patterns = [
-    /Grand\s+Total\s*\(excluding\s+GST\)\s*:\s*\$\s*([\d,]+\.?\d*)/i,
-    /Grand\s+Total\s*\(excl\.?\s*GST\)\s*:\s*\$\s*([\d,]+\.?\d*)/i,
-    /Grand\s+Total\s*:\s*\$\s*([\d,]+\.?\d*)/i,
-    /\bTOTAL\s*\(excluding\s+GST\)\s*:\s*\$\s*([\d,]+\.?\d*)/i,
-    /\bTOTAL\s*:\s*\$\s*([\d,]+\.?\d*)/i,
-    // Also try without dollar sign (some formats)
-    /Grand\s+Total\s*\(excluding\s+GST\)\s*:\s*([\d,]+\.?\d*)/i,
+  // Helper: parse a raw match group that may have spaces inside the number
+  // e.g. "1,511, 33 8" or "1 511 338"
+  const parseSpacedAmount = (raw: string): number => {
+    const noCommas = raw.replace(/,/g, '');
+    const tokens = noCommas.trim().split(/\s+/).filter(t => /^\d+$/.test(t));
+    if (tokens.length === 0) return 0;
+    const merged = tokens.join('');
+    const val = parseFloat(merged);
+    return Number.isFinite(val) ? val : 0;
+  };
+
+  // Flatten text to single line for pattern matching (needed for multi-word patterns)
+  const flat = t.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
+
+  // Pattern set: label followed by optional $ and a number that may contain spaces/commas
+  // The number capture group allows digits, commas, and spaces (for space-split artifacts)
+  const labelPatterns: RegExp[] = [
+    // "Total Price: 1,511, 33 8" or "Tota l Price: 1,511,338"
+    /[Tt]ota\s*l\s+[Pp]rice\s*:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/,
+    /Grand\s+Total\s*\(excl(?:uding)?\.?\s*GST\)\s*:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/i,
+    /Grand\s+Total\s*:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/i,
+    /\bTOTAL\s*\(excl(?:uding)?\.?\s*GST\)\s*:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/i,
+    /\bTOTAL\s*:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/i,
+    /Contract\s+(?:Sum|Total|Price|Value)\s*:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/i,
+    /Quote\s+Total\s*:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/i,
+    /Lump\s+Sum\s+(?:Total\s+)?:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/i,
   ];
 
-  for (const pattern of patterns) {
-    const match = t.match(pattern);
+  for (const pattern of labelPatterns) {
+    const match = flat.match(pattern);
     if (match) {
-      const amount = parseMoney(match[1]);
-      // Only return if amount is reasonable (not zero, not tiny)
-      if (amount > 100) {
+      const amount = parseSpacedAmount(match[1]);
+      if (amount > 1000) {
         return amount;
       }
     }

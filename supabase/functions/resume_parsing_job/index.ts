@@ -37,28 +37,31 @@ function extractPlumbingLevelTable(text: string): any[] {
    * or "1 234 567" instead of "1234567". This function collapses runs of short digit tokens
    * (1–3 digits) that are separated by a single space into one number, then picks the last value.
    */
+  /**
+   * Parse the SUM column from a number run that may have PDF space-split artifacts.
+   * Examples: "21600 20 540 10490 8860 6 1490" → last real number is 61490
+   *           "35020 43415 21760 28680 128875" → last number is 128875
+   *           "545660 568378 148050 108540 140470 1511 33 8" → last number is 1511338
+   *
+   * Strategy: scan tokens right-to-left, greedily merging adjacent short digit tokens
+   * (1-4 digits) into a candidate number, stop when the candidate >= 1000 (a valid total).
+   */
   function parseSumFromNumberRun(raw: string): number {
-    const tokens = raw.trim().split(/\s+/);
-    const grouped: string[] = [];
-    let i = 0;
-    while (i < tokens.length) {
-      const tok = tokens[i].replace(/,/g, '');
-      // If this token is 1-3 digits and the NEXT token is also 1-3 digits (thousands group),
-      // they might be parts of a space-split number. Collapse them.
-      if (/^\d{1,3}$/.test(tok) && i + 1 < tokens.length && /^\d{3}$/.test(tokens[i + 1].replace(/,/g, ''))) {
-        let merged = tok;
-        while (i + 1 < tokens.length && /^\d{3}$/.test(tokens[i + 1].replace(/,/g, ''))) {
-          merged += tokens[i + 1].replace(/,/g, '');
-          i++;
-        }
-        grouped.push(merged);
-      } else {
-        grouped.push(tok);
-      }
-      i++;
+    const tokens = raw.trim().replace(/,/g, '').split(/\s+/).filter(t => /^\d+$/.test(t));
+    if (tokens.length === 0) return 0;
+
+    // Walk right-to-left merging tokens greedily until we get a value >= 1000
+    let i = tokens.length - 1;
+    let candidate = tokens[i];
+    let val = parseFloat(candidate);
+
+    while (val < 1000 && i > 0) {
+      i--;
+      candidate = tokens[i] + candidate;
+      val = parseFloat(candidate);
     }
-    const last = grouped[grouped.length - 1];
-    return parseFloat(last.replace(/,/g, '')) || 0;
+
+    return val >= 1000 ? val : 0;
   }
 
   while ((match = LEVEL_RE.exec(flat)) !== null) {
