@@ -732,13 +732,12 @@ Deno.serve(async (req: Request) => {
       const combinedText = allChunkTexts.join('\n');
       const levelItems = extractPlumbingLevelTable(combinedText);
       if (levelItems.length >= 5) {
-        console.log(`[Resume] Plumbing: regex found ${levelItems.length} level rows — replacing ALL LLM items with regex results`);
-        // Remove any LLM-parsed level/ground/roof items that could conflict
+        console.log(`[Resume] Plumbing: regex found ${levelItems.length} level rows — replacing LLM level items with regex results`);
         const nonLevelItems = allItems.filter((item: any) =>
           !/level|ground|roof|basement|floor/i.test(item.description || '')
         );
-        allItems.length = 0;
-        allItems.push(...nonLevelItems, ...levelItems);
+        // Splice in place so the array reference stays valid for the pipeline below
+        allItems.splice(0, allItems.length, ...nonLevelItems, ...levelItems);
         console.log(`[Resume] Plumbing: kept ${nonLevelItems.length} non-level LLM items + ${levelItems.length} regex level items`);
       } else if (levelItems.length > 0) {
         const hasLevelItems = allItems.some((item: any) =>
