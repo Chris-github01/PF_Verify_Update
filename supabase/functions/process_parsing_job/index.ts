@@ -726,9 +726,11 @@ Deno.serve(async (req: Request) => {
 
         console.log(`Created ${quoteItems.length} quote items`);
 
-        // ✅ Calculate totals - prefer document total
+        // ✅ Calculate totals - prefer line item sum (ground truth) over document total
+        // Document totals on cover pages may contain human arithmetic errors.
+        // Only fall back to document total when no line items were parsed.
         const calculatedTotal = quoteItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
-        const finalTotalAmount = documentTotal ?? calculatedTotal;
+        const finalTotalAmount = calculatedTotal > 0 ? calculatedTotal : (documentTotal ?? 0);
 
         // ✅ Update quote with both counts and document total
         await supabase
