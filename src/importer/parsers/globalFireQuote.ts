@@ -13,7 +13,8 @@ export function parseGlobalFireQuote(text: string): ParsedQuote {
 
   const serviceTypes = ['Cable Tray', 'Cable Bundle', 'Single Cable', 'Pex Pipe', 'Steel Pipe',
                         'PVC Pipe', 'Copper Pipe', 'Insulated Copper Pipe', 'Brass Wingback',
-                        'Stainless Steel Pipe', 'Multi Service', 'Conduit', 'Fire Box', 'Sprinkler Pipe'];
+                        'Stainless Steel Pipe', 'Multi Service', 'Conduit', 'Fire Box', 'Sprinkler Pipe',
+                        'Batt Patch'];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -54,9 +55,8 @@ export function parseGlobalFireQuote(text: string): ParsedQuote {
         if (num) {
           if (!rate) {
             rate = num;
-          } else if (!total) {
+          } else {
             total = num;
-            break;
           }
         }
       }
