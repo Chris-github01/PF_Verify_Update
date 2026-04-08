@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { sanitizePlumbingItems, PLUMBING_SYSTEM_PROMPT } from "../_shared/plumbingSanitizer.ts";
+import { sanitizePlumbingItems, PLUMBING_SYSTEM_PROMPT, PASSIVE_FIRE_SYSTEM_PROMPT } from "../_shared/plumbingSanitizer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -388,6 +388,7 @@ Deno.serve(async (req: Request) => {
 
     const { text, supplierName, trade }: ParseRequest = await req.json();
     const isPlumbing = (trade ?? "").toLowerCase() === "plumbing";
+    const isPassiveFire = (trade ?? "").toLowerCase() === "passive_fire";
 
     if (!text || text.trim().length === 0) {
       return new Response(
@@ -410,7 +411,7 @@ Deno.serve(async (req: Request) => {
     console.log(`[LLM Fallback] Quote needs chunking: ${needsChunking}`);
 
     // Create extraction prompt — use plumbing-specific prompt for plumbing trade
-    const systemPrompt = isPlumbing ? PLUMBING_SYSTEM_PROMPT : `You are an expert at extracting line items from construction quotes with hierarchical structures.
+    const systemPrompt = isPlumbing ? PLUMBING_SYSTEM_PROMPT : isPassiveFire ? PASSIVE_FIRE_SYSTEM_PROMPT : `You are an expert at extracting line items from construction quotes with hierarchical structures.
 
 CRITICAL: Quotes often have a hierarchical structure:
 - Section summaries (e.g., "Greenhouse $21,964.00") - DO NOT EXTRACT

@@ -200,3 +200,50 @@ Return JSON:
 }
 
 Critical: Never include Total/Sub Total/Grand Total rows inside items. When in doubt, exclude a summary row from items and place its value in quoteTotal. Never use text like "Included" as a numeric value — if no price is found, omit the item.`;
+
+export const PASSIVE_FIRE_SYSTEM_PROMPT = `You are extracting structured commercial line items from a NEW ZEALAND PASSIVE FIRE PROTECTION quote.
+
+Passive fire quotes contain firestopping, penetration sealing, and compartmentation items. Line items typically describe a service type (Cable Tray, Single Cable, Steel Pipe, PVC Pipe, Copper Pipe, Batt Patch, Multi Service, Conduit, Fire Box, etc.) combined with a size (e.g. 20mm, Up to 50mm), a substrate (e.g. Concrete Floor, Concrete Wall, GIB Wall, Timber Infill Floor), and a quantity with a unit rate and total.
+
+FRR (Fire Resistance Rating) values look like "60/-/-", "90/90/-", "120/120/120" — always extract these into the frr field when present.
+
+INCLUDE as line items only:
+- Individual penetration/sealing line items that have a description, quantity, unit, rate, and total
+- Items may span two lines: description on one line, then qty/unit/rate/total on the next — join these into a single item
+- Each item MUST have qty × rate ≈ total (within rounding)
+
+NEVER INCLUDE as line items:
+- Section headers (e.g. "Electrical", "Hydraulic", "Mechanical", "Fire Protection")
+- Service type labels standing alone without numbers (e.g. "Cable Tray", "Steel Pipe" on their own line)
+- Subtotal, Sub Total, Total, Grand Total, GST, P&G, Margin rows — put these in quoteTotal instead
+
+UNIT HANDLING:
+- Common units: No., ea, Nr, LM, M, M2, Sum
+- If the unit column shows "0", "N/A", "-", or is blank, default to "No." (each penetration)
+- NEVER skip an item because the unit is missing — use "No." as default
+
+MULTI-LINE ITEM HANDLING:
+- A line that starts with only numbers (qty unit rate total) belongs to the PREVIOUS description line
+- Example:
+    "Cable Tray 100x50mm - Concrete Floor"
+    "12  No.  $45.00  $540.00"
+  → description="Cable Tray 100x50mm - Concrete Floor", qty=12, unit="No.", rate=45.00, total=540.00
+
+SIZE AND SUBSTRATE IN DESCRIPTION:
+- Keep size (e.g. "50mm", "Up to 100mm") and substrate (e.g. "Concrete Floor", "GIB Wall") as part of the description
+- Do NOT strip these — they are essential for scope comparison
+
+VALIDATION:
+- Every extracted item MUST satisfy qty × rate ≈ total (within 1%)
+- If numbers do not reconcile, check for PDF split artifacts — a short token before a number may be a leading digit that was split (e.g. "6" before "1490" = 61490)
+- If you cannot find qty AND rate AND total for an item, skip it
+
+Return JSON:
+{
+  "items": [{"description": "string", "qty": number, "unit": "string", "rate": number, "total": number, "section": "string", "frr": "string"}],
+  "quoteTotal": number | null,
+  "confidence": number,
+  "warnings": ["string"]
+}
+
+Critical: Never include Total/Sub Total/Grand Total rows inside items. When in doubt, exclude a summary row from items and place its value in quoteTotal.`;

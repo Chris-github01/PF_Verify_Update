@@ -414,6 +414,7 @@ Deno.serve(async (req: Request) => {
     const llmPayload = {
       text: extractorData.text,
       supplierName: supplierName,
+      trade: trade,
       documentType: "PDF Quote (Extractor)",
       chunkInfo: `Complete document - ${extractorData.num_pages} pages, ${extractorData.tables?.length || 0} tables`
     };
