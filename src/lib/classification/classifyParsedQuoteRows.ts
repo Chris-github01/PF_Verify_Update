@@ -195,7 +195,8 @@ function classifyRow(
     };
   }
 
-  // RULE 3 — MAIN SCOPE (requires pricing + at least 2 non-pricing detail signals)
+  // RULE 3 — MAIN SCOPE (requires pricing + at least 1 non-pricing detail signal;
+  // FRR alone is highly specific to passive fire and sufficient on its own)
   const nonPricingSignalCount = [
     signals.hasFRR,
     signals.hasSubstrate,
@@ -203,7 +204,9 @@ function classifyRow(
     signals.hasServiceType,
   ].filter(Boolean).length;
 
-  if (signals.hasPricingStructure && nonPricingSignalCount >= 2) {
+  const threshold = signals.hasFRR ? 1 : 2;
+
+  if (signals.hasPricingStructure && nonPricingSignalCount >= threshold) {
     const confidence: ClassificationConfidence = nonPricingSignalCount >= 3 ? 'high' : 'medium';
     const matchedSignals = [
       signals.hasFRR ? 'FRR pattern' : null,

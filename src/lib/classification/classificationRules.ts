@@ -74,6 +74,20 @@ const SUBSTRATE_KEYWORDS = [
   'timber wall',
   'steel deck',
   'metal deck',
+  'fire rated wall',
+  'fire wall',
+  'plasterboard wall',
+  'plasterboard floor',
+  'timber floor',
+  'lightweight wall',
+  'lightweight floor',
+  'gib board',
+  'gib floor',
+  'floor slab',
+  'concrete slab',
+  'brick wall',
+  'block wall',
+  'aac wall',
 ];
 
 const MEASURABLE_ELEMENT_PATTERNS = [
@@ -83,8 +97,15 @@ const MEASURABLE_ELEMENT_PATTERNS = [
   /cable tray/i,
   /conduit/i,
   /pvc pipe/i,
+  /pvc floor waste/i,
   /copper pipe/i,
   /steel pipe/i,
+  /pex pipe/i,
+  /brass wingback/i,
+  /refrigerant pipe/i,
+  /insulated copper/i,
+  /unit entry/i,
+  /fire box/i,
   /duct/i,
 ];
 
