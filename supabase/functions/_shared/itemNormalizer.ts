@@ -188,17 +188,21 @@ export function extractDocumentTotal(text: string): number | null {
     /Lump\s+Sum\s+(?:Total\s+)?:?\s*\$?\s*([\d][\d\s,]{3,}[\d])/i,
   ];
 
+  // Collect all matches and return the largest one.
+  // This avoids picking up a section subtotal (e.g. $15,940 for optional items)
+  // instead of the real grand total when multiple patterns fire on the same text.
+  let best: number | null = null;
   for (const pattern of labelPatterns) {
     const match = flat.match(pattern);
     if (match) {
       const amount = parseSpacedAmount(match[1]);
-      if (amount > 1000) {
-        return amount;
+      if (amount > 1000 && (best === null || amount > best)) {
+        best = amount;
       }
     }
   }
 
-  return null;
+  return best;
 }
 
 /**

@@ -804,33 +804,7 @@ Deno.serve(async (req: Request) => {
         return true;
       });
 
-      const totalPriceChunkMap = new Map<string, { chunkNum: number; hasMismatch: boolean }>();
-      for (const item of dedupedItems) {
-        const totalKey = Number(item.total ?? 0).toFixed(2);
-        if (Number(item.total ?? 0) < 100) continue;
-        const chunkNum = item.originalChunkNumber ?? 0;
-        const hasMismatch = Array.isArray(item.validation_flags) && item.validation_flags.includes('MISMATCH');
-        const existing = totalPriceChunkMap.get(totalKey);
-        if (!existing) {
-          totalPriceChunkMap.set(totalKey, { chunkNum, hasMismatch });
-        } else {
-          if (chunkNum > existing.chunkNum || (!hasMismatch && existing.hasMismatch)) {
-            totalPriceChunkMap.set(totalKey, { chunkNum, hasMismatch });
-          }
-        }
-      }
-
-      afterStubDedup = dedupedItems.filter((item: any) => {
-        const totalKey = Number(item.total ?? 0).toFixed(2);
-        if (Number(item.total ?? 0) < 100) return true;
-        const best = totalPriceChunkMap.get(totalKey);
-        if (!best) return true;
-        const itemChunk = item.originalChunkNumber ?? 0;
-        const itemHasMismatch = Array.isArray(item.validation_flags) && item.validation_flags.includes('MISMATCH');
-        if (itemChunk < best.chunkNum) return false;
-        if (itemHasMismatch && !best.hasMismatch && itemChunk === best.chunkNum) return false;
-        return true;
-      });
+      afterStubDedup = dedupedItems;
 
       console.log(`[Resume] After dedup: ${afterStubDedup.length} items`);
     }
