@@ -161,6 +161,60 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
         }),
       });
 
+      const confirmationHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+              .container { max-width: 560px; margin: 32px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+              .header { background: #ea580c; padding: 28px 32px; }
+              .header h1 { color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; }
+              .header p { color: #fed7aa; margin: 6px 0 0; font-size: 14px; }
+              .body { padding: 32px; color: #374151; font-size: 15px; line-height: 1.6; }
+              .body p { margin: 0 0 16px; }
+              .highlight { background: #fff7ed; border-left: 4px solid #ea580c; padding: 14px 18px; border-radius: 4px; margin: 20px 0; font-size: 14px; color: #92400e; }
+              .footer { padding: 20px 32px; background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; text-align: center; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>Thanks for reaching out, ${formData.name.split(' ')[0]}!</h1>
+                <p>Your demo request has been received.</p>
+              </div>
+              <div class="body">
+                <p>We've received your request for a live VerifyTrade demo and our team will be in touch shortly to confirm a time that works for you.</p>
+                <div class="highlight">
+                  In the meantime, your demo account has been set up. Check your inbox for a separate email with your login details.
+                </div>
+                <p>During the demo, we'll walk you through how VerifyTrade audits subcontractor quotes, identifies scope gaps, and generates award recommendations — all in around 20 minutes.</p>
+                <p>If you have any questions before then, simply reply to this email and we'll get back to you.</p>
+                <p>Looking forward to speaking with you.</p>
+                <p style="margin-bottom:0;">The VerifyTrade Team</p>
+              </div>
+              <div class="footer">
+                VerifyTrade &mdash; Smarter Subcontract Management
+              </div>
+            </div>
+          </body>
+        </html>
+      `.trim();
+
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          to: formData.email,
+          subject: 'Thanks for booking your VerifyTrade demo',
+          html: confirmationHtml,
+        }),
+      }).catch(() => {});
+
       setStatus('success');
       setMessage('Demo account created! Check your email for access details.');
 
