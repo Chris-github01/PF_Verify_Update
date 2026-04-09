@@ -50,11 +50,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { to, subject, html, cc } = body as {
+    const { to, subject, html, cc, reply_to } = body as {
       to: unknown;
       subject: unknown;
       html: unknown;
       cc?: unknown;
+      reply_to?: unknown;
     };
 
     if (
@@ -73,6 +74,22 @@ Deno.serve(async (req: Request) => {
         { success: false, error: "Invalid field type: cc must be a string or array of strings" },
         400
       );
+    }
+
+    if (reply_to !== undefined) {
+      if (typeof reply_to !== "string") {
+        return jsonResponse(
+          { success: false, error: "Invalid field type: reply_to must be a string" },
+          400
+        );
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(reply_to)) {
+        return jsonResponse(
+          { success: false, error: "Invalid reply_to: must be a valid email address" },
+          400
+        );
+      }
     }
 
     if (!subject.trim() || !html.trim()) {
@@ -97,6 +114,7 @@ Deno.serve(async (req: Request) => {
       from: "VerifyTrade <noreply@mail.verifytrade.co.nz>",
       to: toAddresses,
       ...(ccAddresses !== undefined && { cc: ccAddresses }),
+      ...(reply_to !== undefined && { reply_to: reply_to as string }),
       subject,
       html,
     });
