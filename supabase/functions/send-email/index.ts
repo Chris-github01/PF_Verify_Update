@@ -50,7 +50,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { to, subject, html } = body as { to: unknown; subject: unknown; html: unknown };
+    const { to, subject, html, cc } = body as {
+      to: unknown;
+      subject: unknown;
+      html: unknown;
+      cc?: unknown;
+    };
 
     if (
       (typeof to !== "string" && !Array.isArray(to)) ||
@@ -59,6 +64,13 @@ Deno.serve(async (req: Request) => {
     ) {
       return jsonResponse(
         { success: false, error: "Invalid field types: to must be string or array, subject and html must be strings" },
+        400
+      );
+    }
+
+    if (cc !== undefined && typeof cc !== "string" && !Array.isArray(cc)) {
+      return jsonResponse(
+        { success: false, error: "Invalid field type: cc must be a string or array of strings" },
         400
       );
     }
@@ -75,11 +87,16 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: false, error: "Field to must not be empty" }, 400);
     }
 
+    const ccAddresses = cc !== undefined
+      ? (Array.isArray(cc) ? cc : [cc])
+      : undefined;
+
     const resend = new Resend(apiKey);
 
     const { data, error } = await resend.emails.send({
       from: "VerifyTrade <noreply@mail.verifytrade.co.nz>",
       to: toAddresses,
+      ...(ccAddresses !== undefined && { cc: ccAddresses }),
       subject,
       html,
     });
