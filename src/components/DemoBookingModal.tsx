@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface DemoBookingModalProps {
   isOpen: boolean;
@@ -80,6 +81,84 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create demo account');
       }
+
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+              .container { max-width: 560px; margin: 32px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+              .header { background: #ea580c; padding: 28px 32px; }
+              .header h1 { color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; }
+              .header p { color: #fed7aa; margin: 6px 0 0; font-size: 14px; }
+              .body { padding: 32px; }
+              .field { margin-bottom: 20px; }
+              .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 4px; }
+              .value { font-size: 16px; color: #111827; font-weight: 500; }
+              .divider { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+              .footer { padding: 20px 32px; background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; text-align: center; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>New Demo Request</h1>
+                <p>A prospect has requested a live demo of VerifyTrade.</p>
+              </div>
+              <div class="body">
+                <div class="field">
+                  <div class="label">Full Name</div>
+                  <div class="value">${formData.name}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Email</div>
+                  <div class="value">${formData.email}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Phone</div>
+                  <div class="value">${formData.phone || '—'}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Company</div>
+                  <div class="value">${formData.company}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Role</div>
+                  <div class="value">${formData.role}</div>
+                </div>
+                ${formData.message ? `
+                <hr class="divider" />
+                <div class="field">
+                  <div class="label">Message</div>
+                  <div class="value">${formData.message.replace(/\n/g, '<br />')}</div>
+                </div>` : ''}
+              </div>
+              <div class="footer">
+                Submitted via VerifyTrade &mdash; Book a Demo form
+              </div>
+            </div>
+          </body>
+        </html>
+      `.trim();
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          to: 'demo@verifytrade.co.nz',
+          cc: 'admin@verifytrade.co.nz',
+          subject: 'New Demo Request - VerifyTrade',
+          html: emailHtml,
+        }),
+      });
 
       setStatus('success');
       setMessage('Demo account created! Check your email for access details.');
