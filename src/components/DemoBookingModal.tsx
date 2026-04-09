@@ -155,6 +155,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
         body: JSON.stringify({
           to: 'demo@verifytrade.co.nz',
           cc: 'admin@verifytrade.co.nz',
+          reply_to: formData.email,
           subject: 'New Demo Request - VerifyTrade',
           html: emailHtml,
         }),
