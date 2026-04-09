@@ -14,7 +14,7 @@ interface SearchResult {
 const searchableItems: SearchResult[] = [
   { id: 'dashboard', title: 'Project Dashboard', description: 'View project overview', category: 'Project' },
   { id: 'projectsettings', title: 'Project Settings', description: 'Configure project settings', category: 'Project' },
-  { id: 'importquotes', title: 'Import Quotes', description: 'Upload PDF, Excel, or CSV supplier quotes', category: 'Import' },
+  { id: 'importquotes', title: 'Import Quotes', description: 'Upload PDF supplier quotes', category: 'Import' },
   { id: 'importboq', title: 'Import Excel BOQ', description: 'Multi-supplier BOQ with auto-detection', category: 'Import' },
   { id: 'review', title: 'Review & Clean', description: 'Normalize and validate imported data', category: 'Import' },
   { id: 'scope', title: 'Scope Matrix', description: 'Side-by-side scope comparison', category: 'Analysis' },

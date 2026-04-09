@@ -640,7 +640,7 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
       {!loading && imports.length === 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { icon: Upload, label: '1. Upload', desc: 'Upload any PDF, Excel, or CSV quote file', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+            { icon: Upload, label: '1. Upload', desc: 'Upload a PDF quote file', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
             { icon: Zap, label: '2. AI Reads It', desc: 'The AI extracts every line item automatically', color: 'text-amber-400', bg: 'bg-amber-500/10' },
             { icon: ClipboardList, label: '3. Review & Confirm', desc: 'Toggle items, then confirm as your baseline', color: 'text-green-400', bg: 'bg-green-500/10' },
           ].map(({ icon: Icon, label, desc, color, bg }) => (
@@ -684,7 +684,7 @@ export default function SCCQuoteImport({ onProceedToWorkflow }: { onProceedToWor
             {uploading ? 'Uploading…' : 'Import Quote'}
           </button>
         </div>
-        <p className="text-xs text-gray-600 mt-2">Supports PDF, Excel (.xlsx, .xls), and CSV</p>
+        <p className="text-xs text-gray-600 mt-2">Supports PDF</p>
         <input ref={fileRef} type="file" accept=".pdf,.xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect} />
       </div>
 

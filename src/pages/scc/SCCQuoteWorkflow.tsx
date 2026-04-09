@@ -26,7 +26,7 @@ const STEP_INTROS: Record<WorkflowStep, {
     title: "Upload your subcontractor's quote",
     what: 'The AI reads your quote document and extracts every line item automatically. You then review the items, toggle any you want to exclude, and set it as your active baseline.',
     tasks: [
-      'Upload a PDF, Excel (.xlsx), or CSV file',
+      'Upload a PDF file',
       'Wait for the AI to finish parsing (usually under a minute)',
       'Check the items look right — toggle off anything you want to exclude',
       'Click "Set as Active Baseline" to lock in the scope',

@@ -136,7 +136,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
     });
 
     if (validFiles.length === 0) {
-      setMessage({ type: 'error', text: 'No valid files selected. Please upload PDF, Excel, or CSV files.' });
+      setMessage({ type: 'error', text: 'No valid files selected. Please upload PDF files.' });
       return;
     }
 
@@ -608,7 +608,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-100">Import Quotes</h2>
-            <p className="text-sm text-slate-400">Upload PDF, Excel, or CSV files from suppliers.</p>
+            <p className="text-sm text-slate-400">Upload PDF files from suppliers.</p>
           </div>
         </div>
 
@@ -710,7 +710,7 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
               </button>
 
               <p className="text-xs text-slate-400 mt-4">
-                Supported formats: PDF, Excel (.xlsx, .xls), CSV
+                Supported formats: PDF
               </p>
             </>
           )}
