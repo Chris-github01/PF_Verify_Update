@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 interface DemoBookingModalProps {
   isOpen: boolean;
@@ -65,23 +64,6 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
     setMessage('');
 
     try {
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/register_demo_account`;
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create demo account');
-      }
-
       const emailHtml = `
         <!DOCTYPE html>
         <html>
@@ -143,14 +125,11 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
         </html>
       `.trim();
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
           to: 'demo@verifytrade.co.nz',
@@ -160,6 +139,11 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
           html: emailHtml,
         }),
       });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to send request. Please try again.');
+      }
 
       const confirmationHtml = `
         <!DOCTYPE html>
@@ -206,7 +190,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
           to: formData.email,
@@ -216,7 +200,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
       }).catch(() => {});
 
       setStatus('success');
-      setMessage('Demo account created! Check your email for access details.');
+      setMessage('Thanks! Your demo request has been received. We\'ll be in touch shortly to confirm a time.');
 
       setTimeout(() => {
         onClose();
@@ -233,7 +217,7 @@ export default function DemoBookingModal({ isOpen, onClose }: DemoBookingModalPr
       }, 3000);
 
     } catch (error: any) {
-      console.error('Demo registration error:', error);
+      console.error('Demo booking error:', error);
       setStatus('error');
       setMessage(error.message || 'An error occurred. Please try again or contact support.');
     } finally {
