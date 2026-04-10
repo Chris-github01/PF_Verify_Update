@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FlaskConical, Plus, Trash2, Play, AlertTriangle, TrendingUp, TrendingDown, Zap, ShieldAlert, Eye } from 'lucide-react';
+import { FlaskConical, Plus, Trash2, Play, TriangleAlert as AlertTriangle, TrendingUp, TrendingDown, Zap, ShieldAlert, Eye } from 'lucide-react';
 import { analyseQuote } from '../analysis';
 import type { LineItem, QuoteAnalysisResult } from '../analysis';
 import { executeShadowRun } from '../shadow/shadowExecutor';
