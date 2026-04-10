@@ -21,5 +21,15 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": [
+    "src/main.tsx",
+    "src/App.tsx",
+    "src/index.css",
+    "src/vite-env.d.ts",
+    "src/components/Layout.tsx",
+    "src/components/Header.tsx",
+    "src/components/DevBanner.tsx",
+    "src/pages/Dashboard.tsx",
+    "src/dev/**/*"
+  ]
 }
