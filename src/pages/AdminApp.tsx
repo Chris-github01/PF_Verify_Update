@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck, Settings, ShieldAlert, Flame, BarChart3, Database } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck, Settings, ShieldAlert, Flame, BarChart3, Database, Map } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { isSuperAdmin } from '../lib/admin/superAdminGuard';
 import AdminDashboard from './admin/AdminDashboard';
@@ -13,8 +13,9 @@ import PlatformAdminUsers from './admin/PlatformAdminUsers';
 import SystemConfiguration from './admin/SystemConfiguration';
 import ExecutiveDashboard from './admin/ExecutiveDashboard';
 import AuditLedger from './admin/AuditLedger';
+import FutureBuildsRoadmap from './admin/FutureBuildsRoadmap';
 
-type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault' | 'platform-admins' | 'system-config' | 'executive-dashboard' | 'audit-ledger';
+type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault' | 'platform-admins' | 'system-config' | 'executive-dashboard' | 'audit-ledger' | 'future-builds-roadmap';
 
 export default function AdminApp() {
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
@@ -54,6 +55,8 @@ export default function AdminApp() {
       setActiveView('executive-dashboard');
     } else if (path === '/admin/audit-ledger') {
       setActiveView('audit-ledger');
+    } else if (path === '/admin/future-builds-roadmap') {
+      setActiveView('future-builds-roadmap');
     } else if (path === '/admin/organisations') {
       setActiveView('organisations');
     } else if (path === '/admin/organisations/new') {
@@ -88,6 +91,8 @@ export default function AdminApp() {
         return <ExecutiveDashboard />;
       case 'audit-ledger':
         return <AuditLedger />;
+      case 'future-builds-roadmap':
+        return <FutureBuildsRoadmap />;
       case 'dashboard':
         return <AdminDashboard />;
       case 'organisations':
@@ -303,6 +308,27 @@ export default function AdminApp() {
                 <span className="flex-1 text-left">Audit Ledger</span>
                 {activeView === 'audit-ledger' && (
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)]" />
+                )}
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => (window.location.href = '/admin/future-builds-roadmap')}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'future-builds-roadmap'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <Map size={16} />
+                </span>
+                <span className="flex-1 text-left">Future Builds</span>
+                {activeView === 'future-builds-roadmap' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
                 )}
               </button>
             </li>
