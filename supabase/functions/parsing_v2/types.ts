@@ -62,6 +62,7 @@ export interface RawLineItem {
   confidence: "high" | "medium" | "low";
   parseMethod: "deterministic" | "llm" | "inferred";
   normalization_confidence?: number;
+  parseConfidence?: number;
 }
 
 export interface NormalizedLineItem {
