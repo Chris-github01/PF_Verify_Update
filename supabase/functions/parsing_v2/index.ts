@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import type {
   NormalizedLineItem,
   ParseV2Request,
+  ParsingStats,
   ParsingV2Result,
   RawLineItem,
   SmartChunk,
@@ -30,7 +31,8 @@ const corsHeaders = {
 function rawToNormalized(
   raw: RawLineItem,
   chunk: SmartChunk,
-  chunkIndex: number
+  chunkIndex: number,
+  source: "deterministic" | "llm"
 ): NormalizedLineItem {
   const qty = safeNum(raw.qty ?? 1);
   const rate = safeNum(raw.rate ?? raw.total ?? 0);
@@ -56,6 +58,9 @@ function rawToNormalized(
     sourceChunk: chunkIndex,
     confidence: raw.confidence,
     parseMethod: raw.parseMethod,
+    source,
+    chunkIndex,
+    originalText: raw.rawLine,
   };
 }
 
@@ -79,20 +84,35 @@ function deduplicateItems(items: NormalizedLineItem[]): NormalizedLineItem[] {
 }
 
 function mergeChunkItems(
-  allChunkResults: Array<{ chunkIndex: number; items: RawLineItem[]; chunk: SmartChunk }>
-): NormalizedLineItem[] {
+  allChunkResults: Array<{
+    chunkIndex: number;
+    deterministicItems: RawLineItem[];
+    llmItems: RawLineItem[];
+    chunk: SmartChunk;
+  }>
+): { items: NormalizedLineItem[]; deterministicCount: number; llmCount: number } {
   const normalized: NormalizedLineItem[] = [];
+  let deterministicCount = 0;
+  let llmCount = 0;
 
-  for (const { chunkIndex, items, chunk } of allChunkResults) {
-    for (const raw of items) {
+  for (const { chunkIndex, deterministicItems, llmItems, chunk } of allChunkResults) {
+    for (const raw of deterministicItems) {
       if (!raw.description || raw.description.trim().length < 3) continue;
-      const item = rawToNormalized(raw, chunk, chunkIndex);
+      const item = rawToNormalized(raw, chunk, chunkIndex, "deterministic");
       if (item.total <= 0 && !item.isAdjustment) continue;
       normalized.push(item);
+      deterministicCount++;
+    }
+    for (const raw of llmItems) {
+      if (!raw.description || raw.description.trim().length < 3) continue;
+      const item = rawToNormalized(raw, chunk, chunkIndex, "llm");
+      if (item.total <= 0 && !item.isAdjustment) continue;
+      normalized.push(item);
+      llmCount++;
     }
   }
 
-  return deduplicateItems(normalized);
+  return { items: deduplicateItems(normalized), deterministicCount, llmCount };
 }
 
 async function processChunk(
@@ -196,7 +216,8 @@ Deno.serve(async (req: Request) => {
 
     const allChunkResults: Array<{
       chunkIndex: number;
-      items: RawLineItem[];
+      deterministicItems: RawLineItem[];
+      llmItems: RawLineItem[];
       chunk: SmartChunk;
     }> = [];
 
@@ -213,22 +234,21 @@ Deno.serve(async (req: Request) => {
         apiKey
       );
 
-      const combinedItems = [...deterministicItems, ...llmItems];
-      allChunkResults.push({ chunkIndex: i, items: combinedItems, chunk });
+      allChunkResults.push({ chunkIndex: i, deterministicItems, llmItems, chunk });
 
       if (deterministicItems.length > 0) chunksWithDeterministic++;
       if (usedLLM) chunksWithLLM++;
-      rawItemCount += combinedItems.length;
+      rawItemCount += deterministicItems.length + llmItems.length;
 
       console.log(
         `[ParsingV2] Chunk ${i + 1}/${chunks.length} "${chunk.section}": ` +
-        `${deterministicItems.length} deterministic + ${llmItems.length} LLM = ${combinedItems.length} items`
+        `${deterministicItems.length} deterministic + ${llmItems.length} LLM = ${deterministicItems.length + llmItems.length} items`
       );
     }
 
     // Merge and deduplicate
     console.log("[ParsingV2] Merging and deduplicating items");
-    const mergedItems = mergeChunkItems(allChunkResults);
+    const { items: mergedItems, deterministicCount, llmCount } = mergeChunkItems(allChunkResults);
     console.log(`[ParsingV2] After dedup: ${mergedItems.length} items (from ${rawItemCount} raw)`);
 
     // Stage 5: Validation Engine
@@ -237,12 +257,20 @@ Deno.serve(async (req: Request) => {
 
     const processingMs = Date.now() - startMs;
 
+    const stats: ParsingStats = {
+      totalChunks: chunks.length,
+      deterministicItems: deterministicCount,
+      llmItems: llmCount,
+      validationScore: validation.score,
+    };
+
     const result: ParsingV2Result = {
       success: true,
       items: validation.validItems,
       validation,
       structure,
       chunks,
+      stats,
       meta: {
         totalChunks: chunks.length,
         chunksWithDeterministicItems: chunksWithDeterministic,
@@ -273,6 +301,12 @@ Deno.serve(async (req: Request) => {
     const errorResult: Partial<ParsingV2Result> = {
       success: false,
       error: err instanceof Error ? err.message : String(err),
+      stats: {
+        totalChunks: 0,
+        deterministicItems: 0,
+        llmItems: 0,
+        validationScore: 0,
+      },
       meta: {
         totalChunks: 0,
         chunksWithDeterministicItems: 0,

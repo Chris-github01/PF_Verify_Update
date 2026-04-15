@@ -80,6 +80,9 @@ export interface NormalizedLineItem {
   sourceChunk: number;
   confidence: "high" | "medium" | "low";
   parseMethod: "deterministic" | "llm" | "inferred";
+  source: "deterministic" | "llm";
+  chunkIndex: number;
+  originalText: string;
 }
 
 export interface ValidationIssue {
@@ -114,12 +117,20 @@ export interface ValidationResult {
   hasCriticalErrors: boolean;
 }
 
+export interface ParsingStats {
+  totalChunks: number;
+  deterministicItems: number;
+  llmItems: number;
+  validationScore: number;
+}
+
 export interface ParsingV2Result {
   success: boolean;
   items: NormalizedLineItem[];
   validation: ValidationResult;
   structure: DocumentStructure;
   chunks: SmartChunk[];
+  stats: ParsingStats;
   meta: {
     totalChunks: number;
     chunksWithDeterministicItems: number;
