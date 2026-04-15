@@ -875,6 +875,21 @@ async function extractTextFromUrl(fileUrl: string): Promise<string> {
   return text;
 }
 
+// ─── Chunk Debug Type ─────────────────────────────────────────────────────────
+
+interface ChunkDebug {
+  chunkIndex: number;
+  section: string;
+  block: string | null;
+  lineCount: number;
+  detectedAsTable: boolean;
+  deterministicItems: number;
+  llmItems: number;
+  rawLines: string[];
+  parsedItems: NormalizedLineItem[];
+  failedLines: string[];
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -933,11 +948,16 @@ Deno.serve(async (req: Request) => {
     const allNormalized: NormalizedLineItem[] = [];
     let totalDeterministicRaw = 0;
     let totalLlmRaw = 0;
+    const chunkDebugs: ChunkDebug[] = [];
+    const failedLinesGlobal: string[] = [];
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
+      const chunkRawLines = chunk.chunkText.split("\n");
+      const chunkNonEmptyLines = chunkRawLines.filter((l) => l.trim().length > 0);
+      const chunkLineCount = chunkNonEmptyLines.length;
+
       const deterministicItems = parseDeterministic(chunk);
-      const chunkLineCount = chunk.chunkText.split("\n").filter((l) => l.trim()).length;
       const deterministicCoverage = chunkLineCount > 0 ? deterministicItems.length / chunkLineCount : 0;
       const needsLLM = apiKey && (deterministicItems.length === 0 || deterministicCoverage < 0.2 || chunk.estimatedItemCount > deterministicItems.length * 1.5);
 
@@ -952,27 +972,108 @@ Deno.serve(async (req: Request) => {
 
       console.log(`[TestParsingV2] Chunk ${i + 1}/${chunks.length} "${chunk.section}": det=${deterministicItems.length} llm=${llmItems.length} lines=${chunkLineCount}`);
 
+      const parsedLineIndexes = new Set<number>([
+        ...deterministicItems.map((r) => r.sourceLineIndex),
+        ...llmItems.map((r) => r.sourceLineIndex),
+      ]);
+
+      const chunkParsedItems: NormalizedLineItem[] = [];
+
       for (const raw of deterministicItems) {
-        if (!raw.description || raw.description.trim().length < 3) continue;
+        if (!raw.description || raw.description.trim().length < 3) {
+          failedLinesGlobal.push(raw.rawLine);
+          continue;
+        }
         const item = rawToNormalized(raw, chunk, i, "deterministic");
-        if (item.total <= 0 && !item.isAdjustment) continue;
+        if (item.total <= 0 && !item.isAdjustment) {
+          failedLinesGlobal.push(raw.rawLine);
+          continue;
+        }
         allNormalized.push(item);
+        chunkParsedItems.push(item);
       }
       for (const raw of llmItems) {
-        if (!raw.description || raw.description.trim().length < 3) continue;
+        if (!raw.description || raw.description.trim().length < 3) {
+          failedLinesGlobal.push(raw.rawLine);
+          continue;
+        }
         const item = rawToNormalized(raw, chunk, i, "llm");
-        if (item.total <= 0 && !item.isAdjustment) continue;
+        if (item.total <= 0 && !item.isAdjustment) {
+          failedLinesGlobal.push(raw.rawLine);
+          continue;
+        }
         allNormalized.push(item);
+        chunkParsedItems.push(item);
       }
+
+      const isTable = structure.tables.some(
+        (t) => t.startLine <= chunk.startLine + 2 && t.endLine >= chunk.endLine - 2
+      );
+
+      const chunkFailedLines: string[] = chunkNonEmptyLines.filter((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        if (isSummaryLine(trimmed)) return false;
+        if (isHeadingLine(trimmed)) return false;
+        if (!/[A-Za-z]{2,}/.test(trimmed)) return false;
+        return !parsedLineIndexes.has(idx);
+      });
+
+      for (const fl of chunkFailedLines) {
+        if (!failedLinesGlobal.includes(fl)) failedLinesGlobal.push(fl);
+      }
+
+      chunkDebugs.push({
+        chunkIndex: i,
+        section: chunk.section,
+        block: chunk.block,
+        lineCount: chunkLineCount,
+        detectedAsTable: isTable,
+        deterministicItems: deterministicItems.length,
+        llmItems: llmItems.length,
+        rawLines: chunkNonEmptyLines,
+        parsedItems: chunkParsedItems,
+        failedLines: chunkFailedLines,
+      });
     }
 
     const mergedItems = deduplicateItems(allNormalized);
     const validation = validateItems(mergedItems, documentTotal);
 
+    const invalidItemDescriptions = new Set(validation.invalidItems.map((i) => i.description));
+    for (const item of validation.invalidItems) {
+      if (item.originalText && !failedLinesGlobal.includes(item.originalText)) {
+        failedLinesGlobal.push(item.originalText);
+      }
+    }
+
     const totalParsedRows = totalDeterministicRaw + totalLlmRaw;
     const deterministicRatio = totalParsedRows > 0 ? roundTo2(totalDeterministicRaw / totalParsedRows) : 0;
     const lowConfidenceItemsCount = validation.validItems.filter((i) => i.confidence === "low").length;
     const processingMs = Date.now() - startMs;
+
+    const allParsedItems = [...validation.validItems, ...validation.invalidItems];
+    const avgParseConfidence = allParsedItems.length > 0
+      ? roundTo2(allParsedItems.reduce((s, item) => {
+          const conf = (item as NormalizedLineItem & { parseConfidence?: number }).parseConfidence ?? (item.confidence === "high" ? 0.9 : item.confidence === "medium" ? 0.6 : 0.3);
+          return s + conf;
+        }, 0) / allParsedItems.length)
+      : 0;
+
+    const avgNormalizationConfidence = allParsedItems.length > 0
+      ? roundTo2(allParsedItems.reduce((s, item) => {
+          const nc = (item as NormalizedLineItem & { normalization_confidence?: number }).normalization_confidence ?? (item.source === "llm" ? 0.8 : 1.0);
+          return s + nc;
+        }, 0) / allParsedItems.length)
+      : 0;
+
+    const highRiskItems = allParsedItems.filter((item) =>
+      item.confidence === "low" || invalidItemDescriptions.has(item.description)
+    ).length;
+
+    const percentLinesParsed = inputLines.length > 0
+      ? roundTo2((totalParsedRows / inputLines.length) * 100)
+      : 0;
 
     console.log(`[TestParsingV2] === PARSE COMPLETE ===`);
     console.log(`[TestParsingV2] Total input lines:  ${inputLines.length}`);
@@ -983,6 +1084,10 @@ Deno.serve(async (req: Request) => {
     console.log(`[TestParsingV2] Invalid items:       ${validation.invalidItems.length}`);
     console.log(`[TestParsingV2] Validation score:    ${validation.score}`);
     console.log(`[TestParsingV2] Parsing gap:         ${validation.parsingGap} (${validation.parsingGapPercent}%)`);
+    console.log(`[TestParsingV2] Failed lines global: ${failedLinesGlobal.length}`);
+    console.log(`[TestParsingV2] % lines parsed:      ${percentLinesParsed}%`);
+    console.log(`[TestParsingV2] Avg parse conf:      ${avgParseConfidence}`);
+    console.log(`[TestParsingV2] High risk items:     ${highRiskItems}`);
     console.log(`[TestParsingV2] Chunks:              ${chunks.length}`);
     console.log(`[TestParsingV2] Processing time:     ${processingMs}ms`);
 
@@ -1019,6 +1124,19 @@ Deno.serve(async (req: Request) => {
           documentTotal: documentTotal ?? null,
           chunksTotal: chunks.length,
           processingMs,
+          chunks: chunkDebugs,
+          failedLinesGlobal,
+          structure: {
+            sectionsDetected: structure.sections.length,
+            tablesDetected: structure.tables.length,
+            blocksDetected: structure.blocks.length,
+          },
+          quality: {
+            percentLinesParsed,
+            avgParseConfidence,
+            avgNormalizationConfidence,
+            highRiskItems,
+          },
         },
       }, null, 2),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
