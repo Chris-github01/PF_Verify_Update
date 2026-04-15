@@ -89,7 +89,8 @@ export interface ValidationIssue {
     | "missing_description"
     | "document_total_gap"
     | "implausible_rate"
-    | "implausible_qty";
+    | "implausible_qty"
+    | "significant_total_mismatch";
   severity: "error" | "warning";
   itemIndex: number | null;
   message: string;
@@ -105,6 +106,9 @@ export interface ValidationResult {
   documentTotal: number | null;
   documentTotalGap: number | null;
   documentTotalGapPct: number | null;
+  parsingGap: number;
+  parsingGapPercent: number;
+  hasGap: boolean;
   hasCriticalErrors: boolean;
 }
 

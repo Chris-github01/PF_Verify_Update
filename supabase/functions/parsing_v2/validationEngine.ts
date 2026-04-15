@@ -174,6 +174,27 @@ function checkDocumentTotalGap(
   }
 }
 
+function checkSignificantMismatch(
+  itemsTotal: number,
+  documentTotal: number | null,
+  issues: ValidationIssue[]
+): void {
+  if (documentTotal === null || documentTotal <= 0) return;
+
+  const gap = roundTo2(documentTotal - itemsTotal);
+  const gapPct = Math.abs(gap) / documentTotal;
+
+  if (gapPct > 0.02) {
+    issues.push({
+      type: "significant_total_mismatch",
+      severity: "error",
+      itemIndex: null,
+      message: `SIGNIFICANT_TOTAL_MISMATCH: parsed items total $${itemsTotal.toFixed(2)} vs document total $${documentTotal.toFixed(2)} — gap of $${Math.abs(gap).toFixed(2)} (${(gapPct * 100).toFixed(1)}%)`,
+      details: { itemsTotal, documentTotal, gap, gapPct },
+    });
+  }
+}
+
 function computeScore(
   items: NormalizedLineItem[],
   issues: ValidationIssue[],
@@ -204,36 +225,6 @@ function computeScore(
   }
 
   return Math.max(0, Math.min(100, score));
-}
-
-function addRemainderAdjustment(
-  items: NormalizedLineItem[],
-  documentTotal: number
-): NormalizedLineItem[] {
-  const itemsTotal = items.reduce((s, i) => s + i.total, 0);
-  const remainder = roundTo2(documentTotal - itemsTotal);
-  const tolerance = Math.max(5, documentTotal * 0.001);
-
-  if (Math.abs(remainder) <= tolerance) return items;
-
-  const adjustmentItem: NormalizedLineItem = {
-    description: "Unparsed remainder — auto-adjustment to match document total",
-    qty: 1,
-    unit: "ls",
-    rate: remainder,
-    total: remainder,
-    section: "Adjustment",
-    block: null,
-    isOptional: false,
-    isAdjustment: true,
-    isSummaryRow: false,
-    frr: null,
-    sourceChunk: -1,
-    confidence: "low",
-    parseMethod: "inferred",
-  };
-
-  return [...items, adjustmentItem];
 }
 
 export function validateItems(
@@ -290,33 +281,39 @@ export function validateItems(
   const itemsTotal = roundTo2(finalValid.reduce((s, i) => s + i.total, 0));
 
   checkDocumentTotalGap(itemsTotal, documentTotal, issues);
+  checkSignificantMismatch(itemsTotal, documentTotal, issues);
 
-  let finalItems = finalValid;
-  if (documentTotal !== null) {
-    finalItems = addRemainderAdjustment(finalValid, documentTotal);
-  }
+  const parsingGap =
+    documentTotal !== null ? roundTo2(documentTotal - itemsTotal) : 0;
+  const parsingGapPercent =
+    documentTotal !== null && documentTotal > 0
+      ? roundTo2((Math.abs(parsingGap) / documentTotal) * 100)
+      : 0;
+  const hasGap = parsingGapPercent > 2;
 
-  const finalTotal = roundTo2(finalItems.reduce((s, i) => s + i.total, 0));
-  const gap = documentTotal !== null ? roundTo2(documentTotal - finalTotal) : null;
+  const gap = documentTotal !== null ? parsingGap : null;
   const gapPct =
     documentTotal !== null && documentTotal > 0
-      ? roundTo2(Math.abs(gap!) / documentTotal)
+      ? roundTo2(Math.abs(parsingGap) / documentTotal)
       : null;
 
-  const score = computeScore(finalItems, issues, documentTotal);
+  const score = computeScore(finalValid, issues, documentTotal);
   const hasCriticalErrors = issues.some(
     (i) => i.severity === "error" && i.type !== "duplicate"
   );
 
   return {
-    validItems: finalItems,
+    validItems: finalValid,
     invalidItems,
     issues,
     score,
-    itemsTotal: finalTotal,
+    itemsTotal,
     documentTotal,
     documentTotalGap: gap,
     documentTotalGapPct: gapPct,
+    parsingGap,
+    parsingGapPercent,
+    hasGap,
     hasCriticalErrors,
   };
 }
