@@ -6,8 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const PARSER_VERSION = "v2.0.0-2026-04-15";
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TradeType = "passive_fire" | "plumbing" | "electrical" | "hvac" | "active_fire" | "carpentry" | "unknown";
@@ -64,6 +62,19 @@ interface ValidationIssue {
   details?: Record<string, unknown>;
 }
 
+interface ValidationResult {
+  validItems: NormalizedLineItem[];
+  invalidItems: NormalizedLineItem[];
+  issues: ValidationIssue[];
+  score: number;
+  itemsTotal: number;
+  documentTotal: number | null;
+  parsingGap: number;
+  parsingGapPercent: number;
+  hasGap: boolean;
+  hasCriticalErrors: boolean;
+}
+
 interface StructureSection { heading: string; startLine: number; endLine: number; level: number; }
 interface StructureTable { startLine: number; endLine: number; columnCount: number; headerLine: string | null; }
 interface StructureBlock { label: string; startLine: number; endLine: number; }
@@ -81,11 +92,10 @@ interface DocumentStructure {
   };
 }
 
-interface TestRequest {
+interface TestParsingRequest {
   text?: string;
   fileUrl?: string;
   tradeType?: TradeType;
-  documentTotal?: number;
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
@@ -345,6 +355,12 @@ function findBlockForLine(lineIndex: number, blocks: StructureBlock[]): string |
   return null;
 }
 
+function isRowContinuationLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  return /^[A-Za-z]/.test(trimmed) && !/\d/.test(trimmed) && trimmed.length < 80 && trimmed.length > 3;
+}
+
 function safeFlush(lines: string[], section: string, block: string | null, startLine: number): SmartChunk {
   const text = lines.join("\n").trim();
   return { chunkText: text, section, block, pageRange: null, startLine, endLine: startLine + lines.length - 1, estimatedItemCount: estimateItemCount(lines) };
@@ -372,7 +388,7 @@ function splitByStructureBoundaries(lines: string[], structure: DocumentStructur
       for (let i = 0; i < segmentLines.length; i++) {
         if (currentLines.length >= MAX_LINES_PER_CHUNK) {
           const nextLine = segmentLines[i + 1]?.trim() ?? "";
-          const isContinuation = (!nextLine || (/^[A-Za-z]/.test(nextLine) && !/\d/.test(nextLine) && nextLine.length < 80 && nextLine.length > 3));
+          const isContinuation = isRowContinuationLine(nextLine) || nextLine === "";
           if (!isContinuation || currentLines.length >= MAX_LINES_PER_CHUNK + 5) {
             const section = findSectionForLine(start + subStart, structure.sections);
             const block = findBlockForLine(start + subStart, structure.blocks);
@@ -475,8 +491,7 @@ function cleanDescription(raw: string): string {
 }
 
 function isNoiseLine(line: string): boolean {
-  const trimmed = line.trim();
-  return isSummaryLine(trimmed) || NOISE_TERMS.test(trimmed);
+  return isSummaryLine(line.trim()) || NOISE_TERMS.test(line.trim());
 }
 
 function tryColumnParse(line: string): { description: string; qty: number | null; unit: string | null; rate: number | null; total: number | null; method: "column" | "fallback" } | null {
@@ -728,20 +743,17 @@ async function normalizeWithLLM(chunk: SmartChunk, deterministicItems: RawLineIt
 
 // ─── Validation Engine ────────────────────────────────────────────────────────
 
-const MATH_TOLERANCE_PCT = 0.02;
-const DOCUMENT_TOTAL_TOLERANCE_PCT = 0.05;
-
-function validateItems(items: NormalizedLineItem[], documentTotal: number | null) {
+function validateItems(items: NormalizedLineItem[], documentTotal: number | null): ValidationResult {
   const issues: ValidationIssue[] = [];
   const validItems: NormalizedLineItem[] = [];
   const invalidItems: NormalizedLineItem[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const itemIssues: ValidationIssue[] = [];
-    if (!item.description || item.description.trim().length < 3) itemIssues.push({ type: "missing_description", severity: "error", itemIndex: i, message: `Item ${i} has no usable description`, details: {} });
+    if (!item.description || item.description.trim().length < 3) itemIssues.push({ type: "missing_description", severity: "error", itemIndex: i, message: `Item ${i} has no usable description` });
     if (item.total <= 0 && !item.isAdjustment) itemIssues.push({ type: "zero_total", severity: "warning", itemIndex: i, message: `Item has zero or negative total: "${item.description}"`, details: { total: item.total } });
     if (item.total < 0 && !item.isAdjustment) itemIssues.push({ type: "negative_total", severity: "warning", itemIndex: i, message: `Item has negative total: "${item.description}" = ${item.total}`, details: { total: item.total } });
-    if (item.qty > 0 && item.rate > 0 && item.total > 0 && !mathCheck(item.qty, item.rate, item.total, MATH_TOLERANCE_PCT)) {
+    if (item.qty > 0 && item.rate > 0 && item.total > 0 && !mathCheck(item.qty, item.rate, item.total, 0.02)) {
       const computed = roundTo2(item.qty * item.rate);
       itemIssues.push({ type: "math_mismatch", severity: "warning", itemIndex: i, message: `Math mismatch: ${item.qty} × ${item.rate} = ${computed}, but total is ${item.total}`, details: { qty: item.qty, rate: item.rate, total: item.total, computed } });
     }
@@ -771,7 +783,7 @@ function validateItems(items: NormalizedLineItem[], documentTotal: number | null
   if (documentTotal !== null && documentTotal > 0) {
     const gap = roundTo2(documentTotal - itemsTotal);
     const gapPct = Math.abs(gap) / documentTotal;
-    if (gapPct > DOCUMENT_TOTAL_TOLERANCE_PCT) issues.push({ type: "document_total_gap", severity: gapPct > 0.15 ? "error" : "warning", itemIndex: null, message: `Items total $${itemsTotal.toFixed(2)} differs from document total $${documentTotal.toFixed(2)} by $${Math.abs(gap).toFixed(2)} (${(gapPct * 100).toFixed(1)}%)`, details: { itemsTotal, documentTotal, gap, gapPct } });
+    if (gapPct > 0.05) issues.push({ type: "document_total_gap", severity: gapPct > 0.15 ? "error" : "warning", itemIndex: null, message: `Items total $${itemsTotal.toFixed(2)} differs from document total $${documentTotal.toFixed(2)} by $${Math.abs(gap).toFixed(2)} (${(gapPct * 100).toFixed(1)}%)`, details: { itemsTotal, documentTotal, gap, gapPct } });
   }
   const parsingGap = documentTotal !== null ? roundTo2(documentTotal - itemsTotal) : 0;
   const parsingGapPercent = documentTotal !== null && documentTotal > 0 ? roundTo2((Math.abs(parsingGap) / documentTotal) * 100) : 0;
@@ -817,6 +829,52 @@ function deduplicateItems(items: NormalizedLineItem[]): NormalizedLineItem[] {
   return result;
 }
 
+// ─── File Extraction ──────────────────────────────────────────────────────────
+
+async function extractTextFromUrl(fileUrl: string): Promise<string> {
+  console.log(`[TestParsingV2] Fetching file: ${fileUrl}`);
+  const res = await fetch(fileUrl);
+  if (!res.ok) throw new Error(`Failed to fetch file: ${res.status} ${res.statusText}`);
+
+  const contentType = res.headers.get("content-type") ?? "";
+  console.log(`[TestParsingV2] Content-Type: ${contentType}`);
+
+  if (contentType.includes("application/json")) {
+    const json = await res.json();
+    if (typeof json.text === "string") return json.text;
+    if (typeof json.content === "string") return json.content;
+    return JSON.stringify(json);
+  }
+
+  if (
+    contentType.includes("application/pdf") ||
+    contentType.includes("application/octet-stream") ||
+    fileUrl.toLowerCase().endsWith(".pdf")
+  ) {
+    const pdfExtractorBase = Deno.env.get("PDF_EXTRACTOR_BASE_URL") || "https://verify-pdf-extractor.onrender.com";
+    const apiKey = Deno.env.get("PYTHON_PARSER_API_KEY");
+    console.log(`[TestParsingV2] Delegating PDF extraction to: ${pdfExtractorBase}`);
+    const extractRes = await fetch(`${pdfExtractorBase}/extract-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(apiKey ? { "X-API-Key": apiKey } : {}) },
+      body: JSON.stringify({ file_url: fileUrl }),
+    });
+    if (!extractRes.ok) {
+      const errText = await extractRes.text();
+      throw new Error(`PDF extraction failed: ${extractRes.status} — ${errText}`);
+    }
+    const extractData = await extractRes.json();
+    const extracted = extractData.text ?? extractData.content ?? extractData.raw_text ?? "";
+    if (!extracted || extracted.trim().length === 0) throw new Error("PDF extraction returned empty text");
+    console.log(`[TestParsingV2] PDF extracted: ${extracted.length} chars`);
+    return extracted;
+  }
+
+  const text = await res.text();
+  console.log(`[TestParsingV2] Raw text fetched: ${text.length} chars`);
+  return text;
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -831,45 +889,46 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Method not allowed. Use POST." }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    let body: TestRequest;
+    let body: TestParsingRequest;
     try { body = await req.json(); }
     catch { return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }); }
 
-    const { text: rawText, fileUrl, tradeType, documentTotal: providedDocTotal } = body;
+    const { text: rawText, fileUrl, tradeType } = body;
 
-    let text: string;
-    if (fileUrl) {
-      console.log(`[TestParsingV2] Fetching file from URL: ${fileUrl}`);
-      const res = await fetch(fileUrl);
-      if (!res.ok) throw new Error(`Failed to fetch file: ${res.status} ${res.statusText}`);
-      const contentType = res.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) {
-        const json = await res.json();
-        text = typeof json.text === "string" ? json.text : typeof json.content === "string" ? json.content : JSON.stringify(json);
-      } else {
-        text = await res.text();
-      }
-      console.log(`[TestParsingV2] Fetched ${text.length} chars from URL`);
-    } else if (rawText && typeof rawText === "string" && rawText.trim().length > 0) {
-      text = rawText;
-    } else {
+    if (!rawText && !fileUrl) {
       return new Response(JSON.stringify({ error: "Provide either 'text' or 'fileUrl'" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    const inputLines = text.split("\n").filter((l) => l.trim().length > 0);
+    let text: string;
+    if (fileUrl) {
+      text = await extractTextFromUrl(fileUrl);
+    } else {
+      text = rawText!;
+    }
 
-    console.log(`[TestParsingV2] Input: ${text.length} chars, ${inputLines.length} non-empty lines`);
+    if (!text || text.trim().length === 0) {
+      return new Response(JSON.stringify({ error: "No usable text could be extracted" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    const allLines = text.split("\n");
+    const inputLines = allLines.filter((l) => l.trim().length > 0);
+
+    console.log(`[TestParsingV2] === PARSE START ===`);
+    console.log(`[TestParsingV2] Total input lines: ${inputLines.length} (${allLines.length} raw)`);
     console.log(`[TestParsingV2] Trade override: ${tradeType ?? "auto-detect"}`);
+    console.log(`[TestParsingV2] Text length: ${text.length} chars`);
 
     const structure = detectStructure(text);
     const detectedTrade: TradeType = tradeType ?? structure.metadata.estimatedTradeType;
-    const documentTotal = providedDocTotal ?? structure.metadata.grandTotal ?? extractDocumentTotal(text);
+    const documentTotal = structure.metadata.grandTotal ?? extractDocumentTotal(text) ?? null;
 
-    console.log(`[TestParsingV2] Detected trade: ${detectedTrade}, document total: ${documentTotal ?? "N/A"}`);
+    console.log(`[TestParsingV2] Detected trade: ${detectedTrade}`);
+    console.log(`[TestParsingV2] Document total: ${documentTotal ?? "N/A"}`);
+    console.log(`[TestParsingV2] Structure — sections: ${structure.sections.length}, blocks: ${structure.blocks.length}, tables: ${structure.tables.length}`);
 
     const chunks = createSmartChunks(text, structure);
-    console.log(`[TestParsingV2] Created ${chunks.length} chunks`);
+    console.log(`[TestParsingV2] Chunks created: ${chunks.length}`);
 
     const allNormalized: NormalizedLineItem[] = [];
     let totalDeterministicRaw = 0;
@@ -879,16 +938,20 @@ Deno.serve(async (req: Request) => {
       const chunk = chunks[i];
       const deterministicItems = parseDeterministic(chunk);
       const chunkLineCount = chunk.chunkText.split("\n").filter((l) => l.trim()).length;
-      const coverage = chunkLineCount > 0 ? deterministicItems.length / chunkLineCount : 0;
-      const needsLLM = apiKey && (deterministicItems.length === 0 || coverage < 0.2 || chunk.estimatedItemCount > deterministicItems.length * 1.5);
+      const deterministicCoverage = chunkLineCount > 0 ? deterministicItems.length / chunkLineCount : 0;
+      const needsLLM = apiKey && (deterministicItems.length === 0 || deterministicCoverage < 0.2 || chunk.estimatedItemCount > deterministicItems.length * 1.5);
+
       let llmItems: RawLineItem[] = [];
       if (needsLLM && apiKey) {
         try { llmItems = await normalizeWithLLM(chunk, deterministicItems, detectedTrade, apiKey); }
-        catch (err) { console.warn(`[TestParsingV2] LLM fallback failed for chunk ${i}:`, err); }
+        catch (err) { console.warn(`[TestParsingV2] LLM fallback failed chunk ${i}:`, err); }
       }
+
       totalDeterministicRaw += deterministicItems.length;
       totalLlmRaw += llmItems.length;
-      console.log(`[TestParsingV2] Chunk ${i + 1}/${chunks.length} "${chunk.section}": ${deterministicItems.length} det + ${llmItems.length} llm`);
+
+      console.log(`[TestParsingV2] Chunk ${i + 1}/${chunks.length} "${chunk.section}": det=${deterministicItems.length} llm=${llmItems.length} lines=${chunkLineCount}`);
+
       for (const raw of deterministicItems) {
         if (!raw.description || raw.description.trim().length < 3) continue;
         const item = rawToNormalized(raw, chunk, i, "deterministic");
@@ -904,16 +967,24 @@ Deno.serve(async (req: Request) => {
     }
 
     const mergedItems = deduplicateItems(allNormalized);
-    const validation = validateItems(mergedItems, documentTotal ?? null);
+    const validation = validateItems(mergedItems, documentTotal);
+
     const totalParsedRows = totalDeterministicRaw + totalLlmRaw;
     const deterministicRatio = totalParsedRows > 0 ? roundTo2(totalDeterministicRaw / totalParsedRows) : 0;
-    const llmRatio = totalParsedRows > 0 ? roundTo2(totalLlmRaw / totalParsedRows) : 0;
     const lowConfidenceItemsCount = validation.validItems.filter((i) => i.confidence === "low").length;
     const processingMs = Date.now() - startMs;
 
-    console.log(`[TestParsingV2] Complete — ${validation.validItems.length} valid items, score=${validation.score}, ${processingMs}ms`);
-    console.log(`[TestParsingV2] Input lines: ${inputLines.length} | Parsed rows: ${totalParsedRows}`);
-    console.log(`[TestParsingV2] Deterministic: ${totalDeterministicRaw} (${(deterministicRatio * 100).toFixed(1)}%) | LLM: ${totalLlmRaw} (${(llmRatio * 100).toFixed(1)}%)`);
+    console.log(`[TestParsingV2] === PARSE COMPLETE ===`);
+    console.log(`[TestParsingV2] Total input lines:  ${inputLines.length}`);
+    console.log(`[TestParsingV2] Total parsed rows:  ${totalParsedRows}`);
+    console.log(`[TestParsingV2] Deterministic:      ${totalDeterministicRaw} (${(deterministicRatio * 100).toFixed(1)}%)`);
+    console.log(`[TestParsingV2] LLM:                ${totalLlmRaw} (${((1 - deterministicRatio) * 100).toFixed(1)}%)`);
+    console.log(`[TestParsingV2] Valid items:         ${validation.validItems.length}`);
+    console.log(`[TestParsingV2] Invalid items:       ${validation.invalidItems.length}`);
+    console.log(`[TestParsingV2] Validation score:    ${validation.score}`);
+    console.log(`[TestParsingV2] Parsing gap:         ${validation.parsingGap} (${validation.parsingGapPercent}%)`);
+    console.log(`[TestParsingV2] Chunks:              ${chunks.length}`);
+    console.log(`[TestParsingV2] Processing time:     ${processingMs}ms`);
 
     return new Response(
       JSON.stringify({
@@ -938,17 +1009,16 @@ Deno.serve(async (req: Request) => {
         debug: {
           parsingGap: validation.parsingGap,
           parsingGapPercent: validation.parsingGapPercent,
+          hasGap: validation.hasGap,
           invalidItemsCount: validation.invalidItems.length,
           lowConfidenceItemsCount,
-          inputLines: inputLines.length,
+          totalInputLines: inputLines.length,
           totalParsedRows,
           deterministicRatio,
-          llmRatio,
           detectedTrade,
           documentTotal: documentTotal ?? null,
           chunksTotal: chunks.length,
           processingMs,
-          parserVersion: PARSER_VERSION,
         },
       }, null, 2),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
