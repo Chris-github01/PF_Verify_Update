@@ -10,6 +10,7 @@ import {
   addRemainderIfNeeded,
   filterTotalRows,
 } from "../_shared/itemNormalizer.ts";
+import { runParseResolution } from "../_shared/parseResolutionEngine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -902,16 +903,42 @@ Deno.serve(async (req: Request) => {
       if (quoteItems.length > 0) {
         await supabase.from("quote_items").insert(quoteItems);
 
-        // ✅ V5: Calculate validation metrics
+        // ✅ Run parse resolution engine to get authoritative total
+        const resolutionRows = quoteItems.map((item: any) => ({
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unit_price: item.unit_price,
+          total_price: item.total_price,
+        }));
+        const resolution = runParseResolution(resolutionRows);
+
         const itemsSum = finalItems.reduce((sum: number, line: any) =>
           sum + (parseFloat(line.total) || 0), 0
         );
 
-        // For multiplier quotes, persist the document total (all levels combined) as total_amount
-        const persistedTotal = (detectedLevelsMultiplier && documentTotal) ? documentTotal : itemsSum;
+        // For multiplier quotes, the document total IS the correct total (items × levels).
+        // Otherwise use the resolution engine's authoritative value.
+        let persistedTotal: number;
+        if (detectedLevelsMultiplier && documentTotal) {
+          persistedTotal = documentTotal;
+        } else if (resolution.resolvedTotal.value > 0) {
+          persistedTotal = resolution.resolvedTotal.value;
+        } else {
+          persistedTotal = itemsSum;
+        }
+
         const tolerance = documentTotal ? Math.max(100, documentTotal * 0.02) : 100;
         const missingAmount = documentTotal ? documentTotal - itemsSum : 0;
         const needsReview = !detectedLevelsMultiplier && documentTotal !== null && Math.abs(missingAmount) > tolerance;
+
+        console.log(`[Resolution] source=${resolution.resolvedTotal.source} confidence=${resolution.resolvedTotal.confidence} total=$${persistedTotal.toLocaleString()}`);
+        if (resolution.debug.duplicatesRemoved > 0) {
+          console.log(`[Resolution] Removed ${resolution.debug.duplicatesRemoved} duplicate rows`);
+        }
+        if (resolution.debug.warnings.length > 0) {
+          console.log(`[Resolution] Warnings:`, resolution.debug.warnings.map((w: any) => w.message));
+        }
 
         await supabase
           .from("quotes")
@@ -931,13 +958,14 @@ Deno.serve(async (req: Request) => {
         console.log(`[Resume V5] Replaced ${quoteItems.length} items in quote ${quoteId}`);
         console.log(`[Resume V5] Sum(items): $${itemsSum.toLocaleString()}`);
         console.log(`[Resume V5] Document total: $${documentTotal?.toLocaleString() || 'not found'}`);
+        console.log(`[Resume V5] Resolved total: $${persistedTotal.toLocaleString()} (${resolution.resolvedTotal.source})`);
         if (detectedLevelsMultiplier) {
           console.log(`[Resume V5] Levels multiplier x${detectedLevelsMultiplier} — persisted total=$${persistedTotal.toLocaleString()}`);
         }
         if (needsReview) {
-          console.warn(`[Resume V5] ⚠️ NEEDS REVIEW: Missing $${Math.abs(missingAmount).toLocaleString()} (${((Math.abs(missingAmount) / documentTotal!) * 100).toFixed(1)}% gap)`);
+          console.log(`[Resume V5] NEEDS REVIEW: Missing $${Math.abs(missingAmount).toLocaleString()} (${((Math.abs(missingAmount) / documentTotal!) * 100).toFixed(1)}% gap)`);
         } else {
-          console.log(`[Resume V5] ✅ Totals match within tolerance`);
+          console.log(`[Resume V5] Totals match within tolerance`);
         }
       }
     }

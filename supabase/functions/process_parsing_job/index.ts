@@ -11,6 +11,7 @@ import {
   extractFRRFromDescription,
   filterTotalRows,
 } from "../_shared/itemNormalizer.ts";
+import { runParseResolution } from "../_shared/parseResolutionEngine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -726,13 +727,29 @@ Deno.serve(async (req: Request) => {
 
         console.log(`Created ${quoteItems.length} quote items`);
 
-        // ✅ Calculate totals - prefer line item sum (ground truth) over document total
-        // Document totals on cover pages may contain human arithmetic errors.
-        // Only fall back to document total when no line items were parsed.
+        // ✅ Run parse resolution engine to get authoritative total
+        const resolutionRows = quoteItems.map(item => ({
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unit_price: item.unit_price,
+          total_price: item.total_price,
+        }));
+        const resolution = runParseResolution(resolutionRows);
         const calculatedTotal = quoteItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
-        const finalTotalAmount = calculatedTotal > 0 ? calculatedTotal : (documentTotal ?? 0);
+        const finalTotalAmount = resolution.resolvedTotal.value > 0
+          ? resolution.resolvedTotal.value
+          : (calculatedTotal > 0 ? calculatedTotal : (documentTotal ?? 0));
 
-        // ✅ Update quote with both counts and document total
+        console.log(`[Resolution] source=${resolution.resolvedTotal.source} confidence=${resolution.resolvedTotal.confidence} total=$${finalTotalAmount.toLocaleString()}`);
+        if (resolution.debug.duplicatesRemoved > 0) {
+          console.log(`[Resolution] Removed ${resolution.debug.duplicatesRemoved} duplicate rows`);
+        }
+        if (resolution.debug.warnings.length > 0) {
+          console.log(`[Resolution] Warnings:`, resolution.debug.warnings.map(w => w.message));
+        }
+
+        // ✅ Update quote with resolved total and resolution metadata
         await supabase
           .from("quotes")
           .update({
@@ -740,11 +757,11 @@ Deno.serve(async (req: Request) => {
             raw_items_count: rawItemsCount,
             inserted_items_count: quoteItems.length,
             total_amount: finalTotalAmount,
-            total_price: finalTotalAmount
+            total_price: finalTotalAmount,
           })
           .eq("id", quoteData.id);
 
-        console.log(`Raw parsed: ${rawItemsCount}, Inserted: ${quoteItems.length}, Document total: $${finalTotalAmount.toLocaleString()}`);
+        console.log(`Raw parsed: ${rawItemsCount}, Inserted: ${quoteItems.length}, Resolved total: $${finalTotalAmount.toLocaleString()} (${resolution.resolvedTotal.source})`);
       }
 
       await supabase
