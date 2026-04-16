@@ -348,6 +348,17 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token ?? anonKey;
+
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('quotes')
+        .createSignedUrl(fileUrl, 300);
+
+      if (signedError || !signedData?.signedUrl) {
+        throw new Error(`Could not generate signed URL for file: ${signedError?.message ?? 'Unknown error'}`);
+      }
+
+      const resolvedFileUrl = signedData.signedUrl;
+
       const res = await fetch(`${supabaseUrl}/functions/v1/test_parsing_v2`, {
         method: 'POST',
         headers: {
@@ -355,7 +366,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
           'Authorization': `Bearer ${token}`,
           'Apikey': anonKey,
         },
-        body: JSON.stringify({ fileUrl, tradeType }),
+        body: JSON.stringify({ fileUrl: resolvedFileUrl, tradeType }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -691,10 +702,9 @@ export default function QuoteSelect({
           .not('file_url', 'is', null);
 
         if (parsingJobs) {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
           for (const job of parsingJobs) {
             if (job.quote_id && job.file_url && !fileUrlByQuote[job.quote_id]) {
-              fileUrlByQuote[job.quote_id] = `${supabaseUrl}/storage/v1/object/public/quotes/${job.file_url}`;
+              fileUrlByQuote[job.quote_id] = job.file_url;
             }
           }
         }
