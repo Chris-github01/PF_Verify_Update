@@ -1,9 +1,210 @@
 import { useState, useEffect } from 'react';
-import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers } from 'lucide-react';
+import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
 import type { DashboardMode } from '../App';
+
+interface ParsedItem {
+  id: string;
+  description: string;
+  quantity: number | null;
+  unit: string | null;
+  unit_price: number | null;
+  total_price: number | null;
+  service_type: string | null;
+  frr_rating: string | null;
+  system_type: string | null;
+  confidence_score: number | null;
+  scope_category: string | null;
+  notes: string | null;
+}
+
+function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; quoteName: string; onClose: () => void }) {
+  const [items, setItems] = useState<ParsedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('quote_items')
+          .select('id, description, quantity, unit, unit_price, total_price, service_type, frr_rating, system_type, confidence_score, scope_category, notes')
+          .eq('quote_id', quoteId)
+          .order('id', { ascending: true })
+          .limit(2000);
+        if (error) throw error;
+        setItems(data ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load items');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchItems();
+  }, [quoteId]);
+
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const filtered = items.filter(item =>
+    !filter || item.description?.toLowerCase().includes(filter.toLowerCase()) ||
+    item.service_type?.toLowerCase().includes(filter.toLowerCase()) ||
+    item.system_type?.toLowerCase().includes(filter.toLowerCase())
+  );
+
+  const totalValue = items.reduce((sum, i) => sum + Number(i.total_price ?? 0), 0);
+  const pricedCount = items.filter(i => Number(i.total_price ?? 0) > 0).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div
+        className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 flex-shrink-0">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <FlaskConical size={18} className="text-amber-400" />
+              <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">Parse Results</span>
+            </div>
+            <h2 className="text-lg font-bold text-slate-100">{quoteName}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        {!loading && !error && (
+          <div className="px-6 py-3 border-b border-slate-700/50 flex items-center gap-6 flex-shrink-0 bg-slate-800/40">
+            <div className="text-sm"><span className="text-slate-400">Total Items:</span> <span className="font-semibold text-slate-100">{items.length}</span></div>
+            <div className="text-sm"><span className="text-slate-400">Priced:</span> <span className="font-semibold text-emerald-400">{pricedCount}</span></div>
+            <div className="text-sm"><span className="text-slate-400">Total Value:</span> <span className="font-semibold text-slate-100">${totalValue.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+            <div className="ml-auto">
+              <input
+                type="text"
+                placeholder="Filter items..."
+                value={filter}
+                onChange={e => setFilter(e.target.value)}
+                className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-500 w-48"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-auto">
+          {loading && (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
+            </div>
+          )}
+          {error && (
+            <div className="p-6 text-red-400 text-sm">{error}</div>
+          )}
+          {!loading && !error && (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-800 z-10">
+                <tr className="text-left text-xs text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 w-8">#</th>
+                  <th className="px-4 py-2">Description</th>
+                  <th className="px-4 py-2 text-right">Qty</th>
+                  <th className="px-4 py-2">Unit</th>
+                  <th className="px-4 py-2 text-right">Unit Price</th>
+                  <th className="px-4 py-2 text-right">Total</th>
+                  <th className="px-4 py-2">Service Type</th>
+                  <th className="px-4 py-2">FRR</th>
+                  <th className="px-4 py-2 text-right">Conf.</th>
+                  <th className="px-4 py-2 w-8"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {filtered.map((item, idx) => (
+                  <>
+                    <tr
+                      key={item.id}
+                      className="hover:bg-slate-800/50 transition-colors cursor-pointer"
+                      onClick={() => toggleRow(item.id)}
+                    >
+                      <td className="px-4 py-2 text-slate-500 text-xs">{idx + 1}</td>
+                      <td className="px-4 py-2 text-slate-200 max-w-xs">
+                        <div className="truncate">{item.description || <span className="text-slate-600 italic">—</span>}</div>
+                      </td>
+                      <td className="px-4 py-2 text-right text-slate-300">
+                        {item.quantity != null ? item.quantity : <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-slate-400 text-xs">
+                        {item.unit || <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right text-slate-300">
+                        {item.unit_price != null
+                          ? `$${Number(item.unit_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right font-semibold">
+                        {item.total_price != null && Number(item.total_price) > 0
+                          ? <span className="text-emerald-400">${Number(item.total_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          : <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2">
+                        {item.service_type
+                          ? <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">{item.service_type}</span>
+                          : <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-400">
+                        {item.frr_rating || <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right text-xs">
+                        {item.confidence_score != null
+                          ? <span className={item.confidence_score >= 0.8 ? 'text-emerald-400' : item.confidence_score >= 0.5 ? 'text-amber-400' : 'text-red-400'}>
+                              {Math.round(item.confidence_score * 100)}%
+                            </span>
+                          : <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-slate-500">
+                        {expandedRows.has(item.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </td>
+                    </tr>
+                    {expandedRows.has(item.id) && (
+                      <tr key={`${item.id}-expanded`} className="bg-slate-800/30">
+                        <td />
+                        <td colSpan={9} className="px-4 py-3">
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div><span className="text-slate-500">System Type:</span> <span className="text-slate-300">{item.system_type || '—'}</span></div>
+                            <div><span className="text-slate-500">Scope Category:</span> <span className="text-slate-300">{item.scope_category || '—'}</span></div>
+                            <div className="col-span-2"><span className="text-slate-500">Full Description:</span> <span className="text-slate-300">{item.description || '—'}</span></div>
+                            {item.notes && <div className="col-span-2"><span className="text-slate-500">Notes:</span> <span className="text-slate-300">{item.notes}</span></div>}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-4 py-12 text-center text-slate-500">No items match your filter</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="px-6 py-3 border-t border-slate-700 flex-shrink-0 flex items-center justify-between">
+          <span className="text-xs text-slate-500">Showing {filtered.length} of {items.length} items</span>
+          <button onClick={onClose} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface Quote {
   id: string;
@@ -41,6 +242,7 @@ export default function QuoteSelect({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [parseModal, setParseModal] = useState<{ quoteId: string; quoteName: string } | null>(null);
 
   useEffect(() => {
     loadQuotes();
@@ -342,69 +544,86 @@ export default function QuoteSelect({
         ) : (
           <div className="space-y-3">
             {quotes.map((quote) => (
-              <button
+              <div
                 key={quote.id}
-                onClick={() => toggleQuoteSelection(quote.id)}
-                className={`group relative w-full p-4 rounded-lg border transition-all text-left ${
+                className={`group relative w-full rounded-lg border transition-all ${
                   quote.is_selected
                     ? 'bg-slate-900/50 border-orange-500/50'
                     : 'bg-slate-900/30 border-slate-700/50 hover:border-slate-600/50 hover:bg-slate-900/40'
                 }`}
               >
-                <div className="flex items-start gap-3">
-                  <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center transition-all ${
-                    quote.is_selected
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-slate-700/50 text-slate-400 group-hover:bg-slate-600'
-                  }`}>
-                    {quote.is_selected ? <CheckSquare size={14} /> : <Square size={14} />}
-                  </div>
+                <div className="flex items-stretch">
+                  <button
+                    onClick={() => toggleQuoteSelection(quote.id)}
+                    className="flex-1 p-4 text-left"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded flex items-center justify-center transition-all ${
+                        quote.is_selected
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-slate-700/50 text-slate-400 group-hover:bg-slate-600'
+                      }`}>
+                        {quote.is_selected ? <CheckSquare size={14} /> : <Square size={14} />}
+                      </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4 mb-2">
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-bold text-slate-100 mb-0.5 truncate">
-                          {quote.supplier_name}
-                        </h3>
-                        {quote.quote_reference && (
-                          <p className="text-xs text-slate-400">
-                            Reference: {quote.quote_reference}
-                          </p>
-                        )}
-                        {quote.file_name && (
-                          <p className="text-xs text-slate-500 mt-0.5 truncate">
-                            {quote.file_name}
-                          </p>
-                        )}
-                      </div>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${getStatusColor(quote.status)}`}>
-                        {getStatusLabel(quote.status)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-slate-400">Main Scope:</span>
-                        <span className="font-semibold text-slate-100">
-                          ${(quote.main_scope_total ?? quote.total_amount ?? 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-slate-400">Items:</span>
-                        <span className="font-medium text-slate-300">
-                          {(quote.main_scope_count ?? quote.items_count).toLocaleString()}
-                        </span>
-                      </div>
-                      {quote.levels_multiplier && (
-                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-blue-300 font-medium">
-                          <Layers size={10} />
-                          <span>×{quote.levels_multiplier} levels</span>
+                        <div className="flex items-start justify-between gap-4 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-base font-bold text-slate-100 mb-0.5 truncate">
+                              {quote.supplier_name}
+                            </h3>
+                            {quote.quote_reference && (
+                              <p className="text-xs text-slate-400">
+                                Reference: {quote.quote_reference}
+                              </p>
+                            )}
+                            {quote.file_name && (
+                              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                {quote.file_name}
+                              </p>
+                            )}
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${getStatusColor(quote.status)}`}>
+                            {getStatusLabel(quote.status)}
+                          </span>
                         </div>
-                      )}
+
+                        <div className="flex items-center gap-4 text-xs flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400">Main Scope:</span>
+                            <span className="font-semibold text-slate-100">
+                              ${(quote.main_scope_total ?? quote.total_amount ?? 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400">Items:</span>
+                            <span className="font-medium text-slate-300">
+                              {(quote.main_scope_count ?? quote.items_count).toLocaleString()}
+                            </span>
+                          </div>
+                          {quote.levels_multiplier && (
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/30 text-blue-300 font-medium">
+                              <Layers size={10} />
+                              <span>×{quote.levels_multiplier} levels</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                  </button>
+
+                  <div className="flex items-center px-3 border-l border-slate-700/50">
+                    <button
+                      onClick={() => setParseModal({ quoteId: quote.id, quoteName: quote.supplier_name })}
+                      title="View parse results"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 text-xs font-medium transition-all whitespace-nowrap"
+                    >
+                      <FlaskConical size={13} />
+                      Parse Results
+                    </button>
                   </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
@@ -425,6 +644,14 @@ export default function QuoteSelect({
           </div>
         )}
       </div>
+
+      {parseModal && (
+        <ParseResultsModal
+          quoteId={parseModal.quoteId}
+          quoteName={parseModal.quoteName}
+          onClose={() => setParseModal(null)}
+        />
+      )}
     </div>
   );
 }
