@@ -808,17 +808,34 @@ Deno.serve(async (req: Request) => {
       const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));
       console.log(`[Resume] After normalization: ${normalizedItems.length} items`);
 
+      // Pass 1: exact dedup by description + qty + unit + total
       const seenKeys = new Set();
-      const dedupedItems = normalizedItems.filter((item: any) => {
+      const exactDeduped = normalizedItems.filter((item: any) => {
         const key = dedupeKey(item);
         if (seenKeys.has(key)) return false;
         seenKeys.add(key);
         return true;
       });
 
+      // Pass 2: numeric-fingerprint dedup — catches same item with different description prefixes
+      // (e.g. "Beam X" vs "Architectural/Structural Details Beam X" from different chunks)
+      const seenNumeric = new Set();
+      const dedupedItems = exactDeduped.filter((item: any) => {
+        const qty = Number(item.qty ?? 0).toFixed(4);
+        const rate = Number(item.rate ?? 0).toFixed(4);
+        const total = Number(item.total ?? 0).toFixed(2);
+        const unit = String(item.unit ?? 'ea').toLowerCase().trim();
+        // Only apply numeric-only dedup when total > 0 (prevents collapsing $0 items)
+        if (Number(total) === 0) return true;
+        const numKey = `${qty}__${rate}__${total}__${unit}`;
+        if (seenNumeric.has(numKey)) return false;
+        seenNumeric.add(numKey);
+        return true;
+      });
+
       afterStubDedup = dedupedItems;
 
-      console.log(`[Resume] After dedup: ${afterStubDedup.length} items`);
+      console.log(`[Resume] After dedup: ${afterStubDedup.length} items (exact: ${exactDeduped.length}, numeric pass removed ${exactDeduped.length - dedupedItems.length} more)`);
     }
 
     // Create or update quote
