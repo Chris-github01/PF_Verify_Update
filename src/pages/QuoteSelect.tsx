@@ -12,12 +12,16 @@ interface ParsedItem {
   unit: string | null;
   unit_price: number | null;
   total_price: number | null;
-  service_type: string | null;
-  frr_rating: string | null;
-  system_type: string | null;
-  confidence_score: number | null;
+  service: string | null;
+  frr: string | null;
+  mapped_service_type: string | null;
+  mapped_system: string | null;
+  confidence: number | null;
   scope_category: string | null;
-  notes: string | null;
+  source: string | null;
+  is_excluded: boolean | null;
+  subclass: string | null;
+  size: string | null;
 }
 
 function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; quoteName: string; onClose: () => void }) {
@@ -32,9 +36,9 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
       try {
         const { data, error } = await supabase
           .from('quote_items')
-          .select('id, description, quantity, unit, unit_price, total_price, service_type, frr_rating, system_type, confidence_score, scope_category, notes')
+          .select('id, description, quantity, unit, unit_price, total_price, service, frr, mapped_service_type, mapped_system, confidence, scope_category, source, is_excluded, subclass, size')
           .eq('quote_id', quoteId)
-          .order('id', { ascending: true })
+          .order('created_at', { ascending: true })
           .limit(2000);
         if (error) throw error;
         setItems(data ?? []);
@@ -57,8 +61,9 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
 
   const filtered = items.filter(item =>
     !filter || item.description?.toLowerCase().includes(filter.toLowerCase()) ||
-    item.service_type?.toLowerCase().includes(filter.toLowerCase()) ||
-    item.system_type?.toLowerCase().includes(filter.toLowerCase())
+    item.service?.toLowerCase().includes(filter.toLowerCase()) ||
+    item.mapped_service_type?.toLowerCase().includes(filter.toLowerCase()) ||
+    item.mapped_system?.toLowerCase().includes(filter.toLowerCase())
   );
 
   const totalValue = items.reduce((sum, i) => sum + Number(i.total_price ?? 0), 0);
@@ -119,8 +124,9 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
                   <th className="px-4 py-2">Unit</th>
                   <th className="px-4 py-2 text-right">Unit Price</th>
                   <th className="px-4 py-2 text-right">Total</th>
-                  <th className="px-4 py-2">Service Type</th>
+                  <th className="px-4 py-2">Service</th>
                   <th className="px-4 py-2">FRR</th>
+                  <th className="px-4 py-2">Mapped Type</th>
                   <th className="px-4 py-2 text-right">Conf.</th>
                   <th className="px-4 py-2 w-8"></th>
                 </tr>
@@ -154,17 +160,20 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
                           : <span className="text-slate-600">—</span>}
                       </td>
                       <td className="px-4 py-2">
-                        {item.service_type
-                          ? <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">{item.service_type}</span>
+                        {item.service
+                          ? <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">{item.service}</span>
                           : <span className="text-slate-600">—</span>}
                       </td>
                       <td className="px-4 py-2 text-xs text-slate-400">
-                        {item.frr_rating || <span className="text-slate-600">—</span>}
+                        {item.frr || <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-400">
+                        {item.mapped_service_type || <span className="text-slate-600">—</span>}
                       </td>
                       <td className="px-4 py-2 text-right text-xs">
-                        {item.confidence_score != null
-                          ? <span className={item.confidence_score >= 0.8 ? 'text-emerald-400' : item.confidence_score >= 0.5 ? 'text-amber-400' : 'text-red-400'}>
-                              {Math.round(item.confidence_score * 100)}%
+                        {item.confidence != null
+                          ? <span className={item.confidence >= 0.8 ? 'text-emerald-400' : item.confidence >= 0.5 ? 'text-amber-400' : 'text-red-400'}>
+                              {Math.round(item.confidence * 100)}%
                             </span>
                           : <span className="text-slate-600">—</span>}
                       </td>
@@ -175,12 +184,15 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
                     {expandedRows.has(item.id) && (
                       <tr key={`${item.id}-expanded`} className="bg-slate-800/30">
                         <td />
-                        <td colSpan={9} className="px-4 py-3">
+                        <td colSpan={10} className="px-4 py-3">
                           <div className="grid grid-cols-2 gap-3 text-xs">
-                            <div><span className="text-slate-500">System Type:</span> <span className="text-slate-300">{item.system_type || '—'}</span></div>
+                            <div><span className="text-slate-500">Mapped System:</span> <span className="text-slate-300">{item.mapped_system || '—'}</span></div>
                             <div><span className="text-slate-500">Scope Category:</span> <span className="text-slate-300">{item.scope_category || '—'}</span></div>
+                            <div><span className="text-slate-500">Subclass:</span> <span className="text-slate-300">{item.subclass || '—'}</span></div>
+                            <div><span className="text-slate-500">Size:</span> <span className="text-slate-300">{item.size || '—'}</span></div>
+                            <div><span className="text-slate-500">Source:</span> <span className="text-slate-300">{item.source || '—'}</span></div>
+                            <div><span className="text-slate-500">Excluded:</span> <span className={item.is_excluded ? 'text-red-400' : 'text-slate-300'}>{item.is_excluded ? 'Yes' : 'No'}</span></div>
                             <div className="col-span-2"><span className="text-slate-500">Full Description:</span> <span className="text-slate-300">{item.description || '—'}</span></div>
-                            {item.notes && <div className="col-span-2"><span className="text-slate-500">Notes:</span> <span className="text-slate-300">{item.notes}</span></div>}
                           </div>
                         </td>
                       </tr>
@@ -189,7 +201,7 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-slate-500">No items match your filter</td>
+                    <td colSpan={11} className="px-4 py-12 text-center text-slate-500">No items match your filter</td>
                   </tr>
                 )}
               </tbody>
