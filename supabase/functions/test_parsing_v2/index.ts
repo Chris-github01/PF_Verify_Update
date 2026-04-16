@@ -862,7 +862,8 @@ async function extractTextFromUrl(fileUrl: string): Promise<string> {
     formData.append("file", file);
 
     const extractHeaders: Record<string, string> = {};
-    if (apiKey) extractHeaders["X-API-Key"] = apiKey;
+    const resolvedApiKey = apiKey || Deno.env.get("RENDER_PDF_EXTRACTOR_API_KEY");
+    if (resolvedApiKey) extractHeaders["X-API-Key"] = resolvedApiKey;
 
     const extractRes = await fetch(`${pdfExtractorBase}/parse/ensemble`, {
       method: "POST",
