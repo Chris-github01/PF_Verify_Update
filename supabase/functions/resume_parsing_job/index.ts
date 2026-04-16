@@ -11,6 +11,7 @@ import {
   filterTotalRows,
 } from "../_shared/itemNormalizer.ts";
 import { runParseResolution } from "../_shared/parseResolutionEngine.ts";
+import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -865,37 +866,19 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ✅ Extract document total from chunk text
-    // Try ALL chunks (not just last) since Grand Total could be anywhere
-    let documentTotal: number | null = null;
-    if (allCompletedChunksRaw.data && allCompletedChunksRaw.data.length > 0) {
-      const allChunksText = await supabase
-        .from("parsing_chunks")
-        .select("chunk_text, chunk_number")
-        .eq("job_id", jobId)
-        .eq("status", "completed")
-        .order("chunk_number", { ascending: false });
+    console.log(`[IMPORT PATH] function=resume_parsing_job trade=${job.trade || 'passive_fire'} parser=v2_llm`);
 
-      if (allChunksText.data) {
-        // Try chunks in reverse order (summary usually at end)
-        for (const chunk of allChunksText.data) {
-          if (chunk.chunk_text) {
-            documentTotal = extractDocumentTotal(chunk.chunk_text);
-            if (documentTotal) {
-              console.log(`[Resume] Extracted document total from chunk ${chunk.chunk_number}: $${documentTotal.toLocaleString()}`);
-              break;
-            }
-          }
-        }
-      }
-    }
+    // STEP 1: Extract document totals from ALL chunk texts combined (grand total often on last page)
+    const combinedChunkText = allChunkTexts.join('\n\n');
+    const docTotals = extractDocumentTotals(combinedChunkText);
 
     // Carpentry levels multiplier: detect "x N levels" across full combined text
     let detectedLevelsMultiplier: number | null = null;
+    let documentTotal: number | null = docTotals.grandTotal;
+
     if (isCarpentry && afterStubDedup.length > 0) {
-      const combinedText = allChunkTexts.join('\n');
       const rawSubtotal = afterStubDedup.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
-      const levelsResult = detectCarpentryLevelsMultiplier(combinedText, rawSubtotal);
+      const levelsResult = detectCarpentryLevelsMultiplier(combinedChunkText, rawSubtotal);
       if (levelsResult) {
         const { multiplier, documentTotal: levelsDocTotal } = levelsResult;
         detectedLevelsMultiplier = multiplier;
@@ -904,94 +887,139 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ✅ V5: Use deduped items AS-IS (no band-aid remainder adjustment)
-    const finalItems = afterStubDedup;
+    // STEP 2: Split deduped items into main scope vs optional
+    const OPTIONAL_PATTERNS = /\b(OPTIONAL|ADD TO SCOPE|OPTIONAL SCOPE|BY OTHERS|PROVISIONAL|NOT PART OF PASSIVE FIRE)\b/i;
+    const mainScopeItems = afterStubDedup.filter((item: any) => !OPTIONAL_PATTERNS.test(String(item.description ?? '')));
+    const optionalScopeItems = afterStubDedup.filter((item: any) => OPTIONAL_PATTERNS.test(String(item.description ?? '')));
+    const optionalTotal = optionalScopeItems.reduce((s: number, i: any) => s + (parseFloat(i.total) || 0), 0);
+    if (optionalScopeItems.length > 0) {
+      console.log(`[Resume] Optional items: ${optionalScopeItems.length}, optional total=$${optionalTotal.toLocaleString()}`);
+    }
+
+    // STEP 3: Run row-based resolution on main scope items only (for row grand total fallback)
+    const rowResolutionRows = mainScopeItems.map((item: any) => ({
+      description: String(item.description ?? ''),
+      quantity: parseFloat(item.qty) || null,
+      unit: String(item.unit ?? '') || null,
+      unit_price: parseFloat(item.rate) || null,
+      total_price: parseFloat(item.total) || null,
+    }));
+    const rowResolution = runParseResolution(rowResolutionRows);
+    const lineItemsTotal = mainScopeItems.reduce((s: number, i: any) => s + (parseFloat(i.total) || 0), 0);
+
+    // STEP 4: Determine authoritative total — document grand total wins
+    let persistedTotal: number;
+    let resolutionSource: string;
+    let resolutionConfidence: string;
+
+    if (detectedLevelsMultiplier && documentTotal) {
+      persistedTotal = documentTotal;
+      resolutionSource = 'carpentry_levels_multiplier';
+      resolutionConfidence = 'HIGH';
+    } else if (docTotals.grandTotal && docTotals.grandTotal > 0) {
+      persistedTotal = docTotals.grandTotal;
+      resolutionSource = 'document_grand_total';
+      resolutionConfidence = 'HIGH';
+    } else if (rowResolution.resolvedTotal.source === 'summary_grand_total' && rowResolution.resolvedTotal.value > 0) {
+      persistedTotal = rowResolution.resolvedTotal.value;
+      resolutionSource = 'row_grand_total';
+      resolutionConfidence = 'HIGH';
+    } else if (docTotals.subTotal && docTotals.subTotal > 0) {
+      persistedTotal = docTotals.subTotal;
+      resolutionSource = 'document_sub_total';
+      resolutionConfidence = 'MEDIUM';
+    } else if (rowResolution.resolvedTotal.source === 'summary_sub_total' && rowResolution.resolvedTotal.value > 0) {
+      persistedTotal = rowResolution.resolvedTotal.value;
+      resolutionSource = 'row_sub_total';
+      resolutionConfidence = 'MEDIUM';
+    } else {
+      persistedTotal = lineItemsTotal;
+      resolutionSource = 'line_items_sum';
+      resolutionConfidence = 'LOW';
+    }
+
+    console.log(`[RESOLUTION]`);
+    console.log(`  grandTotal=${docTotals.grandTotal ?? 'null'}`);
+    console.log(`  subTotal=${docTotals.subTotal ?? 'null'}`);
+    console.log(`  optionalTotal=${optionalTotal}`);
+    console.log(`  lineItemsTotal=${lineItemsTotal.toFixed(2)}`);
+    console.log(`  resolvedTotal=${persistedTotal}`);
+    console.log(`  source=${resolutionSource}`);
+    console.log(`  confidence=${resolutionConfidence}`);
+
     const rawItemsCount = allItems.length;
+    const finalItems = mainScopeItems;
 
     // Replace ALL items with complete deduplicated set
-    if (quoteId && finalItems.length > 0) {
-      // Delete old items (partial data)
-      await supabase
-        .from("quote_items")
-        .delete()
-        .eq("quote_id", quoteId);
+    if (quoteId && (finalItems.length > 0 || optionalScopeItems.length > 0)) {
+      await supabase.from("quote_items").delete().eq("quote_id", quoteId);
 
-      // ✅ Insert ALL items (no filter on description)
-      const quoteItems = finalItems.map((line: any) => ({
+      const itemSource = 'v2_llm';
+
+      const mainQuoteItems = finalItems.map((line: any) => ({
         quote_id: quoteId,
         description: cleanText(line.description) || 'No description',
         quantity: parseFloat(line.qty) || 0,
         unit: line.unit || 'ea',
         unit_price: parseFloat(line.rate) || 0,
         total_price: parseFloat(line.total) || 0,
-        scope_category: line.section || null,
+        scope_category: 'Main',
+        source: line.source || itemSource,
+        frr: line.frr || null,
         is_excluded: false,
       }));
 
-      if (quoteItems.length > 0) {
-        await supabase.from("quote_items").insert(quoteItems);
+      const optionalQuoteItems = optionalScopeItems.map((line: any) => ({
+        quote_id: quoteId,
+        description: cleanText(line.description) || 'Optional item',
+        quantity: parseFloat(line.qty) || 0,
+        unit: line.unit || 'ea',
+        unit_price: parseFloat(line.rate) || 0,
+        total_price: parseFloat(line.total) || 0,
+        scope_category: 'Optional',
+        source: line.source || itemSource,
+        frr: line.frr || null,
+        is_excluded: false,
+      }));
 
-        const itemsSum = finalItems.reduce((sum: number, line: any) =>
-          sum + (parseFloat(line.total) || 0), 0
-        );
+      const allQuoteItems = [...mainQuoteItems, ...optionalQuoteItems];
 
-        // ✅ Use pre-filter resolution (ran before summary rows were stripped).
-        // For non-carpentry paths preFilterResolution is set above; for carpentry/plumbing
-        // paths fall back to summing inserted items since those use deterministic parsers.
-        const resolution = typeof preFilterResolution !== 'undefined' ? preFilterResolution : null;
+      if (allQuoteItems.length > 0) {
+        await supabase.from("quote_items").insert(allQuoteItems);
+      }
 
-        // For multiplier quotes, the document total IS the correct total (items × levels).
-        // Otherwise use the resolution engine's authoritative value.
-        let persistedTotal: number;
-        if (detectedLevelsMultiplier && documentTotal) {
-          persistedTotal = documentTotal;
-        } else if (resolution && resolution.resolvedTotal.value > 0) {
-          persistedTotal = resolution.resolvedTotal.value;
-        } else {
-          persistedTotal = itemsSum;
-        }
+      const tolerance = persistedTotal ? Math.max(100, persistedTotal * 0.02) : 100;
+      const missingAmount = documentTotal ? documentTotal - lineItemsTotal : 0;
+      const needsReview = resolutionSource === 'line_items_sum' && documentTotal !== null && Math.abs(missingAmount) > tolerance;
 
-        const tolerance = documentTotal ? Math.max(100, documentTotal * 0.02) : 100;
-        const missingAmount = documentTotal ? documentTotal - itemsSum : 0;
-        const needsReview = !detectedLevelsMultiplier && documentTotal !== null && Math.abs(missingAmount) > tolerance;
+      await supabase
+        .from("quotes")
+        .update({
+          total_amount: persistedTotal,
+          total_price: persistedTotal,
+          document_total: docTotals.grandTotal ?? documentTotal,
+          missing_amount: needsReview ? missingAmount : 0,
+          needs_review: needsReview,
+          items_count: mainQuoteItems.length,
+          raw_items_count: rawItemsCount,
+          inserted_items_count: mainQuoteItems.length,
+          levels_multiplier: detectedLevelsMultiplier,
+          resolved_total: persistedTotal,
+          resolution_source: resolutionSource,
+          resolution_confidence: resolutionConfidence,
+          document_grand_total: docTotals.grandTotal,
+          document_sub_total: docTotals.subTotal,
+          optional_scope_total: optionalTotal > 0 ? optionalTotal : (docTotals.optionalTotal ?? null),
+          original_line_items_total: lineItemsTotal,
+        })
+        .eq("id", quoteId);
 
-        if (resolution) {
-          console.log(`[Resolution] source=${resolution.resolvedTotal.source} confidence=${resolution.resolvedTotal.confidence} total=$${persistedTotal.toLocaleString()}`);
-          if (resolution.debug.duplicatesRemoved > 0) {
-            console.log(`[Resolution] Removed ${resolution.debug.duplicatesRemoved} duplicate rows`);
-          }
-          if (resolution.debug.warnings.length > 0) {
-            console.log(`[Resolution] Warnings:`, resolution.debug.warnings.map((w: any) => w.message));
-          }
-        }
-
-        await supabase
-          .from("quotes")
-          .update({
-            total_amount: persistedTotal,
-            total_price: persistedTotal,
-            document_total: documentTotal,
-            missing_amount: needsReview ? missingAmount : 0,
-            needs_review: needsReview,
-            items_count: quoteItems.length,
-            raw_items_count: rawItemsCount,
-            inserted_items_count: quoteItems.length,
-            levels_multiplier: detectedLevelsMultiplier,
-          })
-          .eq("id", quoteId);
-
-        console.log(`[Resume V5] Replaced ${quoteItems.length} items in quote ${quoteId}`);
-        console.log(`[Resume V5] Sum(items): $${itemsSum.toLocaleString()}`);
-        console.log(`[Resume V5] Document total: $${documentTotal?.toLocaleString() || 'not found'}`);
-        console.log(`[Resume V5] Resolved total: $${persistedTotal.toLocaleString()} (${resolution?.resolvedTotal.source ?? 'items_sum'})`);
-        if (detectedLevelsMultiplier) {
-          console.log(`[Resume V5] Levels multiplier x${detectedLevelsMultiplier} — persisted total=$${persistedTotal.toLocaleString()}`);
-        }
-        if (needsReview) {
-          console.log(`[Resume V5] NEEDS REVIEW: Missing $${Math.abs(missingAmount).toLocaleString()} (${((Math.abs(missingAmount) / documentTotal!) * 100).toFixed(1)}% gap)`);
-        } else {
-          console.log(`[Resume V5] Totals match within tolerance`);
-        }
+      console.log(`[UI TOTAL SOURCE] quoteId=${quoteId} displayTotal=${persistedTotal} source=quote.total_amount`);
+      console.log(`[Resume V5] Replaced ${mainQuoteItems.length} main + ${optionalQuoteItems.length} optional items in quote ${quoteId}`);
+      console.log(`[Resume V5] Sum(items): $${lineItemsTotal.toLocaleString()}`);
+      console.log(`[Resume V5] Resolved total: $${persistedTotal.toLocaleString()} (${resolutionSource})`);
+      if (needsReview) {
+        console.log(`[Resume V5] NEEDS REVIEW: Missing $${Math.abs(missingAmount).toLocaleString()}`);
       }
     }
 

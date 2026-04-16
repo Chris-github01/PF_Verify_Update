@@ -973,7 +973,17 @@ export default function QuoteSelect({
         let main_scope_total: number;
         let main_scope_count: number;
 
-        if (isPassiveFire) {
+        // Use the resolved total from the quote record when available (HIGH/MEDIUM confidence).
+        // Only fall back to summing items when no authoritative total was resolved.
+        const resolvedQuoteTotal = Number((quote as any).resolved_total ?? quote.total_amount ?? 0);
+        const resolutionConfidence = (quote as any).resolution_confidence as string | undefined;
+        const hasAuthoritativeTotal = resolvedQuoteTotal > 0 && resolutionConfidence !== 'LOW' && resolutionConfidence != null;
+
+        if (hasAuthoritativeTotal) {
+          main_scope_total = resolvedQuoteTotal;
+          const mainItems = rawItems.filter(item => (item as any).scope_category !== 'Optional');
+          main_scope_count = mainItems.filter(item => Number(item.total_price ?? 0) > 0).length || (quote.inserted_items_count ?? quote.items_count ?? 0);
+        } else if (isPassiveFire) {
           const { summary } = classifyParsedQuoteRows(rawItems);
           main_scope_total = summary.main_scope_total;
           main_scope_count = summary.counts.main_scope;
@@ -982,7 +992,7 @@ export default function QuoteSelect({
           const pricedCount = rawItems.filter(item => Number(item.total_price ?? 0) > 0).length;
           main_scope_count = pricedCount > 0 ? pricedCount : (quote.inserted_items_count ?? quote.items_count ?? 0);
         } else {
-          const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0);
+          const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0 && (item as any).scope_category !== 'Optional');
           main_scope_total = priced.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
           main_scope_count = priced.length;
         }

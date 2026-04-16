@@ -315,7 +315,15 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
         const rawItems = itemsByQuote[q.id] ?? [];
         let main_scope_total: number;
         let main_scope_count: number;
-        if (isPassiveFire) {
+        const resolvedQuoteTotal = Number((q as any).resolved_total ?? q.total_amount ?? 0);
+        const resolutionConfidence = (q as any).resolution_confidence as string | undefined;
+        const hasAuthoritativeTotal = resolvedQuoteTotal > 0 && resolutionConfidence !== 'LOW' && resolutionConfidence != null;
+
+        if (hasAuthoritativeTotal) {
+          main_scope_total = resolvedQuoteTotal;
+          const mainItems = rawItems.filter(item => (item as any).scope_category !== 'Optional');
+          main_scope_count = mainItems.filter(item => Number(item.total_price ?? 0) > 0).length || (q.inserted_items_count ?? q.items_count ?? 0);
+        } else if (isPassiveFire) {
           const { summary } = classifyParsedQuoteRows(rawItems, { trade: currentTrade });
           main_scope_total = summary.main_scope_total;
           main_scope_count = summary.counts.main_scope;
@@ -323,7 +331,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
           main_scope_total = Number(q.document_total);
           main_scope_count = rawItems.filter(item => Number(item.total_price ?? 0) > 0).length;
         } else {
-          const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0);
+          const priced = rawItems.filter(item => Number(item.total_price ?? 0) > 0 && (item as any).scope_category !== 'Optional');
           main_scope_total = priced.reduce((sum, item) => sum + Number(item.total_price ?? 0), 0);
           main_scope_count = priced.length;
         }

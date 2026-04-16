@@ -12,6 +12,7 @@ import {
   filterTotalRows,
 } from "../_shared/itemNormalizer.ts";
 import { runParseResolution } from "../_shared/parseResolutionEngine.ts";
+import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -662,9 +663,16 @@ Deno.serve(async (req: Request) => {
         }
 
         const rawItemsCount = parsedData.items.length;
+        console.log(`[IMPORT PATH] function=process_parsing_job trade=${typedJob.trade || 'passive_fire'} parser=${useExternalExtractor ? 'external_parser' : 'llm_v2'}`);
 
-        // Keep items that have a description AND a non-zero total (or can calculate one from qty*rate)
-        // For plumbing, lump-sum items (qty=1, unit=LS, total>0) are always valid even without a rate
+        // STEP 1: Extract document totals from raw PDF text FIRST (before any row filtering)
+        let docTotals = { grandTotal: null as number | null, subTotal: null as number | null, optionalTotal: null as number | null, blockTotals: [] as Array<{label:string;value:number}> };
+        if (allPages && allPages.length > 0) {
+          const fullText = allPages.join("\n\n");
+          docTotals = extractDocumentTotals(fullText);
+        }
+
+        // STEP 2: Keep items that have a description AND a non-zero total (or can calculate one from qty*rate)
         const isLumpSumTrade = (typedJob.trade || '') === 'plumbing' || (typedJob.trade || '') === 'carpentry';
         const basicFiltered = parsedData.items.filter((item: any) => {
           if (!hasDesc(item)) return false;
@@ -677,40 +685,74 @@ Deno.serve(async (req: Request) => {
         });
         console.log(`After safe filter: ${basicFiltered.length} items (removed ${parsedData.items.length - basicFiltered.length} empty/zero rows)`);
 
-        // ✅ Run resolution engine BEFORE stripping summary rows so it can see the Grand Total
-        const preFilterResolutionRows = basicFiltered.map((item: any) => ({
+        // STEP 3: Split items into main scope vs optional BEFORE any row stripping
+        const OPTIONAL_PATTERNS = /\b(OPTIONAL|ADD TO SCOPE|OPTIONAL SCOPE|BY OTHERS|PROVISIONAL|NOT PART OF PASSIVE FIRE)\b/i;
+        const optionalItems = basicFiltered.filter((item: any) => OPTIONAL_PATTERNS.test(String(item.description ?? '')));
+        const mainScopeItems = basicFiltered.filter((item: any) => !OPTIONAL_PATTERNS.test(String(item.description ?? '')));
+        const optionalTotal = optionalItems.reduce((s: number, i: any) => s + Number(i.total ?? i.total_price ?? 0), 0);
+        if (optionalItems.length > 0) {
+          console.log(`[Resolution] Optional/excluded items: ${optionalItems.length}, optional total=$${optionalTotal.toLocaleString()}`);
+        }
+
+        // STEP 4: Run resolution engine on main-scope rows (still includes summary rows at this point)
+        const preFilterResolutionRows = mainScopeItems.map((item: any) => ({
           description: String(item.description ?? item.desc ?? ''),
           quantity: Number(item.qty ?? item.quantity ?? 0) || null,
           unit: String(item.unit ?? '') || null,
           unit_price: Number(item.rate ?? item.unit_price ?? 0) || null,
           total_price: Number(item.total ?? item.total_price ?? 0) || null,
         }));
-        const preFilterResolution = runParseResolution(preFilterResolutionRows);
-        console.log(`[Resolution] Pre-filter: source=${preFilterResolution.resolvedTotal.source} confidence=${preFilterResolution.resolvedTotal.confidence} value=$${preFilterResolution.resolvedTotal.value.toLocaleString()}`);
+        const rowResolution = runParseResolution(preFilterResolutionRows);
 
-        const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(basicFiltered);
+        // STEP 5: Document grand total is authoritative — override row-based resolution
+        const lineItemsTotal = rowResolution.validLineItems.reduce((s, r) => s + (r.total_price ?? 0), 0);
+        let finalTotalAmount: number;
+        let resolutionSource: string;
+        let resolutionConfidence: string;
+
+        if (docTotals.grandTotal && docTotals.grandTotal > 0) {
+          finalTotalAmount = docTotals.grandTotal;
+          resolutionSource = 'document_grand_total';
+          resolutionConfidence = 'HIGH';
+        } else if (rowResolution.resolvedTotal.source === 'summary_grand_total' && rowResolution.resolvedTotal.value > 0) {
+          finalTotalAmount = rowResolution.resolvedTotal.value;
+          resolutionSource = 'row_grand_total';
+          resolutionConfidence = 'HIGH';
+        } else if (docTotals.subTotal && docTotals.subTotal > 0) {
+          finalTotalAmount = docTotals.subTotal;
+          resolutionSource = 'document_sub_total';
+          resolutionConfidence = 'MEDIUM';
+        } else if (rowResolution.resolvedTotal.source === 'summary_sub_total' && rowResolution.resolvedTotal.value > 0) {
+          finalTotalAmount = rowResolution.resolvedTotal.value;
+          resolutionSource = 'row_sub_total';
+          resolutionConfidence = 'MEDIUM';
+        } else {
+          finalTotalAmount = lineItemsTotal;
+          resolutionSource = 'line_items_sum';
+          resolutionConfidence = 'LOW';
+        }
+
+        console.log(`[RESOLUTION]`);
+        console.log(`  grandTotal=${docTotals.grandTotal ?? 'null'}`);
+        console.log(`  subTotal=${docTotals.subTotal ?? 'null'}`);
+        console.log(`  optionalTotal=${optionalTotal}`);
+        console.log(`  lineItemsTotal=${lineItemsTotal.toFixed(2)}`);
+        console.log(`  resolvedTotal=${finalTotalAmount}`);
+        console.log(`  source=${resolutionSource}`);
+        console.log(`  confidence=${resolutionConfidence}`);
+
+        // STEP 6: Strip summary rows and normalize — only main scope items stored
+        const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(mainScopeItems);
         if (totalRowsRemoved > 0) {
           console.log(`Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
         }
 
-        // ✅ Normalize items to fill empty descriptions from raw_text
         const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));
         console.log(`After normalization: ${normalizedItems.length} items`);
 
-        // ✅ Extract document total from full text
-        let documentTotal: number | null = null;
-        if (allPages && allPages.length > 0) {
-          const fullText = allPages.join("\n\n");
-          documentTotal = extractDocumentTotal(fullText);
-          if (documentTotal) {
-            console.log(`Extracted document total: $${documentTotal.toLocaleString()}`);
-          }
-        }
-
-        // ✅ Add remainder adjustment if needed
-        const finalItems = addRemainderIfNeeded(normalizedItems, documentTotal);
-
-        const quoteItems = finalItems.map((item: any) => ({
+        // STEP 7: Map to quote_items — do NOT add remainder adjustment (resolved total is authoritative)
+        const itemSource = useExternalExtractor ? 'external_parser' : 'v2_llm';
+        const quoteItems = normalizedItems.map((item: any) => ({
           quote_id: quoteData.id,
           item_number: item.item_number || '',
           description: cleanText(item.description) || 'No description',
@@ -721,14 +763,38 @@ Deno.serve(async (req: Request) => {
           system_id: item.section || '',
           raw_text: item.raw_text || item.description || '',
           confidence: item.confidence || 0.85,
-          source: item.source || (useExternalExtractor ? 'external_parser' : 'llm_v2'),
+          source: item.source || itemSource,
           validation_flags: item.validation_flags || [],
-          frr: item.frr || extractFRRFromDescription(cleanText(item.description) || '') || 'Smoke'
+          frr: item.frr || extractFRRFromDescription(cleanText(item.description) || '') || 'Smoke',
+          scope_category: 'Main',
         }));
+
+        // Also insert optional items tagged correctly
+        const optionalQuoteItems = optionalItems.map((item: any, index: number) => {
+          const norm = normalizeLine(item, index);
+          return {
+            quote_id: quoteData.id,
+            item_number: norm.item_number || '',
+            description: cleanText(norm.description) || 'Optional item',
+            quantity: norm.qty || 0,
+            unit: norm.unit || 'ea',
+            unit_price: norm.rate || 0,
+            total_price: norm.total || 0,
+            system_id: norm.section || '',
+            raw_text: norm.raw_text || norm.description || '',
+            confidence: norm.confidence || 0.85,
+            source: norm.source || itemSource,
+            validation_flags: norm.validation_flags || [],
+            frr: norm.frr || extractFRRFromDescription(cleanText(norm.description) || '') || 'Smoke',
+            scope_category: 'Optional',
+          };
+        });
+
+        const allQuoteItems = [...quoteItems, ...optionalQuoteItems];
 
         const { error: itemsError } = await supabase
           .from("quote_items")
-          .insert(quoteItems);
+          .insert(allQuoteItems);
 
         if (itemsError) {
           console.error("Failed to create quote items:", itemsError);
@@ -736,24 +802,9 @@ Deno.serve(async (req: Request) => {
           throw new Error(`Failed to create quote items: ${itemsError.message}`);
         }
 
-        console.log(`Created ${quoteItems.length} quote items`);
+        console.log(`Created ${quoteItems.length} main + ${optionalQuoteItems.length} optional quote items`);
 
-        // ✅ Use pre-filter resolution result (ran before summary rows were stripped)
-        const calculatedTotal = quoteItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
-        const resolution = preFilterResolution;
-        const finalTotalAmount = resolution.resolvedTotal.value > 0
-          ? resolution.resolvedTotal.value
-          : (calculatedTotal > 0 ? calculatedTotal : (documentTotal ?? 0));
-
-        console.log(`[Resolution] source=${resolution.resolvedTotal.source} confidence=${resolution.resolvedTotal.confidence} total=$${finalTotalAmount.toLocaleString()}`);
-        if (resolution.debug.duplicatesRemoved > 0) {
-          console.log(`[Resolution] Removed ${resolution.debug.duplicatesRemoved} duplicate rows`);
-        }
-        if (resolution.debug.warnings.length > 0) {
-          console.log(`[Resolution] Warnings:`, resolution.debug.warnings.map(w => w.message));
-        }
-
-        // ✅ Update quote with resolved total and resolution metadata
+        // STEP 8: Update quote with authoritative resolved total and full audit metadata
         await supabase
           .from("quotes")
           .update({
@@ -762,10 +813,18 @@ Deno.serve(async (req: Request) => {
             inserted_items_count: quoteItems.length,
             total_amount: finalTotalAmount,
             total_price: finalTotalAmount,
+            resolved_total: finalTotalAmount,
+            resolution_source: resolutionSource,
+            resolution_confidence: resolutionConfidence,
+            document_grand_total: docTotals.grandTotal,
+            document_sub_total: docTotals.subTotal,
+            optional_scope_total: optionalTotal > 0 ? optionalTotal : (docTotals.optionalTotal ?? null),
+            original_line_items_total: lineItemsTotal,
           })
           .eq("id", quoteData.id);
 
-        console.log(`Raw parsed: ${rawItemsCount}, Inserted: ${quoteItems.length}, Resolved total: $${finalTotalAmount.toLocaleString()} (${resolution.resolvedTotal.source})`);
+        console.log(`[UI TOTAL SOURCE] quoteId=${quoteData.id} displayTotal=${finalTotalAmount} source=quote.total_amount`);
+        console.log(`Raw parsed: ${rawItemsCount}, Inserted: ${quoteItems.length}, Resolved total: $${finalTotalAmount.toLocaleString()} (${resolutionSource})`);
       }
 
       await supabase
