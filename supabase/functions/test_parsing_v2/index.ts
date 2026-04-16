@@ -849,22 +849,33 @@ async function extractTextFromUrl(fileUrl: string): Promise<string> {
   if (
     contentType.includes("application/pdf") ||
     contentType.includes("application/octet-stream") ||
-    fileUrl.toLowerCase().endsWith(".pdf")
+    fileUrl.toLowerCase().includes(".pdf")
   ) {
     const pdfExtractorBase = Deno.env.get("PDF_EXTRACTOR_BASE_URL") || "https://verify-pdf-extractor.onrender.com";
     const apiKey = Deno.env.get("PYTHON_PARSER_API_KEY");
     console.log(`[TestParsingV2] Delegating PDF extraction to: ${pdfExtractorBase}`);
-    const extractRes = await fetch(`${pdfExtractorBase}/extract-text`, {
+
+    const pdfBytes = await res.arrayBuffer();
+    const filename = fileUrl.split("/").pop()?.split("?")[0] ?? "quote.pdf";
+    const file = new File([pdfBytes], filename, { type: "application/pdf" });
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const extractHeaders: Record<string, string> = {};
+    if (apiKey) extractHeaders["X-API-Key"] = apiKey;
+
+    const extractRes = await fetch(`${pdfExtractorBase}/parse/ensemble`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(apiKey ? { "X-API-Key": apiKey } : {}) },
-      body: JSON.stringify({ file_url: fileUrl }),
+      headers: extractHeaders,
+      body: formData,
     });
     if (!extractRes.ok) {
       const errText = await extractRes.text();
       throw new Error(`PDF extraction failed: ${extractRes.status} — ${errText}`);
     }
     const extractData = await extractRes.json();
-    const extracted = extractData.text ?? extractData.content ?? extractData.raw_text ?? "";
+    const bestResult = extractData.best_result;
+    const extracted = bestResult?.text ?? bestResult?.content ?? extractData.text ?? extractData.content ?? extractData.raw_text ?? "";
     if (!extracted || extracted.trim().length === 0) throw new Error("PDF extraction returned empty text");
     console.log(`[TestParsingV2] PDF extracted: ${extracted.length} chars`);
     return extracted;
