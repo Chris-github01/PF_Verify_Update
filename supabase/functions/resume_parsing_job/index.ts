@@ -789,6 +789,17 @@ Deno.serve(async (req: Request) => {
       const safeItems = allItems.filter((item: any) => hasDesc(item) || hasMoney(item));
       console.log(`[Resume] After safe filter: ${safeItems.length} items (removed ${allItems.length - safeItems.length} empty rows)`);
 
+      // ✅ Run resolution engine BEFORE stripping summary rows so it can see the Grand Total
+      const preFilterResolutionRows = safeItems.map((item: any) => ({
+        description: String(item.description ?? item.desc ?? ''),
+        quantity: Number(item.qty ?? item.quantity ?? 0) || null,
+        unit: String(item.unit ?? '') || null,
+        unit_price: Number(item.rate ?? item.unit_price ?? 0) || null,
+        total_price: Number(item.total ?? item.total_price ?? 0) || null,
+      }));
+      const preFilterResolution = runParseResolution(preFilterResolutionRows);
+      console.log(`[Resolution] Pre-filter: source=${preFilterResolution.resolvedTotal.source} confidence=${preFilterResolution.resolvedTotal.confidence} value=$${preFilterResolution.resolvedTotal.value.toLocaleString()}`);
+
       const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(safeItems);
       if (totalRowsRemoved > 0) {
         console.log(`[Resume] Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
@@ -903,26 +914,21 @@ Deno.serve(async (req: Request) => {
       if (quoteItems.length > 0) {
         await supabase.from("quote_items").insert(quoteItems);
 
-        // ✅ Run parse resolution engine to get authoritative total
-        const resolutionRows = quoteItems.map((item: any) => ({
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-        }));
-        const resolution = runParseResolution(resolutionRows);
-
         const itemsSum = finalItems.reduce((sum: number, line: any) =>
           sum + (parseFloat(line.total) || 0), 0
         );
+
+        // ✅ Use pre-filter resolution (ran before summary rows were stripped).
+        // For non-carpentry paths preFilterResolution is set above; for carpentry/plumbing
+        // paths fall back to summing inserted items since those use deterministic parsers.
+        const resolution = typeof preFilterResolution !== 'undefined' ? preFilterResolution : null;
 
         // For multiplier quotes, the document total IS the correct total (items × levels).
         // Otherwise use the resolution engine's authoritative value.
         let persistedTotal: number;
         if (detectedLevelsMultiplier && documentTotal) {
           persistedTotal = documentTotal;
-        } else if (resolution.resolvedTotal.value > 0) {
+        } else if (resolution && resolution.resolvedTotal.value > 0) {
           persistedTotal = resolution.resolvedTotal.value;
         } else {
           persistedTotal = itemsSum;
@@ -932,12 +938,14 @@ Deno.serve(async (req: Request) => {
         const missingAmount = documentTotal ? documentTotal - itemsSum : 0;
         const needsReview = !detectedLevelsMultiplier && documentTotal !== null && Math.abs(missingAmount) > tolerance;
 
-        console.log(`[Resolution] source=${resolution.resolvedTotal.source} confidence=${resolution.resolvedTotal.confidence} total=$${persistedTotal.toLocaleString()}`);
-        if (resolution.debug.duplicatesRemoved > 0) {
-          console.log(`[Resolution] Removed ${resolution.debug.duplicatesRemoved} duplicate rows`);
-        }
-        if (resolution.debug.warnings.length > 0) {
-          console.log(`[Resolution] Warnings:`, resolution.debug.warnings.map((w: any) => w.message));
+        if (resolution) {
+          console.log(`[Resolution] source=${resolution.resolvedTotal.source} confidence=${resolution.resolvedTotal.confidence} total=$${persistedTotal.toLocaleString()}`);
+          if (resolution.debug.duplicatesRemoved > 0) {
+            console.log(`[Resolution] Removed ${resolution.debug.duplicatesRemoved} duplicate rows`);
+          }
+          if (resolution.debug.warnings.length > 0) {
+            console.log(`[Resolution] Warnings:`, resolution.debug.warnings.map((w: any) => w.message));
+          }
         }
 
         await supabase
@@ -958,7 +966,7 @@ Deno.serve(async (req: Request) => {
         console.log(`[Resume V5] Replaced ${quoteItems.length} items in quote ${quoteId}`);
         console.log(`[Resume V5] Sum(items): $${itemsSum.toLocaleString()}`);
         console.log(`[Resume V5] Document total: $${documentTotal?.toLocaleString() || 'not found'}`);
-        console.log(`[Resume V5] Resolved total: $${persistedTotal.toLocaleString()} (${resolution.resolvedTotal.source})`);
+        console.log(`[Resume V5] Resolved total: $${persistedTotal.toLocaleString()} (${resolution?.resolvedTotal.source ?? 'items_sum'})`);
         if (detectedLevelsMultiplier) {
           console.log(`[Resume V5] Levels multiplier x${detectedLevelsMultiplier} — persisted total=$${persistedTotal.toLocaleString()}`);
         }

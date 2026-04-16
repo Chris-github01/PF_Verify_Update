@@ -677,6 +677,17 @@ Deno.serve(async (req: Request) => {
         });
         console.log(`After safe filter: ${basicFiltered.length} items (removed ${parsedData.items.length - basicFiltered.length} empty/zero rows)`);
 
+        // ✅ Run resolution engine BEFORE stripping summary rows so it can see the Grand Total
+        const preFilterResolutionRows = basicFiltered.map((item: any) => ({
+          description: String(item.description ?? item.desc ?? ''),
+          quantity: Number(item.qty ?? item.quantity ?? 0) || null,
+          unit: String(item.unit ?? '') || null,
+          unit_price: Number(item.rate ?? item.unit_price ?? 0) || null,
+          total_price: Number(item.total ?? item.total_price ?? 0) || null,
+        }));
+        const preFilterResolution = runParseResolution(preFilterResolutionRows);
+        console.log(`[Resolution] Pre-filter: source=${preFilterResolution.resolvedTotal.source} confidence=${preFilterResolution.resolvedTotal.confidence} value=$${preFilterResolution.resolvedTotal.value.toLocaleString()}`);
+
         const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(basicFiltered);
         if (totalRowsRemoved > 0) {
           console.log(`Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
@@ -727,16 +738,9 @@ Deno.serve(async (req: Request) => {
 
         console.log(`Created ${quoteItems.length} quote items`);
 
-        // ✅ Run parse resolution engine to get authoritative total
-        const resolutionRows = quoteItems.map(item => ({
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-        }));
-        const resolution = runParseResolution(resolutionRows);
+        // ✅ Use pre-filter resolution result (ran before summary rows were stripped)
         const calculatedTotal = quoteItems.reduce((sum, item) => sum + (item.total_price || 0), 0);
+        const resolution = preFilterResolution;
         const finalTotalAmount = resolution.resolvedTotal.value > 0
           ? resolution.resolvedTotal.value
           : (calculatedTotal > 0 ? calculatedTotal : (documentTotal ?? 0));
