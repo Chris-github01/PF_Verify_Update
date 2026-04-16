@@ -1,16 +1,8 @@
 // =============================================================================
 // PAGE-FIRST STRUCTURED PARSER  (Parser Mode A: StructuredPageParser)
-//
-// Designed for structured schedule PDFs where each page contains a properly
-// formatted pricing table (e.g. Summerset Milldale firestopping schedules).
-//
-// Pipeline position: BEFORE chunking — replaces chunked LLM parsing entirely
-// for qualifying documents.
+// HOTFIX: flexible regex with whitespace collapse, diagnostic counters,
+//         auto-fallback when zero rows parsed.
 // =============================================================================
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface StructuredPageItem {
   line_id: string;
@@ -43,10 +35,17 @@ export interface PageParseResult {
   };
   page_count: number;
   structured_pages: number;
+  diagnostics: {
+    rows_detected: number;
+    rows_parsed: number;
+    rows_failed: number;
+    rows_excluded_by_others: number;
+  };
+  fallback_triggered: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Step 1 — Detect structured schedule pages
+// Step 1 — Document qualification
 // ---------------------------------------------------------------------------
 
 const SCHEDULE_SIGNALS = [
@@ -61,267 +60,252 @@ export function isStructuredSchedulePage(pageText: string): boolean {
   return SCHEDULE_SIGNALS.some(re => re.test(pageText));
 }
 
-export function classifyPages(pages: string[]): boolean[] {
-  return pages.map(p => isStructuredSchedulePage(p));
-}
-
-/**
- * Returns true if the document qualifies for the structured parser:
- * at least 50% of pages (or at least 2) look like schedule pages.
- */
 export function documentQualifiesForStructuredParser(pages: string[]): boolean {
   if (pages.length === 0) return false;
-  const classifications = classifyPages(pages);
-  const structuredCount = classifications.filter(Boolean).length;
+  const structuredCount = pages.filter(p => isStructuredSchedulePage(p)).length;
   return structuredCount >= 2 || structuredCount / pages.length >= 0.5;
 }
 
 // ---------------------------------------------------------------------------
-// Step 3 — Detect block header on a page
+// Helpers
 // ---------------------------------------------------------------------------
 
 const BLOCK_HEADER_RE = /\bBLOCK\s*B?(\d+)\b/i;
-
-function extractPageBlockId(pageText: string): string | null {
-  const m = pageText.match(BLOCK_HEADER_RE);
-  return m ? `B${m[1]}` : null;
-}
-
-// ---------------------------------------------------------------------------
-// Step 7 — Detect optional scope section transition
-// ---------------------------------------------------------------------------
-
 const OPTIONAL_SECTION_RE = /\b(OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|OPTIONAL\s+EXTRAS)\b/i;
 
-function lineIsOptionalHeader(line: string): boolean {
-  return OPTIONAL_SECTION_RE.test(line);
-}
-
-// ---------------------------------------------------------------------------
-// Step 6 — Non-priced row exclusion patterns
-// ---------------------------------------------------------------------------
-
-const EXCLUDE_DESC_RE = [
-  /^by\s+others\b/i,
-  /^\$\s*[-–]\s*$/,
-  /^-+$/,
-  /^n\/?a$/i,
-  /not\s+in\s+contract/i,
-  /not\s+part\s+of\s+passive\s+fire/i,
-  /services\s+identified\s+not\s+part/i,
-];
-
-function isExcludedRow(description: string, total: number): boolean {
-  if (total === 0 && description.trim() === '') return true;
-  return EXCLUDE_DESC_RE.some(re => re.test(description.trim()));
-}
-
-// ---------------------------------------------------------------------------
-// Column parsing helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a monetary string: "$1,234.56" / "1234.56" / "1 234.56" → number
- */
 function parseMoney(raw: string): number {
-  const cleaned = raw.replace(/[,$\s]/g, '');
-  const val = parseFloat(cleaned);
+  const val = parseFloat(raw.replace(/[$,\s]/g, ''));
   return isNaN(val) ? 0 : val;
 }
 
-/**
- * Parse a quantity — may be integer or decimal
- */
-function parseQty(raw: string): number {
-  const cleaned = raw.replace(/,/g, '').trim();
-  const val = parseFloat(cleaned);
-  return isNaN(val) ? 0 : val;
-}
-
-/**
- * Normalize common unit strings
- */
 function normaliseUnit(raw: string): string {
-  const u = raw.toLowerCase().trim();
+  const u = raw.toLowerCase().trim().replace(/\.$/, '');
   const map: Record<string, string> = {
-    no: 'ea', 'no.': 'ea', ea: 'ea', each: 'ea', nr: 'ea', item: 'ea',
-    m: 'lm', lm: 'lm',
-    'm2': 'm2', sqm: 'm2',
+    no: 'ea', ea: 'ea', each: 'ea', nr: 'ea', item: 'ea',
+    m: 'lm', lm: 'lm', m2: 'm2', sqm: 'm2',
   };
   return map[u] ?? u;
 }
 
 // ---------------------------------------------------------------------------
-// Step 4 + 5 — Parse numbered line rows from a single page
+// Step 4 + 5 — Flexible structured row parser
 //
-// Firestopping schedule column layout (tab / large-space separated):
-//   LINE_ID  SERVICE  SERVICE_TYPE  SIZE  DESCRIPTION  QTY  UNIT  RATE  TOTAL
+// PDF text extraction is irregular; whitespace is collapsed before matching.
 //
-// The extractor collapses PDF text items into lines using Y-position grouping.
-// Columns are separated by variable whitespace (2+ spaces or tabs).
+// Primary pattern (with rate):
+//   ^(\d+) (.+?) ([\d.]+) (No\.|No|m2|lm|ea|each|item|nr) \$ ([\d,]+\.\d{2}) \$ ([\d,]+\.\d{2})$
+//
+// Secondary pattern (total only, no explicit rate):
+//   ^(\d+) (.+?) ([\d.]+) (No\.|No|m2|lm|ea|each|item|nr) \$ ([\d,]+\.\d{2})$
+//
+// Tertiary pattern (just description + trailing dollar total):
+//   ^(\d+) (.+?) \$ ([\d,]+\.\d{2})$
 // ---------------------------------------------------------------------------
 
-const LINE_ID_RE = /^(\d{1,3})\s+/;
+const UNIT_ALT = 'No\\.|No|m2|lm|ea|each|item|nr|m';
 
-// Matches a monetary total at the end of the row: e.g. "1,234.56" or "61490"
-const TRAILING_MONEY_RE = /\$?([\d,]+(?:\.\d{2})?)$/;
+const ROW_FULL_RE = new RegExp(
+  `^(\\d{1,3})\\s+(.+?)\\s+([\\d.]+)\\s+(${UNIT_ALT})\\s+\\$\\s*([\\d,]+\\.\\d{2})\\s+\\$\\s*([\\d,]+\\.\\d{2})$`,
+  'i',
+);
 
-// Rate pattern — a number that looks like a unit rate (may have decimals)
-const RATE_RE = /\$?([\d,]+(?:\.\d+)?)$/;
+const ROW_NO_RATE_RE = new RegExp(
+  `^(\\d{1,3})\\s+(.+?)\\s+([\\d.]+)\\s+(${UNIT_ALT})\\s+\\$\\s*([\\d,]+\\.\\d{2})$`,
+  'i',
+);
 
-/**
- * Split a line into tokens using 2+ consecutive spaces or tabs as delimiter.
- * Falls back to single-space split if fewer than 4 tokens produced.
- */
-function tokenizeLine(line: string): string[] {
-  let tokens = line.split(/\s{2,}|\t/).map(t => t.trim()).filter(Boolean);
-  if (tokens.length < 3) {
-    tokens = line.trim().split(/\s+/);
-  }
-  return tokens;
+const ROW_TOTAL_ONLY_RE = /^(\d{1,3})\s+(.+?)\s+\$\s*([\d,]+\.\d{2})$/i;
+
+const BY_OTHERS_RE = /\bby\s+others\b/i;
+
+const EXCLUDE_TOTAL_LABELS = [
+  /^\$\s*[-–]$/, /^-+$/, /^n\/?a$/i,
+  /not\s+in\s+contract/i,
+  /not\s+part\s+of\s+passive\s+fire/i,
+];
+
+interface ParseAttempt {
+  item: StructuredPageItem | null;
+  byOthers: boolean;
 }
 
-/**
- * Attempt to parse a structured row. Returns null if the line doesn't look
- * like a valid numbered line item.
- */
-function parseStructuredRow(
-  line: string,
-  currentBlockId: string,
+function attemptParseRow(
+  rawLine: string,
+  blockId: string,
   scopeCategory: 'base' | 'optional',
   pageNum: number,
-): StructuredPageItem | null {
-  const lineMatch = line.match(LINE_ID_RE);
-  if (!lineMatch) return null;
+): ParseAttempt {
+  // HOTFIX: collapse all whitespace sequences to single space before matching
+  const line = rawLine.replace(/\s+/g, ' ').trim();
 
-  const lineId = lineMatch[1];
-  const rest = line.slice(lineMatch[0].length).trim();
+  // Must start with a line number
+  if (!/^\d{1,3}\s/.test(line)) return { item: null, byOthers: false };
 
-  if (!rest) return null;
-
-  const tokens = tokenizeLine(rest);
-
-  if (tokens.length < 2) return null;
-
-  // The total is always the last token that looks like money
-  const lastToken = tokens[tokens.length - 1];
-  const totalMatch = lastToken.match(TRAILING_MONEY_RE);
-  if (!totalMatch) {
-    // If last token doesn't look like money at all, skip
-    const looksNumeric = /^[\d,]+(\.\d+)?$/.test(lastToken.replace(/\$/g, ''));
-    if (!looksNumeric) return null;
-  }
-  const total = parseMoney(lastToken);
-
-  // Rate is second-to-last if it looks like a number
-  let rate = 0;
-  let unit = 'ea';
-  let qty = 0;
-  let descTokens: string[] = [];
-
-  if (tokens.length >= 4) {
-    const rateRaw = tokens[tokens.length - 2];
-    const unitRaw = tokens[tokens.length - 3];
-    const qtyRaw = tokens[tokens.length - 4];
-
-    const rateVal = parseMoney(rateRaw);
-    const qtyVal = parseQty(qtyRaw);
-
-    if (rateVal > 0 && qtyVal > 0) {
-      rate = rateVal;
-      qty = qtyVal;
-      unit = normaliseUnit(unitRaw);
-      descTokens = tokens.slice(0, tokens.length - 4);
-    } else {
-      // Fallback: treat whole middle section as description
-      descTokens = tokens.slice(0, tokens.length - 1);
-    }
-  } else {
-    descTokens = tokens.slice(0, tokens.length - 1);
+  // Check "By others" — keep informationally but exclude from priced rows
+  if (BY_OTHERS_RE.test(line)) {
+    return { item: null, byOthers: true };
   }
 
-  const description = descTokens.join(' ').trim();
-  if (!description && total === 0) return null;
+  // Exclude total label rows
+  if (EXCLUDE_TOTAL_LABELS.some(re => re.test(line))) {
+    return { item: null, byOthers: false };
+  }
 
-  // Step 6: exclude non-priced rows
-  if (isExcludedRow(description, total)) return null;
-
-  // Extract service type and size from description heuristically
-  const sizeMatch = description.match(/\b(\d{2,4}mm|\d+[Xx]\d+|DN\d+)\b/i);
+  const sizeMatch = line.match(/\b(\d{2,4}mm|\d+[Xx]\d+|DN\d+)\b/i);
   const size = sizeMatch ? sizeMatch[1] : '';
-
-  const serviceTypeMatch = description.match(/\b(cable|pipe|duct|conduit|penetration|firestopping|intumescent|collar|wrap|pillow|seal)\b/i);
+  const serviceTypeMatch = line.match(/\b(cable|pipe|duct|conduit|penetration|firestopping|intumescent|collar|wrap|pillow|seal)\b/i);
   const serviceType = serviceTypeMatch ? serviceTypeMatch[1].toLowerCase() : '';
 
-  // Service = first meaningful word
-  const service = descTokens[0] ?? '';
+  // --- Primary: full row with qty + unit + rate + total ---
+  let m = line.match(ROW_FULL_RE);
+  if (m) {
+    const [, lineId, desc, qtyRaw, unitRaw, rateRaw, totalRaw] = m;
+    const total = parseMoney(totalRaw);
+    if (total === 0) return { item: null, byOthers: false };
+    return {
+      item: {
+        line_id: lineId,
+        block_id: blockId,
+        service: desc.split(' ')[0] ?? '',
+        service_type: serviceType,
+        size,
+        description: desc.trim(),
+        qty: parseFloat(qtyRaw) || 1,
+        unit: normaliseUnit(unitRaw),
+        rate: parseMoney(rateRaw),
+        total,
+        scope_category: scopeCategory,
+        page_number: pageNum,
+        source: 'structured_page_parser',
+      },
+      byOthers: false,
+    };
+  }
 
-  return {
-    line_id: lineId,
-    block_id: currentBlockId,
-    service,
-    service_type: serviceType,
-    size,
-    description: description || `Line ${lineId}`,
-    qty: qty || 1,
-    unit,
-    rate,
-    total,
-    scope_category: scopeCategory,
-    page_number: pageNum,
-    source: 'structured_page_parser',
-  };
+  // --- Secondary: qty + unit + total (no separate rate column) ---
+  m = line.match(ROW_NO_RATE_RE);
+  if (m) {
+    const [, lineId, desc, qtyRaw, unitRaw, totalRaw] = m;
+    const total = parseMoney(totalRaw);
+    const qty = parseFloat(qtyRaw) || 1;
+    if (total === 0) return { item: null, byOthers: false };
+    return {
+      item: {
+        line_id: lineId,
+        block_id: blockId,
+        service: desc.split(' ')[0] ?? '',
+        service_type: serviceType,
+        size,
+        description: desc.trim(),
+        qty,
+        unit: normaliseUnit(unitRaw),
+        rate: total / qty,
+        total,
+        scope_category: scopeCategory,
+        page_number: pageNum,
+        source: 'structured_page_parser',
+      },
+      byOthers: false,
+    };
+  }
+
+  // --- Tertiary: just description + trailing dollar total (lump sum) ---
+  m = line.match(ROW_TOTAL_ONLY_RE);
+  if (m) {
+    const [, lineId, desc, totalRaw] = m;
+    const total = parseMoney(totalRaw);
+    if (total === 0) return { item: null, byOthers: false };
+    return {
+      item: {
+        line_id: lineId,
+        block_id: blockId,
+        service: desc.split(' ')[0] ?? '',
+        service_type: serviceType,
+        size,
+        description: desc.trim(),
+        qty: 1,
+        unit: 'item',
+        rate: total,
+        total,
+        scope_category: scopeCategory,
+        page_number: pageNum,
+        source: 'structured_page_parser',
+      },
+      byOthers: false,
+    };
+  }
+
+  return { item: null, byOthers: false };
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 + 3 + 4 — Parse a single page independently
+// Parse single page
 // ---------------------------------------------------------------------------
+
+interface PageResult {
+  items: StructuredPageItem[];
+  lastBlockId: string;
+  rows_detected: number;
+  rows_parsed: number;
+  rows_failed: number;
+  rows_excluded_by_others: number;
+}
 
 export function parsePage(
   pageText: string,
   pageNum: number,
   inheritedBlockId: string,
-): { items: StructuredPageItem[]; lastBlockId: string } {
+): PageResult {
   const lines = pageText.split('\n').map(l => l.trim()).filter(Boolean);
   const items: StructuredPageItem[] = [];
 
   let currentBlockId = inheritedBlockId;
   let scopeCategory: 'base' | 'optional' = 'base';
+  let rows_detected = 0;
+  let rows_parsed = 0;
+  let rows_failed = 0;
+  let rows_excluded_by_others = 0;
 
   for (const line of lines) {
-    // Step 3: detect block header — update current block for all following rows
-    const blockMatch = line.match(BLOCK_HEADER_RE);
+    const blockMatch = line.replace(/\s+/g, ' ').match(BLOCK_HEADER_RE);
     if (blockMatch) {
       currentBlockId = `B${blockMatch[1]}`;
     }
 
-    // Step 7: detect optional scope section transition
-    if (lineIsOptionalHeader(line)) {
+    if (OPTIONAL_SECTION_RE.test(line)) {
       scopeCategory = 'optional';
     }
 
-    // Step 4: only attempt parsing of numbered line rows
-    const item = parseStructuredRow(line, currentBlockId, scopeCategory, pageNum);
-    if (item) {
+    // Only attempt rows that start with a digit
+    if (!/^\d{1,3}[\s]/.test(line.trimStart())) continue;
+
+    rows_detected++;
+
+    const { item, byOthers } = attemptParseRow(line, currentBlockId, scopeCategory, pageNum);
+    if (byOthers) {
+      rows_excluded_by_others++;
+    } else if (item) {
+      rows_parsed++;
       items.push(item);
+    } else {
+      rows_failed++;
     }
   }
 
-  return { items, lastBlockId: currentBlockId };
+  return { items, lastBlockId: currentBlockId, rows_detected, rows_parsed, rows_failed, rows_excluded_by_others };
 }
 
 // ---------------------------------------------------------------------------
-// Step 9 — Validate by block totals
+// Block + document totals
 // ---------------------------------------------------------------------------
 
 function extractPageBlockTotals(pages: string[]): Record<string, number> {
   const totals: Record<string, number> = {};
-  // Pattern: "BLOCK B30 TOTAL   $12,345.67" or "Total Block 30   12345.67"
   const BLOCK_TOTAL_RE = /BLOCK\s*B?(\d+)\s+(?:TOTAL|SUB[- ]?TOTAL)\s*:?\s*\$?([\d,]+(?:\.\d{2})?)/gi;
-
   for (const page of pages) {
     const flat = page.replace(/[\r\n]+/g, ' ');
     let m: RegExpExecArray | null;
+    BLOCK_TOTAL_RE.lastIndex = 0;
     while ((m = BLOCK_TOTAL_RE.exec(flat)) !== null) {
       const key = `B${m[1]}`;
       const val = parseMoney(m[2]);
@@ -330,10 +314,6 @@ function extractPageBlockTotals(pages: string[]): Record<string, number> {
   }
   return totals;
 }
-
-// ---------------------------------------------------------------------------
-// Step 9 (document total from raw text)
-// ---------------------------------------------------------------------------
 
 const GRAND_TOTAL_PATTERNS: RegExp[] = [
   /Grand\s+Total\s*\(excl(?:uding)?\.?\s*GST\)\s*:?\s*\$?\s*([\d][\d\s,]*\.\d{2})/i,
@@ -357,49 +337,49 @@ function extractGrandTotal(text: string): number | null {
 }
 
 // ---------------------------------------------------------------------------
-// Step 10 + 11 — Main entry point
+// Main entry point
 // ---------------------------------------------------------------------------
 
-/**
- * Run the structured page parser against an array of per-page text strings.
- *
- * @param pages     Array of page text strings (one entry per PDF page)
- * @returns         PageParseResult with structured items and validation
- */
 export function runPageStructuredParser(pages: string[]): PageParseResult {
   const allItems: StructuredPageItem[] = [];
   let lastBlockId = 'UNKNOWN';
 
-  for (let i = 0; i < pages.length; i++) {
-    const pageNum = i + 1;
-    // Step 1: only parse structured schedule pages
-    if (!isStructuredSchedulePage(pages[i])) {
-      continue;
-    }
+  let total_rows_detected = 0;
+  let total_rows_parsed = 0;
+  let total_rows_failed = 0;
+  let total_rows_excluded_by_others = 0;
 
-    const { items, lastBlockId: newBlock } = parsePage(pages[i], pageNum, lastBlockId);
-    lastBlockId = newBlock;
-    allItems.push(...items);
+  for (let i = 0; i < pages.length; i++) {
+    if (!isStructuredSchedulePage(pages[i])) continue;
+
+    const result = parsePage(pages[i], i + 1, lastBlockId);
+    lastBlockId = result.lastBlockId;
+    allItems.push(...result.items);
+
+    total_rows_detected += result.rows_detected;
+    total_rows_parsed += result.rows_parsed;
+    total_rows_failed += result.rows_failed;
+    total_rows_excluded_by_others += result.rows_excluded_by_others;
   }
 
-  // Split base / optional (Step 8 — no identity dedup here, raw rows preserved)
+  // Step 8: fallback triggered when zero rows parsed
+  const fallback_triggered = allItems.length === 0;
+
+  console.log(`[StructuredPageParser] rows_detected=${total_rows_detected} rows_parsed=${total_rows_parsed} rows_failed=${total_rows_failed} rows_excluded_by_others=${total_rows_excluded_by_others}`);
+  if (fallback_triggered) {
+    console.warn('[StructuredPageParser] Zero rows parsed — fallback_triggered=true, delegating to LLM pipeline');
+  }
+
   const baseItems = allItems.filter(i => i.scope_category === 'base');
   const optionalItems = allItems.filter(i => i.scope_category === 'optional');
-
   const baseTotal = baseItems.reduce((s, i) => s + i.total, 0);
   const optionalTotal = optionalItems.reduce((s, i) => s + i.total, 0);
 
-  // Document total (Step 10)
   const combinedText = pages.join('\n\n');
   const documentTotal = extractGrandTotal(combinedText);
-
-  // Block totals from page summary rows (Step 9)
   const blockTotals = extractPageBlockTotals(pages);
-
-  // Structured page count
   const structuredPages = pages.filter(p => isStructuredSchedulePage(p)).length;
 
-  // Validation (Step 11)
   let matches_document = true;
   let variance = 0;
   let risk: 'OK' | 'HIGH' = 'OK';
@@ -410,7 +390,7 @@ export function runPageStructuredParser(pages: string[]): PageParseResult {
     matches_document = variance <= 0.02;
     if (!matches_document) {
       risk = 'HIGH';
-      message = `Base total $${baseTotal.toFixed(2)} vs document total $${documentTotal.toFixed(2)} — ${(variance * 100).toFixed(1)}% variance (systemic_miss)`;
+      message = `Base total $${baseTotal.toFixed(2)} vs document total $${documentTotal.toFixed(2)} — ${(variance * 100).toFixed(1)}% variance`;
     }
   }
 
@@ -424,5 +404,12 @@ export function runPageStructuredParser(pages: string[]): PageParseResult {
     validation: { matches_document, variance, risk, message },
     page_count: pages.length,
     structured_pages: structuredPages,
+    diagnostics: {
+      rows_detected: total_rows_detected,
+      rows_parsed: total_rows_parsed,
+      rows_failed: total_rows_failed,
+      rows_excluded_by_others: total_rows_excluded_by_others,
+    },
+    fallback_triggered,
   };
 }

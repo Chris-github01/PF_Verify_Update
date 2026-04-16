@@ -426,17 +426,20 @@ Deno.serve(async (req: Request) => {
         const pageResult = runPageStructuredParser(allPages);
 
         console.log(`[StructuredPageParser] structured_pages=${pageResult.structured_pages}/${pageResult.page_count}`);
-        console.log(`[StructuredPageParser] base items=${pageResult.items.filter(i => i.scope_category === 'base').length} total=$${pageResult.base_total.toFixed(2)}`);
-        console.log(`[StructuredPageParser] optional items=${pageResult.items.filter(i => i.scope_category === 'optional').length} total=$${pageResult.optional_total.toFixed(2)}`);
+        console.log(`[StructuredPageParser] diagnostics: rows_detected=${pageResult.diagnostics?.rows_detected ?? 0} rows_parsed=${pageResult.diagnostics?.rows_parsed ?? 0} rows_failed=${pageResult.diagnostics?.rows_failed ?? 0} rows_excluded_by_others=${pageResult.diagnostics?.rows_excluded_by_others ?? 0}`);
+        console.log(`[StructuredPageParser] base items=${pageResult.items.filter((i: any) => i.scope_category === 'base').length} total=$${pageResult.base_total.toFixed(2)}`);
+        console.log(`[StructuredPageParser] optional items=${pageResult.items.filter((i: any) => i.scope_category === 'optional').length} total=$${pageResult.optional_total.toFixed(2)}`);
         console.log(`[StructuredPageParser] document_total=${pageResult.document_total ?? 'null'}`);
         console.log(`[StructuredPageParser] validation risk=${pageResult.validation.risk} variance=${(pageResult.validation.variance * 100).toFixed(1)}%`);
         if (pageResult.validation.message) {
           console.warn(`[StructuredPageParser] ${pageResult.validation.message}`);
         }
+        if (pageResult.fallback_triggered) {
+          console.warn(`[StructuredPageParser] fallback_triggered=true — zero rows parsed, delegating to LLM/chunk pipeline`);
+        }
 
         // Only commit structured parser result if it produced meaningful items.
-        // If it extracted nothing (e.g. all pages are cover/TOC), fall through
-        // to the chunk-based LLM pipeline.
+        // fallback_triggered=true means zero rows — fall through to LLM pipeline.
         if (pageResult.items.length > 0) {
           usedStructuredPageParser = true;
 
