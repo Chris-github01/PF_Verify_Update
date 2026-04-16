@@ -575,42 +575,48 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
   }, [debugData, rawJson, quoteName]);
 
   const exportDebugJSON = useCallback(() => {
-    if (!debugData) return;
     const slug = quoteName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const payload = {
+    const payload: Record<string, unknown> = {
       quote: quoteName,
       exportedAt: new Date().toISOString(),
-      stats: debugData.stats,
-      validation: debugData.validation,
-      chunks: debugData.debug.chunks.map(c => ({
-        chunkIndex: c.chunkIndex,
-        itemCount: c.items.length,
-        items: c.items.map(i => ({
-          description: i.description,
-          quantity: i.quantity,
-          unit: i.unit,
-          unit_price: i.unit_price,
-          total_price: i.total_price,
-          service: i.service,
-          frr: i.frr,
-          mapped_service_type: i.mapped_service_type,
-          confidence: i.confidence,
-        })),
-        failedLines: c.failedLines,
+      itemCount: items.length,
+      items: items.map(i => ({
+        description: i.description,
+        quantity: i.quantity,
+        unit: i.unit,
+        unit_price: i.unit_price,
+        total_price: i.total_price,
+        service: i.service,
+        frr: i.frr,
+        mapped_service_type: i.mapped_service_type,
+        mapped_system: i.mapped_system,
+        confidence: i.confidence,
+        scope_category: i.scope_category,
+        source: i.source,
+        is_excluded: i.is_excluded,
       })),
-      globalFailedLines: debugData.debug.failedLinesGlobal,
-      rawPromptPreview: rawJson ? rawJson.slice(0, 2000) : null,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `debug-report-${slug}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, [debugData, rawJson, quoteName]);
+    if (debugData) {
+      payload.stats = debugData.stats;
+      payload.validation = debugData.validation;
+      payload.chunkCount = debugData.debug.chunks.length;
+      payload.globalFailedLines = debugData.debug.failedLinesGlobal;
+      payload.qualityMetrics = debugData.debug.quality;
+    }
+    try {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `debug-report-${slug}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      alert('Export failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }, [debugData, items, quoteName]);
 
   const toggleRow = (id: string) => {
     setExpandedRows(prev => {
@@ -824,7 +830,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
           )}
         </div>
 
-        {view === 'debug' && debugData && (
+        {items.length > 0 && (
           <div className="px-6 py-2 border-t border-slate-700 bg-slate-900/40 flex-shrink-0 flex items-center gap-2 flex-wrap">
             <span className="text-xs text-slate-500 mr-1">Export for ChatGPT:</span>
             <button
@@ -834,13 +840,15 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
               <Download size={12} />
               Download JSON
             </button>
-            <button
-              onClick={exportDebugPDF}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition-colors"
-            >
-              <Download size={12} />
-              Download HTML
-            </button>
+            {view === 'debug' && debugData && (
+              <button
+                onClick={exportDebugPDF}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition-colors"
+              >
+                <Download size={12} />
+                Download HTML
+              </button>
+            )}
             <span className="text-xs text-slate-600 ml-1">Upload the JSON file directly into ChatGPT</span>
           </div>
         )}
