@@ -13,6 +13,7 @@ import {
 } from "../_shared/itemNormalizer.ts";
 import { runParseResolution } from "../_shared/parseResolutionEngine.ts";
 import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
+import { runIdentityEngine } from "../_shared/identityEngine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -893,25 +894,30 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // STEP 2: Split deduped items into main scope vs optional
-    const OPTIONAL_PATTERNS = /\b(OPTIONAL|ADD TO SCOPE|OPTIONAL SCOPE|BY OTHERS|PROVISIONAL|NOT PART OF PASSIVE FIRE)\b/i;
-    const mainScopeItems = afterStubDedup.filter((item: any) => !OPTIONAL_PATTERNS.test(String(item.description ?? '')));
-    const optionalScopeItems = afterStubDedup.filter((item: any) => OPTIONAL_PATTERNS.test(String(item.description ?? '')));
-    const optionalTotal = optionalScopeItems.reduce((s: number, i: any) => s + (parseFloat(i.total) || 0), 0);
-    if (optionalScopeItems.length > 0) {
-      console.log(`[Resume] Optional items: ${optionalScopeItems.length}, optional total=$${optionalTotal.toLocaleString()}`);
+    // STEP 2–8: Run Identity + Aggregation Engine
+    // This replaces the manual optional/base split, signature dedup, and unit normalisation.
+    const identityResult = runIdentityEngine(afterStubDedup, combinedChunkText);
+
+    const mainScopeItems = identityResult.base.items;
+    const optionalScopeItems = identityResult.optional.items;
+    const optionalTotal = identityResult.optional.total;
+
+    console.log(`[Identity] base=${mainScopeItems.length} items / $${identityResult.base.total.toFixed(2)}`);
+    console.log(`[Identity] optional=${optionalScopeItems.length} items / $${optionalTotal.toFixed(2)}`);
+    if (identityResult.validation.risk === 'HIGH') {
+      console.warn(`[Identity] VALIDATION WARNING: ${identityResult.validation.message}`);
     }
 
-    // STEP 3: Run row-based resolution on main scope items only (for row grand total fallback)
+    // STEP 3: Row-based resolution fallback (for grand total from parsed rows, not document text)
     const rowResolutionRows = mainScopeItems.map((item: any) => ({
       description: String(item.description ?? ''),
-      quantity: parseFloat(item.qty) || null,
+      quantity: item.quantity ?? null,
       unit: String(item.unit ?? '') || null,
-      unit_price: parseFloat(item.rate) || null,
-      total_price: parseFloat(item.total) || null,
+      unit_price: item.unit_price ?? null,
+      total_price: item.total_price ?? null,
     }));
     const rowResolution = runParseResolution(rowResolutionRows);
-    const lineItemsTotal = mainScopeItems.reduce((s: number, i: any) => s + (parseFloat(i.total) || 0), 0);
+    const lineItemsTotal = identityResult.base.total;
 
     // STEP 4: Determine authoritative total — document grand total wins
     let persistedTotal: number;
@@ -965,10 +971,10 @@ Deno.serve(async (req: Request) => {
       const mainQuoteItems = finalItems.map((line: any) => ({
         quote_id: quoteId,
         description: cleanText(line.description) || 'No description',
-        quantity: parseFloat(line.qty) || 0,
+        quantity: Number(line.quantity ?? line.qty ?? 0) || 0,
         unit: line.unit || 'ea',
-        unit_price: parseFloat(line.rate) || 0,
-        total_price: parseFloat(line.total) || 0,
+        unit_price: Number(line.unit_price ?? line.rate ?? 0) || 0,
+        total_price: Number(line.total_price ?? line.total ?? 0) || 0,
         scope_category: 'Main',
         source: line.source || itemSource,
         frr: line.frr || null,
@@ -978,10 +984,10 @@ Deno.serve(async (req: Request) => {
       const optionalQuoteItems = optionalScopeItems.map((line: any) => ({
         quote_id: quoteId,
         description: cleanText(line.description) || 'Optional item',
-        quantity: parseFloat(line.qty) || 0,
+        quantity: Number(line.quantity ?? line.qty ?? 0) || 0,
         unit: line.unit || 'ea',
-        unit_price: parseFloat(line.rate) || 0,
-        total_price: parseFloat(line.total) || 0,
+        unit_price: Number(line.unit_price ?? line.rate ?? 0) || 0,
+        total_price: Number(line.total_price ?? line.total ?? 0) || 0,
         scope_category: 'Optional',
         source: line.source || itemSource,
         frr: line.frr || null,
@@ -1016,6 +1022,7 @@ Deno.serve(async (req: Request) => {
           document_grand_total: docTotals.grandTotal,
           document_sub_total: docTotals.subTotal,
           optional_scope_total: optionalTotal > 0 ? optionalTotal : (docTotals.optionalTotal ?? null),
+          identity_engine_validation: identityResult.validation.risk,
           original_line_items_total: lineItemsTotal,
         })
         .eq("id", quoteId);
