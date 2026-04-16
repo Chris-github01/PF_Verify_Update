@@ -1,8 +1,22 @@
 // =============================================================================
 // PAGE-FIRST STRUCTURED PARSER  (Parser Mode A: StructuredPageParser)
-// HOTFIX: flexible regex with whitespace collapse, diagnostic counters,
-//         auto-fallback when zero rows parsed.
+//
+// ARCHITECTURE (new source-of-truth priority):
+//
+//   1. Page 2 summary labels  → canonical totals (Main Scope, Optional Scope)
+//   2. Schedule rows (p4–8)   → item counts, block breakdown, validation only
+//
+// Main Scope card  = Grand Total (excl. GST) from page 2 summary
+// Optional Scope   = ADD TO SCOPE from page 2 summary
+// NEVER derive Main Scope from row summation when page summary exists.
 // =============================================================================
+
+import { extractPage2Summary } from './page2SummaryExtractor';
+export type { Page2Summary } from './page2SummaryExtractor';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 export interface StructuredPageItem {
   line_id: string;
@@ -23,8 +37,11 @@ export interface StructuredPageItem {
 export interface PageParseResult {
   mode: 'structured_page_parser';
   items: StructuredPageItem[];
+  // SOURCE-OF-TRUTH totals (from page 2 summary when available)
   base_total: number;
   optional_total: number;
+  subtotal: number | null;
+  ps3_qa: number | null;
   document_total: number | null;
   block_totals: Record<string, number>;
   validation: {
@@ -40,6 +57,8 @@ export interface PageParseResult {
     rows_parsed: number;
     rows_failed: number;
     rows_excluded_by_others: number;
+    summary_detected: boolean;
+    used_source: 'page2_summary' | 'row_fallback';
   };
   fallback_triggered: boolean;
 }
@@ -88,18 +107,7 @@ function normaliseUnit(raw: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Step 4 + 5 — Flexible structured row parser
-//
-// PDF text extraction is irregular; whitespace is collapsed before matching.
-//
-// Primary pattern (with rate):
-//   ^(\d+) (.+?) ([\d.]+) (No\.|No|m2|lm|ea|each|item|nr) \$ ([\d,]+\.\d{2}) \$ ([\d,]+\.\d{2})$
-//
-// Secondary pattern (total only, no explicit rate):
-//   ^(\d+) (.+?) ([\d.]+) (No\.|No|m2|lm|ea|each|item|nr) \$ ([\d,]+\.\d{2})$
-//
-// Tertiary pattern (just description + trailing dollar total):
-//   ^(\d+) (.+?) \$ ([\d,]+\.\d{2})$
+// Flexible row regex patterns (whitespace-collapsed before matching)
 // ---------------------------------------------------------------------------
 
 const UNIT_ALT = 'No\\.|No|m2|lm|ea|each|item|nr|m';
@@ -118,7 +126,7 @@ const ROW_TOTAL_ONLY_RE = /^(\d{1,3})\s+(.+?)\s+\$\s*([\d,]+\.\d{2})$/i;
 
 const BY_OTHERS_RE = /\bby\s+others\b/i;
 
-const EXCLUDE_TOTAL_LABELS = [
+const EXCLUDE_LABELS = [
   /^\$\s*[-–]$/, /^-+$/, /^n\/?a$/i,
   /not\s+in\s+contract/i,
   /not\s+part\s+of\s+passive\s+fire/i,
@@ -135,28 +143,18 @@ function attemptParseRow(
   scopeCategory: 'base' | 'optional',
   pageNum: number,
 ): ParseAttempt {
-  // HOTFIX: collapse all whitespace sequences to single space before matching
   const line = rawLine.replace(/\s+/g, ' ').trim();
 
-  // Must start with a line number
   if (!/^\d{1,3}\s/.test(line)) return { item: null, byOthers: false };
 
-  // Check "By others" — keep informationally but exclude from priced rows
-  if (BY_OTHERS_RE.test(line)) {
-    return { item: null, byOthers: true };
-  }
-
-  // Exclude total label rows
-  if (EXCLUDE_TOTAL_LABELS.some(re => re.test(line))) {
-    return { item: null, byOthers: false };
-  }
+  if (BY_OTHERS_RE.test(line)) return { item: null, byOthers: true };
+  if (EXCLUDE_LABELS.some(re => re.test(line))) return { item: null, byOthers: false };
 
   const sizeMatch = line.match(/\b(\d{2,4}mm|\d+[Xx]\d+|DN\d+)\b/i);
   const size = sizeMatch ? sizeMatch[1] : '';
-  const serviceTypeMatch = line.match(/\b(cable|pipe|duct|conduit|penetration|firestopping|intumescent|collar|wrap|pillow|seal)\b/i);
-  const serviceType = serviceTypeMatch ? serviceTypeMatch[1].toLowerCase() : '';
+  const stMatch = line.match(/\b(cable|pipe|duct|conduit|penetration|firestopping|intumescent|collar|wrap|pillow|seal)\b/i);
+  const serviceType = stMatch ? stMatch[1].toLowerCase() : '';
 
-  // --- Primary: full row with qty + unit + rate + total ---
   let m = line.match(ROW_FULL_RE);
   if (m) {
     const [, lineId, desc, qtyRaw, unitRaw, rateRaw, totalRaw] = m;
@@ -164,25 +162,18 @@ function attemptParseRow(
     if (total === 0) return { item: null, byOthers: false };
     return {
       item: {
-        line_id: lineId,
-        block_id: blockId,
-        service: desc.split(' ')[0] ?? '',
-        service_type: serviceType,
-        size,
+        line_id: lineId, block_id: blockId,
+        service: desc.split(' ')[0] ?? '', service_type: serviceType, size,
         description: desc.trim(),
-        qty: parseFloat(qtyRaw) || 1,
-        unit: normaliseUnit(unitRaw),
-        rate: parseMoney(rateRaw),
-        total,
-        scope_category: scopeCategory,
-        page_number: pageNum,
+        qty: parseFloat(qtyRaw) || 1, unit: normaliseUnit(unitRaw),
+        rate: parseMoney(rateRaw), total,
+        scope_category: scopeCategory, page_number: pageNum,
         source: 'structured_page_parser',
       },
       byOthers: false,
     };
   }
 
-  // --- Secondary: qty + unit + total (no separate rate column) ---
   m = line.match(ROW_NO_RATE_RE);
   if (m) {
     const [, lineId, desc, qtyRaw, unitRaw, totalRaw] = m;
@@ -191,25 +182,18 @@ function attemptParseRow(
     if (total === 0) return { item: null, byOthers: false };
     return {
       item: {
-        line_id: lineId,
-        block_id: blockId,
-        service: desc.split(' ')[0] ?? '',
-        service_type: serviceType,
-        size,
+        line_id: lineId, block_id: blockId,
+        service: desc.split(' ')[0] ?? '', service_type: serviceType, size,
         description: desc.trim(),
-        qty,
-        unit: normaliseUnit(unitRaw),
-        rate: total / qty,
-        total,
-        scope_category: scopeCategory,
-        page_number: pageNum,
+        qty, unit: normaliseUnit(unitRaw),
+        rate: total / qty, total,
+        scope_category: scopeCategory, page_number: pageNum,
         source: 'structured_page_parser',
       },
       byOthers: false,
     };
   }
 
-  // --- Tertiary: just description + trailing dollar total (lump sum) ---
   m = line.match(ROW_TOTAL_ONLY_RE);
   if (m) {
     const [, lineId, desc, totalRaw] = m;
@@ -217,18 +201,11 @@ function attemptParseRow(
     if (total === 0) return { item: null, byOthers: false };
     return {
       item: {
-        line_id: lineId,
-        block_id: blockId,
-        service: desc.split(' ')[0] ?? '',
-        service_type: serviceType,
-        size,
+        line_id: lineId, block_id: blockId,
+        service: desc.split(' ')[0] ?? '', service_type: serviceType, size,
         description: desc.trim(),
-        qty: 1,
-        unit: 'item',
-        rate: total,
-        total,
-        scope_category: scopeCategory,
-        page_number: pageNum,
+        qty: 1, unit: 'item', rate: total, total,
+        scope_category: scopeCategory, page_number: pageNum,
         source: 'structured_page_parser',
       },
       byOthers: false,
@@ -239,7 +216,7 @@ function attemptParseRow(
 }
 
 // ---------------------------------------------------------------------------
-// Parse single page
+// Parse single page (for item counts + block breakdown only)
 // ---------------------------------------------------------------------------
 
 interface PageResult {
@@ -258,7 +235,6 @@ export function parsePage(
 ): PageResult {
   const lines = pageText.split('\n').map(l => l.trim()).filter(Boolean);
   const items: StructuredPageItem[] = [];
-
   let currentBlockId = inheritedBlockId;
   let scopeCategory: 'base' | 'optional' = 'base';
   let rows_detected = 0;
@@ -268,19 +244,13 @@ export function parsePage(
 
   for (const line of lines) {
     const blockMatch = line.replace(/\s+/g, ' ').match(BLOCK_HEADER_RE);
-    if (blockMatch) {
-      currentBlockId = `B${blockMatch[1]}`;
-    }
+    if (blockMatch) currentBlockId = `B${blockMatch[1]}`;
 
-    if (OPTIONAL_SECTION_RE.test(line)) {
-      scopeCategory = 'optional';
-    }
+    if (OPTIONAL_SECTION_RE.test(line)) scopeCategory = 'optional';
 
-    // Only attempt rows that start with a digit
     if (!/^\d{1,3}[\s]/.test(line.trimStart())) continue;
 
     rows_detected++;
-
     const { item, byOthers } = attemptParseRow(line, currentBlockId, scopeCategory, pageNum);
     if (byOthers) {
       rows_excluded_by_others++;
@@ -296,7 +266,7 @@ export function parsePage(
 }
 
 // ---------------------------------------------------------------------------
-// Block + document totals
+// Block totals from page text (secondary — for breakdown only)
 // ---------------------------------------------------------------------------
 
 function extractPageBlockTotals(pages: string[]): Record<string, number> {
@@ -315,35 +285,21 @@ function extractPageBlockTotals(pages: string[]): Record<string, number> {
   return totals;
 }
 
-const GRAND_TOTAL_PATTERNS: RegExp[] = [
-  /Grand\s+Total\s*\(excl(?:uding)?\.?\s*GST\)\s*:?\s*\$?\s*([\d][\d\s,]*\.\d{2})/i,
-  /Grand\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*\.\d{2})/i,
-  /TOTAL\s*\(excl(?:uding)?\.?\s*GST\)\s*:?\s*\$?\s*([\d][\d\s,]*\.\d{2})/i,
-  /Contract\s+(?:Sum|Total|Price)\s*:?\s*\$?\s*([\d][\d\s,]*\.\d{2})/i,
-  /Quote\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*\.\d{2})/i,
-];
-
-function extractGrandTotal(text: string): number | null {
-  const flat = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
-  let best: number | null = null;
-  for (const re of GRAND_TOTAL_PATTERNS) {
-    const m = flat.match(re);
-    if (m) {
-      const val = parseMoney(m[1]);
-      if (val > 0 && (best === null || val > best)) best = val;
-    }
-  }
-  return best;
-}
-
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
 export function runPageStructuredParser(pages: string[]): PageParseResult {
+  // =========================================================================
+  // STEP 1: Extract page 2 summary — this is the SOURCE OF TRUTH for totals
+  // =========================================================================
+  const summary = extractPage2Summary(pages);
+
+  // =========================================================================
+  // STEP 2: Parse schedule rows (pages 4–8) for item counts + block breakdown
+  // =========================================================================
   const allItems: StructuredPageItem[] = [];
   let lastBlockId = 'UNKNOWN';
-
   let total_rows_detected = 0;
   let total_rows_parsed = 0;
   let total_rows_failed = 0;
@@ -355,51 +311,75 @@ export function runPageStructuredParser(pages: string[]): PageParseResult {
     const result = parsePage(pages[i], i + 1, lastBlockId);
     lastBlockId = result.lastBlockId;
     allItems.push(...result.items);
-
     total_rows_detected += result.rows_detected;
     total_rows_parsed += result.rows_parsed;
     total_rows_failed += result.rows_failed;
     total_rows_excluded_by_others += result.rows_excluded_by_others;
   }
 
-  // Step 8: fallback triggered when zero rows parsed
-  const fallback_triggered = allItems.length === 0;
-
-  console.log(`[StructuredPageParser] rows_detected=${total_rows_detected} rows_parsed=${total_rows_parsed} rows_failed=${total_rows_failed} rows_excluded_by_others=${total_rows_excluded_by_others}`);
-  if (fallback_triggered) {
-    console.warn('[StructuredPageParser] Zero rows parsed — fallback_triggered=true, delegating to LLM pipeline');
-  }
-
+  // =========================================================================
+  // STEP 3: Determine canonical totals
+  //
+  //   SOURCE PRIORITY:
+  //     A) Page 2 summary (grand_total / optional_total) — preferred
+  //     B) Row summation — only if summary not found
+  // =========================================================================
   const baseItems = allItems.filter(i => i.scope_category === 'base');
   const optionalItems = allItems.filter(i => i.scope_category === 'optional');
-  const baseTotal = baseItems.reduce((s, i) => s + i.total, 0);
-  const optionalTotal = optionalItems.reduce((s, i) => s + i.total, 0);
+  const rowBaseTotal = baseItems.reduce((s, i) => s + i.total, 0);
+  const rowOptionalTotal = optionalItems.reduce((s, i) => s + i.total, 0);
 
-  const combinedText = pages.join('\n\n');
-  const documentTotal = extractGrandTotal(combinedText);
-  const blockTotals = extractPageBlockTotals(pages);
-  const structuredPages = pages.filter(p => isStructuredSchedulePage(p)).length;
+  const base_total = summary.summary_detected && summary.grand_total !== null
+    ? summary.grand_total
+    : rowBaseTotal;
 
+  const optional_total = summary.summary_detected && summary.optional_total !== null
+    ? summary.optional_total
+    : rowOptionalTotal;
+
+  const document_total = summary.grand_total;
+
+  console.log(`[StructuredPageParser] used_source=${summary.used_source} summary_detected=${summary.summary_detected}`);
+  console.log(`[StructuredPageParser] base_total=$${base_total.toFixed(2)} optional_total=$${optional_total.toFixed(2)}`);
+  console.log(`[StructuredPageParser] rows_detected=${total_rows_detected} rows_parsed=${total_rows_parsed} rows_failed=${total_rows_failed} rows_excluded_by_others=${total_rows_excluded_by_others}`);
+
+  // =========================================================================
+  // STEP 4: Fallback logic
+  //   fallback_triggered only when BOTH summary AND rows are empty
+  // =========================================================================
+  const fallback_triggered = !summary.summary_detected && allItems.length === 0;
+  if (fallback_triggered) {
+    console.warn('[StructuredPageParser] fallback_triggered=true — no summary and no rows, delegating to LLM pipeline');
+  }
+
+  // =========================================================================
+  // STEP 5: Validation — compare row total vs summary total
+  // =========================================================================
   let matches_document = true;
   let variance = 0;
   let risk: 'OK' | 'HIGH' = 'OK';
   let message: string | undefined;
 
-  if (documentTotal && documentTotal > 0 && baseTotal > 0) {
-    variance = Math.abs(documentTotal - baseTotal) / documentTotal;
-    matches_document = variance <= 0.02;
-    if (!matches_document) {
+  if (summary.summary_detected && rowBaseTotal > 0 && summary.grand_total !== null) {
+    variance = Math.abs(summary.grand_total - rowBaseTotal) / summary.grand_total;
+    if (variance > 0.15) {
       risk = 'HIGH';
-      message = `Base total $${baseTotal.toFixed(2)} vs document total $${documentTotal.toFixed(2)} — ${(variance * 100).toFixed(1)}% variance`;
+      matches_document = false;
+      message = `Row total $${rowBaseTotal.toFixed(2)} vs page2 summary $${summary.grand_total.toFixed(2)} — ${(variance * 100).toFixed(1)}% variance (rows used for count only)`;
     }
   }
+
+  const blockTotals = extractPageBlockTotals(pages);
+  const structuredPages = pages.filter(p => isStructuredSchedulePage(p)).length;
 
   return {
     mode: 'structured_page_parser',
     items: allItems,
-    base_total: baseTotal,
-    optional_total: optionalTotal,
-    document_total: documentTotal,
+    base_total,
+    optional_total,
+    subtotal: summary.subtotal,
+    ps3_qa: summary.ps3_qa,
+    document_total,
     block_totals: blockTotals,
     validation: { matches_document, variance, risk, message },
     page_count: pages.length,
@@ -409,6 +389,8 @@ export function runPageStructuredParser(pages: string[]): PageParseResult {
       rows_parsed: total_rows_parsed,
       rows_failed: total_rows_failed,
       rows_excluded_by_others: total_rows_excluded_by_others,
+      summary_detected: summary.summary_detected,
+      used_source: summary.used_source,
     },
     fallback_triggered,
   };

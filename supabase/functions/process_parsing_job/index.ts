@@ -419,31 +419,43 @@ Deno.serve(async (req: Request) => {
       // row merging, and block context loss.
       // -----------------------------------------------------------------------
       let usedStructuredPageParser = false;
+      let structuredPageResult: any = null;
 
       if (!structuredItems && allPages.length > 0 && documentQualifiesForStructuredParser(allPages)) {
         console.log(`[StructuredPageParser] Document qualifies — running page-first parser on ${allPages.length} pages`);
 
         const pageResult = runPageStructuredParser(allPages);
+        structuredPageResult = pageResult;
 
+        const diag = pageResult.diagnostics ?? {};
         console.log(`[StructuredPageParser] structured_pages=${pageResult.structured_pages}/${pageResult.page_count}`);
-        console.log(`[StructuredPageParser] diagnostics: rows_detected=${pageResult.diagnostics?.rows_detected ?? 0} rows_parsed=${pageResult.diagnostics?.rows_parsed ?? 0} rows_failed=${pageResult.diagnostics?.rows_failed ?? 0} rows_excluded_by_others=${pageResult.diagnostics?.rows_excluded_by_others ?? 0}`);
-        console.log(`[StructuredPageParser] base items=${pageResult.items.filter((i: any) => i.scope_category === 'base').length} total=$${pageResult.base_total.toFixed(2)}`);
-        console.log(`[StructuredPageParser] optional items=${pageResult.items.filter((i: any) => i.scope_category === 'optional').length} total=$${pageResult.optional_total.toFixed(2)}`);
+        console.log(`[StructuredPageParser] summary_detected=${diag.summary_detected ?? false} used_source=${diag.used_source ?? 'unknown'}`);
+        console.log(`[StructuredPageParser] rows_detected=${diag.rows_detected ?? 0} rows_parsed=${diag.rows_parsed ?? 0} rows_failed=${diag.rows_failed ?? 0} rows_excluded_by_others=${diag.rows_excluded_by_others ?? 0}`);
+        console.log(`[StructuredPageParser] base_total=$${pageResult.base_total.toFixed(2)} (source: ${diag.used_source ?? 'unknown'})`);
+        console.log(`[StructuredPageParser] optional_total=$${pageResult.optional_total.toFixed(2)}`);
+        console.log(`[StructuredPageParser] subtotal=${pageResult.subtotal ?? 'null'} ps3_qa=${pageResult.ps3_qa ?? 'null'}`);
         console.log(`[StructuredPageParser] document_total=${pageResult.document_total ?? 'null'}`);
         console.log(`[StructuredPageParser] validation risk=${pageResult.validation.risk} variance=${(pageResult.validation.variance * 100).toFixed(1)}%`);
         if (pageResult.validation.message) {
           console.warn(`[StructuredPageParser] ${pageResult.validation.message}`);
         }
         if (pageResult.fallback_triggered) {
-          console.warn(`[StructuredPageParser] fallback_triggered=true — zero rows parsed, delegating to LLM/chunk pipeline`);
+          console.warn(`[StructuredPageParser] fallback_triggered=true — no summary and no rows, delegating to LLM pipeline`);
         }
 
-        // Only commit structured parser result if it produced meaningful items.
-        // fallback_triggered=true means zero rows — fall through to LLM pipeline.
-        if (pageResult.items.length > 0) {
+        // Commit when:
+        //  A) summary was detected (grand_total is canonical even if row count is 0), OR
+        //  B) rows were parsed (legacy row-summation path)
+        // Only skip if BOTH are empty (fallback_triggered=true).
+        const hasSummary = diag.summary_detected && pageResult.base_total > 0;
+        const hasRows = pageResult.items.length > 0;
+
+        if (hasSummary || hasRows) {
           usedStructuredPageParser = true;
 
-          // Map to the shape expected by the downstream quote-save pipeline
+          // Map schedule rows to downstream shape.
+          // When summary is source-of-truth, rows are used for item count only.
+          // The grand_total from the summary overrides any per-row summation.
           structuredItems = pageResult.items.map(item => ({
             description: item.description,
             qty: item.qty,
@@ -467,7 +479,19 @@ Deno.serve(async (req: Request) => {
                 structured_pages: pageResult.structured_pages,
                 page_count: pageResult.page_count,
                 items_count: structuredItems.length,
+                // SOURCE-OF-TRUTH totals from page 2 summary
+                grand_total: pageResult.base_total,
+                optional_total: pageResult.optional_total,
+                subtotal: pageResult.subtotal,
+                ps3_qa: pageResult.ps3_qa,
                 document_total: pageResult.document_total,
+                // Debug panel fields
+                summary_detected: diag.summary_detected ?? false,
+                used_source: diag.used_source ?? 'row_fallback',
+                rows_detected: diag.rows_detected ?? 0,
+                rows_parsed: diag.rows_parsed ?? 0,
+                rows_failed: diag.rows_failed ?? 0,
+                rows_excluded_by_others: diag.rows_excluded_by_others ?? 0,
                 validation_risk: pageResult.validation.risk,
                 skip_llm: true,
               },
@@ -475,24 +499,42 @@ Deno.serve(async (req: Request) => {
             })
             .eq("id", jobId);
         } else {
-          console.log(`[StructuredPageParser] No items extracted — falling back to LLM/chunk pipeline`);
+          console.log(`[StructuredPageParser] fallback_triggered — no summary + no rows, delegating to LLM/chunk pipeline`);
         }
       }
 
       let parsedData;
-      if (structuredItems && structuredItems.length > 0) {
+      if (structuredItems && (structuredItems.length > 0 || (structuredPageResult && structuredPageResult.base_total > 0))) {
         const label = usedStructuredPageParser ? 'structured_page_parser' : 'external_extractor';
         console.log(`Using ${structuredItems.length} structured items from ${label}`);
+
+        // SOURCE-OF-TRUTH: use page 2 summary grand_total when available,
+        // otherwise fall back to summing row totals.
+        const rowSum = structuredItems.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+        const canonicalTotal = (structuredPageResult && structuredPageResult.base_total > 0)
+          ? structuredPageResult.base_total
+          : rowSum;
+        const canonicalOptional = (structuredPageResult && structuredPageResult.optional_total > 0)
+          ? structuredPageResult.optional_total
+          : 0;
+
         parsedData = {
           success: true,
           items: structuredItems,
           totals: {
-            subtotal: structuredItems.reduce((sum: number, item: any) => sum + (item.total || 0), 0),
+            subtotal: canonicalTotal,
             gst: 0,
-            grandTotal: structuredItems.reduce((sum: number, item: any) => sum + (item.total || 0), 0)
+            grandTotal: canonicalTotal,
+            optional_total: canonicalOptional,
+            ps3_qa: structuredPageResult?.ps3_qa ?? null,
+            // Raw row sum preserved for audit/debug
+            row_sum: rowSum,
           },
           metadata: {
-            supplier: typedJob.supplier_name
+            supplier: typedJob.supplier_name,
+            summary_detected: structuredPageResult?.diagnostics?.summary_detected ?? false,
+            used_source: structuredPageResult?.diagnostics?.used_source ?? 'row_fallback',
+            rows_detected: structuredPageResult?.diagnostics?.rows_detected ?? 0,
           },
           confidence: usedStructuredPageParser ? 1.0 : 0.9,
           warnings: []
