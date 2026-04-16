@@ -7,6 +7,7 @@ import {
   normalizeLine,
   extractDocumentTotal,
   dedupeKey,
+  safeDedupKey,
   addRemainderIfNeeded,
   filterTotalRows,
 } from "../_shared/itemNormalizer.ts";
@@ -720,11 +721,30 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[Resume] Completed chunks: ${allCompletedChunksRaw.data?.length || 0} raw, ${dedupedCompletedChunks.length} after dedup by chunk_number`);
 
+    // Section header patterns — used to extract section_id from chunk text
+    // and attach it to items so dedup is section-scoped.
+    const SECTION_HEADER_RE = /^(?:BLOCK\s+[A-Z0-9]+|LEVEL\s+[A-Z0-9]+|ZONE\s+[A-Z0-9]+|STAGE\s+[A-Z0-9]+|[A-Z][0-9]{1,3}(?:\s*[-–]\s*[A-Z][0-9]{1,3})?)\s*$/im;
+
+    function extractSectionFromChunkText(text: string): string {
+      const lines = text.split(/\n/);
+      for (const line of lines) {
+        const t = line.trim();
+        if (SECTION_HEADER_RE.test(t) && t.length < 40) return t.toUpperCase();
+      }
+      return '';
+    }
+
     const allItems: any[] = [];
     const allChunkTexts: string[] = [];
     for (const chunk of dedupedCompletedChunks) {
       if (chunk.parsed_items) {
-        allItems.push(...chunk.parsed_items);
+        // Detect section_id from chunk text and attach to all items in this chunk
+        const chunkSectionId = chunk.chunk_text ? extractSectionFromChunkText(chunk.chunk_text) : '';
+        const itemsWithSection = (chunk.parsed_items as any[]).map((item: any) => ({
+          ...item,
+          section_id: item.section_id || item.section || chunkSectionId || '',
+        }));
+        allItems.push(...itemsWithSection);
       }
       if (chunk.chunk_text) {
         allChunkTexts.push(chunk.chunk_text);
@@ -777,9 +797,9 @@ Deno.serve(async (req: Request) => {
         const safeItems = allItems.filter((item: any) => hasDesc(item) || hasMoney(item));
         const { kept: keptItems } = filterTotalRows(safeItems);
         const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));
-        const seenKeys = new Set();
+        const seenKeys = new Set<string>();
         afterStubDedup = normalizedItems.filter((item: any) => {
-          const key = dedupeKey(item);
+          const key = safeDedupKey(item);
           if (seenKeys.has(key)) return false;
           seenKeys.add(key);
           return true;
@@ -809,34 +829,20 @@ Deno.serve(async (req: Request) => {
       const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));
       console.log(`[Resume] After normalization: ${normalizedItems.length} items`);
 
-      // Pass 1: exact dedup by description + qty + unit + total
-      const seenKeys = new Set();
-      const exactDeduped = normalizedItems.filter((item: any) => {
-        const key = dedupeKey(item);
+      // Safe dedup: section_id + normalized_description + unit_price + quantity
+      // Numeric-only dedup (qty+rate+total) is intentionally REMOVED — it incorrectly
+      // collapses legitimate scope items that appear in different sections at the same rate.
+      const seenKeys = new Set<string>();
+      const dedupedItems = normalizedItems.filter((item: any) => {
+        const key = safeDedupKey(item);
         if (seenKeys.has(key)) return false;
         seenKeys.add(key);
         return true;
       });
 
-      // Pass 2: numeric-fingerprint dedup — catches same item with different description prefixes
-      // (e.g. "Beam X" vs "Architectural/Structural Details Beam X" from different chunks)
-      const seenNumeric = new Set();
-      const dedupedItems = exactDeduped.filter((item: any) => {
-        const qty = Number(item.qty ?? 0).toFixed(4);
-        const rate = Number(item.rate ?? 0).toFixed(4);
-        const total = Number(item.total ?? 0).toFixed(2);
-        const unit = String(item.unit ?? 'ea').toLowerCase().trim();
-        // Only apply numeric-only dedup when total > 0 (prevents collapsing $0 items)
-        if (Number(total) === 0) return true;
-        const numKey = `${qty}__${rate}__${total}__${unit}`;
-        if (seenNumeric.has(numKey)) return false;
-        seenNumeric.add(numKey);
-        return true;
-      });
-
       afterStubDedup = dedupedItems;
 
-      console.log(`[Resume] After dedup: ${afterStubDedup.length} items (exact: ${exactDeduped.length}, numeric pass removed ${exactDeduped.length - dedupedItems.length} more)`);
+      console.log(`[Resume] After safe dedup: ${afterStubDedup.length} items (removed ${normalizedItems.length - dedupedItems.length} true duplicates from chunk overlap)`);
     }
 
     // Create or update quote

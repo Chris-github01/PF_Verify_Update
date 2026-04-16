@@ -206,20 +206,65 @@ export function extractDocumentTotal(text: string): number | null {
 }
 
 /**
- * Create deduplication key for a line item
+ * Create deduplication key for a line item (legacy - description+qty+unit+total)
  */
 export function dedupeKey(line: any): string {
   const qty = Number(line.qty ?? 0).toFixed(4);
   const total = Number(line.total ?? 0).toFixed(2);
   const unit = String(line.unit ?? "ea").toLowerCase().trim();
 
-  // Use raw_text (if available) as a better "identity"
   const raw = cleanText(line.raw_text ?? "");
   const rawPart = raw
     ? raw.slice(0, 80).toLowerCase()
     : cleanText(line.description).slice(0, 80).toLowerCase();
 
   return `${rawPart}__${qty}__${unit}__${total}`;
+}
+
+// Prefixes added by chunk overlap or PDF section headers that should be stripped
+// before comparing descriptions for deduplication purposes.
+const DESCRIPTION_PREFIXES_TO_STRIP = [
+  /^architectural\s*\/?\s*structural\s+details\s*/i,
+  /^optional\s+extras\s*/i,
+  /^mechanical\s+hvac\s*/i,
+  /^electrical\s*/i,
+  /^plumbing\s*/i,
+  /^block\s+[a-z0-9]+\s*/i,
+  /^level\s+[a-z0-9]+\s*/i,
+  /^zone\s+[a-z0-9]+\s*/i,
+  /^stage\s+[a-z0-9]+\s*/i,
+];
+
+/**
+ * Normalise a description for dedup comparison:
+ * - Strip known section/context prefixes added by chunk parsing
+ * - Lowercase and trim
+ * - Collapse internal whitespace
+ */
+export function normalizeDescription(desc: string): string {
+  let d = cleanText(desc).toLowerCase();
+  for (const prefix of DESCRIPTION_PREFIXES_TO_STRIP) {
+    d = d.replace(prefix, "").trimStart();
+  }
+  return d.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Safe dedup key: section_id + normalized_description + unit_price + quantity
+ *
+ * Rules:
+ * - Items in DIFFERENT sections are NEVER collapsed (same item in Block A and Block B is legitimate)
+ * - Numeric-only dedup (qty+rate+total without description) is intentionally excluded —
+ *   it incorrectly collapses legitimate scope items at the same rate in different contexts
+ */
+export function safeDedupKey(line: any): string {
+  const sectionId = cleanText(String(line.section_id ?? line.section ?? line.system_id ?? "")).toLowerCase();
+  const normDesc = normalizeDescription(String(line.description ?? "")).slice(0, 120);
+  const qty = Number(line.qty ?? 0).toFixed(4);
+  const rate = Number(line.rate ?? 0).toFixed(4);
+  const unit = String(line.unit ?? "ea").toLowerCase().trim();
+
+  return `${sectionId}||${normDesc}||${qty}||${rate}||${unit}`;
 }
 
 /**
