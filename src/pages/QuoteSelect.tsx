@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp, Bug, Eye, Code } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
@@ -24,12 +24,296 @@ interface ParsedItem {
   size: string | null;
 }
 
-function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; quoteName: string; onClose: () => void }) {
+interface DebugResponse {
+  items: unknown[];
+  validation: {
+    score: number;
+    itemsTotal: number;
+    documentTotal: number | null;
+    parsingGap: number;
+    parsingGapPercent: number;
+    hasGap: boolean;
+    hasCriticalErrors: boolean;
+  };
+  stats: {
+    totalChunks: number;
+    deterministicItems: number;
+    llmItems: number;
+    validationScore: number;
+  };
+  debug: {
+    parsingGap: number;
+    parsingGapPercent: number;
+    deterministicRatio: number;
+    totalInputLines: number;
+    totalParsedRows: number;
+    detectedTrade: string;
+    documentTotal: number | null;
+    chunksTotal: number;
+    processingMs: number;
+    failedLinesGlobal: string[];
+    chunks: Array<{
+      chunkIndex: number;
+      section: string;
+      block: string | null;
+      lineCount: number;
+      detectedAsTable: boolean;
+      deterministicItems: number;
+      llmItems: number;
+      rawLines: string[];
+      parsedItems: unknown[];
+      failedLines: string[];
+    }>;
+    structure: {
+      sectionsDetected: number;
+      tablesDetected: number;
+      blocksDetected: number;
+    };
+    quality: {
+      percentLinesParsed: number;
+      avgParseConfidence: number;
+      avgNormalizationConfidence: number;
+      highRiskItems: number;
+    };
+  };
+}
+
+function gapColor(pct: number) {
+  if (pct <= 2) return 'text-emerald-400';
+  if (pct <= 5) return 'text-amber-400';
+  return 'text-red-400';
+}
+
+function gapBg(pct: number) {
+  if (pct <= 2) return 'bg-emerald-500/10 border-emerald-500/30';
+  if (pct <= 5) return 'bg-amber-500/10 border-amber-500/30';
+  return 'bg-red-500/10 border-red-500/30';
+}
+
+function MetricCard({ label, value, sub, colorClass }: { label: string; value: string | number; sub?: string; colorClass?: string }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+      <div className="text-xs text-slate-400 mb-1">{label}</div>
+      <div className={`text-2xl font-bold ${colorClass ?? 'text-slate-100'}`}>{value}</div>
+      {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
+  debugData: DebugResponse;
+  rawJson: string;
+  showRaw: boolean;
+  onToggleRaw: () => void;
+}) {
+  const [expandedChunks, setExpandedChunks] = useState<Set<number>>(new Set());
+  const { debug, stats, validation } = debugData;
+
+  const toggleChunk = (i: number) => {
+    setExpandedChunks(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
+  return (
+    <div className="p-5 space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Debug Analysis</h3>
+        <button
+          onClick={onToggleRaw}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors border border-slate-600"
+        >
+          <Code size={13} />
+          {showRaw ? 'Hide' : 'Show'} Raw JSON
+        </button>
+      </div>
+
+      {showRaw && (
+        <div className="bg-slate-950 border border-slate-700 rounded-lg p-4 overflow-auto max-h-64">
+          <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono">{rawJson}</pre>
+        </div>
+      )}
+
+      <div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section A — Summary Metrics</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MetricCard
+            label="Parsing Gap"
+            value={`${debug.parsingGapPercent}%`}
+            sub={`$${Math.abs(debug.parsingGap).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} gap`}
+            colorClass={gapColor(debug.parsingGapPercent)}
+          />
+          <MetricCard
+            label="Deterministic Ratio"
+            value={`${Math.round(debug.deterministicRatio * 100)}%`}
+            sub="of rows parsed deterministically"
+            colorClass={debug.deterministicRatio >= 0.7 ? 'text-emerald-400' : debug.deterministicRatio >= 0.4 ? 'text-amber-400' : 'text-red-400'}
+          />
+          <MetricCard
+            label="Validation Score"
+            value={stats.validationScore}
+            sub="out of 100"
+            colorClass={stats.validationScore >= 80 ? 'text-emerald-400' : stats.validationScore >= 60 ? 'text-amber-400' : 'text-red-400'}
+          />
+          <MetricCard
+            label="Lines Parsed"
+            value={`${debug.quality.percentLinesParsed}%`}
+            sub={`${debug.totalParsedRows} of ${debug.totalInputLines} lines`}
+            colorClass={debug.quality.percentLinesParsed >= 60 ? 'text-emerald-400' : debug.quality.percentLinesParsed >= 30 ? 'text-amber-400' : 'text-red-400'}
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section B — Parse Stats</div>
+        <div className="bg-slate-800 border border-slate-700 rounded-lg divide-y divide-slate-700">
+          {[
+            ['Total Chunks', stats.totalChunks],
+            ['Deterministic Items', stats.deterministicItems],
+            ['LLM Items', stats.llmItems],
+            ['Detected Trade', debug.detectedTrade],
+            ['Document Total', debug.documentTotal != null ? `$${Number(debug.documentTotal).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : '—'],
+            ['Items Total (parsed)', `$${validation.itemsTotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`],
+            ['Processing Time', `${debug.processingMs}ms`],
+            ['Sections Detected', debug.structure.sectionsDetected],
+            ['Tables Detected', debug.structure.tablesDetected],
+            ['Blocks Detected', debug.structure.blocksDetected],
+          ].map(([k, v]) => (
+            <div key={String(k)} className="flex items-center justify-between px-4 py-2.5 text-sm">
+              <span className="text-slate-400">{k}</span>
+              <span className="text-slate-100 font-medium">{String(v)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+          Section C — Failed Lines
+          <span className="ml-2 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium">
+            {debug.failedLinesGlobal.length}
+          </span>
+        </div>
+        {debug.failedLinesGlobal.length === 0 ? (
+          <div className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3">No failed lines detected</div>
+        ) : (
+          <div className="bg-slate-950 border border-slate-700 rounded-lg overflow-auto max-h-52">
+            {debug.failedLinesGlobal.slice(0, 50).map((line, i) => (
+              <div key={i} className="flex gap-3 px-4 py-1.5 border-b border-slate-800 last:border-0">
+                <span className="text-slate-600 text-xs w-6 flex-shrink-0">{i + 1}</span>
+                <span className="text-red-300 text-xs font-mono break-all">{line}</span>
+              </div>
+            ))}
+            {debug.failedLinesGlobal.length > 50 && (
+              <div className="px-4 py-2 text-xs text-slate-500">+{debug.failedLinesGlobal.length - 50} more lines not shown</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section D — Chunk Breakdown</div>
+        <div className="space-y-2">
+          {debug.chunks.map((chunk, i) => (
+            <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+              <button
+                onClick={() => toggleChunk(i)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-700/50 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-slate-500 w-8">#{i}</span>
+                  <span className="text-sm font-medium text-slate-200">{chunk.section}</span>
+                  {chunk.block && <span className="text-xs text-slate-400">{chunk.block}</span>}
+                  {chunk.detectedAsTable && <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">table</span>}
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="text-slate-400">{chunk.lineCount} lines</span>
+                  <span className="text-emerald-400">{chunk.deterministicItems} det</span>
+                  <span className="text-blue-400">{chunk.llmItems} llm</span>
+                  <span className="text-red-400">{chunk.failedLines.length} failed</span>
+                  {expandedChunks.has(i) ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+                </div>
+              </button>
+              {expandedChunks.has(i) && (
+                <div className="border-t border-slate-700 px-4 py-3 grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs font-medium text-slate-400 mb-2">Raw Lines (first 10)</div>
+                    <div className="bg-slate-950 rounded p-2 space-y-1 max-h-40 overflow-auto">
+                      {chunk.rawLines.slice(0, 10).map((l, j) => (
+                        <div key={j} className="text-xs text-slate-400 font-mono truncate">{l}</div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-medium text-slate-400 mb-2">Parsed Items (first 10)</div>
+                    <div className="bg-slate-950 rounded p-2 space-y-1 max-h-40 overflow-auto">
+                      {(chunk.parsedItems as Array<{ description?: string; total?: number; source?: string }>).slice(0, 10).map((item, j) => (
+                        <div key={j} className="text-xs font-mono">
+                          <span className="text-slate-300 truncate block">{item.description ?? '—'}</span>
+                          <span className="text-emerald-500">${Number(item.total ?? 0).toFixed(2)}</span>
+                          {item.source && <span className={`ml-2 ${item.source === 'llm' ? 'text-blue-400' : 'text-amber-400'}`}>[{item.source}]</span>}
+                        </div>
+                      ))}
+                      {chunk.parsedItems.length === 0 && <div className="text-slate-600 text-xs">No items parsed</div>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section E — Quality Metrics</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MetricCard
+            label="Avg Parse Confidence"
+            value={`${Math.round(debug.quality.avgParseConfidence * 100)}%`}
+            colorClass={debug.quality.avgParseConfidence >= 0.7 ? 'text-emerald-400' : debug.quality.avgParseConfidence >= 0.5 ? 'text-amber-400' : 'text-red-400'}
+          />
+          <MetricCard
+            label="Avg Norm. Confidence"
+            value={`${Math.round(debug.quality.avgNormalizationConfidence * 100)}%`}
+            colorClass={debug.quality.avgNormalizationConfidence >= 0.8 ? 'text-emerald-400' : 'text-amber-400'}
+          />
+          <MetricCard
+            label="High Risk Items"
+            value={debug.quality.highRiskItems}
+            colorClass={debug.quality.highRiskItems === 0 ? 'text-emerald-400' : debug.quality.highRiskItems < 5 ? 'text-amber-400' : 'text-red-400'}
+          />
+          <MetricCard
+            label="Has Critical Errors"
+            value={validation.hasCriticalErrors ? 'Yes' : 'No'}
+            colorClass={validation.hasCriticalErrors ? 'text-red-400' : 'text-emerald-400'}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: {
+  quoteId: string;
+  quoteName: string;
+  fileUrl: string | null;
+  tradeType: string;
+  onClose: () => void;
+}) {
+  const [view, setView] = useState<'user' | 'debug'>('user');
   const [items, setItems] = useState<ParsedItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState('');
+
+  const [debugData, setDebugData] = useState<DebugResponse | null>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [debugError, setDebugError] = useState<string | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
+  const [rawJson, setRawJson] = useState('');
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -43,13 +327,52 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
         if (error) throw error;
         setItems(data ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load items');
+        setItemsError(e instanceof Error ? e.message : 'Failed to load items');
       } finally {
-        setLoading(false);
+        setLoadingItems(false);
       }
     };
     fetchItems();
   }, [quoteId]);
+
+  const loadDebugData = async () => {
+    if (debugData || debugLoading) return;
+    if (!fileUrl) {
+      setDebugError('No file URL available for this quote — cannot run debug analysis.');
+      return;
+    }
+    setDebugLoading(true);
+    setDebugError(null);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? anonKey;
+      const res = await fetch(`${supabaseUrl}/functions/v1/test_parsing_v2`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Apikey': anonKey,
+        },
+        body: JSON.stringify({ fileUrl, tradeType }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const jsonStr = JSON.stringify(json, null, 2);
+      setRawJson(jsonStr);
+      setDebugData(json as DebugResponse);
+    } catch (e) {
+      setDebugError(e instanceof Error ? e.message : 'Debug analysis failed');
+    } finally {
+      setDebugLoading(false);
+    }
+  };
+
+  const handleViewChange = (v: 'user' | 'debug') => {
+    setView(v);
+    if (v === 'debug') loadDebugData();
+  };
 
   const toggleRow = (id: string) => {
     setExpandedRows(prev => {
@@ -72,23 +395,49 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl"
+        className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 flex-shrink-0">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <FlaskConical size={18} className="text-amber-400" />
-              <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">Parse Results</span>
+          <div className="flex items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <FlaskConical size={18} className="text-amber-400" />
+                <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">Parse Results</span>
+              </div>
+              <h2 className="text-lg font-bold text-slate-100">{quoteName}</h2>
             </div>
-            <h2 className="text-lg font-bold text-slate-100">{quoteName}</h2>
+            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 ml-4">
+              <button
+                onClick={() => handleViewChange('user')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  view === 'user'
+                    ? 'bg-slate-600 text-slate-100 shadow'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                <Eye size={13} />
+                User View
+              </button>
+              <button
+                onClick={() => handleViewChange('debug')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  view === 'debug'
+                    ? 'bg-amber-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                <Bug size={13} />
+                Debug View
+              </button>
+            </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors">
             <X size={20} />
           </button>
         </div>
 
-        {!loading && !error && (
+        {view === 'user' && !loadingItems && !itemsError && (
           <div className="px-6 py-3 border-b border-slate-700/50 flex items-center gap-6 flex-shrink-0 bg-slate-800/40">
             <div className="text-sm"><span className="text-slate-400">Total Items:</span> <span className="font-semibold text-slate-100">{items.length}</span></div>
             <div className="text-sm"><span className="text-slate-400">Priced:</span> <span className="font-semibold text-emerald-400">{pricedCount}</span></div>
@@ -106,111 +455,144 @@ function ParseResultsModal({ quoteId, quoteName, onClose }: { quoteId: string; q
         )}
 
         <div className="flex-1 overflow-auto">
-          {loading && (
-            <div className="flex items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
-            </div>
-          )}
-          {error && (
-            <div className="p-6 text-red-400 text-sm">{error}</div>
-          )}
-          {!loading && !error && (
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-slate-800 z-10">
-                <tr className="text-left text-xs text-slate-400 uppercase tracking-wider">
-                  <th className="px-4 py-2 w-8">#</th>
-                  <th className="px-4 py-2">Description</th>
-                  <th className="px-4 py-2 text-right">Qty</th>
-                  <th className="px-4 py-2">Unit</th>
-                  <th className="px-4 py-2 text-right">Unit Price</th>
-                  <th className="px-4 py-2 text-right">Total</th>
-                  <th className="px-4 py-2">Service</th>
-                  <th className="px-4 py-2">FRR</th>
-                  <th className="px-4 py-2">Mapped Type</th>
-                  <th className="px-4 py-2 text-right">Conf.</th>
-                  <th className="px-4 py-2 w-8"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {filtered.map((item, idx) => (
-                  <>
-                    <tr
-                      key={item.id}
-                      className="hover:bg-slate-800/50 transition-colors cursor-pointer"
-                      onClick={() => toggleRow(item.id)}
-                    >
-                      <td className="px-4 py-2 text-slate-500 text-xs">{idx + 1}</td>
-                      <td className="px-4 py-2 text-slate-200 max-w-xs">
-                        <div className="truncate">{item.description || <span className="text-slate-600 italic">—</span>}</div>
-                      </td>
-                      <td className="px-4 py-2 text-right text-slate-300">
-                        {item.quantity != null ? item.quantity : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-slate-400 text-xs">
-                        {item.unit || <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-right text-slate-300">
-                        {item.unit_price != null
-                          ? `$${Number(item.unit_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                          : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-right font-semibold">
-                        {item.total_price != null && Number(item.total_price) > 0
-                          ? <span className="text-emerald-400">${Number(item.total_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2">
-                        {item.service
-                          ? <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">{item.service}</span>
-                          : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-xs text-slate-400">
-                        {item.frr || <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-xs text-slate-400">
-                        {item.mapped_service_type || <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-right text-xs">
-                        {item.confidence != null
-                          ? <span className={item.confidence >= 0.8 ? 'text-emerald-400' : item.confidence >= 0.5 ? 'text-amber-400' : 'text-red-400'}>
-                              {Math.round(item.confidence * 100)}%
-                            </span>
-                          : <span className="text-slate-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-slate-500">
-                        {expandedRows.has(item.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </td>
+          {view === 'user' && (
+            <>
+              {loadingItems && (
+                <div className="flex items-center justify-center py-20">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
+                </div>
+              )}
+              {itemsError && (
+                <div className="p-6 text-red-400 text-sm">{itemsError}</div>
+              )}
+              {!loadingItems && !itemsError && (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-800 z-10">
+                    <tr className="text-left text-xs text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-2 w-8">#</th>
+                      <th className="px-4 py-2">Description</th>
+                      <th className="px-4 py-2 text-right">Qty</th>
+                      <th className="px-4 py-2">Unit</th>
+                      <th className="px-4 py-2 text-right">Unit Price</th>
+                      <th className="px-4 py-2 text-right">Total</th>
+                      <th className="px-4 py-2">Service</th>
+                      <th className="px-4 py-2">FRR</th>
+                      <th className="px-4 py-2">Mapped Type</th>
+                      <th className="px-4 py-2 text-right">Conf.</th>
+                      <th className="px-4 py-2 w-8"></th>
                     </tr>
-                    {expandedRows.has(item.id) && (
-                      <tr key={`${item.id}-expanded`} className="bg-slate-800/30">
-                        <td />
-                        <td colSpan={10} className="px-4 py-3">
-                          <div className="grid grid-cols-2 gap-3 text-xs">
-                            <div><span className="text-slate-500">Mapped System:</span> <span className="text-slate-300">{item.mapped_system || '—'}</span></div>
-                            <div><span className="text-slate-500">Scope Category:</span> <span className="text-slate-300">{item.scope_category || '—'}</span></div>
-                            <div><span className="text-slate-500">Subclass:</span> <span className="text-slate-300">{item.subclass || '—'}</span></div>
-                            <div><span className="text-slate-500">Size:</span> <span className="text-slate-300">{item.size || '—'}</span></div>
-                            <div><span className="text-slate-500">Source:</span> <span className="text-slate-300">{item.source || '—'}</span></div>
-                            <div><span className="text-slate-500">Excluded:</span> <span className={item.is_excluded ? 'text-red-400' : 'text-slate-300'}>{item.is_excluded ? 'Yes' : 'No'}</span></div>
-                            <div className="col-span-2"><span className="text-slate-500">Full Description:</span> <span className="text-slate-300">{item.description || '—'}</span></div>
-                          </div>
-                        </td>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {filtered.map((item, idx) => (
+                      <>
+                        <tr
+                          key={item.id}
+                          className="hover:bg-slate-800/50 transition-colors cursor-pointer"
+                          onClick={() => toggleRow(item.id)}
+                        >
+                          <td className="px-4 py-2 text-slate-500 text-xs">{idx + 1}</td>
+                          <td className="px-4 py-2 text-slate-200 max-w-xs">
+                            <div className="truncate">{item.description || <span className="text-slate-600 italic">—</span>}</div>
+                          </td>
+                          <td className="px-4 py-2 text-right text-slate-300">
+                            {item.quantity != null ? item.quantity : <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-slate-400 text-xs">
+                            {item.unit || <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-right text-slate-300">
+                            {item.unit_price != null
+                              ? `$${Number(item.unit_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                              : <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-right font-semibold">
+                            {item.total_price != null && Number(item.total_price) > 0
+                              ? <span className="text-emerald-400">${Number(item.total_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              : <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2">
+                            {item.service
+                              ? <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">{item.service}</span>
+                              : <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-xs text-slate-400">
+                            {item.frr || <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-xs text-slate-400">
+                            {item.mapped_service_type || <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-right text-xs">
+                            {item.confidence != null
+                              ? <span className={item.confidence >= 0.8 ? 'text-emerald-400' : item.confidence >= 0.5 ? 'text-amber-400' : 'text-red-400'}>
+                                  {Math.round(item.confidence * 100)}%
+                                </span>
+                              : <span className="text-slate-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-slate-500">
+                            {expandedRows.has(item.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </td>
+                        </tr>
+                        {expandedRows.has(item.id) && (
+                          <tr key={`${item.id}-expanded`} className="bg-slate-800/30">
+                            <td />
+                            <td colSpan={10} className="px-4 py-3">
+                              <div className="grid grid-cols-2 gap-3 text-xs">
+                                <div><span className="text-slate-500">Mapped System:</span> <span className="text-slate-300">{item.mapped_system || '—'}</span></div>
+                                <div><span className="text-slate-500">Scope Category:</span> <span className="text-slate-300">{item.scope_category || '—'}</span></div>
+                                <div><span className="text-slate-500">Subclass:</span> <span className="text-slate-300">{item.subclass || '—'}</span></div>
+                                <div><span className="text-slate-500">Size:</span> <span className="text-slate-300">{item.size || '—'}</span></div>
+                                <div><span className="text-slate-500">Source:</span> <span className="text-slate-300">{item.source || '—'}</span></div>
+                                <div><span className="text-slate-500">Excluded:</span> <span className={item.is_excluded ? 'text-red-400' : 'text-slate-300'}>{item.is_excluded ? 'Yes' : 'No'}</span></div>
+                                <div className="col-span-2"><span className="text-slate-500">Full Description:</span> <span className="text-slate-300">{item.description || '—'}</span></div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                    {filtered.length === 0 && (
+                      <tr>
+                        <td colSpan={11} className="px-4 py-12 text-center text-slate-500">No items match your filter</td>
                       </tr>
                     )}
-                  </>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={11} className="px-4 py-12 text-center text-slate-500">No items match your filter</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  </tbody>
+                </table>
+              )}
+            </>
+          )}
+
+          {view === 'debug' && (
+            <>
+              {debugLoading && (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
+                  <p className="text-slate-400 text-sm">Running parsing_v2 diagnostics...</p>
+                </div>
+              )}
+              {debugError && (
+                <div className="p-6">
+                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-sm text-red-400">{debugError}</div>
+                </div>
+              )}
+              {debugData && !debugLoading && (
+                <DebugView
+                  debugData={debugData}
+                  rawJson={rawJson}
+                  showRaw={showRaw}
+                  onToggleRaw={() => setShowRaw(v => !v)}
+                />
+              )}
+            </>
           )}
         </div>
 
         <div className="px-6 py-3 border-t border-slate-700 flex-shrink-0 flex items-center justify-between">
-          <span className="text-xs text-slate-500">Showing {filtered.length} of {items.length} items</span>
+          {view === 'user'
+            ? <span className="text-xs text-slate-500">Showing {filtered.length} of {items.length} items</span>
+            : <span className="text-xs text-slate-500">
+                {debugData ? `${debugData.debug.chunks.length} chunks · ${debugData.debug.failedLinesGlobal.length} failed lines` : 'Debug mode'}
+              </span>
+          }
           <button onClick={onClose} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">Close</button>
         </div>
       </div>
@@ -231,6 +613,8 @@ interface Quote {
   status: string;
   is_selected: boolean;
   file_name?: string;
+  file_url?: string;
+  trade?: string;
   quoted_total?: number;
   main_scope_total?: number;
   main_scope_count?: number;
@@ -254,7 +638,7 @@ export default function QuoteSelect({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-  const [parseModal, setParseModal] = useState<{ quoteId: string; quoteName: string } | null>(null);
+  const [parseModal, setParseModal] = useState<{ quoteId: string; quoteName: string; fileUrl: string | null; tradeType: string } | null>(null);
 
   useEffect(() => {
     loadQuotes();
@@ -626,7 +1010,7 @@ export default function QuoteSelect({
 
                   <div className="flex items-center px-3 border-l border-slate-700/50">
                     <button
-                      onClick={() => setParseModal({ quoteId: quote.id, quoteName: quote.supplier_name })}
+                      onClick={() => setParseModal({ quoteId: quote.id, quoteName: quote.supplier_name, fileUrl: quote.file_url ?? null, tradeType: quote.trade ?? currentTrade })}
                       title="View parse results"
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 text-xs font-medium transition-all whitespace-nowrap"
                     >
@@ -661,6 +1045,8 @@ export default function QuoteSelect({
         <ParseResultsModal
           quoteId={parseModal.quoteId}
           quoteName={parseModal.quoteName}
+          fileUrl={parseModal.fileUrl}
+          tradeType={parseModal.tradeType}
           onClose={() => setParseModal(null)}
         />
       )}
