@@ -314,9 +314,6 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
   const [debugError, setDebugError] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [rawJson, setRawJson] = useState('');
-  const [exportingPdf, setExportingPdf] = useState(false);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -388,7 +385,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
     if (v === 'debug') loadDebugData();
   };
 
-  const exportDebugPDF = useCallback(async () => {
+  const exportDebugPDF = useCallback(() => {
     if (!debugData) return;
     const { debug, stats, validation } = debugData;
 
@@ -565,30 +562,54 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
 </body>
 </html>`;
 
-    setExportingPdf(true);
-    setShareUrl(null);
-    try {
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const slug = quoteName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const fileName = `${slug}_${Date.now()}.html`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('debug-reports')
-        .upload(fileName, blob, { contentType: 'text/html;charset=utf-8', upsert: true });
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage
-        .from('debug-reports')
-        .getPublicUrl(uploadData.path);
-      const publicUrl = urlData.publicUrl;
-      setShareUrl(publicUrl);
-      await navigator.clipboard.writeText(publicUrl);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 3000);
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : 'Export failed';
-      alert(`Export failed: ${errMsg}`);
-    } finally {
-      setExportingPdf(false);
-    }
+    const slug = quoteName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `debug-report-${slug}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, [debugData, rawJson, quoteName]);
+
+  const exportDebugJSON = useCallback(() => {
+    if (!debugData) return;
+    const slug = quoteName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const payload = {
+      quote: quoteName,
+      exportedAt: new Date().toISOString(),
+      stats: debugData.stats,
+      validation: debugData.validation,
+      chunks: debugData.debug.chunks.map(c => ({
+        chunkIndex: c.chunkIndex,
+        itemCount: c.items.length,
+        items: c.items.map(i => ({
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+          unit_price: i.unit_price,
+          total_price: i.total_price,
+          service: i.service,
+          frr: i.frr,
+          mapped_service_type: i.mapped_service_type,
+          confidence: i.confidence,
+        })),
+        failedLines: c.failedLines,
+      })),
+      globalFailedLines: debugData.debug.failedLinesGlobal,
+      rawPromptPreview: rawJson ? rawJson.slice(0, 2000) : null,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `debug-report-${slug}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [debugData, rawJson, quoteName]);
 
   const toggleRow = (id: string) => {
@@ -803,25 +824,24 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
           )}
         </div>
 
-        {view === 'debug' && shareUrl && (
-          <div className="px-6 py-3 border-t border-slate-700 bg-slate-800/60 flex items-center gap-3 flex-shrink-0">
-            <span className="text-xs text-slate-400 flex-shrink-0">Shareable link:</span>
-            <input
-              readOnly
-              value={shareUrl}
-              className="flex-1 min-w-0 px-3 py-1.5 bg-slate-900 border border-slate-600 rounded-lg text-xs text-slate-200 font-mono focus:outline-none select-all"
-              onClick={e => (e.target as HTMLInputElement).select()}
-            />
+        {view === 'debug' && debugData && (
+          <div className="px-6 py-2 border-t border-slate-700 bg-slate-900/40 flex-shrink-0 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-slate-500 mr-1">Export for ChatGPT:</span>
             <button
-              onClick={async () => {
-                await navigator.clipboard.writeText(shareUrl);
-                setCopySuccess(true);
-                setTimeout(() => setCopySuccess(false), 2000);
-              }}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${copySuccess ? 'bg-emerald-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+              onClick={exportDebugJSON}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-medium transition-colors"
             >
-              {copySuccess ? 'Copied!' : 'Copy'}
+              <Download size={12} />
+              Download JSON
             </button>
+            <button
+              onClick={exportDebugPDF}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-lg text-xs font-medium transition-colors"
+            >
+              <Download size={12} />
+              Download HTML
+            </button>
+            <span className="text-xs text-slate-600 ml-1">Upload the JSON file directly into ChatGPT</span>
           </div>
         )}
         <div className="px-6 py-3 border-t border-slate-700 flex-shrink-0 flex items-center justify-between gap-3">
@@ -831,23 +851,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
                 {debugData ? `${debugData.debug.chunks.length} chunks · ${debugData.debug.failedLinesGlobal.length} failed lines` : 'Debug mode'}
               </span>
           }
-          <div className="flex items-center gap-2">
-            {view === 'debug' && debugData && (
-              <button
-                onClick={exportDebugPDF}
-                disabled={exportingPdf}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                {exportingPdf ? (
-                  <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                ) : (
-                  <Download size={14} />
-                )}
-                {exportingPdf ? 'Uploading...' : shareUrl ? 'Re-export & Share' : 'Export & Share Link'}
-              </button>
-            )}
-            <button onClick={onClose} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">Close</button>
-          </div>
+          <button onClick={onClose} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">Close</button>
         </div>
       </div>
     </div>
