@@ -17,6 +17,10 @@ import {
   documentQualifiesForStructuredParser,
   runPageStructuredParser,
 } from "../_shared/pageStructuredParser.ts";
+import { runParserV3 } from "../_shared/parserRouterV3.ts";
+
+// Feature flag — set PARSER_V3_ENABLED=true in edge function env to activate
+const PARSER_V3_ENABLED = Deno.env.get("PARSER_V3_ENABLED") === "true";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -409,6 +413,70 @@ Deno.serve(async (req: Request) => {
           .eq("id", jobId);
       } else {
         throw new Error("Unsupported file type");
+      }
+
+      // -----------------------------------------------------------------------
+      // PARSER V3: Classifier → Router → Resolution Layer (feature flagged)
+      // Enable via PARSER_V3_ENABLED=true env var
+      // -----------------------------------------------------------------------
+      if (PARSER_V3_ENABLED && !structuredItems && allPages.length > 0) {
+        const fileExt = fileName.split('.').pop()?.toLowerCase();
+        const pages = allPages.map((text, i) => ({ pageNum: i + 1, text }));
+        const rawText = allPages.join('\n\n');
+
+        const v3Result = runParserV3({ pages, rawText, fileExtension: fileExt });
+        const { resolution, classification } = v3Result;
+
+        console.log(`[ParserV3] documentClass=${classification.documentClass} confidence=${classification.confidence.toFixed(2)}`);
+        console.log(`[ParserV3] baseItems=${resolution.baseItems.length} optionalItems=${resolution.optionalItems.length}`);
+        console.log(`[ParserV3] grandTotal=${resolution.totals.grandTotal.toFixed(2)} source=${resolution.totals.source}`);
+        console.log(`[ParserV3] summaryDetected=${resolution.debug.summaryDetected} optionalScopeDetected=${resolution.debug.optionalScopeDetected}`);
+
+        if (resolution.totals.grandTotal > 0 || resolution.baseItems.length > 0) {
+          structuredItems = [
+            ...resolution.baseItems.map(item => ({
+              description: item.description, qty: item.qty, unit: item.unit,
+              rate: item.rate, total: item.total, section: item.section,
+              item_number: item.lineId, confidence: item.confidence,
+              source: item.source, scope_category: 'Main', frr: null,
+            })),
+            ...resolution.optionalItems.map(item => ({
+              description: item.description, qty: item.qty, unit: item.unit,
+              rate: item.rate, total: item.total, section: item.section,
+              item_number: item.lineId, confidence: item.confidence,
+              source: item.source, scope_category: 'Optional', frr: null,
+            })),
+          ];
+          structuredPageResult = {
+            base_total: resolution.totals.grandTotal,
+            optional_total: resolution.totals.optionalTotal,
+            subtotal: resolution.totals.subTotal,
+            ps3_qa: null,
+          };
+          usedStructuredPageParser = true;
+
+          await supabase.from("parsing_jobs").update({
+            progress: 80,
+            metadata: {
+              extractor_used: 'parser_v3',
+              document_class: classification.documentClass,
+              classifier_confidence: classification.confidence,
+              parser_used: resolution.parserUsed,
+              items_count: structuredItems.length,
+              grand_total: resolution.totals.grandTotal,
+              optional_total: resolution.totals.optionalTotal,
+              total_source: resolution.totals.source,
+              summary_detected: resolution.debug.summaryDetected,
+              optional_scope_detected: resolution.debug.optionalScopeDetected,
+              rows_detected: resolution.debug.itemCountBase + resolution.debug.itemCountOptional + resolution.debug.itemCountExcluded,
+              validation_risk: resolution.validation.risk,
+              validation_warnings: resolution.validation.warnings,
+              classifier_reasons: resolution.debug.classifierReasons,
+              skip_llm: true,
+            },
+            updated_at: new Date().toISOString(),
+          }).eq("id", jobId);
+        }
       }
 
       // -----------------------------------------------------------------------
