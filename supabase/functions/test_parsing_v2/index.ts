@@ -865,21 +865,60 @@ async function extractTextFromUrl(fileUrl: string): Promise<string> {
     const resolvedApiKey = apiKey || Deno.env.get("RENDER_PDF_EXTRACTOR_API_KEY");
     if (resolvedApiKey) extractHeaders["X-API-Key"] = resolvedApiKey;
 
-    const extractRes = await fetch(`${pdfExtractorBase}/parse/ensemble`, {
-      method: "POST",
-      headers: extractHeaders,
-      body: formData,
-    });
-    if (!extractRes.ok) {
-      const errText = await extractRes.text();
-      throw new Error(`PDF extraction failed: ${extractRes.status} — ${errText}`);
+    let extractedText = "";
+    try {
+      const extractRes = await fetch(`${pdfExtractorBase}/parse/ensemble`, {
+        method: "POST",
+        headers: extractHeaders,
+        body: formData,
+      });
+      if (extractRes.ok) {
+        const extractData = await extractRes.json();
+        const bestResult = extractData.best_result;
+        extractedText = bestResult?.text ?? bestResult?.content ?? extractData.text ?? extractData.content ?? extractData.raw_text ?? "";
+        console.log(`[TestParsingV2] PDF extracted via ensemble: ${extractedText.length} chars`);
+      } else {
+        const errText = await extractRes.text();
+        console.log(`[TestParsingV2] External extractor failed (${extractRes.status}): ${errText}, falling back to pdfjs`);
+      }
+    } catch (extErr) {
+      console.log(`[TestParsingV2] External extractor error: ${extErr.message}, falling back to pdfjs`);
     }
-    const extractData = await extractRes.json();
-    const bestResult = extractData.best_result;
-    const extracted = bestResult?.text ?? bestResult?.content ?? extractData.text ?? extractData.content ?? extractData.raw_text ?? "";
-    if (!extracted || extracted.trim().length === 0) throw new Error("PDF extraction returned empty text");
-    console.log(`[TestParsingV2] PDF extracted: ${extracted.length} chars`);
-    return extracted;
+
+    if (!extractedText || extractedText.trim().length === 0) {
+      console.log(`[TestParsingV2] Falling back to built-in pdfjs text extraction`);
+      const pdfjsLib = await import("npm:pdfjs-dist@4.0.379");
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(pdfBytes),
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+      });
+      const pdfDocument = await loadingTask.promise;
+      const pages: string[] = [];
+      for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+        const page = await pdfDocument.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        let lastY = -1;
+        let pageText = "";
+        textContent.items.forEach((item: any) => {
+          const currentY = item.transform[5];
+          if (lastY !== -1 && Math.abs(currentY - lastY) > 5) {
+            pageText += "\n";
+          } else if (pageText.length > 0) {
+            pageText += " ";
+          }
+          pageText += item.str;
+          lastY = currentY;
+        });
+        if (pageText.trim()) pages.push(pageText);
+      }
+      extractedText = pages.join("\n\n");
+      console.log(`[TestParsingV2] pdfjs extracted: ${extractedText.length} chars`);
+    }
+
+    if (!extractedText || extractedText.trim().length === 0) throw new Error("PDF extraction returned empty text");
+    return extractedText;
   }
 
   const text = await res.text();
