@@ -668,6 +668,8 @@ export default function QuoteSelect({
       const quoteIds = filteredQuotes.map(q => q.id);
       let itemsByQuote: Record<string, { quantity: number; unit_price: number; total_price: number; description: string }[]> = {};
 
+      let fileUrlByQuote: Record<string, string> = {};
+
       if (quoteIds.length > 0) {
         const { data: allItems } = await supabase
           .from('quote_items')
@@ -679,6 +681,21 @@ export default function QuoteSelect({
           for (const item of allItems) {
             if (!itemsByQuote[item.quote_id]) itemsByQuote[item.quote_id] = [];
             itemsByQuote[item.quote_id].push(item);
+          }
+        }
+
+        const { data: parsingJobs } = await supabase
+          .from('parsing_jobs')
+          .select('quote_id, file_url')
+          .in('quote_id', quoteIds)
+          .not('file_url', 'is', null);
+
+        if (parsingJobs) {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          for (const job of parsingJobs) {
+            if (job.quote_id && job.file_url && !fileUrlByQuote[job.quote_id]) {
+              fileUrlByQuote[job.quote_id] = `${supabaseUrl}/storage/v1/object/public/quotes/${job.file_url}`;
+            }
           }
         }
       }
@@ -707,6 +724,7 @@ export default function QuoteSelect({
 
         return {
           ...quote,
+          file_url: fileUrlByQuote[quote.id] ?? quote.file_url ?? null,
           items_count: (quote.inserted_items_count && quote.inserted_items_count > 0)
             ? quote.inserted_items_count
             : (quote.final_items_count && quote.final_items_count > 0)
