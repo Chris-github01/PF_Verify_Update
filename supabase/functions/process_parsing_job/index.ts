@@ -13,6 +13,10 @@ import {
 } from "../_shared/itemNormalizer.ts";
 import { runParseResolution } from "../_shared/parseResolutionEngine.ts";
 import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
+import {
+  documentQualifiesForStructuredParser,
+  runPageStructuredParser,
+} from "../_shared/pageStructuredParser.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -407,21 +411,87 @@ Deno.serve(async (req: Request) => {
         throw new Error("Unsupported file type");
       }
 
+      // -----------------------------------------------------------------------
+      // PARSER MODE A: StructuredPageParser
+      // If the document contains structured schedule pages (e.g. firestopping
+      // schedules with BLOCK headers and numbered line items), parse
+      // page-by-page WITHOUT chunking. This eliminates chunk duplication,
+      // row merging, and block context loss.
+      // -----------------------------------------------------------------------
+      let usedStructuredPageParser = false;
+
+      if (!structuredItems && allPages.length > 0 && documentQualifiesForStructuredParser(allPages)) {
+        console.log(`[StructuredPageParser] Document qualifies — running page-first parser on ${allPages.length} pages`);
+
+        const pageResult = runPageStructuredParser(allPages);
+
+        console.log(`[StructuredPageParser] structured_pages=${pageResult.structured_pages}/${pageResult.page_count}`);
+        console.log(`[StructuredPageParser] base items=${pageResult.items.filter(i => i.scope_category === 'base').length} total=$${pageResult.base_total.toFixed(2)}`);
+        console.log(`[StructuredPageParser] optional items=${pageResult.items.filter(i => i.scope_category === 'optional').length} total=$${pageResult.optional_total.toFixed(2)}`);
+        console.log(`[StructuredPageParser] document_total=${pageResult.document_total ?? 'null'}`);
+        console.log(`[StructuredPageParser] validation risk=${pageResult.validation.risk} variance=${(pageResult.validation.variance * 100).toFixed(1)}%`);
+        if (pageResult.validation.message) {
+          console.warn(`[StructuredPageParser] ${pageResult.validation.message}`);
+        }
+
+        // Only commit structured parser result if it produced meaningful items.
+        // If it extracted nothing (e.g. all pages are cover/TOC), fall through
+        // to the chunk-based LLM pipeline.
+        if (pageResult.items.length > 0) {
+          usedStructuredPageParser = true;
+
+          // Map to the shape expected by the downstream quote-save pipeline
+          structuredItems = pageResult.items.map(item => ({
+            description: item.description,
+            qty: item.qty,
+            unit: item.unit,
+            rate: item.rate,
+            total: item.total,
+            section: item.block_id,
+            item_number: item.line_id,
+            confidence: 1.0,
+            source: 'structured_page_parser',
+            scope_category: item.scope_category === 'optional' ? 'Optional' : 'Main',
+            frr: null,
+          }));
+
+          await supabase
+            .from("parsing_jobs")
+            .update({
+              progress: 80,
+              metadata: {
+                extractor_used: 'structured_page_parser',
+                structured_pages: pageResult.structured_pages,
+                page_count: pageResult.page_count,
+                items_count: structuredItems.length,
+                document_total: pageResult.document_total,
+                validation_risk: pageResult.validation.risk,
+                skip_llm: true,
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", jobId);
+        } else {
+          console.log(`[StructuredPageParser] No items extracted — falling back to LLM/chunk pipeline`);
+        }
+      }
+
       let parsedData;
       if (structuredItems && structuredItems.length > 0) {
-        console.log(`Using ${structuredItems.length} structured items from external extractor`);
+        const label = usedStructuredPageParser ? 'structured_page_parser' : 'external_extractor';
+        console.log(`Using ${structuredItems.length} structured items from ${label}`);
         parsedData = {
           success: true,
           items: structuredItems,
           totals: {
-            subtotal: structuredItems.reduce((sum, item) => sum + (item.total || 0), 0),
+            subtotal: structuredItems.reduce((sum: number, item: any) => sum + (item.total || 0), 0),
             gst: 0,
-            grandTotal: structuredItems.reduce((sum, item) => sum + (item.total || 0), 0)
+            grandTotal: structuredItems.reduce((sum: number, item: any) => sum + (item.total || 0), 0)
           },
           metadata: {
             supplier: typedJob.supplier_name
           },
-          confidence: 0.9,
+          confidence: usedStructuredPageParser ? 1.0 : 0.9,
           warnings: []
         };
       } else {
