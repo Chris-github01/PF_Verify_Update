@@ -25,7 +25,10 @@ interface ParsedItem {
 }
 
 interface DebugResponse {
+  parserVersion?: string;
   items: unknown[];
+  optionalItems?: unknown[];
+  excludedItems?: unknown[];
   validation: {
     score: number;
     itemsTotal: number;
@@ -34,12 +37,32 @@ interface DebugResponse {
     parsingGapPercent: number;
     hasGap: boolean;
     hasCriticalErrors: boolean;
+    risk?: string;
+    warnings?: string[];
   };
   stats: {
     totalChunks: number;
     deterministicItems: number;
     llmItems: number;
     validationScore: number;
+    parserUsed?: string;
+    optionalItems?: number;
+    excludedItems?: number;
+  };
+  classification?: {
+    documentClass: string;
+    confidence: number;
+    reasons: string[];
+    signals: {
+      hasSummaryTotals: boolean;
+      hasScheduleRows: boolean;
+      hasOptionalScope: boolean;
+      numberedRowCount: number;
+      pageCount: number;
+      tableConfidence: number;
+      isSpreadsheet: boolean;
+      ocrQuality: string;
+    };
   };
   debug: {
     parsingGap: number;
@@ -49,8 +72,10 @@ interface DebugResponse {
     totalParsedRows: number;
     detectedTrade: string;
     documentTotal: number | null;
+    itemsTotal?: number;
     chunksTotal: number;
     processingMs: number;
+    parserUsed?: string;
     failedLinesGlobal: string[];
     chunks: Array<{
       chunkIndex: number;
@@ -74,6 +99,12 @@ interface DebugResponse {
       avgParseConfidence: number;
       avgNormalizationConfidence: number;
       highRiskItems: number;
+    };
+    totals?: {
+      grandTotal: number;
+      optionalTotal: number;
+      rowSum: number;
+      source: string;
     };
   };
 }
@@ -117,10 +148,23 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
     });
   };
 
+  const isV3 = debugData.parserVersion === 'v3';
+  const cls = debugData.classification;
+
   return (
     <div className="p-5 space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Debug Analysis</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Debug Analysis</h3>
+          <span className={`px-2 py-0.5 rounded text-xs font-bold border ${isV3 ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'}`}>
+            {debugData.parserVersion ?? 'v2'}
+          </span>
+          {debug.parserUsed && (
+            <span className="px-2 py-0.5 rounded text-xs text-slate-400 border border-slate-600 bg-slate-800">
+              {debug.parserUsed}
+            </span>
+          )}
+        </div>
         <button
           onClick={onToggleRaw}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-medium transition-colors border border-slate-600"
@@ -136,27 +180,102 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
         </div>
       )}
 
+      {isV3 && cls && (
+        <div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section A — Document Classification</div>
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="px-2.5 py-1 rounded-md text-sm font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                {cls.documentClass}
+              </span>
+              <span className={`px-2.5 py-1 rounded-md text-sm font-semibold border ${cls.confidence >= 0.7 ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : cls.confidence >= 0.4 ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-red-500/15 text-red-300 border-red-500/30'}`}>
+                {Math.round(cls.confidence * 100)}% confidence
+              </span>
+              {validation.risk && (
+                <span className={`px-2.5 py-1 rounded-md text-sm font-semibold border ${validation.risk === 'low' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : validation.risk === 'medium' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-red-500/15 text-red-300 border-red-500/30'}`}>
+                  {validation.risk} risk
+                </span>
+              )}
+            </div>
+            {cls.reasons.length > 0 && (
+              <div className="space-y-1">
+                {cls.reasons.map((r, i) => (
+                  <div key={i} className="text-xs text-slate-400 flex items-start gap-2">
+                    <span className="text-emerald-500 mt-0.5 flex-shrink-0">›</span>
+                    <span>{r}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {validation.warnings && validation.warnings.length > 0 && (
+              <div className="mt-2 border-t border-slate-700 pt-2 space-y-1">
+                {validation.warnings.map((w, i) => (
+                  <div key={i} className="text-xs text-amber-400 flex items-start gap-2">
+                    <span className="flex-shrink-0 mt-0.5">!</span>
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2 mt-3 text-xs border-t border-slate-700 pt-3">
+              {[
+                ['Summary Totals', cls.signals.hasSummaryTotals],
+                ['Schedule Rows', cls.signals.hasScheduleRows],
+                ['Optional Scope', cls.signals.hasOptionalScope],
+                ['Spreadsheet', cls.signals.isSpreadsheet],
+              ].map(([label, val]) => (
+                <div key={String(label)} className="flex items-center gap-1.5">
+                  <span className={String(val) === 'true' ? 'text-emerald-400' : 'text-slate-600'}>
+                    {String(val) === 'true' ? '✓' : '✗'}
+                  </span>
+                  <span className="text-slate-400">{String(label)}</span>
+                </div>
+              ))}
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400">Table conf:</span>
+                <span className="text-slate-200">{Math.round(cls.signals.tableConfidence * 100)}%</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400">OCR:</span>
+                <span className={cls.signals.ocrQuality === 'good' ? 'text-emerald-400' : cls.signals.ocrQuality === 'poor' ? 'text-red-400' : 'text-slate-400'}>{cls.signals.ocrQuality}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section A — Summary Metrics</div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+          {isV3 ? 'Section B — Summary Metrics' : 'Section A — Summary Metrics'}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
-            label="Parsing Gap"
-            value={`${debug.parsingGapPercent}%`}
-            sub={`$${Math.abs(debug.parsingGap).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} gap`}
-            colorClass={gapColor(debug.parsingGapPercent)}
-          />
-          <MetricCard
-            label="Deterministic Ratio"
-            value={`${Math.round(debug.deterministicRatio * 100)}%`}
-            sub="of rows parsed deterministically"
-            colorClass={debug.deterministicRatio >= 0.7 ? 'text-emerald-400' : debug.deterministicRatio >= 0.4 ? 'text-amber-400' : 'text-red-400'}
-          />
-          <MetricCard
-            label="Validation Score"
-            value={stats.validationScore}
+            label="Confidence Score"
+            value={`${stats.validationScore}`}
             sub="out of 100"
             colorClass={stats.validationScore >= 80 ? 'text-emerald-400' : stats.validationScore >= 60 ? 'text-amber-400' : 'text-red-400'}
           />
+          <MetricCard
+            label="Base Items"
+            value={stats.deterministicItems}
+            sub={isV3 && stats.optionalItems != null ? `+ ${stats.optionalItems} optional` : 'parsed items'}
+            colorClass="text-slate-100"
+          />
+          {isV3 ? (
+            <MetricCard
+              label="Grand Total"
+              value={debug.documentTotal != null ? `$${Number(debug.documentTotal).toLocaleString('en-NZ', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'}
+              sub={debug.totals ? `source: ${debug.totals.source}` : undefined}
+              colorClass="text-slate-100"
+            />
+          ) : (
+            <MetricCard
+              label="Parsing Gap"
+              value={`${debug.parsingGapPercent}%`}
+              sub={`$${Math.abs(debug.parsingGap).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} gap`}
+              colorClass={gapColor(debug.parsingGapPercent)}
+            />
+          )}
           <MetricCard
             label="Lines Parsed"
             value={`${debug.quality.percentLinesParsed}%`}
@@ -167,12 +286,16 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
       </div>
 
       <div>
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section B — Parse Stats</div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+          {isV3 ? 'Section C — Parse Stats' : 'Section B — Parse Stats'}
+        </div>
         <div className="bg-slate-800 border border-slate-700 rounded-lg divide-y divide-slate-700">
           {[
-            ['Total Chunks', stats.totalChunks],
-            ['Deterministic Items', stats.deterministicItems],
-            ['LLM Items', stats.llmItems],
+            ['Pages / Chunks', stats.totalChunks],
+            isV3 ? ['Parser Used', debug.parserUsed ?? stats.parserUsed ?? '—'] : ['Deterministic Items', stats.deterministicItems],
+            isV3 ? ['Base Items', stats.deterministicItems] : ['LLM Items', stats.llmItems],
+            isV3 ? ['Optional Items', stats.optionalItems ?? 0] : null,
+            isV3 ? ['Excluded Items', stats.excludedItems ?? 0] : null,
             ['Detected Trade', debug.detectedTrade],
             ['Document Total', debug.documentTotal != null ? `$${Number(debug.documentTotal).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : '—'],
             ['Items Total (parsed)', `$${validation.itemsTotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`],
@@ -180,41 +303,48 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
             ['Sections Detected', debug.structure.sectionsDetected],
             ['Tables Detected', debug.structure.tablesDetected],
             ['Blocks Detected', debug.structure.blocksDetected],
-          ].map(([k, v]) => (
-            <div key={String(k)} className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <span className="text-slate-400">{k}</span>
-              <span className="text-slate-100 font-medium">{String(v)}</span>
-            </div>
-          ))}
+          ].filter(Boolean).map((row) => {
+            const [k, v] = row as [string, unknown];
+            return (
+              <div key={String(k)} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span className="text-slate-400">{k}</span>
+                <span className="text-slate-100 font-medium">{String(v)}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {(!isV3 || debug.failedLinesGlobal.length > 0) && (
+        <div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            {isV3 ? 'Section D — Failed Lines' : 'Section C — Failed Lines'}
+            <span className="ml-2 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium">
+              {debug.failedLinesGlobal.length}
+            </span>
+          </div>
+          {debug.failedLinesGlobal.length === 0 ? (
+            <div className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3">No failed lines detected</div>
+          ) : (
+            <div className="bg-slate-950 border border-slate-700 rounded-lg overflow-auto max-h-52">
+              {debug.failedLinesGlobal.slice(0, 50).map((line, i) => (
+                <div key={i} className="flex gap-3 px-4 py-1.5 border-b border-slate-800 last:border-0">
+                  <span className="text-slate-600 text-xs w-6 flex-shrink-0">{i + 1}</span>
+                  <span className="text-red-300 text-xs font-mono break-all">{line}</span>
+                </div>
+              ))}
+              {debug.failedLinesGlobal.length > 50 && (
+                <div className="px-4 py-2 text-xs text-slate-500">+{debug.failedLinesGlobal.length - 50} more lines not shown</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div>
         <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-          Section C — Failed Lines
-          <span className="ml-2 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium">
-            {debug.failedLinesGlobal.length}
-          </span>
+          {isV3 ? 'Section E — Page Breakdown' : 'Section D — Chunk Breakdown'}
         </div>
-        {debug.failedLinesGlobal.length === 0 ? (
-          <div className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3">No failed lines detected</div>
-        ) : (
-          <div className="bg-slate-950 border border-slate-700 rounded-lg overflow-auto max-h-52">
-            {debug.failedLinesGlobal.slice(0, 50).map((line, i) => (
-              <div key={i} className="flex gap-3 px-4 py-1.5 border-b border-slate-800 last:border-0">
-                <span className="text-slate-600 text-xs w-6 flex-shrink-0">{i + 1}</span>
-                <span className="text-red-300 text-xs font-mono break-all">{line}</span>
-              </div>
-            ))}
-            {debug.failedLinesGlobal.length > 50 && (
-              <div className="px-4 py-2 text-xs text-slate-500">+{debug.failedLinesGlobal.length - 50} more lines not shown</div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section D — Chunk Breakdown</div>
         <div className="space-y-2">
           {debug.chunks.map((chunk, i) => (
             <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
@@ -230,9 +360,9 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
                 </div>
                 <div className="flex items-center gap-4 text-xs">
                   <span className="text-slate-400">{chunk.lineCount} lines</span>
-                  <span className="text-emerald-400">{chunk.deterministicItems} det</span>
-                  <span className="text-blue-400">{chunk.llmItems} llm</span>
-                  <span className="text-red-400">{chunk.failedLines.length} failed</span>
+                  <span className="text-emerald-400">{chunk.deterministicItems} items</span>
+                  {!isV3 && <span className="text-blue-400">{chunk.llmItems} llm</span>}
+                  {chunk.failedLines.length > 0 && <span className="text-red-400">{chunk.failedLines.length} failed</span>}
                   {expandedChunks.has(i) ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                 </div>
               </button>
@@ -249,11 +379,16 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
                   <div>
                     <div className="text-xs font-medium text-slate-400 mb-2">Parsed Items (first 10)</div>
                     <div className="bg-slate-950 rounded p-2 space-y-1 max-h-40 overflow-auto">
-                      {(chunk.parsedItems as Array<{ description?: string; total?: number; source?: string }>).slice(0, 10).map((item, j) => (
+                      {(chunk.parsedItems as Array<{ description?: string; total?: number; source?: string; confidence?: number }>).slice(0, 10).map((item, j) => (
                         <div key={j} className="text-xs font-mono">
                           <span className="text-slate-300 truncate block">{item.description ?? '—'}</span>
                           <span className="text-emerald-500">${Number(item.total ?? 0).toFixed(2)}</span>
-                          {item.source && <span className={`ml-2 ${item.source === 'llm' ? 'text-blue-400' : 'text-amber-400'}`}>[{item.source}]</span>}
+                          {item.confidence != null && (
+                            <span className={`ml-2 ${item.confidence >= 0.7 ? 'text-emerald-400' : item.confidence >= 0.4 ? 'text-amber-400' : 'text-red-400'}`}>
+                              [{Math.round(item.confidence * 100)}%]
+                            </span>
+                          )}
+                          {item.source && !isV3 && <span className={`ml-2 ${item.source === 'llm' ? 'text-blue-400' : 'text-amber-400'}`}>[{item.source}]</span>}
                         </div>
                       ))}
                       {chunk.parsedItems.length === 0 && <div className="text-slate-600 text-xs">No items parsed</div>}
@@ -267,15 +402,17 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
       </div>
 
       <div>
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Section E — Quality Metrics</div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+          {isV3 ? 'Section F — Quality Metrics' : 'Section E — Quality Metrics'}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
-            label="Avg Parse Confidence"
+            label="Avg Confidence"
             value={`${Math.round(debug.quality.avgParseConfidence * 100)}%`}
             colorClass={debug.quality.avgParseConfidence >= 0.7 ? 'text-emerald-400' : debug.quality.avgParseConfidence >= 0.5 ? 'text-amber-400' : 'text-red-400'}
           />
           <MetricCard
-            label="Avg Norm. Confidence"
+            label="Norm. Confidence"
             value={`${Math.round(debug.quality.avgNormalizationConfidence * 100)}%`}
             colorClass={debug.quality.avgNormalizationConfidence >= 0.8 ? 'text-emerald-400' : 'text-amber-400'}
           />
@@ -285,9 +422,13 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
             colorClass={debug.quality.highRiskItems === 0 ? 'text-emerald-400' : debug.quality.highRiskItems < 5 ? 'text-amber-400' : 'text-red-400'}
           />
           <MetricCard
-            label="Has Critical Errors"
-            value={validation.hasCriticalErrors ? 'Yes' : 'No'}
-            colorClass={validation.hasCriticalErrors ? 'text-red-400' : 'text-emerald-400'}
+            label={isV3 ? 'Risk Level' : 'Has Critical Errors'}
+            value={isV3 ? (validation.risk ?? 'low') : (validation.hasCriticalErrors ? 'Yes' : 'No')}
+            colorClass={
+              isV3
+                ? validation.risk === 'low' ? 'text-emerald-400' : validation.risk === 'medium' ? 'text-amber-400' : 'text-red-400'
+                : validation.hasCriticalErrors ? 'text-red-400' : 'text-emerald-400'
+            }
           />
         </div>
       </div>
@@ -359,7 +500,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
 
       const resolvedFileUrl = signedData.signedUrl;
 
-      const res = await fetch(`${supabaseUrl}/functions/v1/test_parsing_v2`, {
+      const res = await fetch(`${supabaseUrl}/functions/v1/test_parsing_v3`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -810,7 +951,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
               {debugLoading && (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
-                  <p className="text-slate-400 text-sm">Running parsing_v2 diagnostics...</p>
+                  <p className="text-slate-400 text-sm">Running v3 parser diagnostics...</p>
                 </div>
               )}
               {debugError && (
