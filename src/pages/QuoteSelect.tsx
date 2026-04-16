@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp, Bug, Eye, Code } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp, Bug, Eye, Code, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
@@ -385,6 +385,193 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
     if (v === 'debug') loadDebugData();
   };
 
+  const exportDebugPDF = useCallback(() => {
+    if (!debugData) return;
+    const { debug, stats, validation } = debugData;
+
+    const fmtMoney = (n: number) => `$${Math.abs(n).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtPct = (n: number) => `${Math.round(n * 100)}%`;
+
+    const sectionStyle = `margin:0 0 24px 0;`;
+    const headingStyle = `font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin:0 0 10px 0;padding-bottom:6px;border-bottom:1px solid #e2e8f0;`;
+    const cardStyle = `display:inline-block;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;min-width:140px;margin:0 8px 8px 0;vertical-align:top;`;
+    const tableStyle = `width:100%;border-collapse:collapse;font-size:12px;`;
+    const tdStyle = `padding:7px 12px;border-bottom:1px solid #f1f5f9;`;
+    const tdRStyle = `padding:7px 12px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:600;`;
+
+    const metricCard = (label: string, value: string, color: string) => `
+      <div style="${cardStyle}">
+        <div style="font-size:10px;color:#94a3b8;margin-bottom:4px;">${label}</div>
+        <div style="font-size:22px;font-weight:700;color:${color};">${value}</div>
+      </div>`;
+
+    const gapPct = debug.parsingGapPercent;
+    const gapColor = gapPct === 0 ? '#10b981' : gapPct < 5 ? '#f59e0b' : '#ef4444';
+    const detRatio = debug.deterministicRatio;
+    const detColor = detRatio >= 0.7 ? '#10b981' : detRatio >= 0.4 ? '#f59e0b' : '#ef4444';
+    const vscore = stats.validationScore;
+    const vColor = vscore >= 80 ? '#10b981' : vscore >= 60 ? '#f59e0b' : '#ef4444';
+    const lpPct = debug.quality.percentLinesParsed;
+    const lpColor = lpPct >= 60 ? '#10b981' : lpPct >= 30 ? '#f59e0b' : '#ef4444';
+
+    const statRows = [
+      ['Total Chunks', stats.totalChunks],
+      ['Deterministic Items', stats.deterministicItems],
+      ['LLM Items', stats.llmItems],
+      ['Detected Trade', debug.detectedTrade ?? '—'],
+      ['Document Total', debug.documentTotal != null ? fmtMoney(Number(debug.documentTotal)) : '—'],
+      ['Items Total (parsed)', fmtMoney(validation.itemsTotal)],
+      ['Processing Time', `${debug.processingMs}ms`],
+      ['Sections Detected', debug.structure.sectionsDetected],
+      ['Tables Detected', debug.structure.tablesDetected],
+      ['Blocks Detected', debug.structure.blocksDetected],
+    ];
+
+    const failedHtml = debug.failedLinesGlobal.length === 0
+      ? `<div style="color:#10b981;font-size:12px;">No failed lines detected</div>`
+      : debug.failedLinesGlobal.slice(0, 200).map((l, i) => `
+          <tr>
+            <td style="${tdStyle}color:#94a3b8;">${i + 1}</td>
+            <td style="${tdStyle}font-family:monospace;color:#ef4444;word-break:break-all;">${l}</td>
+          </tr>`).join('') + (debug.failedLinesGlobal.length > 200 ? `<tr><td colspan="2" style="${tdStyle}color:#94a3b8;">+${debug.failedLinesGlobal.length - 200} more lines not shown</td></tr>` : '');
+
+    const chunkRows = debug.chunks.map((chunk, i) => `
+      <tr style="background:${i % 2 === 0 ? '#f8fafc' : '#ffffff'};">
+        <td style="${tdStyle}color:#94a3b8;">#${i}</td>
+        <td style="${tdStyle}font-weight:500;">${chunk.section}</td>
+        <td style="${tdStyle}color:#64748b;">${chunk.block ?? '—'}</td>
+        <td style="${tdStyle}text-align:center;">${chunk.detectedAsTable ? 'Yes' : 'No'}</td>
+        <td style="${tdRStyle}">${chunk.lineCount}</td>
+        <td style="${tdRStyle}color:#10b981;">${chunk.deterministicItems}</td>
+        <td style="${tdRStyle}color:#3b82f6;">${chunk.llmItems}</td>
+        <td style="${tdRStyle}color:#ef4444;">${chunk.failedLines.length}</td>
+      </tr>`).join('');
+
+    const qmCards = [
+      ['Avg Parse Confidence', fmtPct(debug.quality.avgParseConfidence), debug.quality.avgParseConfidence >= 0.7 ? '#10b981' : debug.quality.avgParseConfidence >= 0.5 ? '#f59e0b' : '#ef4444'],
+      ['Avg Norm. Confidence', fmtPct(debug.quality.avgNormalizationConfidence), debug.quality.avgNormalizationConfidence >= 0.8 ? '#10b981' : '#f59e0b'],
+      ['High Risk Items', String(debug.quality.highRiskItems), debug.quality.highRiskItems === 0 ? '#10b981' : debug.quality.highRiskItems < 5 ? '#f59e0b' : '#ef4444'],
+      ['Has Critical Errors', validation.hasCriticalErrors ? 'Yes' : 'No', validation.hasCriticalErrors ? '#ef4444' : '#10b981'],
+    ];
+
+    const now = new Date().toLocaleString('en-NZ', { dateStyle: 'full', timeStyle: 'short' });
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Debug Analysis — ${quoteName}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#1e293b;background:#fff;padding:32px 40px;}
+  @media print{body{padding:20px 28px;}@page{size:A4;margin:16mm 14mm;}}
+  h1{font-size:22px;font-weight:700;color:#0f172a;margin-bottom:4px;}
+  .subtitle{font-size:13px;color:#64748b;margin-bottom:24px;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;background:#fef3c7;color:#92400e;margin-right:6px;}
+  pre{background:#0f172a;color:#e2e8f0;padding:16px;border-radius:8px;font-size:10px;font-family:monospace;white-space:pre-wrap;word-break:break-all;line-height:1.6;max-height:none;}
+  table{${tableStyle}}
+  th{padding:7px 12px;background:#f1f5f9;text-align:left;font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.04em;}
+  th.r{text-align:right;}
+  .divider{border:none;border-top:1px solid #e2e8f0;margin:28px 0;}
+</style>
+</head>
+<body>
+  <div style="margin-bottom:20px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#f59e0b;margin-bottom:4px;">
+          <span class="badge">Debug Analysis Report</span>
+        </div>
+        <h1>${quoteName}</h1>
+        <div class="subtitle">Generated ${now}</div>
+      </div>
+    </div>
+    <hr class="divider"/>
+  </div>
+
+  <div style="${sectionStyle}">
+    <div style="${headingStyle}">Raw JSON Output</div>
+    <pre>${rawJson.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+  </div>
+
+  <hr class="divider"/>
+
+  <div style="${sectionStyle}">
+    <div style="${headingStyle}">Section A — Summary Metrics</div>
+    <div style="display:flex;flex-wrap:wrap;gap:0;">
+      ${metricCard('Parsing Gap', `${debug.parsingGapPercent}%`, gapColor)}
+      ${metricCard('Deterministic Ratio', `${Math.round(detRatio * 100)}%`, detColor)}
+      ${metricCard('Validation Score', String(vscore), vColor)}
+      ${metricCard('Lines Parsed', `${lpPct}%`, lpColor)}
+    </div>
+    <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
+      Gap: ${fmtMoney(Math.abs(debug.parsingGap))} &nbsp;|&nbsp;
+      ${debug.totalParsedRows} of ${debug.totalInputLines} lines parsed
+    </div>
+  </div>
+
+  <hr class="divider"/>
+
+  <div style="${sectionStyle}">
+    <div style="${headingStyle}">Section B — Parse Stats</div>
+    <table>
+      ${statRows.map(([k, v]) => `<tr><td style="${tdStyle}">${k}</td><td style="${tdRStyle}">${v}</td></tr>`).join('')}
+    </table>
+  </div>
+
+  <hr class="divider"/>
+
+  <div style="${sectionStyle}">
+    <div style="${headingStyle}">Section C — Failed Lines (${debug.failedLinesGlobal.length})</div>
+    ${debug.failedLinesGlobal.length === 0
+      ? `<div style="color:#10b981;font-size:12px;">No failed lines detected</div>`
+      : `<table><thead><tr><th style="width:40px;">#</th><th>Line</th></tr></thead><tbody>${failedHtml}</tbody></table>`
+    }
+  </div>
+
+  <hr class="divider"/>
+
+  <div style="${sectionStyle}">
+    <div style="${headingStyle}">Section D — Chunk Breakdown (${debug.chunks.length} chunks)</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px;">#</th>
+          <th>Section</th>
+          <th>Block</th>
+          <th style="text-align:center;">Table?</th>
+          <th class="r">Lines</th>
+          <th class="r">Det.</th>
+          <th class="r">LLM</th>
+          <th class="r">Failed</th>
+        </tr>
+      </thead>
+      <tbody>${chunkRows}</tbody>
+    </table>
+  </div>
+
+  <hr class="divider"/>
+
+  <div style="${sectionStyle}">
+    <div style="${headingStyle}">Section E — Quality Metrics</div>
+    <div style="display:flex;flex-wrap:wrap;gap:0;">
+      ${qmCards.map(([l, v, c]) => metricCard(l as string, v as string, c as string)).join('')}
+    </div>
+  </div>
+
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+    }, 600);
+  }, [debugData, rawJson, quoteName]);
+
   const toggleRow = (id: string) => {
     setExpandedRows(prev => {
       const next = new Set(prev);
@@ -597,14 +784,25 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
           )}
         </div>
 
-        <div className="px-6 py-3 border-t border-slate-700 flex-shrink-0 flex items-center justify-between">
+        <div className="px-6 py-3 border-t border-slate-700 flex-shrink-0 flex items-center justify-between gap-3">
           {view === 'user'
             ? <span className="text-xs text-slate-500">Showing {filtered.length} of {items.length} items</span>
             : <span className="text-xs text-slate-500">
                 {debugData ? `${debugData.debug.chunks.length} chunks · ${debugData.debug.failedLinesGlobal.length} failed lines` : 'Debug mode'}
               </span>
           }
-          <button onClick={onClose} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">Close</button>
+          <div className="flex items-center gap-2">
+            {view === 'debug' && debugData && (
+              <button
+                onClick={exportDebugPDF}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Download size={14} />
+                Export PDF
+              </button>
+            )}
+            <button onClick={onClose} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">Close</button>
+          </div>
         </div>
       </div>
     </div>
