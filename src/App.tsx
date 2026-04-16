@@ -48,6 +48,7 @@ import OrganisationPicker from './pages/OrganisationPicker';
 import OrganisationSettings from './pages/OrganisationSettings';
 import AdminApp from './pages/AdminApp';
 import DemoLogin from './pages/DemoLogin';
+import ParserTest from './pages/ParserTest';
 import ShadowHome from './pages/shadow/ShadowHome';
 import ShadowLogin from './pages/shadow/ShadowLogin';
 import ShadowModulesPage from './pages/shadow/ShadowModulesPage';
@@ -1108,6 +1109,10 @@ function AppContent() {
 
   if (window.location.pathname === '/demo-login') {
     return <DemoLogin />;
+  }
+
+  if (window.location.pathname === '/parser-test') {
+    return <ParserTest />;
   }
 
   if (window.location.pathname === '/video') {
