@@ -31,7 +31,15 @@ interface ParsingJob {
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
   error_message: string | null;
-  result_data: { items?: any[] } | null;
+  result_data: {
+    items?: any[];
+    item_count_base?: number;
+    item_count_optional?: number;
+    item_count_excluded?: number;
+    grand_total?: number;
+    parser_used?: string;
+    parser_version?: string;
+  } | null;
   metadata?: ParsingJobMetadata | null;
   parsed_lines?: any[];
   quote_id: string | null;
@@ -251,6 +259,17 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
     }
   };
 
+  const getItemCount = (job: ParsingJob): number => {
+    const rd = job.result_data;
+    if (rd?.item_count_base != null) {
+      return rd.item_count_base + (rd.item_count_optional ?? 0);
+    }
+    if (rd?.items != null) {
+      return rd.items.length;
+    }
+    return Array.isArray(job.parsed_lines) ? job.parsed_lines.length : 0;
+  };
+
   const categorizeJobs = () => {
     const successful: ParsingJob[] = [];
     const partial: ParsingJob[] = [];
@@ -261,9 +280,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       if (job.status === 'pending' || job.status === 'processing') {
         active.push(job);
       } else if (job.status === 'completed') {
-        // Check parsed_lines instead of result_data.items
-        const parsedLinesCount = Array.isArray(job.parsed_lines) ? job.parsed_lines.length : 0;
-        const itemCount = job.result_data?.items?.length || parsedLinesCount;
+        const itemCount = getItemCount(job);
         const hasFailedChunks = job.error_message?.includes('chunks failed') || false;
 
         if (itemCount === 0) {
@@ -444,7 +461,11 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                         )}
                       </div>
                       <div className="text-xs text-slate-400 mt-0.5">
-                        {(Array.isArray(job.parsed_lines) ? job.parsed_lines.length : job.result_data?.items?.length) || 0} items parsed • File: {job.filename} • Imported {formatDateTime(job.updated_at)}
+                        {getItemCount(job)} items parsed
+                        {job.result_data?.item_count_optional != null && job.result_data.item_count_optional > 0 && (
+                          <> ({job.result_data.item_count_base ?? 0} base + {job.result_data.item_count_optional} optional)</>
+                        )}
+                        {' '}• File: {job.filename} • Imported {formatDateTime(job.updated_at)}
                       </div>
                     </div>
                   </div>
@@ -462,6 +483,26 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                       <div className="text-slate-200">{meta.confidence != null ? (meta.confidence * 100).toFixed(0) + '%' : '—'}</div>
                       <div className="text-slate-500">validation_risk</div>
                       <div className={riskColor}>{meta.validation_risk ?? '—'}</div>
+                      {meta.item_count_base != null && (
+                        <>
+                          <div className="text-slate-500">base_items</div>
+                          <div className="text-slate-200">{meta.item_count_base}</div>
+                          <div className="text-slate-500">optional_items</div>
+                          <div className="text-slate-200">{meta.item_count_optional ?? 0}</div>
+                          {meta.item_count_excluded != null && meta.item_count_excluded > 0 && (
+                            <>
+                              <div className="text-slate-500">excluded_items</div>
+                              <div className="text-slate-400">{meta.item_count_excluded}</div>
+                            </>
+                          )}
+                        </>
+                      )}
+                      {meta.grand_total != null && (
+                        <>
+                          <div className="text-slate-500">grand_total</div>
+                          <div className="text-slate-200">${meta.grand_total.toLocaleString()}</div>
+                        </>
+                      )}
                       {meta.warnings && meta.warnings.length > 0 && (
                         <>
                           <div className="text-slate-500 col-span-2 pt-1 border-t border-slate-700 mt-1">warnings</div>
@@ -489,8 +530,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
               </h4>
               <div className="space-y-2">
                 {partial.map(job => {
-                  const parsedLinesCount = Array.isArray(job.parsed_lines) ? job.parsed_lines.length : 0;
-                  const itemCount = job.result_data?.items?.length || parsedLinesCount;
+                  const itemCount = getItemCount(job);
                   const failedChunks = job.error_message?.match(/(\d+) chunks? failed/)?.[1] || '0';
 
                   return (
@@ -534,12 +574,13 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
               </h4>
               <div className="space-y-2">
                 {failed.map(job => {
-                  const parsedLinesCount = Array.isArray(job.parsed_lines) ? job.parsed_lines.length : 0;
-                  const itemCount = job.result_data?.items?.length || parsedLinesCount;
-                  const reason = itemCount === 0 && job.status === 'completed'
-                    ? 'Parsed successfully but returned 0 line items'
-                    : job.error_message || 'Could not extract tables';
+                  const itemCount = getItemCount(job);
                   const failMeta = (job.metadata as ParsingJobMetadata | null) ?? null;
+                  const reason = failMeta?.failure_reason
+                    || job.error_message
+                    || (itemCount === 0 && job.status === 'completed'
+                      ? 'Parser completed but extracted 0 line items'
+                      : 'Could not extract tables');
 
                   return (
                     <div key={job.id} className="border border-red-500/30 rounded-lg p-3 bg-red-900/20">
