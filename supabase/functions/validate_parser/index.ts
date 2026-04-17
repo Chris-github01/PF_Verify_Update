@@ -270,6 +270,7 @@ async function persistRun(
   diag: ReturnType<typeof buildDiagnostics>,
   mode: string,
   batchId?: string,
+  trade?: string | null,
 ) {
   await supabase.from("parser_validation_runs").insert({
     filename: diag.filename,
@@ -294,6 +295,7 @@ async function persistRun(
     error_category: diag.error_category,
     run_mode: mode,
     batch_id: batchId ?? null,
+    trade: trade ?? null,
     organisation_id: organisationId,
     user_id: userId,
     raw_diagnostics: diag,
@@ -465,10 +467,11 @@ Deno.serve(async (req: Request) => {
           };
 
           const diag = buildDiagnostics(bm.filename, ext, gt, resolution, classification, durationMs);
-          results.push(diag);
+          const diagWithMeta = { ...diag, benchmark_label: bm.label ?? bm.filename, trade: bm.trade ?? null };
+          results.push(diagWithMeta as any);
 
           if (persist) {
-            await persistRun(supabase, userId, organisationId, diag, "batch", batchId);
+            await persistRun(supabase, userId, organisationId, diagWithMeta as any, "batch", batchId, bm.trade ?? null);
           }
         } catch (bmErr) {
           console.error(`[batch] Failed benchmark ${bm.id}:`, bmErr);
@@ -500,11 +503,24 @@ Deno.serve(async (req: Request) => {
       }
       const topFailures = Object.entries(errorCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat, count]) => ({ category: cat, count }));
 
+      const trades = ["passive_fire", "plumbing", "electrical", "carpentry", "hvac", "active_fire"];
+      const tradeAccuracy: Record<string, { pass: number; total: number; pct: number | null }> = {};
+      for (const tr of trades) {
+        const trRuns = (results as any[]).filter((r: any) => r.trade === tr);
+        const trPassed = trRuns.filter((r: any) => r.pass).length;
+        tradeAccuracy[tr] = {
+          pass: trPassed,
+          total: trRuns.length,
+          pct: trRuns.length > 0 ? Math.round((trPassed / trRuns.length) * 100) : null,
+        };
+      }
+
       const scorecard = {
         overall_accuracy: overallAccuracy,
         total_pass: totalPass,
         total_runs: results.length,
         family_accuracy: familyAccuracy,
+        trade_accuracy: tradeAccuracy,
         optional_separation_accuracy: optionalAccuracy,
         avg_variance_pct: parseFloat(avgVariance.toFixed(2)),
         top_failure_causes: topFailures,

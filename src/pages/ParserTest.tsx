@@ -2,7 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Upload, Play, CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronUp,
   Loader2, BarChart3, FileText, Bug, RefreshCw, Target, TrendingUp, List,
-  Database, GitCompare, Plus, Trash2, FlaskConical, Tag,
+  Database, GitCompare, Plus, Trash2, FlaskConical, Tag, Download,
+  ArrowUpDown, ArrowUp, ArrowDown, Filter, Layers,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -13,6 +14,9 @@ import { supabase } from '../lib/supabase';
 type CommercialFamily =
   | 'itemized_quote' | 'lump_sum_quote' | 'hybrid_quote'
   | 'spreadsheet_quote' | 'scanned_ocr_quote' | 'unknown_quote' | '';
+
+type TradeModule =
+  | 'passive_fire' | 'plumbing' | 'electrical' | 'carpentry' | 'hvac' | 'active_fire' | '';
 
 type ErrorCategory =
   | 'wrong_family_selected' | 'total_extraction_failed' | 'optional_contamination'
@@ -76,6 +80,7 @@ interface HistoryRun {
   total_source: string;
   error_category: ErrorCategory;
   run_mode: string;
+  trade: TradeModule | null;
 }
 
 interface Benchmark {
@@ -92,6 +97,26 @@ interface Benchmark {
   is_active: boolean;
   notes: string;
   created_at: string;
+  trade: TradeModule | null;
+}
+
+interface BulkQueueItem {
+  file: File;
+  label: string;
+  family: CommercialFamily;
+  trade: TradeModule;
+  total: string;
+  optTotal: string;
+  hasOptional: string;
+  suggestedFamily: CommercialFamily;
+}
+
+interface BatchRunProgress {
+  label: string;
+  filename: string;
+  status: 'pending' | 'running' | 'pass' | 'fail' | 'error';
+  error_category?: ErrorCategory;
+  variance_pct?: number | null;
 }
 
 interface ShadowDiff {
@@ -110,7 +135,17 @@ const FAMILY_OPTIONS: { value: CommercialFamily; label: string }[] = [
   { value: 'scanned_ocr_quote', label: 'Scanned / OCR Quote' },
 ];
 
+const TRADE_OPTIONS: { value: TradeModule; label: string }[] = [
+  { value: 'passive_fire', label: 'Passive Fire' },
+  { value: 'plumbing', label: 'Plumbing' },
+  { value: 'electrical', label: 'Electrical' },
+  { value: 'carpentry', label: 'Carpentry' },
+  { value: 'hvac', label: 'HVAC' },
+  { value: 'active_fire', label: 'Active Fire' },
+];
+
 const FAMILIES = ['itemized_quote', 'lump_sum_quote', 'hybrid_quote', 'spreadsheet_quote', 'scanned_ocr_quote'];
+const TRADES = ['passive_fire', 'plumbing', 'electrical', 'carpentry', 'hvac', 'active_fire'];
 
 const FAMILY_COLORS: Record<string, string> = {
   itemized_quote: 'bg-blue-100 text-blue-800',
@@ -119,6 +154,24 @@ const FAMILY_COLORS: Record<string, string> = {
   spreadsheet_quote: 'bg-green-100 text-green-800',
   scanned_ocr_quote: 'bg-slate-100 text-slate-700',
   unknown_quote: 'bg-red-100 text-red-700',
+};
+
+const TRADE_COLORS: Record<string, string> = {
+  passive_fire: 'bg-orange-100 text-orange-800',
+  plumbing: 'bg-blue-100 text-blue-800',
+  electrical: 'bg-yellow-100 text-yellow-800',
+  carpentry: 'bg-stone-100 text-stone-800',
+  hvac: 'bg-cyan-100 text-cyan-800',
+  active_fire: 'bg-red-100 text-red-800',
+};
+
+const TRADE_LABELS: Record<string, string> = {
+  passive_fire: 'Passive Fire',
+  plumbing: 'Plumbing',
+  electrical: 'Electrical',
+  carpentry: 'Carpentry',
+  hvac: 'HVAC',
+  active_fire: 'Active Fire',
 };
 
 const ERROR_COLORS: Record<string, string> = {
@@ -132,12 +185,55 @@ const ERROR_COLORS: Record<string, string> = {
   fallback_used: 'bg-slate-100 text-slate-600',
 };
 
-const RISK_COLORS: Record<string, string> = {
-  OK: 'text-green-600', MEDIUM: 'text-amber-600', HIGH: 'text-red-600', UNKNOWN: 'text-slate-400',
-};
-
 const fmt = (n: number) => n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2 });
 const pct = (n: number | null) => n === null ? '—' : n.toFixed(2) + '%';
+
+// ---------------------------------------------------------------------------
+// Family auto-suggest from filename/extension
+// ---------------------------------------------------------------------------
+
+function suggestFamilyFromFile(file: File): CommercialFamily {
+  const name = file.name.toLowerCase();
+  const ext = name.split('.').pop() ?? '';
+
+  if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') return 'spreadsheet_quote';
+  if (name.includes('ocr') || name.includes('scan') || name.includes('scanned')) return 'scanned_ocr_quote';
+  if (name.includes('lump') || name.includes('lumpsum') || name.includes('lump_sum')) return 'lump_sum_quote';
+  if (name.includes('hybrid')) return 'hybrid_quote';
+  if (name.includes('itemis') || name.includes('itemiz') || name.includes('schedule')) return 'itemized_quote';
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// CSV export helper
+// ---------------------------------------------------------------------------
+
+function exportHistoryCSV(rows: HistoryRun[]) {
+  const headers = ['filename', 'run_mode', 'trade', 'expected_family', 'detected_family', 'expected_total', 'parsed_total', 'variance_pct', 'pass', 'error_category', 'run_at'];
+  const lines = [
+    headers.join(','),
+    ...rows.map(r => [
+      `"${r.filename}"`,
+      r.run_mode,
+      r.trade ?? '',
+      r.expected_family,
+      r.detected_family,
+      r.expected_total,
+      r.parsed_total,
+      r.variance_pct ?? '',
+      r.pass ? 'PASS' : 'FAIL',
+      r.error_category ?? '',
+      r.run_at,
+    ].join(',')),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `parser_validation_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ---------------------------------------------------------------------------
 // Shared small components
@@ -152,7 +248,16 @@ function PassBadge({ pass }: { pass: boolean | null }) {
 function FamilyTag({ family }: { family: string }) {
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${FAMILY_COLORS[family] ?? 'bg-slate-100 text-slate-600'}`}>
-      {family || '—'}
+      {family.replace(/_quote$/, '').replace(/_/g, ' ') || '—'}
+    </span>
+  );
+}
+
+function TradeTag({ trade }: { trade: string | null }) {
+  if (!trade) return <span className="text-slate-400 text-xs">—</span>;
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TRADE_COLORS[trade] ?? 'bg-slate-100 text-slate-600'}`}>
+      {TRADE_LABELS[trade] ?? trade}
     </span>
   );
 }
@@ -172,6 +277,38 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string | 
       <div className="text-xs text-slate-500 mb-1">{label}</div>
       <div className={`text-2xl font-bold ${color ?? 'text-slate-800'}`}>{value ?? '—'}</div>
       {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Filter pills
+// ---------------------------------------------------------------------------
+
+function FilterPills({ label, icon, options, value, onChange }: {
+  label: string;
+  icon: React.ReactNode;
+  options: { value: string; label: string; color?: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="flex items-center gap-1 text-xs text-slate-500 shrink-0">{icon}{label}:</span>
+      <button
+        onClick={() => onChange('')}
+        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${value === '' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      >
+        All
+      </button>
+      {options.map(o => (
+        <button key={o.value}
+          onClick={() => onChange(o.value === value ? '' : o.value)}
+          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${value === o.value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -198,10 +335,18 @@ function SingleTestTab({ history, onHistoryChange }: { history: HistoryRun[]; on
   const [showSignals, setShowSignals] = useState(false);
   const [showReasons, setShowReasons] = useState(false);
 
+  const handleFile = (f: File) => {
+    setFile(f);
+    setResult(null);
+    setError(null);
+    const suggested = suggestFamilyFromFile(f);
+    if (suggested && !expectedFamily) setExpectedFamily(suggested);
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f) { setFile(f); setResult(null); setError(null); }
+    if (f) handleFile(f);
   };
 
   const handleRun = async () => {
@@ -243,7 +388,6 @@ function SingleTestTab({ history, onHistoryChange }: { history: HistoryRun[]; on
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* LEFT */}
       <div className="space-y-4">
         <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -260,6 +404,9 @@ function SingleTestTab({ history, onHistoryChange }: { history: HistoryRun[]; on
                 <FileText className="w-8 h-8 text-slate-400 mx-auto mb-2" />
                 <p className="text-sm font-medium text-slate-700">{file.name}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{(file.size / 1024).toFixed(1)} KB</p>
+                {suggestFamilyFromFile(file) && (
+                  <p className="text-xs text-teal-600 mt-1">Auto-suggested: {suggestFamilyFromFile(file).replace(/_quote$/, '').replace(/_/g, ' ')}</p>
+                )}
               </div>
             ) : (
               <div>
@@ -269,10 +416,9 @@ function SingleTestTab({ history, onHistoryChange }: { history: HistoryRun[]; on
               </div>
             )}
             <input ref={fileRef} type="file" className="hidden" accept=".pdf,.xlsx,.xls,.csv"
-              onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); setResult(null); setError(null); } }} />
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
           </div>
 
-          {/* Ground truth inputs */}
           <div className="space-y-3">
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ground Truth</div>
             <div className="grid grid-cols-2 gap-3">
@@ -337,11 +483,9 @@ function SingleTestTab({ history, onHistoryChange }: { history: HistoryRun[]; on
         </div>
       </div>
 
-      {/* RIGHT — Results */}
       <div className="space-y-4">
         {d ? (
           <>
-            {/* Banner */}
             <div className={`rounded-xl px-4 py-3 flex items-center gap-3 ${d.pass ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
               {d.pass ? <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" /> : <XCircle className="w-5 h-5 text-red-500 shrink-0" />}
               <div className="flex-1 min-w-0">
@@ -353,12 +497,12 @@ function SingleTestTab({ history, onHistoryChange }: { history: HistoryRun[]; on
               {d.error_category && <ErrorTag cat={d.error_category} />}
             </div>
 
-            {/* Tabs */}
             <div className="flex border-b border-slate-200">
-              {([['comparison', 'Comparison', <Target className="w-3.5 h-3.5" />], ['diagnostics', 'Diagnostics', <BarChart3 className="w-3.5 h-3.5" />]] as const).map(([key, label, icon]) => (
-                <button key={key} onClick={() => setActiveTab(key as any)}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === key ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                  {icon}{label}
+              {(['comparison', 'diagnostics'] as const).map(key => (
+                <button key={key} onClick={() => setActiveTab(key)}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors capitalize ${activeTab === key ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                  {key === 'comparison' ? <Target className="w-3.5 h-3.5" /> : <BarChart3 className="w-3.5 h-3.5" />}
+                  {key}
                 </button>
               ))}
             </div>
@@ -487,23 +631,28 @@ function SingleTestTab({ history, onHistoryChange }: { history: HistoryRun[]; on
 // TAB 2 — Batch / Golden Dataset
 // ---------------------------------------------------------------------------
 
-function BatchTab({ organisationId }: { organisationId: string | null }) {
+function BatchTab({ organisationId, onHistoryChange }: { organisationId: string | null; onHistoryChange: () => void }) {
   const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
   const [loading, setLoading] = useState(false);
-  const [running, setRunning] = useState(false);
+  const [runProgress, setRunProgress] = useState<BatchRunProgress[] | null>(null);
   const [batchResult, setBatchResult] = useState<any>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [bulkQueue, setBulkQueue] = useState<BulkQueueItem[]>([]);
+  const [saving, setSaving] = useState(false);
+  const bulkDropRef = useRef<HTMLInputElement>(null);
+  const addFileRef = useRef<HTMLInputElement>(null);
+
+  // Single add form state
   const [addFile, setAddFile] = useState<File | null>(null);
   const [addLabel, setAddLabel] = useState('');
   const [addFamily, setAddFamily] = useState<CommercialFamily>('');
+  const [addTrade, setAddTrade] = useState<TradeModule>('');
   const [addTotal, setAddTotal] = useState('');
   const [addOptTotal, setAddOptTotal] = useState('');
   const [addItemMin, setAddItemMin] = useState('');
   const [addItemMax, setAddItemMax] = useState('');
   const [addHasOptional, setAddHasOptional] = useState('');
   const [addNotes, setAddNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-  const addFileRef = useRef<HTMLInputElement>(null);
 
   const loadBenchmarks = useCallback(async () => {
     if (!organisationId) return;
@@ -515,25 +664,84 @@ function BatchTab({ organisationId }: { organisationId: string | null }) {
 
   useEffect(() => { loadBenchmarks(); }, [loadBenchmarks]);
 
-  const handleUploadBenchmark = async () => {
+  const handleBulkDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files).filter(f => /\.(pdf|xlsx|xls|csv)$/i.test(f.name));
+    appendToBulkQueue(files);
+  };
+
+  const appendToBulkQueue = (files: File[]) => {
+    const newItems: BulkQueueItem[] = files.map(f => ({
+      file: f,
+      label: f.name.replace(/\.(pdf|xlsx|xls|csv)$/i, ''),
+      family: suggestFamilyFromFile(f),
+      suggestedFamily: suggestFamilyFromFile(f),
+      trade: '',
+      total: '',
+      optTotal: '',
+      hasOptional: '',
+    }));
+    setBulkQueue(prev => [...prev, ...newItems]);
+  };
+
+  const updateQueueItem = (idx: number, patch: Partial<BulkQueueItem>) => {
+    setBulkQueue(prev => prev.map((item, i) => i === idx ? { ...item, ...patch } : item));
+  };
+
+  const removeQueueItem = (idx: number) => {
+    setBulkQueue(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveBulk = async () => {
+    if (!organisationId || bulkQueue.length === 0) return;
+    const invalid = bulkQueue.filter(q => !q.family || !q.total);
+    if (invalid.length > 0) { alert(`${invalid.length} item(s) missing required fields (Type, Total)`); return; }
+    setSaving(true);
+    try {
+      for (const item of bulkQueue) {
+        const ext = item.file.name.split('.').pop()?.toLowerCase() ?? '';
+        const storagePath = `${organisationId}/${Date.now()}_${item.file.name}`;
+        const { error: upErr } = await supabase.storage.from('parser-benchmarks').upload(storagePath, item.file);
+        if (upErr) throw new Error(`Upload failed for ${item.file.name}: ${upErr.message}`);
+        await supabase.from('parser_golden_benchmarks').insert({
+          organisation_id: organisationId,
+          label: item.label || item.file.name,
+          filename: item.file.name,
+          storage_path: storagePath,
+          expected_family: item.family,
+          trade: item.trade || null,
+          expected_total: parseFloat(item.total.replace(/[$,]/g, '')) || 0,
+          expected_optional_total: parseFloat(item.optTotal.replace(/[$,]/g, '')) || 0,
+          expected_item_count_min: null,
+          expected_item_count_max: null,
+          expected_has_optional: item.hasOptional === '' ? null : item.hasOptional === 'true',
+        });
+        void ext;
+      }
+      setBulkQueue([]);
+      setShowAddForm(false);
+      loadBenchmarks();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUploadSingle = async () => {
     if (!addFile || !organisationId || !addFamily) return;
     setSaving(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const ext = addFile.name.split('.').pop()?.toLowerCase() ?? '';
       const storagePath = `${organisationId}/${Date.now()}_${addFile.name}`;
-
       const { error: upErr } = await supabase.storage.from('parser-benchmarks').upload(storagePath, addFile);
       if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
-
       await supabase.from('parser_golden_benchmarks').insert({
         organisation_id: organisationId,
         label: addLabel || addFile.name,
         filename: addFile.name,
         storage_path: storagePath,
         expected_family: addFamily,
+        trade: addTrade || null,
         expected_total: parseFloat(addTotal.replace(/[$,]/g, '')) || 0,
         expected_optional_total: parseFloat(addOptTotal.replace(/[$,]/g, '')) || 0,
         expected_item_count_min: addItemMin ? parseInt(addItemMin) : null,
@@ -541,9 +749,8 @@ function BatchTab({ organisationId }: { organisationId: string | null }) {
         expected_has_optional: addHasOptional === '' ? null : addHasOptional === 'true',
         notes: addNotes,
       });
-
       setShowAddForm(false);
-      setAddFile(null); setAddLabel(''); setAddFamily(''); setAddTotal('');
+      setAddFile(null); setAddLabel(''); setAddFamily(''); setAddTrade(''); setAddTotal('');
       setAddOptTotal(''); setAddItemMin(''); setAddItemMax(''); setAddHasOptional(''); setAddNotes('');
       loadBenchmarks();
     } catch (err: any) {
@@ -560,27 +767,54 @@ function BatchTab({ organisationId }: { organisationId: string | null }) {
   };
 
   const handleRunBatch = async () => {
-    if (!organisationId) return;
-    setRunning(true); setBatchResult(null);
+    if (!organisationId || benchmarks.length === 0) return;
+    setBatchResult(null);
+
+    const initialProgress: BatchRunProgress[] = benchmarks.map(bm => ({
+      label: bm.label || bm.filename,
+      filename: bm.filename,
+      status: 'pending',
+    }));
+    setRunProgress(initialProgress);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
+
+      setRunProgress(prev => prev!.map(p => ({ ...p, status: 'running' as const })));
+
       const form = new FormData();
       form.append('mode', 'batch');
       form.append('organisationId', organisationId);
+
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate_parser`,
         { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` }, body: form });
       const json = await res.json();
       if (!json.success) throw new Error(json.error ?? 'Batch failed');
+
+      const results: any[] = json.results ?? [];
+      setRunProgress(prev => prev!.map((p, i) => {
+        const r = results[i];
+        if (!r) return { ...p, status: 'error' as const };
+        return {
+          ...p,
+          status: r.pass ? 'pass' : 'fail',
+          error_category: r.error_category,
+          variance_pct: r.variance_pct,
+        };
+      }));
+
       setBatchResult(json);
+      onHistoryChange();
     } catch (err: any) {
       alert(err.message);
-    } finally {
-      setRunning(false);
+      setRunProgress(null);
     }
   };
 
   const sc = batchResult?.scorecard;
+  const batchResults: any[] = batchResult?.results ?? [];
+  const failedResults = [...batchResults].filter(r => !r.pass).sort((a, b) => (b.variance_pct ?? 0) - (a.variance_pct ?? 0));
 
   return (
     <div className="space-y-6">
@@ -593,97 +827,207 @@ function BatchTab({ organisationId }: { organisationId: string | null }) {
             <span className="text-xs text-slate-400">({benchmarks.length} registered)</span>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowAddForm(v => !v)}
+            <button
+              onClick={() => { setShowAddForm(v => !v); setBulkQueue([]); }}
               className="flex items-center gap-1.5 text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white hover:bg-slate-50 transition-colors text-slate-600">
-              <Plus className="w-3.5 h-3.5" />Register
+              <Plus className="w-3.5 h-3.5" />Add Benchmarks
             </button>
-            <button onClick={handleRunBatch} disabled={running || benchmarks.length === 0}
+            <button onClick={handleRunBatch} disabled={!!runProgress && batchResult === null || benchmarks.length === 0}
               className="flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-lg px-3 py-1.5 hover:bg-slate-700 disabled:opacity-40 transition-colors">
-              {running ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Running...</> : <><FlaskConical className="w-3.5 h-3.5" />Run All</>}
+              {runProgress && !batchResult ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Running...</> : <><FlaskConical className="w-3.5 h-3.5" />Run All</>}
             </button>
           </div>
         </div>
 
+        {/* Add form — bulk drop area + queue table */}
         {showAddForm && (
-          <div className="border-b border-slate-200 bg-slate-50 p-4 space-y-3">
-            <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Register Benchmark</div>
+          <div className="border-b border-slate-200 bg-slate-50 p-4 space-y-4">
+            <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Add Benchmark Files</div>
+
+            {/* Bulk drop zone */}
             <div
-              onClick={() => addFileRef.current?.click()}
-              className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-slate-400 transition-colors">
-              {addFile ? (
-                <span className="text-sm font-medium text-slate-700">{addFile.name}</span>
-              ) : (
-                <span className="text-sm text-slate-500">Click to select benchmark file</span>
-              )}
-              <input ref={addFileRef} type="file" className="hidden" accept=".pdf,.xlsx,.xls,.csv"
-                onChange={e => { const f = e.target.files?.[0]; if (f) setAddFile(f); }} />
+              onDrop={handleBulkDrop}
+              onDragOver={e => e.preventDefault()}
+              onClick={() => bulkDropRef.current?.click()}
+              className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-slate-500 hover:bg-white transition-colors"
+            >
+              <Upload className="w-7 h-7 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">Drop multiple files here (PDF, XLSX, CSV)</p>
+              <p className="text-xs text-slate-400 mt-1">or click to browse — family auto-suggested from filename</p>
+              <input ref={bulkDropRef} type="file" className="hidden" accept=".pdf,.xlsx,.xls,.csv" multiple
+                onChange={e => { if (e.target.files) appendToBulkQueue(Array.from(e.target.files)); }} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs text-slate-600 mb-1">Label</label>
-                <input value={addLabel} onChange={e => setAddLabel(e.target.value)} placeholder="e.g. Trafalgar passive fire Q1"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+            {/* Bulk queue table */}
+            {bulkQueue.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-600">{bulkQueue.length} file(s) queued</div>
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-slate-100 border-b border-slate-200">
+                      {['File', 'Label', 'Trade', 'Family *', 'Expected Total *', 'Has Opt?', ''].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-medium text-slate-600">{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {bulkQueue.map((item, idx) => (
+                        <tr key={idx} className="border-b border-slate-100 bg-white">
+                          <td className="px-3 py-2 text-slate-600 max-w-[120px] truncate">{item.file.name}</td>
+                          <td className="px-3 py-2">
+                            <input value={item.label} onChange={e => updateQueueItem(idx, { label: e.target.value })}
+                              className="w-32 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select value={item.trade} onChange={e => updateQueueItem(idx, { trade: e.target.value as TradeModule })}
+                              className="w-28 border border-slate-200 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                              <option value="">—</option>
+                              {TRADE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <select value={item.family} onChange={e => updateQueueItem(idx, { family: e.target.value as CommercialFamily })}
+                              className={`w-32 border rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${!item.family ? 'border-red-300' : 'border-slate-200'}`}>
+                              <option value="">Select...</option>
+                              {FAMILY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                            {item.suggestedFamily && item.suggestedFamily === item.family && (
+                              <span className="text-teal-600 text-xs ml-1">auto</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <input value={item.total} onChange={e => updateQueueItem(idx, { total: e.target.value })}
+                              placeholder="0.00" className={`w-28 border rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 ${!item.total ? 'border-red-300' : 'border-slate-200'}`} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select value={item.hasOptional} onChange={e => updateQueueItem(idx, { hasOptional: e.target.value })}
+                              className="w-16 border border-slate-200 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                              <option value="">—</option><option value="true">Yes</option><option value="false">No</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <button onClick={() => removeQueueItem(idx)} className="text-slate-400 hover:text-red-500 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleSaveBulk} disabled={saving}
+                    className="flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-lg px-4 py-2 hover:bg-slate-700 disabled:opacity-40 transition-colors">
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                    Save {bulkQueue.length} file{bulkQueue.length !== 1 ? 's' : ''}
+                  </button>
+                  <button onClick={() => setBulkQueue([])} className="text-sm text-slate-500 hover:text-slate-700 px-3 py-2">Clear</button>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1">Expected Type *</label>
-                <select value={addFamily} onChange={e => setAddFamily(e.target.value as CommercialFamily)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Select...</option>
-                  {FAMILY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+            )}
+
+            {/* Single-file quick form (collapsed by default, shown when no bulk files) */}
+            {bulkQueue.length === 0 && (
+              <div className="space-y-3">
+                <div className="text-xs text-slate-500">Or register a single file:</div>
+                <div
+                  onClick={() => addFileRef.current?.click()}
+                  className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-slate-400 transition-colors">
+                  {addFile ? (
+                    <div>
+                      <span className="text-sm font-medium text-slate-700">{addFile.name}</span>
+                      {suggestFamilyFromFile(addFile) && <p className="text-xs text-teal-600 mt-0.5">Suggested: {suggestFamilyFromFile(addFile).replace(/_quote$/, '').replace(/_/g, ' ')}</p>}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-500">Click to select file</span>
+                  )}
+                  <input ref={addFileRef} type="file" className="hidden" accept=".pdf,.xlsx,.xls,.csv"
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        setAddFile(f);
+                        if (!addLabel) setAddLabel(f.name.replace(/\.(pdf|xlsx|xls|csv)$/i, ''));
+                        const s = suggestFamilyFromFile(f);
+                        if (s && !addFamily) setAddFamily(s);
+                      }
+                    }} />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-3">
+                    <label className="block text-xs text-slate-600 mb-1">Label</label>
+                    <input value={addLabel} onChange={e => setAddLabel(e.target.value)} placeholder="e.g. Trafalgar passive fire Q1"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Trade</label>
+                    <select value={addTrade} onChange={e => setAddTrade(e.target.value as TradeModule)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">—</option>
+                      {TRADE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Expected Type *</label>
+                    <select value={addFamily} onChange={e => setAddFamily(e.target.value as CommercialFamily)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Select...</option>
+                      {FAMILY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Expected Total *</label>
+                    <input value={addTotal} onChange={e => setAddTotal(e.target.value)} placeholder="485000.00"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Optional Total</label>
+                    <input value={addOptTotal} onChange={e => setAddOptTotal(e.target.value)} placeholder="0"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Has Optional?</label>
+                    <select value={addHasOptional} onChange={e => setAddHasOptional(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">—</option><option value="true">Yes</option><option value="false">No</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Item Min</label>
+                    <input value={addItemMin} onChange={e => setAddItemMin(e.target.value)} placeholder="—"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1">Item Max</label>
+                    <input value={addItemMax} onChange={e => setAddItemMax(e.target.value)} placeholder="—"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div className="col-span-3">
+                    <label className="block text-xs text-slate-600 mb-1">Notes</label>
+                    <input value={addNotes} onChange={e => setAddNotes(e.target.value)} placeholder="Optional notes"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleUploadSingle} disabled={!addFile || !addFamily || saving}
+                    className="flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-lg px-4 py-2 hover:bg-slate-700 disabled:opacity-40 transition-colors">
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}Save
+                  </button>
+                  <button onClick={() => setShowAddForm(false)} className="text-sm text-slate-500 hover:text-slate-700 px-3 py-2">Cancel</button>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1">Expected Total *</label>
-                <input value={addTotal} onChange={e => setAddTotal(e.target.value)} placeholder="485000.00"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1">Optional Total</label>
-                <input value={addOptTotal} onChange={e => setAddOptTotal(e.target.value)} placeholder="0"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1">Has Optional?</label>
-                <select value={addHasOptional} onChange={e => setAddHasOptional(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">—</option><option value="true">Yes</option><option value="false">No</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1">Item Count Min</label>
-                <input value={addItemMin} onChange={e => setAddItemMin(e.target.value)} placeholder="—"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1">Item Count Max</label>
-                <input value={addItemMax} onChange={e => setAddItemMax(e.target.value)} placeholder="—"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-slate-600 mb-1">Notes</label>
-                <input value={addNotes} onChange={e => setAddNotes(e.target.value)} placeholder="Optional notes"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={handleUploadBenchmark} disabled={!addFile || !addFamily || saving}
-                className="flex items-center gap-1.5 text-sm bg-slate-900 text-white rounded-lg px-4 py-2 hover:bg-slate-700 disabled:opacity-40 transition-colors">
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}Save
-              </button>
-              <button onClick={() => setShowAddForm(false)} className="text-sm text-slate-500 hover:text-slate-700 px-3 py-2">Cancel</button>
-            </div>
+            )}
           </div>
         )}
 
+        {/* Benchmark list */}
         {loading ? (
           <div className="p-6 text-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto" /></div>
         ) : benchmarks.length === 0 ? (
-          <div className="p-8 text-center text-sm text-slate-400">No benchmarks registered. Click Register to add your first golden quote.</div>
+          <div className="p-8 text-center text-sm text-slate-400">No benchmarks registered. Click "Add Benchmarks" to get started.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-                {['Label', 'Type', 'Expected Total', 'Optional', 'Items', 'Has Opt?', ''].map(h => (
+                {['Label', 'Trade', 'Family', 'Expected Total', 'Optional', 'Has Opt?', ''].map(h => (
                   <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>
                 ))}
               </tr></thead>
@@ -691,10 +1035,10 @@ function BatchTab({ organisationId }: { organisationId: string | null }) {
                 {benchmarks.map(bm => (
                   <tr key={bm.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-3 py-2 font-medium text-slate-700 max-w-[160px] truncate">{bm.label || bm.filename}</td>
+                    <td className="px-3 py-2"><TradeTag trade={bm.trade} /></td>
                     <td className="px-3 py-2"><FamilyTag family={bm.expected_family} /></td>
                     <td className="px-3 py-2 font-mono text-slate-600">{fmt(bm.expected_total)}</td>
                     <td className="px-3 py-2 font-mono text-slate-500">{bm.expected_optional_total > 0 ? fmt(bm.expected_optional_total) : '—'}</td>
-                    <td className="px-3 py-2 text-slate-500">{bm.expected_item_count_min != null ? `${bm.expected_item_count_min}–${bm.expected_item_count_max}` : '—'}</td>
                     <td className="px-3 py-2 text-slate-500">{bm.expected_has_optional === null ? '—' : bm.expected_has_optional ? 'Yes' : 'No'}</td>
                     <td className="px-3 py-2">
                       <button onClick={() => handleDelete(bm.id, bm.storage_path)} className="text-slate-400 hover:text-red-500 transition-colors">
@@ -709,7 +1053,37 @@ function BatchTab({ organisationId }: { organisationId: string | null }) {
         )}
       </div>
 
-      {/* Batch results */}
+      {/* Batch run progress */}
+      {runProgress && (
+        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <Loader2 className={`w-4 h-4 ${batchResult ? 'text-green-500' : 'animate-spin text-slate-400'}`} />
+            <span className="text-sm font-semibold text-slate-700">
+              {batchResult ? `Run complete — ${runProgress.filter(p => p.status === 'pass').length}/${runProgress.length} passed` : 'Running benchmarks...'}
+            </span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {runProgress.map((p, i) => (
+              <div key={i} className="px-4 py-2.5 flex items-center gap-3">
+                <div className="shrink-0">
+                  {p.status === 'pending' && <div className="w-4 h-4 rounded-full border-2 border-slate-200" />}
+                  {p.status === 'running' && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+                  {p.status === 'pass' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                  {p.status === 'fail' && <XCircle className="w-4 h-4 text-red-500" />}
+                  {p.status === 'error' && <AlertTriangle className="w-4 h-4 text-amber-500" />}
+                </div>
+                <span className="text-sm text-slate-700 flex-1 truncate">{p.label}</span>
+                {p.status === 'fail' && p.error_category && <ErrorTag cat={p.error_category} />}
+                {p.status === 'fail' && p.variance_pct != null && (
+                  <span className="text-xs font-mono text-red-600">{pct(p.variance_pct)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Batch scorecard */}
       {sc && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -719,30 +1093,104 @@ function BatchTab({ organisationId }: { organisationId: string | null }) {
             <KpiCard label="Benchmarks Run" value={String(sc.total_runs)} />
           </div>
 
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-slate-500" /><span className="text-sm font-semibold text-slate-700">Family Accuracy</span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Family accuracy */}
+            <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-slate-500" /><span className="text-sm font-semibold text-slate-700">Accuracy by Parser Family</span>
+              </div>
+              {FAMILIES.map(fam => {
+                const fa = sc.family_accuracy?.[fam];
+                const rate = fa?.pct;
+                const barColor = rate == null ? 'bg-slate-200' : rate === 100 ? 'bg-green-500' : rate >= 80 ? 'bg-amber-400' : 'bg-red-400';
+                return (
+                  <div key={fam} className="px-4 py-3 flex items-center gap-3 border-b border-slate-100 last:border-0">
+                    <div className="w-28 shrink-0"><FamilyTag family={fam} /></div>
+                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate ?? 0}%` }} />
+                    </div>
+                    <div className="w-20 text-right text-xs font-semibold text-slate-700">
+                      {rate != null ? `${fa.pass}/${fa.total} (${rate}%)` : 'No runs'}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            {FAMILIES.map(fam => {
-              const fa = sc.family_accuracy?.[fam];
-              const rate = fa?.pct;
-              const barColor = rate == null ? 'bg-slate-200' : rate === 100 ? 'bg-green-500' : rate >= 80 ? 'bg-amber-400' : 'bg-red-400';
-              return (
-                <div key={fam} className="px-4 py-3 flex items-center gap-4 border-b border-slate-100 last:border-0">
-                  <div className="w-36 shrink-0"><FamilyTag family={fam} /></div>
-                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${rate ?? 0}%` }} />
+
+            {/* Trade accuracy */}
+            <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-slate-500" /><span className="text-sm font-semibold text-slate-700">Accuracy by Trade Module</span>
+              </div>
+              {TRADES.map(tr => {
+                const ta = sc.trade_accuracy?.[tr];
+                const rate = ta?.pct;
+                const hasData = ta && ta.total > 0;
+                const barColor = rate == null ? 'bg-slate-200' : rate === 100 ? 'bg-green-500' : rate >= 80 ? 'bg-amber-400' : 'bg-red-400';
+                return (
+                  <div key={tr} className="px-4 py-3 flex items-center gap-3 border-b border-slate-100 last:border-0">
+                    <div className="w-28 shrink-0"><TradeTag trade={tr} /></div>
+                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${barColor}`} style={{ width: `${hasData ? (rate ?? 0) : 0}%` }} />
+                    </div>
+                    <div className="w-20 text-right text-xs font-semibold text-slate-700">
+                      {hasData ? `${ta.pass}/${ta.total} (${rate}%)` : <span className="text-slate-400 font-normal">No runs</span>}
+                    </div>
                   </div>
-                  <div className="w-20 text-right text-sm font-semibold text-slate-700">
-                    {rate != null ? `${fa.pass}/${fa.total} (${rate}%)` : 'No runs'}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
+          {/* Failures sorted by variance desc */}
+          {failedResults.length > 0 && (
+            <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-red-400" />
+                  <span className="text-sm font-semibold text-slate-700">Failures — sorted by variance</span>
+                </div>
+                <button onClick={() => {
+                  const csv = ['filename,expected_family,detected_family,expected_total,parsed_total,variance_pct,error_category',
+                    ...failedResults.map(r => `"${r.filename}",${r.expected_family},${r.commercial_family},${r.expected_total},${r.parsed_total},${r.variance_pct ?? ''},${r.error_category ?? ''}`)
+                  ].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = 'batch_failures.csv'; a.click();
+                  URL.revokeObjectURL(url);
+                }} className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white hover:bg-slate-50 transition-colors">
+                  <Download className="w-3 h-3" />Export CSV
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-slate-50 border-b border-slate-100 text-xs text-slate-500">
+                    {['File', 'Expected', 'Detected', 'Expected Total', 'Parsed Total', 'Var%', 'Error'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {failedResults.map((r, i) => (
+                      <tr key={i} className="border-b border-slate-100 hover:bg-red-50">
+                        <td className="px-3 py-2 text-slate-600 max-w-[140px] truncate">{r.filename}</td>
+                        <td className="px-3 py-2"><FamilyTag family={r.expected_family} /></td>
+                        <td className="px-3 py-2"><FamilyTag family={r.commercial_family} /></td>
+                        <td className="px-3 py-2 font-mono text-slate-600">{fmt(r.expected_total)}</td>
+                        <td className="px-3 py-2 font-mono text-slate-600">{fmt(r.parsed_total)}</td>
+                        <td className="px-3 py-2 font-mono text-red-600 font-semibold">{pct(r.variance_pct)}</td>
+                        <td className="px-3 py-2"><ErrorTag cat={r.error_category} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Top failure causes */}
           {sc.top_failure_causes?.length > 0 && (
-            <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
               <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
                 <span className="text-sm font-semibold text-slate-700">Top Failure Causes</span>
               </div>
@@ -767,8 +1215,6 @@ function BatchTab({ organisationId }: { organisationId: string | null }) {
 // ---------------------------------------------------------------------------
 
 function ScorecardTab({ history }: { history: HistoryRun[] }) {
-  const families = FAMILIES;
-
   const overallPass = history.filter(r => r.pass).length;
   const overallTotal = history.length;
   const overallPct = overallTotal > 0 ? Math.round((overallPass / overallTotal) * 100) : null;
@@ -790,12 +1236,10 @@ function ScorecardTab({ history }: { history: HistoryRun[] }) {
     if (r.error_category) errorCounts[r.error_category] = (errorCounts[r.error_category] ?? 0) + 1;
   }
   const topErrors = Object.entries(errorCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
-
   const maxErrCount = topErrors[0]?.[1] ?? 1;
 
   return (
     <div className="space-y-6">
-      {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard label="Overall Accuracy" value={overallPct != null ? `${overallPct}%` : null}
           sub={`${overallPass}/${overallTotal} runs`}
@@ -806,33 +1250,59 @@ function ScorecardTab({ history }: { history: HistoryRun[] }) {
         <KpiCard label="Regression Failures" value={String(regressionFails)} color={regressionFails > 0 ? 'text-red-600' : 'text-green-600'} />
       </div>
 
-      {/* Family accuracy */}
-      <div className="rounded-xl border border-slate-200 overflow-hidden">
-        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-slate-500" /><span className="text-sm font-semibold text-slate-700">Accuracy by Family</span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Parser family accuracy */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-slate-500" /><span className="text-sm font-semibold text-slate-700">Accuracy by Parser Family</span>
+          </div>
+          {FAMILIES.map(fam => {
+            const runs = history.filter(r => r.expected_family === fam);
+            const passed = runs.filter(r => r.pass).length;
+            const rate = runs.length > 0 ? Math.round((passed / runs.length) * 100) : null;
+            const barColor = rate == null ? 'bg-slate-200' : rate === 100 ? 'bg-green-500' : rate >= 80 ? 'bg-amber-400' : 'bg-red-400';
+            return (
+              <div key={fam} className="px-4 py-3 flex items-center gap-3 border-b border-slate-100 last:border-0">
+                <div className="w-28 shrink-0"><FamilyTag family={fam} /></div>
+                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${rate ?? 0}%` }} />
+                </div>
+                <div className="w-24 text-right text-xs">
+                  {rate != null ? <span className="font-semibold text-slate-700">{passed}/{runs.length} ({rate}%)</span> : <span className="text-slate-400">No runs</span>}
+                </div>
+              </div>
+            );
+          })}
         </div>
-        {families.map(fam => {
-          const runs = history.filter(r => r.expected_family === fam);
-          const passed = runs.filter(r => r.pass).length;
-          const rate = runs.length > 0 ? Math.round((passed / runs.length) * 100) : null;
-          const barColor = rate == null ? 'bg-slate-200' : rate === 100 ? 'bg-green-500' : rate >= 80 ? 'bg-amber-400' : 'bg-red-400';
-          return (
-            <div key={fam} className="px-4 py-3 flex items-center gap-4 border-b border-slate-100 last:border-0">
-              <div className="w-36 shrink-0"><FamilyTag family={fam} /></div>
-              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${rate ?? 0}%` }} />
+
+        {/* Trade accuracy */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <Tag className="w-4 h-4 text-slate-500" /><span className="text-sm font-semibold text-slate-700">Accuracy by Trade Module</span>
+          </div>
+          {TRADES.map(tr => {
+            const runs = history.filter(r => r.trade === tr);
+            const passed = runs.filter(r => r.pass).length;
+            const rate = runs.length > 0 ? Math.round((passed / runs.length) * 100) : null;
+            const barColor = rate == null ? 'bg-slate-200' : rate === 100 ? 'bg-green-500' : rate >= 80 ? 'bg-amber-400' : 'bg-red-400';
+            return (
+              <div key={tr} className="px-4 py-3 flex items-center gap-3 border-b border-slate-100 last:border-0">
+                <div className="w-28 shrink-0"><TradeTag trade={tr} /></div>
+                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${rate ?? 0}%` }} />
+                </div>
+                <div className="w-24 text-right text-xs">
+                  {rate != null ? <span className="font-semibold text-slate-700">{passed}/{runs.length} ({rate}%)</span> : <span className="text-slate-400">No runs</span>}
+                </div>
               </div>
-              <div className="w-24 text-right text-sm">
-                {rate != null ? <span className="font-semibold text-slate-700">{passed}/{runs.length} ({rate}%)</span> : <span className="text-slate-400 text-xs">No runs</span>}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Error category breakdown */}
+      {/* Error breakdown */}
       {topErrors.length > 0 && (
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
+        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
             <Tag className="w-4 h-4 text-slate-500" /><span className="text-sm font-semibold text-slate-700">Error Category Breakdown</span>
           </div>
@@ -876,7 +1346,6 @@ function ShadowTab() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate_parser`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
@@ -919,9 +1388,7 @@ function ShadowTab() {
       {result && (
         <>
           <div className={`rounded-xl px-4 py-3 flex items-center gap-3 ${changedKeys.length === 0 ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
-            {changedKeys.length === 0
-              ? <CheckCircle2 className="w-5 h-5 text-green-500" />
-              : <AlertTriangle className="w-5 h-5 text-amber-500" />}
+            {changedKeys.length === 0 ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <AlertTriangle className="w-5 h-5 text-amber-500" />}
             <div>
               <div className="text-sm font-semibold text-slate-800">
                 {changedKeys.length === 0 ? 'No differences — candidate matches production' : `${changedKeys.length} field(s) differ`}
@@ -930,7 +1397,7 @@ function ShadowTab() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
               <span className="text-sm font-semibold text-slate-700">Field Comparison</span>
             </div>
@@ -959,37 +1426,120 @@ function ShadowTab() {
 }
 
 // ---------------------------------------------------------------------------
-// Run history table — shared
+// Run history table — sortable, filterable, exportable
 // ---------------------------------------------------------------------------
 
+type SortCol = 'run_at' | 'variance_pct' | 'parsed_total' | 'pass';
+type SortDir = 'asc' | 'desc';
+
 function HistoryTable({ history, loading }: { history: HistoryRun[]; loading: boolean }) {
+  const [sortCol, setSortCol] = useState<SortCol>('run_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [filterFamily, setFilterFamily] = useState('');
+  const [filterTrade, setFilterTrade] = useState('');
+
+  const handleSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('desc'); }
+  };
+
+  const SortIcon = ({ col }: { col: SortCol }) => {
+    if (sortCol !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
+    return sortDir === 'asc' ? <ArrowUp className="w-3 h-3 text-slate-600" /> : <ArrowDown className="w-3 h-3 text-slate-600" />;
+  };
+
+  const filtered = history
+    .filter(r => !filterFamily || r.expected_family === filterFamily || r.detected_family === filterFamily)
+    .filter(r => !filterTrade || r.trade === filterTrade);
+
+  const sorted = [...filtered].sort((a, b) => {
+    let av: any, bv: any;
+    if (sortCol === 'run_at') { av = a.run_at; bv = b.run_at; }
+    else if (sortCol === 'variance_pct') { av = a.variance_pct ?? -Infinity; bv = b.variance_pct ?? -Infinity; }
+    else if (sortCol === 'parsed_total') { av = a.parsed_total; bv = b.parsed_total; }
+    else { av = a.pass ? 1 : 0; bv = b.pass ? 1 : 0; }
+    return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+  });
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <List className="w-4 h-4 text-slate-400" />
-          <span className="text-sm font-semibold text-slate-700">Run History</span>
-          {history.length > 0 && <span className="text-xs text-slate-400">({history.length})</span>}
+      <div className="px-4 py-3 border-b border-slate-200 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <List className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-semibold text-slate-700">Run History</span>
+            {history.length > 0 && <span className="text-xs text-slate-400">({sorted.length}/{history.length})</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            {sorted.length > 0 && (
+              <button onClick={() => exportHistoryCSV(sorted)}
+                className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white hover:bg-slate-50 transition-colors">
+                <Download className="w-3 h-3" />Export CSV
+              </button>
+            )}
+          </div>
         </div>
-        {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+
+        {/* Filters */}
+        <div className="space-y-2">
+          <FilterPills
+            label="Family"
+            icon={<Filter className="w-3 h-3" />}
+            options={FAMILY_OPTIONS.map(o => ({ value: o.value, label: o.label.replace(' Quote', '') }))}
+            value={filterFamily}
+            onChange={setFilterFamily}
+          />
+          <FilterPills
+            label="Trade"
+            icon={<Tag className="w-3 h-3" />}
+            options={TRADE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+            value={filterTrade}
+            onChange={setFilterTrade}
+          />
+        </div>
       </div>
-      {history.length === 0 ? (
-        <div className="px-4 py-8 text-center text-sm text-slate-400">No runs yet.</div>
+
+      {sorted.length === 0 ? (
+        <div className="px-4 py-8 text-center text-sm text-slate-400">
+          {history.length === 0 ? 'No runs yet.' : 'No runs match the current filters.'}
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-              {['File', 'Mode', 'Expected', 'Detected', 'Total', 'Var%', 'Pass', 'Error Category'].map(h => (
-                <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>
-              ))}
-            </tr></thead>
+            <thead>
+              <tr className="text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
+                <th className="px-3 py-2 text-left font-medium">File</th>
+                <th className="px-3 py-2 text-left font-medium">Mode</th>
+                <th className="px-3 py-2 text-left font-medium">Trade</th>
+                <th className="px-3 py-2 text-left font-medium">Expected</th>
+                <th className="px-3 py-2 text-left font-medium">Detected</th>
+                <th className="px-3 py-2 text-left font-medium">
+                  <button onClick={() => handleSort('parsed_total')} className="flex items-center gap-1 hover:text-slate-800">
+                    Total <SortIcon col="parsed_total" />
+                  </button>
+                </th>
+                <th className="px-3 py-2 text-left font-medium">
+                  <button onClick={() => handleSort('variance_pct')} className="flex items-center gap-1 hover:text-slate-800">
+                    Var% <SortIcon col="variance_pct" />
+                  </button>
+                </th>
+                <th className="px-3 py-2 text-left font-medium">
+                  <button onClick={() => handleSort('pass')} className="flex items-center gap-1 hover:text-slate-800">
+                    Pass <SortIcon col="pass" />
+                  </button>
+                </th>
+                <th className="px-3 py-2 text-left font-medium">Error Category</th>
+              </tr>
+            </thead>
             <tbody>
-              {history.map(run => (
-                <tr key={run.id} className="border-b border-slate-100 hover:bg-slate-50">
+              {sorted.map(run => (
+                <tr key={run.id} className={`border-b border-slate-100 hover:bg-slate-50 ${run.pass === false ? 'bg-red-50/30' : ''}`}>
                   <td className="px-3 py-2 text-slate-600 max-w-[140px] truncate">{run.filename}</td>
                   <td className="px-3 py-2">
                     <span className="px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-600">{run.run_mode}</span>
                   </td>
+                  <td className="px-3 py-2"><TradeTag trade={run.trade} /></td>
                   <td className="px-3 py-2"><FamilyTag family={run.expected_family} /></td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1">
@@ -998,7 +1548,7 @@ function HistoryTable({ history, loading }: { history: HistoryRun[]; loading: bo
                     </div>
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-700">{fmt(run.parsed_total)}</td>
-                  <td className="px-3 py-2 font-mono text-slate-500">{pct(run.variance_pct)}</td>
+                  <td className={`px-3 py-2 font-mono font-semibold ${run.variance_pct != null && run.variance_pct > 1 ? 'text-red-600' : 'text-slate-500'}`}>{pct(run.variance_pct)}</td>
                   <td className="px-3 py-2 text-center"><PassBadge pass={run.pass} /></td>
                   <td className="px-3 py-2"><ErrorTag cat={run.error_category} /></td>
                 </tr>
@@ -1018,7 +1568,7 @@ function HistoryTable({ history, loading }: { history: HistoryRun[]; loading: bo
 type Tab = 'single' | 'batch' | 'scorecard' | 'shadow';
 
 export default function ParserTest() {
-  const [tab, setTab] = useState<Tab>('single');
+  const [tab, setTab] = useState<Tab>('batch');
   const [history, setHistory] = useState<HistoryRun[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [organisationId, setOrganisationId] = useState<string | null>(null);
@@ -1028,9 +1578,9 @@ export default function ParserTest() {
     try {
       const { data } = await supabase
         .from('parser_validation_runs')
-        .select('id,run_at,filename,expected_family,detected_family,expected_total,parsed_total,variance_pct,pass,validation_risk,confidence,item_count,total_source,error_category,run_mode')
+        .select('id,run_at,filename,expected_family,detected_family,expected_total,parsed_total,variance_pct,pass,validation_risk,confidence,item_count,total_source,error_category,run_mode,trade')
         .order('run_at', { ascending: false })
-        .limit(100);
+        .limit(200);
       setHistory((data ?? []) as HistoryRun[]);
     } catch { /* ignore */ } finally {
       setHistoryLoading(false);
@@ -1056,15 +1606,14 @@ export default function ParserTest() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
 
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <Bug className="w-6 h-6 text-slate-500" />Parser QA Framework
+              <Bug className="w-6 h-6 text-slate-500" />Parser QA — Phase 4 Benchmark Testing
             </h1>
-            <p className="text-sm text-slate-500 mt-1">Phase 3 — commercial validation across all 5 parser families</p>
+            <p className="text-sm text-slate-500 mt-1">Commercial baseline across all 5 parser families · 6 trade modules</p>
           </div>
           <button onClick={loadHistory}
             className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-800 border border-slate-200 rounded-lg px-3 py-1.5 bg-white hover:bg-slate-50 transition-colors">
@@ -1072,7 +1621,6 @@ export default function ParserTest() {
           </button>
         </div>
 
-        {/* Tab bar */}
         <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 w-fit">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -1083,11 +1631,10 @@ export default function ParserTest() {
         </div>
 
         {tab === 'single' && <SingleTestTab history={history} onHistoryChange={loadHistory} />}
-        {tab === 'batch' && <BatchTab organisationId={organisationId} />}
+        {tab === 'batch' && <BatchTab organisationId={organisationId} onHistoryChange={loadHistory} />}
         {tab === 'scorecard' && <ScorecardTab history={history} />}
         {tab === 'shadow' && <ShadowTab />}
 
-        {/* History always visible */}
         {tab !== 'shadow' && <HistoryTable history={history} loading={historyLoading} />}
 
       </div>
