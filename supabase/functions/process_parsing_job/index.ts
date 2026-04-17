@@ -1,20 +1,30 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { cleanText, extractFRRFromDescription } from "../_shared/itemNormalizer.ts";
+import { cleanText, extractFRRFromDescription, isTotalRow, isArithmeticTotalRow } from "../_shared/itemNormalizer.ts";
 import { runParserV3 } from "../_shared/parserRouterV3.ts";
+import { runResolutionLayer } from "../_shared/parseResolutionLayerV3.ts";
+import { classifyDocument } from "../_shared/documentClassifier.ts";
+import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
+import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
 
 // =============================================================================
-// PROCESS PARSING JOB — V3 CANONICAL PARSER
+// PROCESS PARSING JOB — LLM-PRIMARY WITH REGEX RECOVERY
 //
-// Single production flow:
-//   1. Download file
-//   2. Extract raw text / pages
-//   3. runParserV3 (classify → route → resolve)
-//   4. Save quote + quote_items
-//   5. Write parse metadata
+// Flow:
+//   1. Download file + extract text / pages
+//   2. Classify document (structural signals)
+//   3. Spreadsheets: regex only (no LLM needed)
+//   4. PDFs: call LLM (parse_quote_llm_fallback) as PRIMARY parser
+//   5. Evaluate LLM output — trigger regex recovery if:
+//        - zero items returned
+//        - confidence < 0.55
+//        - totals mismatch > 20%
+//   6. Merge LLM + regex outputs intelligently (prefer LLM items, fill gaps)
+//   7. Run parseResolutionLayerV3 on merged output
+//   8. Write quote + quote_items to DB
+//   9. Write metadata with parser_strategy, llm_confidence, regex_recovery_used
 //
-// NO other parser paths. No feature flags. No fallbacks to old parsers.
-// If v3 returns empty, job is marked parsing_failed with diagnostics.
+// DB writes are unchanged. Progress / status updates are unchanged.
 // =============================================================================
 
 const corsHeaders = {
@@ -35,6 +45,167 @@ interface ParsingJob {
   trade: string | null;
   metadata: Record<string, unknown> | null;
 }
+
+// ---------------------------------------------------------------------------
+// LLM item → ParsedLineItem adapter
+// Bridges the LLM fallback response shape into the V3 resolution layer shape.
+// ---------------------------------------------------------------------------
+function adaptLlmItem(item: any, index: number, parserUsed: string): ParsedLineItem {
+  const desc = cleanText(String(item.description ?? "")) || `Item ${index + 1}`;
+  const qty = Number(item.qty ?? item.quantity ?? 1);
+  const rate = Number(item.rate ?? item.unit_price ?? 0);
+  const total = Number(item.total ?? item.total_price ?? 0);
+  const isOptional =
+    /optional|option\b|\(opt\)/i.test(desc) ||
+    String(item.section ?? "").toLowerCase().includes("optional") ||
+    item.is_optional === true;
+
+  return {
+    lineId: String(index + 1),
+    section: cleanText(String(item.section ?? "")),
+    description: desc,
+    qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+    unit: cleanText(String(item.unit ?? "ea")) || "ea",
+    rate: Number.isFinite(rate) ? rate : 0,
+    total: Number.isFinite(total) ? total : 0,
+    scopeCategory: isOptional ? "optional" : "base",
+    pageNum: 0,
+    confidence: Number(item.confidence ?? 0.85),
+    source: parserUsed,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Convert V3 regex ParsedLineItem to a plain object for dedup key comparison
+// ---------------------------------------------------------------------------
+function dedupKey(item: ParsedLineItem): string {
+  return [
+    item.description.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 80),
+    item.qty.toFixed(3),
+    item.rate.toFixed(2),
+    item.total.toFixed(2),
+  ].join("|");
+}
+
+// ---------------------------------------------------------------------------
+// Merge LLM items + regex items:
+//   - Start with all LLM items (they are primary)
+//   - Add any regex items whose dedup key is not already present in LLM set
+// ---------------------------------------------------------------------------
+function mergeItems(llmItems: ParsedLineItem[], regexItems: ParsedLineItem[]): ParsedLineItem[] {
+  const seen = new Set<string>(llmItems.map(dedupKey));
+  const additions: ParsedLineItem[] = [];
+
+  for (const item of regexItems) {
+    const key = dedupKey(item);
+    if (!seen.has(key)) {
+      seen.add(key);
+      additions.push({ ...item, source: item.source + "(regex_gap_fill)" });
+    }
+  }
+
+  if (additions.length > 0) {
+    console.log(`[MERGE] regex gap-fill added ${additions.length} items not found by LLM`);
+  }
+
+  return [...llmItems, ...additions];
+}
+
+// ---------------------------------------------------------------------------
+// Filter summary/total rows out of LLM items before evaluation
+// ---------------------------------------------------------------------------
+function filterLlmSummaryRows(items: any[]): { kept: any[]; removed: number } {
+  const all: any[] = [];
+  let removed = 0;
+
+  const labelFiltered = items.filter((item) => {
+    if (isTotalRow(item)) {
+      removed++;
+      return false;
+    }
+    return true;
+  });
+
+  const mathFiltered = labelFiltered.filter((item) => {
+    if (isArithmeticTotalRow(item, labelFiltered)) {
+      removed++;
+      return false;
+    }
+    return true;
+  });
+
+  return { kept: mathFiltered, removed };
+}
+
+// ---------------------------------------------------------------------------
+// Call parse_quote_llm_fallback (internal edge function)
+// ---------------------------------------------------------------------------
+async function callLlmParser(
+  supabaseUrl: string,
+  serviceKey: string,
+  text: string,
+  supplierName: string,
+  trade: string,
+): Promise<{
+  items: any[];
+  confidence: number;
+  totals: { grandTotal?: number; subtotal?: number };
+  warnings: string[];
+  success: boolean;
+}> {
+  const url = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback`;
+
+  console.log(`[LLM_PRIMARY] Calling LLM parser — ${text.length} chars, trade=${trade}`);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text, supplierName, trade }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[LLM_PRIMARY] LLM parser HTTP ${res.status}: ${errText.slice(0, 300)}`);
+      return { items: [], confidence: 0, totals: {}, warnings: [`LLM HTTP ${res.status}`], success: false };
+    }
+
+    const data = await res.json();
+
+    console.log(`[LLM_PRIMARY] LLM returned ${(data.items ?? []).length} items, confidence=${data.confidence?.toFixed(2) ?? "n/a"}`);
+
+    return {
+      items: data.items ?? data.lines ?? [],
+      confidence: Number(data.confidence ?? 0),
+      totals: data.totals ?? {},
+      warnings: data.warnings ?? [],
+      success: data.success === true,
+    };
+  } catch (err) {
+    console.error(`[LLM_PRIMARY] LLM parser threw: ${err instanceof Error ? err.message : err}`);
+    return { items: [], confidence: 0, totals: {}, warnings: ["LLM parser threw"], success: false };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Run regex parser (V3) and return its resolution output
+// ---------------------------------------------------------------------------
+function runRegexParser(
+  pages: { pageNum: number; text: string }[],
+  rawText: string,
+  fileExtension: string | undefined,
+  spreadsheetRows: (string | number | null | undefined)[][] | undefined,
+) {
+  return runParserV3({ pages, rawText, fileExtension, spreadsheetRows });
+}
+
+// ---------------------------------------------------------------------------
+// Main handler
+// ---------------------------------------------------------------------------
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -80,8 +251,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const typedJob = job as unknown as ParsingJob;
+    const trade = typedJob.trade || "passive_fire";
 
-    console.log(`[PIPELINE_START] job_id=${jobId} file=${typedJob.filename} trade=${typedJob.trade || "unset"} supplier=${typedJob.supplier_name}`);
+    console.log(`[PIPELINE_START] job_id=${jobId} file=${typedJob.filename} trade=${trade} supplier=${typedJob.supplier_name} strategy=llm_primary`);
 
     await supabase
       .from("parsing_jobs")
@@ -105,7 +277,7 @@ Deno.serve(async (req: Request) => {
 
     await supabase
       .from("parsing_jobs")
-      .update({ progress: 25, updated_at: new Date().toISOString() })
+      .update({ progress: 20, updated_at: new Date().toISOString() })
       .eq("id", jobId);
 
     // -------------------------------------------------------------------------
@@ -117,7 +289,7 @@ Deno.serve(async (req: Request) => {
 
     if (fileName.endsWith(".pdf")) {
       fileExtension = "pdf";
-      console.log(`[V3] Extracting PDF text with pdfjs...`);
+      console.log(`[EXTRACT] Extracting PDF text with pdfjs...`);
 
       const pdfjsLib = await import("npm:pdfjs-dist@4.0.379");
       const loadingTask = pdfjsLib.getDocument({
@@ -129,7 +301,7 @@ Deno.serve(async (req: Request) => {
 
       const pdfDocument = await loadingTask.promise;
       const numPages = pdfDocument.numPages;
-      console.log(`[V3] PDF has ${numPages} pages`);
+      console.log(`[EXTRACT] PDF has ${numPages} pages`);
 
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
         const page = await pdfDocument.getPage(pageNum);
@@ -156,7 +328,7 @@ Deno.serve(async (req: Request) => {
 
     } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
       fileExtension = fileName.endsWith(".xls") ? "xls" : "xlsx";
-      console.log(`[V3] Extracting Excel file...`);
+      console.log(`[EXTRACT] Extracting Excel file...`);
 
       const XLSX = await import("npm:xlsx@0.18.5");
       const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
@@ -180,70 +352,275 @@ Deno.serve(async (req: Request) => {
       throw new Error("No text could be extracted from the file");
     }
 
-    console.log(`[STEP_1_EXTRACT] pages=${allPages.length} chars=${allPages.reduce((s, p) => s + p.text.length, 0)} file_type=${fileExtension}`);
+    const rawText = allPages.map((p) => p.text).join("\n\n");
+    const totalChars = rawText.length;
+
+    console.log(`[EXTRACT] pages=${allPages.length} chars=${totalChars} file_type=${fileExtension}`);
 
     await supabase
       .from("parsing_jobs")
-      .update({ progress: 50, updated_at: new Date().toISOString() })
+      .update({ progress: 30, updated_at: new Date().toISOString() })
       .eq("id", jobId);
 
     // -------------------------------------------------------------------------
-    // Step 3: Run V3 parser (classify → route → resolve)
+    // Step 3: Classify document (shared across LLM + regex paths)
     // -------------------------------------------------------------------------
-    const rawText = allPages.map((p) => p.text).join("\n\n");
-    console.log(`[V3] Running parser on ${allPages.length} pages, ${rawText.length} chars`);
+    const classification = classifyDocument(rawText, allPages, fileExtension);
 
-    const v3Result = runParserV3({
-      pages: allPages,
-      rawText,
-      fileExtension,
-      spreadsheetRows,
-    });
+    console.log(`[CLASSIFY] class=${classification.documentClass} family=${classification.commercialFamily} confidence=${classification.confidence.toFixed(2)}`);
+    console.log(`[CLASSIFY] reasons=${classification.reasons.join(" | ")}`);
 
-    const { resolution, classification, durationMs } = v3Result;
+    const isSpreadsheet = classification.commercialFamily === "spreadsheet_quote";
 
-    console.log(`[STEP_2_CLASSIFY] document_class=${classification.documentClass} confidence=${classification.confidence.toFixed(2)} reasons=${JSON.stringify(classification.reasons)}`);
-    console.log(`[STEP_3_ROUTE] parser_used=${resolution.parserUsed}`);
-    console.log(`[STEP_4_PARSE_RESULT] base_items=${resolution.baseItems.length} optional_items=${resolution.optionalItems.length} excluded_items=${resolution.excludedItems.length} base_total=${resolution.totals.rowSum.toFixed(2)} optional_total=${resolution.totals.optionalTotal.toFixed(2)} grand_total=${resolution.totals.grandTotal.toFixed(2)} total_source=${resolution.totals.source} validation_risk=${resolution.validation.risk} duration_ms=${durationMs}`);
+    await supabase
+      .from("parsing_jobs")
+      .update({ progress: 40, updated_at: new Date().toISOString() })
+      .eq("id", jobId);
+
+    // =========================================================================
+    // PARSER STRATEGY DECISION
+    //
+    //  Spreadsheets → regex only (column structure is machine-readable)
+    //  PDFs         → LLM primary, with regex recovery when LLM underperforms
+    // =========================================================================
+
+    let parserStrategy: "llm_primary" | "regex_only" = isSpreadsheet ? "regex_only" : "llm_primary";
+
+    let llmConfidence = 0;
+    let llmWarnings: string[] = [];
+    let llmRawItems: any[] = [];
+    let llmGrandTotal: number = 0;
+    let regexRecoveryUsed = false;
+    let regexResult: ReturnType<typeof runParserV3> | null = null;
 
     // -------------------------------------------------------------------------
-    // Step 4: Fail fast if v3 produced nothing usable
+    // Branch A: Spreadsheet — regex only
+    // -------------------------------------------------------------------------
+    if (isSpreadsheet) {
+      console.log(`[STRATEGY] spreadsheet detected — using regex only`);
+
+      regexResult = runRegexParser(allPages, rawText, fileExtension, spreadsheetRows);
+
+      await supabase
+        .from("parsing_jobs")
+        .update({ progress: 70, updated_at: new Date().toISOString() })
+        .eq("id", jobId);
+
+    } else {
+      // -----------------------------------------------------------------------
+      // Branch B: PDF — LLM primary
+      // -----------------------------------------------------------------------
+      console.log(`[STRATEGY] PDF detected — running LLM as primary parser`);
+
+      await supabase
+        .from("parsing_jobs")
+        .update({ progress: 45, updated_at: new Date().toISOString() })
+        .eq("id", jobId);
+
+      const llmResult = await callLlmParser(
+        supabaseUrl,
+        supabaseServiceKey,
+        rawText,
+        typedJob.supplier_name,
+        trade,
+      );
+
+      llmConfidence = llmResult.confidence;
+      llmWarnings = llmResult.warnings;
+      llmGrandTotal = llmResult.totals.grandTotal ?? 0;
+
+      // Filter summary rows out of LLM output
+      const { kept: filteredLlmItems, removed: summaryRowsRemoved } = filterLlmSummaryRows(llmResult.items);
+      llmRawItems = filteredLlmItems;
+
+      if (summaryRowsRemoved > 0) {
+        console.log(`[LLM_PRIMARY] Removed ${summaryRowsRemoved} summary rows from LLM output`);
+      }
+
+      console.log(`[LLM_PRIMARY] After filter: ${llmRawItems.length} items, confidence=${llmConfidence.toFixed(2)}, llmGrandTotal=$${llmGrandTotal.toFixed(2)}`);
+
+      // Extract document total from raw text for mismatch check
+      const docTotals = extractDocumentTotals(rawText);
+      const documentTotal = docTotals.grandTotal ?? 0;
+
+      // Calculate LLM items sum
+      const llmItemsSum = llmRawItems.reduce((s: number, i: any) => s + Number(i.total ?? 0), 0);
+
+      // Mismatch ratio between LLM items sum and known document total
+      const mismatchRatio =
+        documentTotal > 0 && llmItemsSum > 0
+          ? Math.abs(documentTotal - llmItemsSum) / documentTotal
+          : 0;
+
+      // -----------------------------------------------------------------------
+      // Evaluate whether LLM output is reliable enough to stand alone
+      // Trigger regex recovery when:
+      //   A. Zero items returned
+      //   B. LLM confidence < 0.55
+      //   C. Totals mismatch > 20% (and doc total is known)
+      // -----------------------------------------------------------------------
+      const zeroItems = llmRawItems.length === 0;
+      const lowConfidence = llmConfidence < 0.55;
+      const totalsMismatch = documentTotal > 0 && mismatchRatio > 0.20;
+
+      const needsRegexRecovery = zeroItems || lowConfidence || totalsMismatch;
+
+      if (needsRegexRecovery) {
+        regexRecoveryUsed = true;
+        const reasons: string[] = [];
+        if (zeroItems)        reasons.push(`zero_items`);
+        if (lowConfidence)    reasons.push(`low_confidence(${llmConfidence.toFixed(2)})`);
+        if (totalsMismatch)   reasons.push(`totals_mismatch(${(mismatchRatio * 100).toFixed(1)}%)`);
+
+        console.log(`[REGEX_RECOVERY] triggered — reasons: ${reasons.join(", ")}`);
+
+        regexResult = runRegexParser(allPages, rawText, fileExtension, undefined);
+
+        console.log(`[REGEX_RECOVERY] regex produced ${regexResult.resolution.baseItems.length} base + ${regexResult.resolution.optionalItems.length} optional items`);
+      }
+
+      await supabase
+        .from("parsing_jobs")
+        .update({ progress: 70, updated_at: new Date().toISOString() })
+        .eq("id", jobId);
+    }
+
+    // =========================================================================
+    // BUILD FINAL RESOLUTION OUTPUT
+    //
+    // Spreadsheets: use regex result directly
+    // PDFs (no recovery): wrap LLM items into resolution shape
+    // PDFs (with recovery): merge LLM + regex, then resolve
+    // =========================================================================
+
+    let finalResolution: ReturnType<typeof runParserV3>["resolution"];
+    let finalClassification = regexResult?.classification ?? classification;
+
+    if (isSpreadsheet && regexResult) {
+      // Spreadsheet: regex resolution is final
+      finalResolution = regexResult.resolution;
+
+    } else if (!regexRecoveryUsed) {
+      // PDF, LLM succeeded — wrap LLM items into a RawParserOutput and resolve
+      console.log(`[MERGE] LLM-only path — ${llmRawItems.length} items`);
+
+      const llmAdapted: ParsedLineItem[] = llmRawItems.map((item, i) =>
+        adaptLlmItem(item, i, "llm_primary(gpt-4o)")
+      );
+
+      const docTotals = extractDocumentTotals(rawText);
+      const grandTotal = llmGrandTotal > 0
+        ? llmGrandTotal
+        : docTotals.grandTotal ?? llmAdapted.reduce((s, i) => s + i.total, 0);
+      const optionalTotal = docTotals.optionalTotal ?? 0;
+      const rowSum = llmAdapted.filter(i => i.scopeCategory === "base").reduce((s, i) => s + i.total, 0);
+
+      const rawOutput: RawParserOutput = {
+        parserUsed: "llm_primary(gpt-4o)",
+        allItems: llmAdapted,
+        totals: {
+          grandTotal,
+          optionalTotal,
+          subTotal: docTotals.subTotal,
+          rowSum,
+          source: grandTotal > 0 ? "summary_page" : "row_sum",
+        },
+        summaryDetected: grandTotal > 0,
+        optionalScopeDetected: llmAdapted.some(i => i.scopeCategory === "optional"),
+        parserReasons: [`llm_primary confidence=${llmConfidence.toFixed(2)}`, ...llmWarnings.slice(0, 5)],
+        rawSummary: null,
+      };
+
+      finalResolution = runResolutionLayer(rawOutput, classification);
+
+    } else {
+      // PDF, regex recovery triggered — merge LLM + regex items
+      const regexResolution = regexResult!.resolution;
+      const regexItems = [...regexResolution.baseItems, ...regexResolution.optionalItems];
+
+      const llmAdapted: ParsedLineItem[] = llmRawItems.map((item, i) =>
+        adaptLlmItem(item, i, "llm_primary(gpt-4o)")
+      );
+
+      const mergedItems = mergeItems(llmAdapted, regexItems);
+      console.log(`[MERGE] merged total = ${mergedItems.length} items (llm=${llmAdapted.length} regex=${regexItems.length})`);
+
+      const docTotals = extractDocumentTotals(rawText);
+      const grandTotal = regexResolution.totals.grandTotal > 0
+        ? regexResolution.totals.grandTotal
+        : llmGrandTotal > 0
+        ? llmGrandTotal
+        : docTotals.grandTotal ?? mergedItems.reduce((s, i) => s + i.total, 0);
+
+      const optionalTotal = regexResolution.totals.optionalTotal > 0
+        ? regexResolution.totals.optionalTotal
+        : docTotals.optionalTotal ?? 0;
+
+      const rowSum = mergedItems.filter(i => i.scopeCategory === "base").reduce((s, i) => s + i.total, 0);
+
+      const rawOutput: RawParserOutput = {
+        parserUsed: llmRawItems.length > 0 ? "llm_primary+regex_recovery(gpt-4o)" : "regex_recovery(v3)",
+        allItems: mergedItems,
+        totals: {
+          grandTotal,
+          optionalTotal,
+          subTotal: regexResolution.totals.subTotal ?? docTotals.subTotal,
+          rowSum,
+          source: grandTotal > 0 ? "summary_page" : "row_sum",
+        },
+        summaryDetected: regexResolution.validation.summaryTotal != null || grandTotal > 0,
+        optionalScopeDetected: mergedItems.some(i => i.scopeCategory === "optional"),
+        parserReasons: [
+          `llm_confidence=${llmConfidence.toFixed(2)}`,
+          `regex_recovery=true`,
+          ...regexResolution.debug.parserReasons.slice(0, 5),
+        ],
+        rawSummary: null,
+      };
+
+      finalResolution = runResolutionLayer(rawOutput, finalClassification);
+    }
+
+    const { resolution } = { resolution: finalResolution };
+    const durationMs = 0;
+
+    console.log(`[RESOLVE] parser_used=${resolution.parserUsed} base=${resolution.baseItems.length} optional=${resolution.optionalItems.length} excluded=${resolution.excludedItems.length}`);
+    console.log(`[RESOLVE] grandTotal=$${resolution.totals.grandTotal.toFixed(2)} source=${resolution.totals.source} risk=${resolution.validation.risk}`);
+
+    // -------------------------------------------------------------------------
+    // Step 5: Fail fast if nothing usable was produced
     // -------------------------------------------------------------------------
     const hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
     const hasTotal = resolution.totals.grandTotal > 0;
-
-    // Case A: nothing at all
-    // Case B: summary total found but zero rows parsed — forensic failure
     const zeroItemsWithTotal = !hasItems && hasTotal;
     const completelyEmpty = !hasItems && !hasTotal;
 
     if (completelyEmpty || zeroItemsWithTotal) {
       const failureReason = completelyEmpty
-        ? "V3 parser returned no items and no total"
-        : "Parser found summary total but extracted 0 line items — row detection failed";
+        ? "Both LLM and regex parsers returned no items and no total"
+        : "Parser(s) found summary total but extracted 0 line items — row detection failed";
 
-      const failureCode = zeroItemsWithTotal
-        ? (resolution.debug.parserReasons.find(r => r.startsWith("failure_code="))?.replace("failure_code=", "") ?? "regex_no_matches")
-        : "no_items_no_total";
+      const failureCode = zeroItemsWithTotal ? "llm_and_regex_no_matches" : "no_items_no_total";
 
       const diagnostics = {
-        parser_version: "vNext",
+        parser_strategy: parserStrategy,
+        parser_version: "vNext-llm-primary",
         entry_point: "process_parsing_job",
         document_class: classification.documentClass,
         classifier_confidence: classification.confidence,
         classifier_reasons: classification.reasons,
         parser_used: resolution.parserUsed,
+        llm_confidence: llmConfidence,
+        regex_recovery_used: regexRecoveryUsed,
         validation_risk: resolution.validation.risk,
         validation_warnings: resolution.validation.warnings,
-        duration_ms: durationMs,
         failure_reason: failureReason,
         failure_code: failureCode,
-        parser_reasons: resolution.debug.parserReasons,
         grand_total_found: resolution.totals.grandTotal,
         total_source: resolution.totals.source,
       };
 
-      console.error(`[V3] parsing_failed — ${failureReason}. diagnostics:`, JSON.stringify(diagnostics));
+      console.error(`[PIPELINE] parsing_failed — ${failureReason}`);
 
       await supabase
         .from("parsing_jobs")
@@ -267,8 +644,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", jobId);
 
     // -------------------------------------------------------------------------
-    // Step 5: Create or update quote record
-    // ONE module writes quote totals — this block only.
+    // Step 6: Create or update quote record (unchanged from V3)
     // -------------------------------------------------------------------------
     const canonicalTotal = resolution.totals.grandTotal;
     const canonicalOptionalTotal = resolution.totals.optionalTotal;
@@ -297,7 +673,7 @@ Deno.serve(async (req: Request) => {
       }
 
       quoteData = updatedQuote;
-      console.log(`[V3] Updated existing quote ${quoteData.id}`);
+      console.log(`[DB] Updated existing quote ${quoteData.id}`);
     } else {
       const dashboardMode = (typedJob.metadata as any)?.dashboard_mode || "original";
       let revisionNumber = 1;
@@ -336,18 +712,17 @@ Deno.serve(async (req: Request) => {
       }
 
       quoteData = newQuote;
-      console.log(`[V3] Created new quote ${quoteData.id} rev=${revisionNumber}`);
+      console.log(`[DB] Created new quote ${quoteData.id} rev=${revisionNumber}`);
     }
 
     // -------------------------------------------------------------------------
-    // Step 6: Save quote_items (base + optional)
-    // ONE module writes quote_items — this block only.
+    // Step 7: Save quote_items (base + optional)
     // -------------------------------------------------------------------------
     if (typedJob.quote_id) {
       await supabase.from("quote_items").delete().eq("quote_id", quoteData.id);
     }
 
-    const mapItem = (item: any, scopeCategory: "Main" | "Optional") => ({
+    const mapItem = (item: ParsedLineItem, scopeCategory: "Main" | "Optional") => ({
       quote_id: quoteData.id,
       item_number: item.lineId || "",
       description: cleanText(item.description) || "No description",
@@ -376,11 +751,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    console.log(`[STEP_5_SAVE] quote_id=${quoteData.id} saved_total=${canonicalTotal} items_saved=${allQuoteItems.length} main=${mainQuoteItems.length} optional=${optionalQuoteItems.length}`);
-    console.log(`[V3] Saved ${mainQuoteItems.length} main + ${optionalQuoteItems.length} optional items`);
+    console.log(`[DB] Saved ${mainQuoteItems.length} main + ${optionalQuoteItems.length} optional items to quote ${quoteData.id}`);
 
     // -------------------------------------------------------------------------
-    // Step 7: Update quote with canonical totals and metadata
+    // Step 8: Update quote with canonical totals
     // -------------------------------------------------------------------------
     await supabase
       .from("quotes")
@@ -401,17 +775,20 @@ Deno.serve(async (req: Request) => {
       .eq("id", quoteData.id);
 
     // -------------------------------------------------------------------------
-    // Step 8: Write parse metadata to parsing_job
+    // Step 9: Write parse metadata with strategy fields
     // -------------------------------------------------------------------------
     const parseMetadata = {
-      parser_version: "vNext",
+      parser_strategy: parserStrategy,
+      parser_version: "vNext-llm-primary",
       entry_point: "process_parsing_job",
       document_class: classification.documentClass,
       commercial_family: classification.commercialFamily,
       parser_used: resolution.parserUsed,
+      llm_confidence: llmConfidence,
+      regex_recovery_used: regexRecoveryUsed,
       total_source: resolution.totals.source,
       confidence: classification.confidence,
-      warnings: resolution.validation.warnings,
+      warnings: [...resolution.validation.warnings, ...llmWarnings.slice(0, 5)],
       classifier_reasons: classification.reasons,
       summary_detected: resolution.debug.summaryDetected,
       optional_scope_detected: resolution.debug.optionalScopeDetected,
@@ -422,7 +799,6 @@ Deno.serve(async (req: Request) => {
       optional_total: canonicalOptionalTotal,
       row_sum: resolution.totals.rowSum,
       validation_risk: resolution.validation.risk,
-      duration_ms: durationMs,
       parser_reasons: resolution.debug.parserReasons,
     };
 
@@ -439,7 +815,7 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", jobId);
 
-    console.log(`[PIPELINE_END] status=success job_id=${jobId} quote_id=${quoteData.id} parser_version=v3 document_class=${classification.documentClass} parser_used=${resolution.parserUsed} grand_total=${canonicalTotal} total_source=${resolution.totals.source} validation_risk=${resolution.validation.risk} items=${allQuoteItems.length}`);
+    console.log(`[PIPELINE_END] status=success job_id=${jobId} quote_id=${quoteData.id} strategy=${parserStrategy} parser_used=${resolution.parserUsed} llm_confidence=${llmConfidence.toFixed(2)} regex_recovery=${regexRecoveryUsed} grand_total=${canonicalTotal} items=${allQuoteItems.length} risk=${resolution.validation.risk}`);
 
     return new Response(
       JSON.stringify({
@@ -447,9 +823,12 @@ Deno.serve(async (req: Request) => {
         jobId,
         quoteId: quoteData.id,
         itemCount: allQuoteItems.length,
-        parserVersion: "v3",
-        documentClass: classification.documentClass,
+        parserVersion: "vNext-llm-primary",
+        parserStrategy,
         parserUsed: resolution.parserUsed,
+        llmConfidence,
+        regexRecoveryUsed,
+        documentClass: classification.documentClass,
         totalSource: resolution.totals.source,
         grandTotal: canonicalTotal,
         validationRisk: resolution.validation.risk,
@@ -458,7 +837,7 @@ Deno.serve(async (req: Request) => {
     );
 
   } catch (error) {
-    console.error("[V3] Fatal error:", error);
+    console.error("[PIPELINE] Fatal error:", error);
 
     if (jobId) {
       try {
