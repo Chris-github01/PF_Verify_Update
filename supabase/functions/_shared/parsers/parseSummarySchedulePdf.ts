@@ -1,12 +1,12 @@
 // =============================================================================
-// PARSER: summary_schedule_pdf
+// PARSER: summary_schedule_pdf / multi_page_boq_summary_pdf
 //
 // For documents that have BOTH:
 //   A) An authoritative summary totals page (Grand Total, Sub-Total, etc.)
 //   B) Numbered schedule rows (pages with line items)
 //
 // RULE: Summary page totals are SOURCE OF TRUTH for grand total.
-//       Schedule rows are parsed for itemization (count, block, unit analysis).
+//       Schedule rows are parsed for itemization.
 //       NEVER derive main quote total from row summation if summary exists.
 // =============================================================================
 
@@ -53,14 +53,14 @@ const OPTIONAL_TOTAL_PATTERNS: Array<{ key: string; re: RegExp }> = [
 const OTHER_TOTAL_RE = /([A-Z][A-Za-z0-9\s&+/]{2,40}(?:Total|Subtotal|Sum))\s*:?\s*\$?\s*([\d,]+\.\d{2})/gi;
 
 function parseMoney(raw: string): number {
-  const v = parseFloat(raw.replace(/[$,\s]/g, ''));
+  const cleaned = raw.replace(/[$,\s]/g, '');
+  const v = parseFloat(cleaned);
   return isNaN(v) ? 0 : v;
 }
 
 function scanPageForTotals(pageText: string, pageNum: number, result: SummaryTotals): void {
   const flat = pageText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
 
-  // Grand total
   if (result.grandTotal === null) {
     for (const { key, re } of GRAND_TOTAL_PATTERNS) {
       const m = flat.match(re);
@@ -76,7 +76,6 @@ function scanPageForTotals(pageText: string, pageNum: number, result: SummaryTot
     }
   }
 
-  // Subtotal
   if (result.subTotal === null) {
     for (const { key, re } of SUBTOTAL_PATTERNS) {
       const m = flat.match(re);
@@ -91,7 +90,6 @@ function scanPageForTotals(pageText: string, pageNum: number, result: SummaryTot
     }
   }
 
-  // Optional total
   if (result.optionalTotal === null) {
     for (const { key, re } of OPTIONAL_TOTAL_PATTERNS) {
       const m = flat.match(re);
@@ -106,7 +104,6 @@ function scanPageForTotals(pageText: string, pageNum: number, result: SummaryTot
     }
   }
 
-  // Other named totals
   let om: RegExpExecArray | null;
   OTHER_TOTAL_RE.lastIndex = 0;
   while ((om = OTHER_TOTAL_RE.exec(flat)) !== null) {
@@ -128,7 +125,7 @@ function extractSummaryTotals(pages: PageData[]): SummaryTotals {
     foundOnPage: null,
   };
 
-  // Scan page 2 first (index 1), then page 1, then rest
+  // Scan page 2 first (index 1) — most common location for cover/summary
   const scanOrder = pages.length >= 2
     ? [pages[1], pages[0], ...pages.slice(2)]
     : pages;
@@ -138,7 +135,6 @@ function extractSummaryTotals(pages: PageData[]): SummaryTotals {
     if (result.grandTotal !== null) break;
   }
 
-  // If still no grand total, scan all pages
   if (result.grandTotal === null) {
     for (const page of pages) {
       scanPageForTotals(page.text, page.pageNum, result);
@@ -150,70 +146,108 @@ function extractSummaryTotals(pages: PageData[]): SummaryTotals {
 }
 
 // ---------------------------------------------------------------------------
-// Schedule row parser — structural, generic
+// Schedule row parser — tolerant of OCR/PDF spacing variation
 // ---------------------------------------------------------------------------
 
-const UNIT_ALT = 'No\\.|No|m2|lm|ea|each|item|nr|m';
+// Recognised unit tokens — order matters (longer first to avoid partial match)
+const UNIT_TOKENS = [
+  'no\\.', 'no', 'nr', 'm2', 'sqm', 'lm', 'lin\\.?m', 'each', 'ea', 'item', 'items',
+  'set', 'lot', 'hrs', 'hr', 'days', 'day', 'allow', 'sum', 'ls', 'm',
+];
+const UNIT_RE_SRC = UNIT_TOKENS.join('|');
+
+// Monetary value — $ optional, commas optional, must have cents
+const MONEY_RE_SRC = '\\$?\\s*([\\d,]+\\.\\d{2})';
+
+// Full row: ID  description  qty  unit  rate  total
+// All separators are flexible whitespace (handles tabs, multiple spaces)
 const ROW_FULL_RE = new RegExp(
-  `^(\\d{1,3})\\s+(.+?)\\s+([\\d.]+)\\s+(${UNIT_ALT})\\s+\\$\\s*([\\d,]+\\.\\d{2})\\s+\\$\\s*([\\d,]+\\.\\d{2})$`,
+  `^(\\d{1,3})\\s+(.+?)\\s+([\\d]+(?:\\.\\d+)?)\\s+(${UNIT_RE_SRC})\\s+${MONEY_RE_SRC}\\s+${MONEY_RE_SRC}$`,
   'i',
 );
+
+// Without rate: ID  description  qty  unit  total
 const ROW_NO_RATE_RE = new RegExp(
-  `^(\\d{1,3})\\s+(.+?)\\s+([\\d.]+)\\s+(${UNIT_ALT})\\s+\\$\\s*([\\d,]+\\.\\d{2})$`,
+  `^(\\d{1,3})\\s+(.+?)\\s+([\\d]+(?:\\.\\d+)?)\\s+(${UNIT_RE_SRC})\\s+${MONEY_RE_SRC}$`,
   'i',
 );
-const ROW_TOTAL_ONLY_RE = /^(\d{1,3})\s+(.+?)\s+\$\s*([\d,]+\.\d{2})$/i;
+
+// Minimal: ID  description  total   (lump-sum / allow items)
+const ROW_TOTAL_ONLY_RE = /^(\d{1,3})\s+(.+?)\s+\$?\s*([\d,]+\.\d{2})$/i;
+
+// Detect a money value anywhere at the end of a line
+const TRAILING_MONEY_RE = /\$?\s*([\d,]+\.\d{2})\s*$/;
 
 const BY_OTHERS_RE = /\bby\s+others\b/i;
+const NULL_VALUE_RE = /^\$?\s*[-–0]$|^-{2,}$|^n\/?a$/i;
 
-// A line is ONLY optional if it is an explicit section heading — not a row keyword.
-// This prevents "Beam", "Structural", "Flush Box" etc from flipping scope globally.
-const OPTIONAL_SECTION_HEADER_RE = /^\s*OPTIONAL\s+SCOPE\s*$/i;
-const OPTIONAL_SECTION_START_RE = /\b(OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|OPTIONAL\s+EXTRAS)\b/i;
-
-// A new non-optional section heading resets scope back to base
-const BASE_SECTION_RESET_RE = /^\s*(MAIN\s+SCOPE|BASE\s+SCOPE|SCOPE\s+OF\s+WORKS?|SCHEDULE\s+OF\s+(RATES?|QUANTITIES))\s*$/i;
-
-const EXCLUDE_RE = [
-  /^\$\s*[-–]$/, /^-+$/, /^n\/?a$/i,
+const EXCLUDE_DESC_RE = [
   /not\s+in\s+contract/i,
-  /not\s+part\s+of\s+passive\s+fire/i,
+  /not\s+part\s+of\s+(passive\s+fire|this\s+contract|scope)/i,
 ];
 
+// Section heading patterns — reset to named section
 const SECTION_RE = /\bBLOCK\s*B?(\d+)\b|\bLEVEL\s+(\d+)\b|\bZONE\s+([A-Z0-9]+)\b|\bSTAGE\s+(\d+)\b/i;
+
+// Optional scope heading — ONLY flip if the line is NOT a numbered row
+const OPTIONAL_SECTION_START_RE = /\b(OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|OPTIONAL\s+EXTRAS)\b/i;
+
+// Base scope reset heading
+const BASE_SECTION_RESET_RE = /^\s*(MAIN\s+SCOPE|BASE\s+SCOPE|SCOPE\s+OF\s+WORKS?|SCHEDULE\s+OF\s+(RATES?|QUANTITIES))\s*$/i;
+
+// Lines that are definitely not rows (headers, footers, labels)
+const SKIP_LINE_RE = /^(Page\s+\d|Description|Item\s+No|Qty|Quantity|Unit|Rate|Total|Amount|Ref|Notes?|Prepared\s+by|Date:|Project:)/i;
 
 function normaliseUnit(raw: string): string {
   const u = raw.toLowerCase().trim().replace(/\.$/, '');
   const map: Record<string, string> = {
-    no: 'ea', ea: 'ea', each: 'ea', nr: 'ea', item: 'ea',
-    m: 'lm', lm: 'lm', m2: 'm2', sqm: 'm2',
+    no: 'ea', ea: 'ea', each: 'ea', nr: 'ea', item: 'ea', items: 'ea',
+    set: 'ea', lot: 'ea', ls: 'ea', sum: 'ea', allow: 'ea',
+    m: 'lm', lm: 'lm', 'lin.m': 'lm', 'linm': 'lm',
+    m2: 'm2', sqm: 'm2',
+    hr: 'hr', hrs: 'hr', day: 'day', days: 'day',
   };
   return map[u] ?? u;
 }
 
-function parseRow(rawLine: string, section: string, scopeCategory: 'base' | 'optional', pageNum: number): ParsedLineItem | null {
-  const line = rawLine.replace(/\s+/g, ' ').trim();
-  if (!/^\d{1,3}\s/.test(line)) return null;
-  if (BY_OTHERS_RE.test(line)) return null;
-  if (EXCLUDE_RE.some(re => re.test(line))) return null;
+function tryParseRow(
+  line: string,
+  section: string,
+  scopeCategory: 'base' | 'optional',
+  pageNum: number,
+): ParsedLineItem | null {
+  // Collapse all whitespace to single space
+  const flat = line.replace(/\s+/g, ' ').trim();
 
-  // Scope is determined by the current section context, not by row keywords
-  const scope = scopeCategory;
+  if (!/^\d{1,3}\s/.test(flat)) return null;
+  if (BY_OTHERS_RE.test(flat)) return null;
+  if (EXCLUDE_DESC_RE.some(re => re.test(flat))) return null;
 
-  let m = line.match(ROW_FULL_RE);
+  // Check null value indicator at end
+  const lastToken = flat.split(' ').pop() ?? '';
+  if (NULL_VALUE_RE.test(lastToken)) return null;
+
+  // Attempt 1: full row with rate + total
+  let m = flat.match(ROW_FULL_RE);
   if (m) {
     const [, lineId, desc, qtyRaw, unitRaw, rateRaw, totalRaw] = m;
     const total = parseMoney(totalRaw);
     if (total === 0) return null;
     return {
       lineId, section, description: desc.trim(),
-      qty: parseFloat(qtyRaw) || 1, unit: normaliseUnit(unitRaw),
-      rate: parseMoney(rateRaw), total, scopeCategory: scope,
-      pageNum, confidence: 1.0, source: 'summary_schedule_pdf',
+      qty: parseFloat(qtyRaw) || 1,
+      unit: normaliseUnit(unitRaw),
+      rate: parseMoney(rateRaw),
+      total,
+      scopeCategory,
+      pageNum,
+      confidence: 1.0,
+      source: 'parseSummarySchedulePdf',
     };
   }
 
-  m = line.match(ROW_NO_RATE_RE);
+  // Attempt 2: row with qty + unit + total only (no rate column)
+  m = flat.match(ROW_NO_RATE_RE);
   if (m) {
     const [, lineId, desc, qtyRaw, unitRaw, totalRaw] = m;
     const total = parseMoney(totalRaw);
@@ -221,41 +255,100 @@ function parseRow(rawLine: string, section: string, scopeCategory: 'base' | 'opt
     if (total === 0) return null;
     return {
       lineId, section, description: desc.trim(),
-      qty, unit: normaliseUnit(unitRaw),
-      rate: total / qty, total, scopeCategory: scope,
-      pageNum, confidence: 0.95, source: 'summary_schedule_pdf',
+      qty,
+      unit: normaliseUnit(unitRaw),
+      rate: qty > 0 ? total / qty : total,
+      total,
+      scopeCategory,
+      pageNum,
+      confidence: 0.92,
+      source: 'parseSummarySchedulePdf',
     };
   }
 
-  m = line.match(ROW_TOTAL_ONLY_RE);
+  // Attempt 3: minimal row — ID + description + trailing money total
+  // Only accept if total > 0 and description is non-trivial
+  m = flat.match(ROW_TOTAL_ONLY_RE);
   if (m) {
     const [, lineId, desc, totalRaw] = m;
     const total = parseMoney(totalRaw);
     if (total === 0) return null;
+    if (desc.trim().length < 3) return null;
     return {
       lineId, section, description: desc.trim(),
-      qty: 1, unit: 'item', rate: total, total, scopeCategory: scope,
-      pageNum, confidence: 0.80, source: 'summary_schedule_pdf',
+      qty: 1, unit: 'item', rate: total, total,
+      scopeCategory,
+      pageNum,
+      confidence: 0.75,
+      source: 'parseSummarySchedulePdf',
     };
   }
 
   return null;
 }
 
-function parseSchedulePages(pages: PageData[]): ParsedLineItem[] {
+interface ScheduleParseDebug {
+  rowsSeen: number;
+  rowsValid: number;
+  rowsFailed: number;
+  sampleFailedLines: string[];
+}
+
+function parseSchedulePages(
+  pages: PageData[],
+  debug: ScheduleParseDebug,
+): ParsedLineItem[] {
   const items: ParsedLineItem[] = [];
   let currentSection = 'UNKNOWN';
   let scopeCategory: 'base' | 'optional' = 'base';
 
   for (const page of pages) {
-    // Reset to base scope at each new page — optional scope does not bleed across pages
+    // Scope resets to base at each new page — optional scope does not bleed across pages
     scopeCategory = 'base';
-    const lines = page.text.split('\n').map(l => l.trim()).filter(Boolean);
 
+    const rawLines = page.text.split('\n');
+    const lines: string[] = [];
+
+    // First pass: join continuation lines.
+    // A continuation line is a non-empty line that does NOT start with a digit
+    // and the previous line started with a digit but had no monetary total yet.
+    for (let i = 0; i < rawLines.length; i++) {
+      const current = rawLines[i].trim();
+      if (!current) continue;
+
+      // If this line starts with a number, it is a fresh candidate row
+      if (/^\d{1,3}\s/.test(current)) {
+        // Check if it already ends with a money value — if not, peek ahead for continuation
+        if (!TRAILING_MONEY_RE.test(current)) {
+          let joined = current;
+          let j = i + 1;
+          while (j < rawLines.length) {
+            const next = rawLines[j].trim();
+            if (!next) { j++; continue; }
+            // Stop if the next line itself starts a new numbered row
+            if (/^\d{1,3}\s/.test(next)) break;
+            joined = joined + ' ' + next;
+            j++;
+            // Stop once we see a trailing money value
+            if (TRAILING_MONEY_RE.test(joined)) break;
+          }
+          lines.push(joined);
+        } else {
+          lines.push(current);
+        }
+      } else {
+        // Non-numbered lines go through for section/scope detection only
+        lines.push(current);
+      }
+    }
+
+    // Second pass: parse
     for (const line of lines) {
-      const normalized = line.replace(/\s+/g, ' ');
+      const normalized = line.replace(/\s+/g, ' ').trim();
+      if (!normalized) continue;
+      if (SKIP_LINE_RE.test(normalized)) continue;
 
-      // Detect new named section (BLOCK, LEVEL, ZONE, STAGE) — always resets to base
+      // Section heading detection — always resets to base
       const secMatch = normalized.match(SECTION_RE);
       if (secMatch) {
         const id = secMatch[1] ?? secMatch[2] ?? secMatch[3] ?? secMatch[4];
@@ -263,20 +356,31 @@ function parseSchedulePages(pages: PageData[]): ParsedLineItem[] {
         scopeCategory = 'base';
       }
 
-      // Only flip to optional on an explicit section heading line (not a row keyword)
+      // Optional scope heading (non-numbered lines only)
       if (OPTIONAL_SECTION_START_RE.test(normalized) && !/^\d{1,3}\s/.test(normalized)) {
         scopeCategory = 'optional';
       }
 
-      // Explicit base scope reset heading
+      // Base scope reset heading
       if (BASE_SECTION_RESET_RE.test(normalized)) {
         scopeCategory = 'base';
       }
 
-      if (!/^\d{1,3}[\s]/.test(line.trimStart())) continue;
+      // Only attempt row parse for lines starting with a digit
+      if (!/^\d{1,3}\s/.test(normalized)) continue;
 
-      const item = parseRow(line, currentSection, scopeCategory, page.pageNum);
-      if (item) items.push(item);
+      debug.rowsSeen++;
+
+      const item = tryParseRow(normalized, currentSection, scopeCategory, page.pageNum);
+      if (item) {
+        debug.rowsValid++;
+        items.push(item);
+      } else {
+        debug.rowsFailed++;
+        if (debug.sampleFailedLines.length < 10) {
+          debug.sampleFailedLines.push(normalized.slice(0, 120));
+        }
+      }
     }
   }
 
@@ -289,7 +393,15 @@ function parseSchedulePages(pages: PageData[]): ParsedLineItem[] {
 
 export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
   const summary = extractSummaryTotals(pages);
-  const scheduleItems = parseSchedulePages(pages);
+
+  const debug: ScheduleParseDebug = {
+    rowsSeen: 0,
+    rowsValid: 0,
+    rowsFailed: 0,
+    sampleFailedLines: [],
+  };
+
+  const scheduleItems = parseSchedulePages(pages, debug);
 
   const baseItems = scheduleItems.filter(i => i.scopeCategory === 'base');
   const optionalItems = scheduleItems.filter(i => i.scopeCategory === 'optional');
@@ -303,9 +415,21 @@ export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
   const parserReasons: string[] = [
     `Summary page found: page ${summary.foundOnPage ?? 'unknown'}`,
     `Grand total source: ${summary.grandTotal !== null ? 'page_summary' : 'row_sum'}`,
-    `Schedule rows parsed: ${scheduleItems.length}`,
-    `Base items: ${baseItems.length}, Optional items: ${optionalItems.length}`,
+    `rows_seen=${debug.rowsSeen}`,
+    `rows_valid=${debug.rowsValid}`,
+    `rows_failed=${debug.rowsFailed}`,
+    `base_items=${baseItems.length}`,
+    `optional_items=${optionalItems.length}`,
   ];
+
+  if (debug.sampleFailedLines.length > 0) {
+    parserReasons.push(`sample_failed_lines: ${JSON.stringify(debug.sampleFailedLines)}`);
+  }
+
+  // Explicit failure signal when extraction produced nothing
+  if (debug.rowsValid === 0 && summary.grandTotal !== null) {
+    parserReasons.push('parser_failed_row_detection: summary found but 0 rows parsed');
+  }
 
   return {
     parserUsed: 'parseSummarySchedulePdf',
@@ -320,6 +444,9 @@ export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
     summaryDetected: summary.grandTotal !== null,
     optionalScopeDetected: summary.optionalTotal !== null || optionalItems.length > 0,
     parserReasons,
-    rawSummary: summary,
+    rawSummary: {
+      ...summary,
+      parseDebug: debug,
+    },
   };
 }
