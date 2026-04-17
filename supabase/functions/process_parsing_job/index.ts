@@ -212,7 +212,20 @@ Deno.serve(async (req: Request) => {
     const hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
     const hasTotal = resolution.totals.grandTotal > 0;
 
-    if (!hasItems && !hasTotal) {
+    // Case A: nothing at all
+    // Case B: summary total found but zero rows parsed — forensic failure
+    const zeroItemsWithTotal = !hasItems && hasTotal;
+    const completelyEmpty = !hasItems && !hasTotal;
+
+    if (completelyEmpty || zeroItemsWithTotal) {
+      const failureReason = completelyEmpty
+        ? "V3 parser returned no items and no total"
+        : "Parser found summary total but extracted 0 line items — row detection failed";
+
+      const failureCode = zeroItemsWithTotal
+        ? (resolution.debug.parserReasons.find(r => r.startsWith("failure_code="))?.replace("failure_code=", "") ?? "regex_no_matches")
+        : "no_items_no_total";
+
       const diagnostics = {
         parser_version: "v3",
         document_class: classification.documentClass,
@@ -222,16 +235,20 @@ Deno.serve(async (req: Request) => {
         validation_risk: resolution.validation.risk,
         validation_warnings: resolution.validation.warnings,
         duration_ms: durationMs,
-        failure_reason: "V3 parser returned no items and no total",
+        failure_reason: failureReason,
+        failure_code: failureCode,
+        parser_reasons: resolution.debug.parserReasons,
+        grand_total_found: resolution.totals.grandTotal,
+        total_source: resolution.totals.source,
       };
 
-      console.error(`[V3] parsing_failed — no items and no total. diagnostics:`, JSON.stringify(diagnostics));
+      console.error(`[V3] parsing_failed — ${failureReason}. diagnostics:`, JSON.stringify(diagnostics));
 
       await supabase
         .from("parsing_jobs")
         .update({
           status: "failed",
-          error_message: "Parser could not extract any items or totals from this document",
+          error_message: failureReason,
           metadata: diagnostics,
           updated_at: new Date().toISOString(),
         })
@@ -403,6 +420,7 @@ Deno.serve(async (req: Request) => {
       row_sum: resolution.totals.rowSum,
       validation_risk: resolution.validation.risk,
       duration_ms: durationMs,
+      parser_reasons: resolution.debug.parserReasons,
     };
 
     await supabase

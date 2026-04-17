@@ -160,7 +160,6 @@ const UNIT_RE_SRC = UNIT_TOKENS.join('|');
 const MONEY_RE_SRC = '\\$?\\s*([\\d,]+\\.\\d{2})';
 
 // Full row: ID  description  qty  unit  rate  total
-// All separators are flexible whitespace (handles tabs, multiple spaces)
 const ROW_FULL_RE = new RegExp(
   `^(\\d{1,3})\\s+(.+?)\\s+([\\d]+(?:\\.\\d+)?)\\s+(${UNIT_RE_SRC})\\s+${MONEY_RE_SRC}\\s+${MONEY_RE_SRC}$`,
   'i',
@@ -172,10 +171,10 @@ const ROW_NO_RATE_RE = new RegExp(
   'i',
 );
 
-// Minimal: ID  description  total   (lump-sum / allow items)
+// Minimal: ID  description  total
 const ROW_TOTAL_ONLY_RE = /^(\d{1,3})\s+(.+?)\s+\$?\s*([\d,]+\.\d{2})$/i;
 
-// Detect a money value anywhere at the end of a line
+// Detect a money value at end of line
 const TRAILING_MONEY_RE = /\$?\s*([\d,]+\.\d{2})\s*$/;
 
 const BY_OTHERS_RE = /\bby\s+others\b/i;
@@ -186,16 +185,9 @@ const EXCLUDE_DESC_RE = [
   /not\s+part\s+of\s+(passive\s+fire|this\s+contract|scope)/i,
 ];
 
-// Section heading patterns — reset to named section
 const SECTION_RE = /\bBLOCK\s*B?(\d+)\b|\bLEVEL\s+(\d+)\b|\bZONE\s+([A-Z0-9]+)\b|\bSTAGE\s+(\d+)\b/i;
-
-// Optional scope heading — ONLY flip if the line is NOT a numbered row
 const OPTIONAL_SECTION_START_RE = /\b(OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|OPTIONAL\s+EXTRAS)\b/i;
-
-// Base scope reset heading
 const BASE_SECTION_RESET_RE = /^\s*(MAIN\s+SCOPE|BASE\s+SCOPE|SCOPE\s+OF\s+WORKS?|SCHEDULE\s+OF\s+(RATES?|QUANTITIES))\s*$/i;
-
-// Lines that are definitely not rows (headers, footers, labels)
 const SKIP_LINE_RE = /^(Page\s+\d|Description|Item\s+No|Qty|Quantity|Unit|Rate|Total|Amount|Ref|Notes?|Prepared\s+by|Date:|Project:)/i;
 
 function normaliseUnit(raw: string): string {
@@ -203,88 +195,37 @@ function normaliseUnit(raw: string): string {
   const map: Record<string, string> = {
     no: 'ea', ea: 'ea', each: 'ea', nr: 'ea', item: 'ea', items: 'ea',
     set: 'ea', lot: 'ea', ls: 'ea', sum: 'ea', allow: 'ea',
-    m: 'lm', lm: 'lm', 'lin.m': 'lm', 'linm': 'lm',
+    m: 'lm', lm: 'lm', 'lin.m': 'lm', linm: 'lm',
     m2: 'm2', sqm: 'm2',
     hr: 'hr', hrs: 'hr', day: 'day', days: 'day',
   };
   return map[u] ?? u;
 }
 
-function tryParseRow(
-  line: string,
-  section: string,
-  scopeCategory: 'base' | 'optional',
-  pageNum: number,
-): ParsedLineItem | null {
-  // Collapse all whitespace to single space
-  const flat = line.replace(/\s+/g, ' ').trim();
+// ---------------------------------------------------------------------------
+// Forensic trace structures
+// ---------------------------------------------------------------------------
 
-  if (!/^\d{1,3}\s/.test(flat)) return null;
-  if (BY_OTHERS_RE.test(flat)) return null;
-  if (EXCLUDE_DESC_RE.some(re => re.test(flat))) return null;
+interface LineAttempt {
+  page: number;
+  raw_line: string;
+  normalized_line: string;
+  starts_with_number: boolean;
+  regex_full_match: boolean;
+  regex_no_rate_match: boolean;
+  regex_minimal_match: boolean;
+  excluded_reason: string | null;
+  parsed_result: 'ok' | 'failed';
+}
 
-  // Check null value indicator at end
-  const lastToken = flat.split(' ').pop() ?? '';
-  if (NULL_VALUE_RE.test(lastToken)) return null;
-
-  // Attempt 1: full row with rate + total
-  let m = flat.match(ROW_FULL_RE);
-  if (m) {
-    const [, lineId, desc, qtyRaw, unitRaw, rateRaw, totalRaw] = m;
-    const total = parseMoney(totalRaw);
-    if (total === 0) return null;
-    return {
-      lineId, section, description: desc.trim(),
-      qty: parseFloat(qtyRaw) || 1,
-      unit: normaliseUnit(unitRaw),
-      rate: parseMoney(rateRaw),
-      total,
-      scopeCategory,
-      pageNum,
-      confidence: 1.0,
-      source: 'parseSummarySchedulePdf',
-    };
-  }
-
-  // Attempt 2: row with qty + unit + total only (no rate column)
-  m = flat.match(ROW_NO_RATE_RE);
-  if (m) {
-    const [, lineId, desc, qtyRaw, unitRaw, totalRaw] = m;
-    const total = parseMoney(totalRaw);
-    const qty = parseFloat(qtyRaw) || 1;
-    if (total === 0) return null;
-    return {
-      lineId, section, description: desc.trim(),
-      qty,
-      unit: normaliseUnit(unitRaw),
-      rate: qty > 0 ? total / qty : total,
-      total,
-      scopeCategory,
-      pageNum,
-      confidence: 0.92,
-      source: 'parseSummarySchedulePdf',
-    };
-  }
-
-  // Attempt 3: minimal row — ID + description + trailing money total
-  // Only accept if total > 0 and description is non-trivial
-  m = flat.match(ROW_TOTAL_ONLY_RE);
-  if (m) {
-    const [, lineId, desc, totalRaw] = m;
-    const total = parseMoney(totalRaw);
-    if (total === 0) return null;
-    if (desc.trim().length < 3) return null;
-    return {
-      lineId, section, description: desc.trim(),
-      qty: 1, unit: 'item', rate: total, total,
-      scopeCategory,
-      pageNum,
-      confidence: 0.75,
-      source: 'parseSummarySchedulePdf',
-    };
-  }
-
-  return null;
+interface PageTrace {
+  pageNum: number;
+  pageChars: number;
+  first300Chars: string;
+  totalLinesRaw: number;
+  totalLinesAfterTrim: number;
+  numberedLinesDetected: number;
+  continuationLinesJoined: number;
 }
 
 interface ScheduleParseDebug {
@@ -292,6 +233,96 @@ interface ScheduleParseDebug {
   rowsValid: number;
   rowsFailed: number;
   sampleFailedLines: string[];
+  lineAttempts: LineAttempt[];
+  pageTraces: PageTrace[];
+  failureCode: string | null;
+}
+
+function tryParseRow(
+  line: string,
+  section: string,
+  scopeCategory: 'base' | 'optional',
+  pageNum: number,
+  trace: LineAttempt,
+): ParsedLineItem | null {
+  const flat = line.replace(/\s+/g, ' ').trim();
+  trace.normalized_line = flat;
+  trace.starts_with_number = /^\d{1,3}\s/.test(flat);
+
+  if (!trace.starts_with_number) {
+    trace.excluded_reason = 'no_leading_digit';
+    return null;
+  }
+  if (BY_OTHERS_RE.test(flat)) {
+    trace.excluded_reason = 'by_others';
+    return null;
+  }
+  if (EXCLUDE_DESC_RE.some(re => re.test(flat))) {
+    trace.excluded_reason = 'exclude_pattern';
+    return null;
+  }
+
+  const lastToken = flat.split(' ').pop() ?? '';
+  if (NULL_VALUE_RE.test(lastToken)) {
+    trace.excluded_reason = 'null_value_token';
+    return null;
+  }
+
+  // Attempt 1: full row with rate + total
+  let m = flat.match(ROW_FULL_RE);
+  trace.regex_full_match = !!m;
+  if (m) {
+    const [, lineId, desc, qtyRaw, unitRaw, rateRaw, totalRaw] = m;
+    const total = parseMoney(totalRaw);
+    if (total === 0) { trace.excluded_reason = 'zero_total'; return null; }
+    trace.parsed_result = 'ok';
+    return {
+      lineId, section, description: desc.trim(),
+      qty: parseFloat(qtyRaw) || 1,
+      unit: normaliseUnit(unitRaw),
+      rate: parseMoney(rateRaw),
+      total, scopeCategory, pageNum,
+      confidence: 1.0, source: 'parseSummarySchedulePdf',
+    };
+  }
+
+  // Attempt 2: qty + unit + total (no rate column)
+  m = flat.match(ROW_NO_RATE_RE);
+  trace.regex_no_rate_match = !!m;
+  if (m) {
+    const [, lineId, desc, qtyRaw, unitRaw, totalRaw] = m;
+    const total = parseMoney(totalRaw);
+    const qty = parseFloat(qtyRaw) || 1;
+    if (total === 0) { trace.excluded_reason = 'zero_total'; return null; }
+    trace.parsed_result = 'ok';
+    return {
+      lineId, section, description: desc.trim(),
+      qty, unit: normaliseUnit(unitRaw),
+      rate: qty > 0 ? total / qty : total,
+      total, scopeCategory, pageNum,
+      confidence: 0.92, source: 'parseSummarySchedulePdf',
+    };
+  }
+
+  // Attempt 3: minimal — ID + description + trailing money
+  m = flat.match(ROW_TOTAL_ONLY_RE);
+  trace.regex_minimal_match = !!m;
+  if (m) {
+    const [, lineId, desc, totalRaw] = m;
+    const total = parseMoney(totalRaw);
+    if (total === 0) { trace.excluded_reason = 'zero_total'; return null; }
+    if (desc.trim().length < 3) { trace.excluded_reason = 'desc_too_short'; return null; }
+    trace.parsed_result = 'ok';
+    return {
+      lineId, section, description: desc.trim(),
+      qty: 1, unit: 'item', rate: total, total,
+      scopeCategory, pageNum,
+      confidence: 0.75, source: 'parseSummarySchedulePdf',
+    };
+  }
+
+  trace.excluded_reason = 'no_regex_match';
+  return null;
 }
 
 function parseSchedulePages(
@@ -302,34 +333,38 @@ function parseSchedulePages(
   let currentSection = 'UNKNOWN';
   let scopeCategory: 'base' | 'optional' = 'base';
 
+  // --- TRACE: log input structure ---
+  console.log(`[FORENSIC] pages_received=${pages.length}`);
+  pages.forEach((p, idx) => {
+    console.log(`[FORENSIC] page[${idx}] pageNum=${p.pageNum} chars=${p.text.length} first300=${JSON.stringify(p.text.slice(0, 300))}`);
+  });
+
   for (const page of pages) {
-    // Scope resets to base at each new page — optional scope does not bleed across pages
     scopeCategory = 'base';
 
     const rawLines = page.text.split('\n');
+    const trimmedLines = rawLines.map(l => l.trim()).filter(Boolean);
+    const numberedBeforeJoin = trimmedLines.filter(l => /^\d{1,3}\s/.test(l)).length;
+    let continuationJoined = 0;
+
     const lines: string[] = [];
 
-    // First pass: join continuation lines.
-    // A continuation line is a non-empty line that does NOT start with a digit
-    // and the previous line started with a digit but had no monetary total yet.
+    // First pass: join continuation lines
     for (let i = 0; i < rawLines.length; i++) {
       const current = rawLines[i].trim();
       if (!current) continue;
 
-      // If this line starts with a number, it is a fresh candidate row
       if (/^\d{1,3}\s/.test(current)) {
-        // Check if it already ends with a money value — if not, peek ahead for continuation
         if (!TRAILING_MONEY_RE.test(current)) {
           let joined = current;
           let j = i + 1;
           while (j < rawLines.length) {
             const next = rawLines[j].trim();
             if (!next) { j++; continue; }
-            // Stop if the next line itself starts a new numbered row
             if (/^\d{1,3}\s/.test(next)) break;
             joined = joined + ' ' + next;
+            continuationJoined++;
             j++;
-            // Stop once we see a trailing money value
             if (TRAILING_MONEY_RE.test(joined)) break;
           }
           lines.push(joined);
@@ -337,10 +372,22 @@ function parseSchedulePages(
           lines.push(current);
         }
       } else {
-        // Non-numbered lines go through for section/scope detection only
         lines.push(current);
       }
     }
+
+    const pageTrace: PageTrace = {
+      pageNum: page.pageNum,
+      pageChars: page.text.length,
+      first300Chars: page.text.slice(0, 300),
+      totalLinesRaw: rawLines.length,
+      totalLinesAfterTrim: trimmedLines.length,
+      numberedLinesDetected: numberedBeforeJoin,
+      continuationLinesJoined: continuationJoined,
+    };
+    debug.pageTraces.push(pageTrace);
+
+    console.log(`[FORENSIC] page=${page.pageNum} raw_lines=${rawLines.length} trimmed=${trimmedLines.length} numbered=${numberedBeforeJoin} continuation_joins=${continuationJoined}`);
 
     // Second pass: parse
     for (const line of lines) {
@@ -348,7 +395,6 @@ function parseSchedulePages(
       if (!normalized) continue;
       if (SKIP_LINE_RE.test(normalized)) continue;
 
-      // Section heading detection — always resets to base
       const secMatch = normalized.match(SECTION_RE);
       if (secMatch) {
         const id = secMatch[1] ?? secMatch[2] ?? secMatch[3] ?? secMatch[4];
@@ -356,32 +402,62 @@ function parseSchedulePages(
         scopeCategory = 'base';
       }
 
-      // Optional scope heading (non-numbered lines only)
       if (OPTIONAL_SECTION_START_RE.test(normalized) && !/^\d{1,3}\s/.test(normalized)) {
         scopeCategory = 'optional';
       }
 
-      // Base scope reset heading
       if (BASE_SECTION_RESET_RE.test(normalized)) {
         scopeCategory = 'base';
       }
 
-      // Only attempt row parse for lines starting with a digit
       if (!/^\d{1,3}\s/.test(normalized)) continue;
 
       debug.rowsSeen++;
 
-      const item = tryParseRow(normalized, currentSection, scopeCategory, page.pageNum);
+      const trace: LineAttempt = {
+        page: page.pageNum,
+        raw_line: line.slice(0, 200),
+        normalized_line: '',
+        starts_with_number: false,
+        regex_full_match: false,
+        regex_no_rate_match: false,
+        regex_minimal_match: false,
+        excluded_reason: null,
+        parsed_result: 'failed',
+      };
+
+      const item = tryParseRow(normalized, currentSection, scopeCategory, page.pageNum, trace);
+
+      // Collect first 25 line attempts for forensic output
+      if (debug.lineAttempts.length < 25) {
+        debug.lineAttempts.push(trace);
+      }
+
       if (item) {
         debug.rowsValid++;
         items.push(item);
       } else {
         debug.rowsFailed++;
         if (debug.sampleFailedLines.length < 10) {
-          debug.sampleFailedLines.push(normalized.slice(0, 120));
+          debug.sampleFailedLines.push(normalized.slice(0, 150));
         }
+        console.log(`[FORENSIC] ROW_FAIL page=${page.pageNum} reason=${trace.excluded_reason} line=${JSON.stringify(normalized.slice(0, 120))}`);
       }
     }
+  }
+
+  // Determine failure code
+  const totalNumberedLines = debug.pageTraces.reduce((s, p) => s + p.numberedLinesDetected, 0);
+  if (debug.pageTraces.length === 0) {
+    debug.failureCode = 'no_schedule_pages_detected';
+  } else if (totalNumberedLines === 0) {
+    debug.failureCode = 'no_numbered_lines_found';
+  } else if (debug.rowsSeen === 0) {
+    debug.failureCode = 'schedule_pages_empty';
+  } else if (debug.rowsValid === 0 && debug.rowsSeen > 0) {
+    debug.failureCode = 'regex_no_matches';
+  } else if (items.length === 0) {
+    debug.failureCode = 'rows_filtered_out_post_parse';
   }
 
   return items;
@@ -392,13 +468,20 @@ function parseSchedulePages(
 // ---------------------------------------------------------------------------
 
 export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
+  console.log(`[parseSummarySchedulePdf] ENTRY pages=${pages.length} total_chars=${pages.reduce((s, p) => s + p.text.length, 0)}`);
+
   const summary = extractSummaryTotals(pages);
+
+  console.log(`[parseSummarySchedulePdf] summary_grand_total=${summary.grandTotal} found_on_page=${summary.foundOnPage} raw_matches=${JSON.stringify(summary.rawMatches)}`);
 
   const debug: ScheduleParseDebug = {
     rowsSeen: 0,
     rowsValid: 0,
     rowsFailed: 0,
     sampleFailedLines: [],
+    lineAttempts: [],
+    pageTraces: [],
+    failureCode: null,
   };
 
   const scheduleItems = parseSchedulePages(pages, debug);
@@ -408,13 +491,25 @@ export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
   const rowBaseSum = baseItems.reduce((s, i) => s + i.total, 0);
   const rowOptionalSum = optionalItems.reduce((s, i) => s + i.total, 0);
 
-  // SOURCE OF TRUTH: summary takes priority over row summation
   const canonicalGrandTotal = summary.grandTotal ?? rowBaseSum;
   const canonicalOptionalTotal = summary.optionalTotal ?? rowOptionalSum;
 
+  // Determine final failure code
+  const failureCode = debug.failureCode
+    ?? (scheduleItems.length === 0 ? 'parser_state_bug' : null);
+
+  console.log(`[parseSummarySchedulePdf] EXIT rows_seen=${debug.rowsSeen} rows_valid=${debug.rowsValid} rows_failed=${debug.rowsFailed} failure_code=${failureCode}`);
+  console.log(`[parseSummarySchedulePdf] LINE_ATTEMPTS sample: ${JSON.stringify(debug.lineAttempts.slice(0, 5))}`);
+
   const parserReasons: string[] = [
-    `Summary page found: page ${summary.foundOnPage ?? 'unknown'}`,
-    `Grand total source: ${summary.grandTotal !== null ? 'page_summary' : 'row_sum'}`,
+    `pages_received=${pages.length}`,
+    `chars_per_page=${pages.map(p => p.text.length).join(',')}`,
+    `summary_grand_total=${summary.grandTotal}`,
+    `summary_found_on_page=${summary.foundOnPage ?? 'not_found'}`,
+    `summary_raw_matches=${JSON.stringify(summary.rawMatches)}`,
+    ...debug.pageTraces.map(pt =>
+      `page=${pt.pageNum} chars=${pt.pageChars} raw_lines=${pt.totalLinesRaw} trimmed=${pt.totalLinesAfterTrim} numbered=${pt.numberedLinesDetected} continuation_joins=${pt.continuationLinesJoined}`
+    ),
     `rows_seen=${debug.rowsSeen}`,
     `rows_valid=${debug.rowsValid}`,
     `rows_failed=${debug.rowsFailed}`,
@@ -423,12 +518,15 @@ export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
   ];
 
   if (debug.sampleFailedLines.length > 0) {
-    parserReasons.push(`sample_failed_lines: ${JSON.stringify(debug.sampleFailedLines)}`);
+    parserReasons.push(`sample_failed_lines=${JSON.stringify(debug.sampleFailedLines)}`);
   }
 
-  // Explicit failure signal when extraction produced nothing
-  if (debug.rowsValid === 0 && summary.grandTotal !== null) {
-    parserReasons.push('parser_failed_row_detection: summary found but 0 rows parsed');
+  if (debug.lineAttempts.length > 0) {
+    parserReasons.push(`line_attempts_sample=${JSON.stringify(debug.lineAttempts.slice(0, 10))}`);
+  }
+
+  if (failureCode) {
+    parserReasons.push(`failure_code=${failureCode}`);
   }
 
   return {
@@ -446,7 +544,15 @@ export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
     parserReasons,
     rawSummary: {
       ...summary,
-      parseDebug: debug,
+      parseDebug: {
+        rowsSeen: debug.rowsSeen,
+        rowsValid: debug.rowsValid,
+        rowsFailed: debug.rowsFailed,
+        failureCode,
+        sampleFailedLines: debug.sampleFailedLines,
+        lineAttempts: debug.lineAttempts,
+        pageTraces: debug.pageTraces,
+      },
     },
   };
 }

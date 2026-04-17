@@ -18,6 +18,10 @@ interface ParsingJobMetadata {
   item_count_optional?: number;
   item_count_excluded?: number;
   duration_ms?: number;
+  failure_reason?: string;
+  failure_code?: string;
+  parser_reasons?: string[];
+  grand_total_found?: number;
 }
 
 interface ParsingJob {
@@ -550,10 +554,29 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                           </div>
                           <div className="text-xs text-slate-400">File: {job.filename}</div>
                           {failMeta?.parser_version === 'v3' && (
-                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono text-xs bg-slate-900/40 border border-slate-700 rounded px-2 py-1.5">
-                              <div className="text-slate-500">document_class</div><div className="text-slate-300">{failMeta.document_class ?? '—'}</div>
-                              <div className="text-slate-500">parser_used</div><div className="text-slate-300">{failMeta.parser_used ?? '—'}</div>
-                              <div className="text-slate-500">failure_reason</div><div className="text-red-400 col-span-1 truncate">{(failMeta as any).failure_reason ?? reason}</div>
+                            <div className="mt-2 font-mono text-xs bg-slate-900/40 border border-slate-700 rounded px-2 py-1.5 space-y-0.5">
+                              <div className="grid grid-cols-2 gap-x-4">
+                                <div className="text-slate-500">document_class</div><div className="text-slate-300">{failMeta.document_class ?? '—'}</div>
+                                <div className="text-slate-500">parser_used</div><div className="text-slate-300">{failMeta.parser_used ?? '—'}</div>
+                                <div className="text-slate-500">failure_code</div><div className="text-red-400">{failMeta.failure_code ?? '—'}</div>
+                                <div className="text-slate-500">failure_reason</div><div className="text-red-400 col-span-1 break-words">{failMeta.failure_reason ?? reason}</div>
+                                {failMeta.grand_total_found != null && (
+                                  <>
+                                    <div className="text-slate-500">grand_total_found</div>
+                                    <div className="text-yellow-300">${failMeta.grand_total_found.toLocaleString()}</div>
+                                  </>
+                                )}
+                              </div>
+                              {failMeta.parser_reasons && failMeta.parser_reasons.length > 0 && (
+                                <div className="mt-1.5 pt-1.5 border-t border-slate-700">
+                                  <div className="text-slate-500 mb-1">parser_reasons</div>
+                                  <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                                    {failMeta.parser_reasons.map((r, i) => (
+                                      <div key={i} className="text-slate-400 break-all leading-relaxed">{r}</div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
