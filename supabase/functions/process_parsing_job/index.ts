@@ -407,6 +407,7 @@ Deno.serve(async (req: Request) => {
       parser_version: "vNext",
       entry_point: "process_parsing_job",
       document_class: classification.documentClass,
+      commercial_family: classification.commercialFamily,
       parser_used: resolution.parserUsed,
       total_source: resolution.totals.source,
       confidence: classification.confidence,
