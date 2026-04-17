@@ -47,6 +47,7 @@ export interface ClassificationResult {
     hasBlockRowIds: boolean;
     hasPrelimsSection: boolean;
     hasPricedRowsAboveThreshold: boolean;
+    hasUnnumberedTableRows: boolean;
     numberedRowCount: number;
     pageCount: number;
     avgLineLength: number;
@@ -116,6 +117,11 @@ const LUMP_SUM_SCOPE_PATTERNS: RegExp[] = [
   /\bEXCLUSIONS?\b/i,
 ];
 
+// Unnumbered table breakdown signals — columnar tables without leading row IDs
+// e.g. Service | Size | FRR | Substrate | Qty | Rate | Total
+const UNNUMBERED_TABLE_COL_RE = /\b(Service|FRR|Substrate|Fire\s+Rating|Wrap|Base\s+Rate|Insulation|Penetration|Joint|Gap)\b/gi;
+const UNNUMBERED_TABLE_HEADER_RE = /\b(Service|FRR|Substrate)\b.*\b(Qty|Quantity|Rate|Total)\b/i;
+
 // Priced row — a line that carries a dollar amount (used for counting)
 const PRICED_ROW_RE = /\$[\d,]+\.\d{2}/gm;
 
@@ -147,6 +153,12 @@ function hasBlockRowIds(text: string): boolean {
 
 function hasPrelimsSection(text: string): boolean {
   return PRELIMS_PATTERNS.some(re => re.test(text));
+}
+
+function hasUnnumberedTableRows(text: string): boolean {
+  if (UNNUMBERED_TABLE_HEADER_RE.test(text)) return true;
+  const colMatches = (text.match(UNNUMBERED_TABLE_COL_RE) ?? []).length;
+  return colMatches >= 3;
 }
 
 function hasLumpSumScopeLanguage(text: string): boolean {
@@ -206,6 +218,11 @@ export function mapToCommercialFamily(
     return 'itemized_quote';
   }
 
+  // Hybrid: unnumbered table breakdown with summary totals (Pattern B)
+  if (signals.hasUnnumberedTableRows && signals.hasSummaryTotals) {
+    return 'hybrid_quote';
+  }
+
   // Hybrid: has some rows AND either prelims or optional scope sections
   if (
     signals.hasPricedRowsAboveThreshold &&
@@ -262,6 +279,7 @@ export function classifyDocument(
         hasBlockRowIds: false,
         hasPrelimsSection: false,
         hasPricedRowsAboveThreshold: false,
+        hasUnnumberedTableRows: false,
         numberedRowCount: 0,
         pageCount: pages.length,
         avgLineLength: 0,
@@ -280,6 +298,7 @@ export function classifyDocument(
   const optionalScopeDetected = hasOptionalScope(fullText);
   const blockRowIdsDetected = hasBlockRowIds(fullText);
   const prelimsSectionDetected = hasPrelimsSection(fullText);
+  const unnumberedTableRowsDetected = hasUnnumberedTableRows(fullText);
   const numberedRowCount = countNumberedRows(fullText);
   const pricedRowCount = countPricedRows(fullText);
   const pricedRowsAboveThreshold = pricedRowCount > 5;
@@ -292,6 +311,7 @@ export function classifyDocument(
   if (optionalScopeDetected) reasons.push('Optional scope section detected');
   if (blockRowIdsDetected) reasons.push('Block-style row IDs detected (e.g. B30, B31)');
   if (prelimsSectionDetected) reasons.push('Prelims/allowances section detected');
+  if (unnumberedTableRowsDetected) reasons.push('Unnumbered table breakdown columns detected (FRR/Service/Substrate)');
   if (numberedRowCount > 30) reasons.push(`High numbered row count (${numberedRowCount})`);
   if (ocrQuality === 'poor') reasons.push('Poor OCR quality detected');
 
@@ -302,6 +322,7 @@ export function classifyDocument(
     hasBlockRowIds: blockRowIdsDetected,
     hasPrelimsSection: prelimsSectionDetected,
     hasPricedRowsAboveThreshold: pricedRowsAboveThreshold,
+    hasUnnumberedTableRows: unnumberedTableRowsDetected,
     numberedRowCount,
     pageCount: pages.length,
     avgLineLength: avgLine,

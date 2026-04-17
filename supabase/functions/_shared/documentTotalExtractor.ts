@@ -2,14 +2,22 @@
  * Document Total Extractor
  *
  * Extracts authoritative totals from raw PDF text BEFORE any row filtering.
- * Distinguishes grand total, subtotals, optional scope totals, and block totals.
+ * Distinguishes grand total, subtotals, QA totals, optional scope totals, and block totals.
  *
- * IMPORTANT: Must be called on raw text, not on parsed items.
+ * Supports:
+ *   - label before amount (standard)
+ *   - amount before label (reversed columns)
+ *   - nearby label-value matching on same PDF page
+ *   - spaced digit amounts (PDF kerning artifacts)
+ *
+ * Priority for hybrid quotes:
+ *   grand_total > subtotal + qa_total > row_sum
  */
 
 export interface DocumentTotals {
   grandTotal: number | null;
   subTotal: number | null;
+  qaTotal: number | null;
   optionalTotal: number | null;
   blockTotals: Array<{ label: string; value: number }>;
 }
@@ -23,6 +31,12 @@ function parseSpacedAmount(raw: string): number {
   return Number.isFinite(val) ? val : 0;
 }
 
+function parseMoney(raw: string): number {
+  const cleaned = raw.replace(/[$,\s]/g, '');
+  const v = parseFloat(cleaned);
+  return isNaN(v) ? 0 : v;
+}
+
 function flattenText(text: string): string {
   return text
     .replace(/\u00A0/g, ' ')
@@ -32,34 +46,107 @@ function flattenText(text: string): string {
     .trim();
 }
 
-const GRAND_TOTAL_PATTERNS: RegExp[] = [
-  /Grand\s+Total\s*\(\s*excl(?:uding)?\.?\s*GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+// ---------------------------------------------------------------------------
+// Grand Total patterns — label before amount (forward)
+// ---------------------------------------------------------------------------
+const GRAND_TOTAL_FWD_PATTERNS: RegExp[] = [
+  /Grand\s+Total\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
   /Grand\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /TOTAL\s*\(\s*excl(?:uding)?\.?\s*GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Total\s+Price\s*\(\s*excl(?:uding)?\.?\s*GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  /TOTAL\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  /Total\s+Price\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
   /Contract\s+(?:Sum|Total|Price|Value)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
   /Quote\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
   /Lump\s+Sum\s+(?:Total\s+)?:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
   /Net\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
   /Tender\s+(?:Sum|Total)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  /Total\s+(?:excl(?:uding)?\.?\s*(?:of\s+)?GST)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
 ];
 
-const SUB_TOTAL_PATTERNS: RegExp[] = [
+// ---------------------------------------------------------------------------
+// Grand Total patterns — amount before label (reversed column order)
+// ---------------------------------------------------------------------------
+const GRAND_TOTAL_REV_PATTERNS: RegExp[] = [
+  /\$?\s*([\d][\d\s,]*\.\d{2})\s+Grand\s+Total/i,
+  /\$?\s*([\d][\d\s,]*\.\d{2})\s+Contract\s+(?:Sum|Total|Price)/i,
+  /\$?\s*([\d][\d\s,]*\.\d{2})\s+Total\s*\(\s*excl/i,
+  /\$?\s*([\d][\d\s,]*\.\d{2})\s+Net\s+Total/i,
+];
+
+// ---------------------------------------------------------------------------
+// Sub-total patterns
+// ---------------------------------------------------------------------------
+const SUB_TOTAL_FWD_PATTERNS: RegExp[] = [
   /Sub[-\s]?Total\s*\([^)]{0,80}\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
   /Sub[-\s]?Total\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
   /Section\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
 ];
 
-const OPTIONAL_SCOPE_PATTERNS: RegExp[] = [
-  /OPTIONAL\s+SCOPE\s+TOTAL\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /ADD\s+TO\s+SCOPE\s+TOTAL\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /OPTIONAL\s+ITEMS?\s+TOTAL\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /OPTIONAL\s+(?:ITEMS?|WORKS?|SCOPE)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+const SUB_TOTAL_REV_PATTERNS: RegExp[] = [
+  /\$?\s*([\d][\d\s,]*\.\d{2})\s+Sub[-\s]?Total/i,
 ];
 
+// ---------------------------------------------------------------------------
+// QA / PS3 patterns — part of the main scope total build-up
+// ---------------------------------------------------------------------------
+const QA_TOTAL_PATTERNS: RegExp[] = [
+  /(?:PS3\s*&\s*QA|QA\s*(?:&\s*PS3)?|Quality\s+Assurance|Preliminary\s+(?:Sums?|Works?))\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  /\$?\s*([\d][\d\s,]*\.\d{2})\s+(?:PS3\s*&\s*QA|Quality\s+Assurance)/i,
+];
+
+// ---------------------------------------------------------------------------
+// Optional scope patterns
+// ---------------------------------------------------------------------------
+const OPTIONAL_SCOPE_FWD_PATTERNS: RegExp[] = [
+  /OPTIONAL\s+SCOPE\s+(?:TOTAL|ITEMS?)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  /ADD\s+TO\s+SCOPE\s+(?:TOTAL)?\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  /OPTIONAL\s+ITEMS?\s+TOTAL\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  /OPTIONAL\s+(?:ITEMS?|WORKS?|SCOPE)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  /Items?\s+with\s+Confirmation\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+];
+
+const OPTIONAL_SCOPE_REV_PATTERNS: RegExp[] = [
+  /\$?\s*([\d][\d\s,]*\.\d{2})\s+(?:OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|Items?\s+with\s+Confirmation)/i,
+];
+
+// ---------------------------------------------------------------------------
+// Block total patterns
+// ---------------------------------------------------------------------------
 const BLOCK_TOTAL_PATTERNS: RegExp[] = [
   /((?:BLOCK|LEVEL|ZONE|STAGE|BUILDING|AREA|LOT)\s+[A-Z0-9]{1,5})\s+(?:TOTAL|SUB[-\s]?TOTAL)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
 ];
+
+// ---------------------------------------------------------------------------
+// Proximity search — for PDFs where label and amount are on adjacent lines
+// (label on one line, amount on next, or vice versa)
+// ---------------------------------------------------------------------------
+function proximitySearch(
+  lines: string[],
+  labelRe: RegExp,
+  windowLines = 3,
+): number | null {
+  const AMOUNT_RE = /\$?\s*([\d][\d,]+\.\d{2})/;
+  for (let i = 0; i < lines.length; i++) {
+    if (labelRe.test(lines[i])) {
+      // Search forward
+      for (let j = i + 1; j <= Math.min(i + windowLines, lines.length - 1); j++) {
+        const m = lines[j].match(AMOUNT_RE);
+        if (m) {
+          const v = parseMoney(m[1]);
+          if (v > 100) return v;
+        }
+      }
+      // Search backward
+      for (let j = i - 1; j >= Math.max(i - windowLines, 0); j--) {
+        const m = lines[j].match(AMOUNT_RE);
+        if (m) {
+          const v = parseMoney(m[1]);
+          if (v > 100) return v;
+        }
+      }
+    }
+  }
+  return null;
+}
 
 function firstMatch(flat: string, patterns: RegExp[]): number | null {
   for (const pattern of patterns) {
@@ -73,13 +160,14 @@ function firstMatch(flat: string, patterns: RegExp[]): number | null {
   return null;
 }
 
-function allMatches(flat: string, patterns: RegExp[]): number[] {
+function allMatchValues(flat: string, patterns: RegExp[]): number[] {
   const results: number[] = [];
   for (const pattern of patterns) {
-    const match = flat.match(pattern);
-    if (match) {
-      const captureIdx = match.length - 1;
-      const amount = parseSpacedAmount(match[captureIdx]);
+    const gp = new RegExp(pattern.source, 'gi');
+    let m: RegExpExecArray | null;
+    while ((m = gp.exec(flat)) !== null) {
+      const captureIdx = m.length - 1;
+      const amount = parseSpacedAmount(m[captureIdx]);
       if (amount > 100) results.push(amount);
     }
   }
@@ -88,16 +176,38 @@ function allMatches(flat: string, patterns: RegExp[]): number[] {
 
 export function extractDocumentTotals(rawText: string): DocumentTotals {
   const flat = flattenText(rawText);
+  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
 
-  const grandTotal = firstMatch(flat, GRAND_TOTAL_PATTERNS);
+  // --- Grand Total ---
+  let grandTotal = firstMatch(flat, GRAND_TOTAL_FWD_PATTERNS);
+  if (!grandTotal) grandTotal = firstMatch(flat, GRAND_TOTAL_REV_PATTERNS);
+  if (!grandTotal) {
+    grandTotal = proximitySearch(lines, /Grand\s+Total|Contract\s+(?:Sum|Total)|Total\s+excl/i);
+  }
 
-  const subTotalMatches = allMatches(flat, SUB_TOTAL_PATTERNS);
+  // --- Sub Total (take largest to handle multiple sub-totals) ---
+  const subTotalMatches = [
+    ...allMatchValues(flat, SUB_TOTAL_FWD_PATTERNS),
+    ...allMatchValues(flat, SUB_TOTAL_REV_PATTERNS),
+  ];
   const subTotal = subTotalMatches.length > 0
     ? subTotalMatches.reduce((a, b) => a > b ? a : b, 0)
     : null;
 
-  const optionalTotal = firstMatch(flat, OPTIONAL_SCOPE_PATTERNS);
+  // --- QA / PS3 Total ---
+  let qaTotal = firstMatch(flat, QA_TOTAL_PATTERNS);
+  if (!qaTotal) {
+    qaTotal = proximitySearch(lines, /PS3\s*&\s*QA|Quality\s+Assurance/i);
+  }
 
+  // --- Optional Total ---
+  let optionalTotal = firstMatch(flat, OPTIONAL_SCOPE_FWD_PATTERNS);
+  if (!optionalTotal) optionalTotal = firstMatch(flat, OPTIONAL_SCOPE_REV_PATTERNS);
+  if (!optionalTotal) {
+    optionalTotal = proximitySearch(lines, /OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|Items?\s+with\s+Confirmation/i);
+  }
+
+  // --- Block Totals ---
   const blockTotals: Array<{ label: string; value: number }> = [];
   for (const pattern of BLOCK_TOTAL_PATTERNS) {
     const globalPattern = new RegExp(pattern.source, 'gi');
@@ -109,7 +219,7 @@ export function extractDocumentTotals(rawText: string): DocumentTotals {
     }
   }
 
-  console.log(`[DocTotalExtractor] grandTotal=${grandTotal} subTotal=${subTotal} optionalTotal=${optionalTotal} blockTotals=${blockTotals.length}`);
+  console.log(`[DocTotalExtractor] grandTotal=${grandTotal} subTotal=${subTotal} qaTotal=${qaTotal} optionalTotal=${optionalTotal} blockTotals=${blockTotals.length}`);
 
-  return { grandTotal, subTotal, optionalTotal, blockTotals };
+  return { grandTotal, subTotal, qaTotal, optionalTotal, blockTotals };
 }
