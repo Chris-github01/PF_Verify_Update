@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp, Bug, Eye, Code, Download } from 'lucide-react';
+import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp, Bug, Eye, Code, Download, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
@@ -22,6 +22,23 @@ interface ParsedItem {
   is_excluded: boolean | null;
   subclass: string | null;
   size: string | null;
+  raw_text: string | null;
+  validation_flags: string[] | null;
+}
+
+interface QuoteResolutionMeta {
+  resolved_total: number | null;
+  resolution_source: string | null;
+  resolution_confidence: string | null;
+  document_grand_total: number | null;
+  document_sub_total: number | null;
+  optional_scope_total: number | null;
+  original_line_items_total: number | null;
+  reconciliation_applied: boolean | null;
+  has_adjustment_item: boolean | null;
+  parsing_version: string | null;
+  document_total: number | null;
+  items_total: number | null;
 }
 
 interface DebugResponse {
@@ -131,11 +148,12 @@ function MetricCard({ label, value, sub, colorClass }: { label: string; value: s
   );
 }
 
-function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
+function DebugView({ debugData, rawJson, showRaw, onToggleRaw, resolutionMeta }: {
   debugData: DebugResponse;
   rawJson: string;
   showRaw: boolean;
   onToggleRaw: () => void;
+  resolutionMeta: QuoteResolutionMeta | null;
 }) {
   const [expandedChunks, setExpandedChunks] = useState<Set<number>>(new Set());
   const { debug, stats, validation } = debugData;
@@ -150,6 +168,14 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
 
   const isV3 = debugData.parserVersion === 'v3';
   const cls = debugData.classification;
+
+  const fmtMoney = (n: number | null | undefined) =>
+    n != null ? `$${Number(n).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+
+  const confBg = (c: string | null) =>
+    c === 'HIGH' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' :
+    c === 'MEDIUM' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
+    'bg-red-500/15 text-red-300 border-red-500/30';
 
   return (
     <div className="p-5 space-y-6">
@@ -285,9 +311,58 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
         </div>
       </div>
 
+      {resolutionMeta && (
+        <div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            {isV3 ? 'Section C — Resolution Audit' : 'Section B — Resolution Audit'}
+          </div>
+          <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700 flex-wrap">
+              {resolutionMeta.resolution_confidence && (
+                <span className={`px-2.5 py-1 rounded-md text-sm font-semibold border ${confBg(resolutionMeta.resolution_confidence)}`}>
+                  {resolutionMeta.resolution_confidence} confidence
+                </span>
+              )}
+              {resolutionMeta.resolution_source && (
+                <span className="px-2.5 py-1 rounded-md text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600">
+                  {resolutionMeta.resolution_source === 'document_grand_total' ? 'Grand Total from Document' :
+                   resolutionMeta.resolution_source === 'document_sub_total' ? 'Sub-Total from Document' :
+                   'Sum of Line Items'}
+                </span>
+              )}
+              {resolutionMeta.reconciliation_applied && (
+                <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">Reconciliation Applied</span>
+              )}
+              {resolutionMeta.has_adjustment_item && (
+                <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">Adjustment Item Present</span>
+              )}
+              {resolutionMeta.parsing_version && (
+                <span className="ml-auto text-xs text-slate-500 font-mono">{resolutionMeta.parsing_version}</span>
+              )}
+            </div>
+            <div className="divide-y divide-slate-700">
+              {[
+                ['Resolved Total', fmtMoney(resolutionMeta.resolved_total)],
+                ['Document Grand Total', fmtMoney(resolutionMeta.document_grand_total)],
+                ['Document Sub-Total', fmtMoney(resolutionMeta.document_sub_total)],
+                ['Optional Scope Total', fmtMoney(resolutionMeta.optional_scope_total)],
+                ['Original Line Items Total', fmtMoney(resolutionMeta.original_line_items_total)],
+                ['Items Total (parsed)', fmtMoney(resolutionMeta.items_total)],
+                ['Document Total (field)', fmtMoney(resolutionMeta.document_total)],
+              ].map(([k, v]) => (
+                <div key={String(k)} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                  <span className="text-slate-400">{k}</span>
+                  <span className="text-slate-100 font-mono font-medium">{String(v)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-          {isV3 ? 'Section C — Parse Stats' : 'Section B — Parse Stats'}
+          {isV3 ? 'Section D — Parse Stats' : 'Section B — Parse Stats'}
         </div>
         <div className="bg-slate-800 border border-slate-700 rounded-lg divide-y divide-slate-700">
           {[
@@ -318,7 +393,7 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
       {(!isV3 || debug.failedLinesGlobal.length > 0) && (
         <div>
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            {isV3 ? 'Section D — Failed Lines' : 'Section C — Failed Lines'}
+            {isV3 ? 'Section E — Failed Lines' : 'Section C — Failed Lines'}
             <span className="ml-2 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium">
               {debug.failedLinesGlobal.length}
             </span>
@@ -343,7 +418,7 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
 
       <div>
         <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-          {isV3 ? 'Section E — Page Breakdown' : 'Section D — Chunk Breakdown'}
+          {isV3 ? 'Section F — Page Breakdown' : 'Section D — Chunk Breakdown'}
         </div>
         <div className="space-y-2">
           {debug.chunks.map((chunk, i) => (
@@ -403,7 +478,7 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw }: {
 
       <div>
         <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-          {isV3 ? 'Section F — Quality Metrics' : 'Section E — Quality Metrics'}
+          {isV3 ? 'Section G — Quality Metrics' : 'Section E — Quality Metrics'}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
@@ -449,6 +524,9 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState('');
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'main' | 'optional' | 'excluded'>('all');
+  const [showFlagged, setShowFlagged] = useState(false);
+  const [resolutionMeta, setResolutionMeta] = useState<QuoteResolutionMeta | null>(null);
 
   const [debugData, setDebugData] = useState<DebugResponse | null>(null);
   const [debugLoading, setDebugLoading] = useState(false);
@@ -459,14 +537,22 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const { data, error } = await supabase
-          .from('quote_items')
-          .select('id, description, quantity, unit, unit_price, total_price, service, frr, mapped_service_type, mapped_system, confidence, scope_category, source, is_excluded, subclass, size')
-          .eq('quote_id', quoteId)
-          .order('created_at', { ascending: true })
-          .limit(2000);
-        if (error) throw error;
-        setItems(data ?? []);
+        const [itemsRes, quoteRes] = await Promise.all([
+          supabase
+            .from('quote_items')
+            .select('id, description, quantity, unit, unit_price, total_price, service, frr, mapped_service_type, mapped_system, confidence, scope_category, source, is_excluded, subclass, size, raw_text, validation_flags')
+            .eq('quote_id', quoteId)
+            .order('created_at', { ascending: true })
+            .limit(2000),
+          supabase
+            .from('quotes')
+            .select('resolved_total, resolution_source, resolution_confidence, document_grand_total, document_sub_total, optional_scope_total, original_line_items_total, reconciliation_applied, has_adjustment_item, parsing_version, document_total, items_total')
+            .eq('id', quoteId)
+            .maybeSingle(),
+        ]);
+        if (itemsRes.error) throw itemsRes.error;
+        setItems(itemsRes.data ?? []);
+        if (quoteRes.data) setResolutionMeta(quoteRes.data as QuoteResolutionMeta);
       } catch (e) {
         setItemsError(e instanceof Error ? e.message : 'Failed to load items');
       } finally {
@@ -529,6 +615,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
   const exportDebugPDF = useCallback(() => {
     if (!debugData) return;
     const { debug, stats, validation } = debugData;
+    const isV3 = debugData.parserVersion === 'v3';
 
     const fmtMoney = (n: number) => `$${Math.abs(n).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const fmtPct = (n: number) => `${Math.round(n * 100)}%`;
@@ -557,11 +644,12 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
 
     const statRows = [
       ['Total Chunks', stats.totalChunks],
-      ['Deterministic Items', stats.deterministicItems],
-      ['LLM Items', stats.llmItems],
+      isV3 ? ['Parser Used', debug.parserUsed ?? stats.parserUsed ?? '—'] : ['Deterministic Items', stats.deterministicItems],
+      isV3 ? ['Base Items', stats.deterministicItems] : ['LLM Items', stats.llmItems],
+      ...(isV3 ? [['Optional Items', stats.optionalItems ?? 0], ['Excluded Items', stats.excludedItems ?? 0]] : []),
       ['Detected Trade', debug.detectedTrade ?? '—'],
-      ['Document Total', debug.documentTotal != null ? fmtMoney(Number(debug.documentTotal)) : '—'],
-      ['Items Total (parsed)', fmtMoney(validation.itemsTotal)],
+      ['Document Total', debug.documentTotal != null ? `$${Number(debug.documentTotal).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : '—'],
+      ['Items Total (parsed)', `$${validation.itemsTotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}`],
       ['Processing Time', `${debug.processingMs}ms`],
       ['Sections Detected', debug.structure.sectionsDetected],
       ['Tables Detected', debug.structure.tablesDetected],
@@ -653,8 +741,31 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
 
   <hr class="divider"/>
 
+  ${resolutionMeta ? `
   <div style="${sectionStyle}">
-    <div style="${headingStyle}">Section B — Parse Stats</div>
+    <div style="${headingStyle}">Section B — Resolution Audit</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      ${resolutionMeta.resolution_confidence ? `<span style="padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;background:${resolutionMeta.resolution_confidence === 'HIGH' ? '#d1fae5' : resolutionMeta.resolution_confidence === 'MEDIUM' ? '#fef3c7' : '#fee2e2'};color:${resolutionMeta.resolution_confidence === 'HIGH' ? '#065f46' : resolutionMeta.resolution_confidence === 'MEDIUM' ? '#92400e' : '#991b1b'};">${resolutionMeta.resolution_confidence} Confidence</span>` : ''}
+      ${resolutionMeta.resolution_source ? `<span style="padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:#f1f5f9;color:#475569;">${resolutionMeta.resolution_source === 'document_grand_total' ? 'Grand Total from Document' : resolutionMeta.resolution_source === 'document_sub_total' ? 'Sub-Total from Document' : 'Sum of Line Items'}</span>` : ''}
+      ${resolutionMeta.reconciliation_applied ? `<span style="padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;">Reconciliation Applied</span>` : ''}
+      ${resolutionMeta.has_adjustment_item ? `<span style="padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;">Adjustment Item Present</span>` : ''}
+    </div>
+    <table>
+      ${[
+        ['Resolved Total', resolutionMeta.resolved_total != null ? `$${Number(resolutionMeta.resolved_total).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : '—'],
+        ['Document Grand Total', resolutionMeta.document_grand_total != null ? `$${Number(resolutionMeta.document_grand_total).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : '—'],
+        ['Document Sub-Total', resolutionMeta.document_sub_total != null ? `$${Number(resolutionMeta.document_sub_total).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : '—'],
+        ['Optional Scope Total', resolutionMeta.optional_scope_total != null ? `$${Number(resolutionMeta.optional_scope_total).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : '—'],
+        ['Original Line Items Total', resolutionMeta.original_line_items_total != null ? `$${Number(resolutionMeta.original_line_items_total).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}` : '—'],
+        ['Parsing Version', resolutionMeta.parsing_version ?? '—'],
+      ].map(([k, v]) => `<tr><td style="${tdStyle}">${k}</td><td style="${tdRStyle}">${v}</td></tr>`).join('')}
+    </table>
+  </div>
+  <hr class="divider"/>
+  ` : ''}
+
+  <div style="${sectionStyle}">
+    <div style="${headingStyle}">Section ${resolutionMeta ? 'C' : 'B'} — Parse Stats</div>
     <table>
       ${statRows.map(([k, v]) => `<tr><td style="${tdStyle}">${k}</td><td style="${tdRStyle}">${v}</td></tr>`).join('')}
     </table>
@@ -663,7 +774,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
   <hr class="divider"/>
 
   <div style="${sectionStyle}">
-    <div style="${headingStyle}">Section C — Failed Lines (${debug.failedLinesGlobal.length})</div>
+    <div style="${headingStyle}">Section ${resolutionMeta ? 'D' : 'C'} — Failed Lines (${debug.failedLinesGlobal.length})</div>
     ${debug.failedLinesGlobal.length === 0
       ? `<div style="color:#10b981;font-size:12px;">No failed lines detected</div>`
       : `<table><thead><tr><th style="width:40px;">#</th><th>Line</th></tr></thead><tbody>${failedHtml}</tbody></table>`
@@ -673,7 +784,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
   <hr class="divider"/>
 
   <div style="${sectionStyle}">
-    <div style="${headingStyle}">Section D — Chunk Breakdown (${debug.chunks.length} chunks)</div>
+    <div style="${headingStyle}">Section ${resolutionMeta ? 'E' : 'D'} — Chunk Breakdown (${debug.chunks.length} chunks)</div>
     <table>
       <thead>
         <tr>
@@ -694,7 +805,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
   <hr class="divider"/>
 
   <div style="${sectionStyle}">
-    <div style="${headingStyle}">Section E — Quality Metrics</div>
+    <div style="${headingStyle}">Section ${resolutionMeta ? 'F' : 'E'} — Quality Metrics</div>
     <div style="display:flex;flex-wrap:wrap;gap:0;">
       ${qmCards.map(([l, v, c]) => metricCard(l as string, v as string, c as string)).join('')}
     </div>
@@ -713,7 +824,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, [debugData, rawJson, quoteName]);
+  }, [debugData, rawJson, quoteName, resolutionMeta]);
 
   const exportDebugJSON = useCallback(() => {
     const slug = quoteName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -744,6 +855,20 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
       payload.globalFailedLines = debugData.debug.failedLinesGlobal;
       payload.qualityMetrics = debugData.debug.quality;
     }
+    if (resolutionMeta) {
+      payload.resolutionAudit = {
+        resolved_total: resolutionMeta.resolved_total,
+        resolution_source: resolutionMeta.resolution_source,
+        resolution_confidence: resolutionMeta.resolution_confidence,
+        document_grand_total: resolutionMeta.document_grand_total,
+        document_sub_total: resolutionMeta.document_sub_total,
+        optional_scope_total: resolutionMeta.optional_scope_total,
+        original_line_items_total: resolutionMeta.original_line_items_total,
+        reconciliation_applied: resolutionMeta.reconciliation_applied,
+        has_adjustment_item: resolutionMeta.has_adjustment_item,
+        parsing_version: resolutionMeta.parsing_version,
+      };
+    }
     try {
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -757,7 +882,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
     } catch (e) {
       alert('Export failed: ' + (e instanceof Error ? e.message : String(e)));
     }
-  }, [debugData, items, quoteName]);
+  }, [debugData, items, quoteName, resolutionMeta]);
 
   const toggleRow = (id: string) => {
     setExpandedRows(prev => {
@@ -767,15 +892,44 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
     });
   };
 
-  const filtered = items.filter(item =>
-    !filter || item.description?.toLowerCase().includes(filter.toLowerCase()) ||
-    item.service?.toLowerCase().includes(filter.toLowerCase()) ||
-    item.mapped_service_type?.toLowerCase().includes(filter.toLowerCase()) ||
-    item.mapped_system?.toLowerCase().includes(filter.toLowerCase())
-  );
+  const filtered = items.filter(item => {
+    const textMatch = !filter ||
+      item.description?.toLowerCase().includes(filter.toLowerCase()) ||
+      item.service?.toLowerCase().includes(filter.toLowerCase()) ||
+      item.mapped_service_type?.toLowerCase().includes(filter.toLowerCase()) ||
+      item.mapped_system?.toLowerCase().includes(filter.toLowerCase());
 
-  const totalValue = items.reduce((sum, i) => sum + Number(i.total_price ?? 0), 0);
-  const pricedCount = items.filter(i => Number(i.total_price ?? 0) > 0).length;
+    const scopeMatch =
+      scopeFilter === 'all' ? true :
+      scopeFilter === 'excluded' ? item.is_excluded === true :
+      scopeFilter === 'optional' ? item.scope_category === 'Optional' && !item.is_excluded :
+      !item.is_excluded && item.scope_category !== 'Optional';
+
+    const flagMatch = !showFlagged || (item.validation_flags && item.validation_flags.length > 0);
+
+    return textMatch && scopeMatch && flagMatch;
+  });
+
+  const mainItems = items.filter(i => !i.is_excluded && i.scope_category !== 'Optional');
+  const optionalItems = items.filter(i => i.scope_category === 'Optional' && !i.is_excluded);
+  const excludedItems = items.filter(i => i.is_excluded);
+  const flaggedItems = items.filter(i => i.validation_flags && i.validation_flags.length > 0);
+  const totalValue = mainItems.reduce((sum, i) => sum + Number(i.total_price ?? 0), 0);
+  const optionalValue = optionalItems.reduce((sum, i) => sum + Number(i.total_price ?? 0), 0);
+  const pricedCount = mainItems.filter(i => Number(i.total_price ?? 0) > 0).length;
+
+  const confBadgeColor = (c: string | null) => {
+    if (c === 'HIGH') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+    if (c === 'MEDIUM') return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+    return 'bg-red-500/15 text-red-300 border-red-500/30';
+  };
+
+  const resSourceLabel = (s: string | null) => {
+    if (s === 'document_grand_total') return 'Document Grand Total';
+    if (s === 'document_sub_total') return 'Document Sub-Total';
+    if (s === 'line_items_sum') return 'Line Items Sum';
+    return s ?? '—';
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
@@ -823,18 +977,64 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
         </div>
 
         {view === 'user' && !loadingItems && !itemsError && (
-          <div className="px-6 py-3 border-b border-slate-700/50 flex items-center gap-6 flex-shrink-0 bg-slate-800/40">
-            <div className="text-sm"><span className="text-slate-400">Total Items:</span> <span className="font-semibold text-slate-100">{items.length}</span></div>
-            <div className="text-sm"><span className="text-slate-400">Priced:</span> <span className="font-semibold text-emerald-400">{pricedCount}</span></div>
-            <div className="text-sm"><span className="text-slate-400">Total Value:</span> <span className="font-semibold text-slate-100">${totalValue.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-            <div className="ml-auto">
-              <input
-                type="text"
-                placeholder="Filter items..."
-                value={filter}
-                onChange={e => setFilter(e.target.value)}
-                className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-500 w-48"
-              />
+          <div className="border-b border-slate-700/50 flex-shrink-0 bg-slate-800/40">
+            <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
+              <div className="text-sm"><span className="text-slate-400">Items:</span> <span className="font-semibold text-slate-100">{items.length}</span></div>
+              <div className="text-sm"><span className="text-slate-400">Priced:</span> <span className="font-semibold text-emerald-400">{pricedCount}</span></div>
+              <div className="text-sm"><span className="text-slate-400">Main Scope:</span> <span className="font-semibold text-slate-100">${totalValue.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+              {optionalValue > 0 && (
+                <div className="text-sm"><span className="text-slate-400">Optional:</span> <span className="font-semibold text-blue-300">${optionalValue.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+              )}
+              {excludedItems.length > 0 && (
+                <div className="text-sm"><span className="text-slate-400">Excluded:</span> <span className="font-semibold text-red-400">{excludedItems.length}</span></div>
+              )}
+              {flaggedItems.length > 0 && (
+                <div className="text-sm"><span className="text-slate-400">Flagged:</span> <span className="font-semibold text-amber-400">{flaggedItems.length}</span></div>
+              )}
+              {resolutionMeta?.resolution_confidence && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <ShieldCheck size={13} className="text-slate-500" />
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${confBadgeColor(resolutionMeta.resolution_confidence)}`}>
+                    {resolutionMeta.resolution_confidence}
+                  </span>
+                  <span className="text-xs text-slate-500">{resSourceLabel(resolutionMeta.resolution_source)}</span>
+                </div>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                {flaggedItems.length > 0 && (
+                  <button
+                    onClick={() => setShowFlagged(v => !v)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showFlagged ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-600'}`}
+                  >
+                    <AlertTriangle size={11} />
+                    Flagged only
+                  </button>
+                )}
+                <input
+                  type="text"
+                  placeholder="Filter items..."
+                  value={filter}
+                  onChange={e => setFilter(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-500 w-44"
+                />
+              </div>
+            </div>
+            <div className="px-6 pb-2.5 flex items-center gap-1.5">
+              {(['all', 'main', 'optional', 'excluded'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setScopeFilter(s)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    scopeFilter === s
+                      ? s === 'excluded' ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                        : s === 'optional' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                        : 'bg-slate-600 text-slate-100 border border-slate-500'
+                      : 'bg-slate-900 text-slate-400 border border-slate-700 hover:border-slate-600'
+                  }`}
+                >
+                  {s === 'all' ? `All (${items.length})` : s === 'main' ? `Main (${mainItems.length})` : s === 'optional' ? `Optional (${optionalItems.length})` : `Excluded (${excludedItems.length})`}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -860,6 +1060,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
                       <th className="px-4 py-2">Unit</th>
                       <th className="px-4 py-2 text-right">Unit Price</th>
                       <th className="px-4 py-2 text-right">Total</th>
+                      <th className="px-4 py-2">Scope</th>
                       <th className="px-4 py-2">Service</th>
                       <th className="px-4 py-2">FRR</th>
                       <th className="px-4 py-2">Mapped Type</th>
@@ -868,76 +1069,126 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {filtered.map((item, idx) => (
-                      <>
-                        <tr
-                          key={item.id}
-                          className="hover:bg-slate-800/50 transition-colors cursor-pointer"
-                          onClick={() => toggleRow(item.id)}
-                        >
-                          <td className="px-4 py-2 text-slate-500 text-xs">{idx + 1}</td>
-                          <td className="px-4 py-2 text-slate-200 max-w-xs">
-                            <div className="truncate">{item.description || <span className="text-slate-600 italic">—</span>}</div>
-                          </td>
-                          <td className="px-4 py-2 text-right text-slate-300">
-                            {item.quantity != null ? item.quantity : <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2 text-slate-400 text-xs">
-                            {item.unit || <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2 text-right text-slate-300">
-                            {item.unit_price != null
-                              ? `$${Number(item.unit_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                              : <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2 text-right font-semibold">
-                            {item.total_price != null && Number(item.total_price) > 0
-                              ? <span className="text-emerald-400">${Number(item.total_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                              : <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2">
-                            {item.service
-                              ? <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">{item.service}</span>
-                              : <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2 text-xs text-slate-400">
-                            {item.frr || <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2 text-xs text-slate-400">
-                            {item.mapped_service_type || <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2 text-right text-xs">
-                            {item.confidence != null
-                              ? <span className={item.confidence >= 0.8 ? 'text-emerald-400' : item.confidence >= 0.5 ? 'text-amber-400' : 'text-red-400'}>
-                                  {Math.round(item.confidence * 100)}%
-                                </span>
-                              : <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2 text-slate-500">
-                            {expandedRows.has(item.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          </td>
-                        </tr>
-                        {expandedRows.has(item.id) && (
-                          <tr key={`${item.id}-expanded`} className="bg-slate-800/30">
-                            <td />
-                            <td colSpan={10} className="px-4 py-3">
-                              <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div><span className="text-slate-500">Mapped System:</span> <span className="text-slate-300">{item.mapped_system || '—'}</span></div>
-                                <div><span className="text-slate-500">Scope Category:</span> <span className="text-slate-300">{item.scope_category || '—'}</span></div>
-                                <div><span className="text-slate-500">Subclass:</span> <span className="text-slate-300">{item.subclass || '—'}</span></div>
-                                <div><span className="text-slate-500">Size:</span> <span className="text-slate-300">{item.size || '—'}</span></div>
-                                <div><span className="text-slate-500">Source:</span> <span className="text-slate-300">{item.source || '—'}</span></div>
-                                <div><span className="text-slate-500">Excluded:</span> <span className={item.is_excluded ? 'text-red-400' : 'text-slate-300'}>{item.is_excluded ? 'Yes' : 'No'}</span></div>
-                                <div className="col-span-2"><span className="text-slate-500">Full Description:</span> <span className="text-slate-300">{item.description || '—'}</span></div>
+                    {filtered.map((item, idx) => {
+                      const isExcluded = item.is_excluded === true;
+                      const isOptional = item.scope_category === 'Optional' && !isExcluded;
+                      const hasFlags = item.validation_flags && item.validation_flags.length > 0;
+                      const rowBg = isExcluded
+                        ? 'bg-red-900/10 hover:bg-red-900/15'
+                        : isOptional
+                        ? 'bg-blue-900/10 hover:bg-blue-900/15'
+                        : hasFlags
+                        ? 'bg-amber-900/10 hover:bg-amber-900/15'
+                        : 'hover:bg-slate-800/50';
+                      return (
+                        <>
+                          <tr
+                            key={item.id}
+                            className={`transition-colors cursor-pointer ${rowBg}`}
+                            onClick={() => toggleRow(item.id)}
+                          >
+                            <td className="px-4 py-2 text-slate-500 text-xs">{idx + 1}</td>
+                            <td className="px-4 py-2 text-slate-200 max-w-xs">
+                              <div className="flex items-start gap-1.5">
+                                <div className={`truncate flex-1 ${isExcluded ? 'line-through text-slate-500' : ''}`}>
+                                  {item.description || <span className="text-slate-600 italic">—</span>}
+                                </div>
+                                {hasFlags && (
+                                  <AlertTriangle size={11} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                                )}
                               </div>
                             </td>
+                            <td className="px-4 py-2 text-right text-slate-300">
+                              {item.quantity != null ? item.quantity : <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2 text-slate-400 text-xs">
+                              {item.unit || <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2 text-right text-slate-300">
+                              {item.unit_price != null
+                                ? `$${Number(item.unit_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2 text-right font-semibold">
+                              {item.total_price != null && Number(item.total_price) > 0
+                                ? <span className={isExcluded ? 'text-slate-500 line-through' : isOptional ? 'text-blue-300' : 'text-emerald-400'}>
+                                    ${Number(item.total_price).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                : <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2">
+                              {isExcluded
+                                ? <span className="px-1.5 py-0.5 rounded text-xs bg-red-500/20 text-red-300 border border-red-500/30">Excluded</span>
+                                : isOptional
+                                ? <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">Optional</span>
+                                : item.scope_category
+                                ? <span className="px-1.5 py-0.5 rounded text-xs bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">{item.scope_category}</span>
+                                : <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2">
+                              {item.service
+                                ? <span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 border border-blue-500/30">{item.service}</span>
+                                : <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2 text-xs text-slate-400">
+                              {item.frr || <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2 text-xs text-slate-400">
+                              {item.mapped_service_type || <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2 text-right text-xs">
+                              {item.confidence != null
+                                ? <span className={item.confidence >= 0.8 ? 'text-emerald-400' : item.confidence >= 0.5 ? 'text-amber-400' : 'text-red-400'}>
+                                    {Math.round(item.confidence * 100)}%
+                                  </span>
+                                : <span className="text-slate-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2 text-slate-500">
+                              {expandedRows.has(item.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </td>
                           </tr>
-                        )}
-                      </>
-                    ))}
+                          {expandedRows.has(item.id) && (
+                            <tr key={`${item.id}-expanded`} className="bg-slate-800/30">
+                              <td />
+                              <td colSpan={11} className="px-4 py-3">
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  <div><span className="text-slate-500">Mapped System:</span> <span className="text-slate-300">{item.mapped_system || '—'}</span></div>
+                                  <div><span className="text-slate-500">Scope Category:</span> <span className="text-slate-300">{item.scope_category || '—'}</span></div>
+                                  <div><span className="text-slate-500">Subclass:</span> <span className="text-slate-300">{item.subclass || '—'}</span></div>
+                                  <div><span className="text-slate-500">Size:</span> <span className="text-slate-300">{item.size || '—'}</span></div>
+                                  <div><span className="text-slate-500">Source:</span>
+                                    <span className={`ml-1 px-1.5 py-0.5 rounded text-xs border ${item.source === 'llm_detect' || item.source === 'llm_normalize' ? 'bg-blue-500/15 text-blue-300 border-blue-500/25' : item.source === 'pdfplumber' || item.source === 'pymupdf' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' : 'bg-slate-700 text-slate-400 border-slate-600'}`}>
+                                      {item.source || 'legacy'}
+                                    </span>
+                                  </div>
+                                  <div><span className="text-slate-500">Excluded:</span> <span className={item.is_excluded ? 'text-red-400' : 'text-slate-300'}>{item.is_excluded ? 'Yes' : 'No'}</span></div>
+                                  {hasFlags && (
+                                    <div className="col-span-2">
+                                      <span className="text-slate-500">Validation Flags:</span>
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {(item.validation_flags ?? []).map((flag, fi) => (
+                                          <span key={fi} className="px-1.5 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30">{flag}</span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {item.raw_text && (
+                                    <div className="col-span-2">
+                                      <span className="text-slate-500">Raw Text:</span>
+                                      <div className="mt-1 bg-slate-950 rounded px-2 py-1.5 font-mono text-xs text-slate-400 break-all max-h-20 overflow-auto">{item.raw_text}</div>
+                                    </div>
+                                  )}
+                                  <div className="col-span-2"><span className="text-slate-500">Full Description:</span> <span className="text-slate-300">{item.description || '—'}</span></div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={11} className="px-4 py-12 text-center text-slate-500">No items match your filter</td>
+                        <td colSpan={12} className="px-4 py-12 text-center text-slate-500">No items match your filter</td>
                       </tr>
                     )}
                   </tbody>
@@ -965,6 +1216,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
                   rawJson={rawJson}
                   showRaw={showRaw}
                   onToggleRaw={() => setShowRaw(v => !v)}
+                  resolutionMeta={resolutionMeta}
                 />
               )}
             </>
@@ -995,9 +1247,29 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
         )}
         <div className="px-6 py-3 border-t border-slate-700 flex-shrink-0 flex items-center justify-between gap-3">
           {view === 'user'
-            ? <span className="text-xs text-slate-500">Showing {filtered.length} of {items.length} items</span>
-            : <span className="text-xs text-slate-500">
-                {debugData ? `${debugData.debug.chunks.length} chunks · ${debugData.debug.failedLinesGlobal.length} failed lines` : 'Debug mode'}
+            ? <span className="text-xs text-slate-500">
+                Showing {filtered.length} of {items.length} items
+                {excludedItems.length > 0 && ` · ${excludedItems.length} excluded`}
+                {flaggedItems.length > 0 && ` · ${flaggedItems.length} flagged`}
+              </span>
+            : <span className="text-xs text-slate-500 flex items-center gap-3">
+                {debugData
+                  ? <>
+                      <span>{debugData.debug.chunks.length} chunks</span>
+                      <span>·</span>
+                      <span className={debugData.debug.failedLinesGlobal.length > 0 ? 'text-red-400' : 'text-emerald-400'}>
+                        {debugData.debug.failedLinesGlobal.length} failed lines
+                      </span>
+                      {resolutionMeta?.resolution_confidence && (
+                        <>
+                          <span>·</span>
+                          <span className={resolutionMeta.resolution_confidence === 'HIGH' ? 'text-emerald-400' : resolutionMeta.resolution_confidence === 'MEDIUM' ? 'text-amber-400' : 'text-red-400'}>
+                            {resolutionMeta.resolution_confidence} resolution
+                          </span>
+                        </>
+                      )}
+                    </>
+                  : 'Debug mode'}
               </span>
           }
           <button onClick={onClose} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm transition-colors">Close</button>
