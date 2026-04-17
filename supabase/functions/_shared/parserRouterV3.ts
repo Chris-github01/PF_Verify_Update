@@ -65,6 +65,9 @@ export function runParserV3(input: ParserV3Input): ParserV3Output {
   let rawOutput: RawParserOutput;
 
   switch (classification.documentClass) {
+    case 'multi_page_boq_summary_pdf':
+      rawOutput = parseSummarySchedulePdf(pages);
+      break;
     case 'summary_schedule_pdf':
       rawOutput = parseSummarySchedulePdf(pages);
       break;

@@ -14,6 +14,7 @@
 // =============================================================================
 
 export type DocumentClass =
+  | 'multi_page_boq_summary_pdf'
   | 'summary_schedule_pdf'
   | 'schedule_only_pdf'
   | 'simple_line_items_pdf'
@@ -34,6 +35,7 @@ export interface ClassificationResult {
     hasSummaryTotals: boolean;
     hasScheduleRows: boolean;
     hasOptionalScope: boolean;
+    hasBlockRowIds: boolean;
     numberedRowCount: number;
     pageCount: number;
     avgLineLength: number;
@@ -74,6 +76,10 @@ const NUMBERED_ROW_RE = /^\s*\d{1,3}[\s\t]+\S/m;
 const SCHEDULE_BLOCK_RE = /\bBLOCK\b|\bLEVEL\s+\d\b|\bZONE\s+[A-Z]\b|\bSTAGE\s+\d\b/i;
 const TABLE_HEADER_RE = /\b(Description|Item|Qty|Quantity|Unit|Rate|Total|Amount)\b/i;
 
+// Block-style row IDs (e.g. B30, B31-B34) — signals multi-page BOQ with block structure
+const BLOCK_ROW_ID_RE = /\bB\d{1,3}\b/;
+const BLOCK_ROW_ID_DENSE_RE = /\bB\d{1,3}\b.*\bB\d{1,3}\b/;
+
 // Poor OCR signals
 const BROKEN_LINE_RE = /[^\x20-\x7E\n\r\t]{3,}/;
 const VERY_SHORT_LINE_RE = /^.{1,4}$/m;
@@ -93,6 +99,10 @@ function hasOptionalScope(text: string): boolean {
 
 function hasScheduleRows(text: string): boolean {
   return NUMBERED_ROW_RE.test(text) || SCHEDULE_BLOCK_RE.test(text);
+}
+
+function hasBlockRowIds(text: string): boolean {
+  return BLOCK_ROW_ID_DENSE_RE.test(text) || (BLOCK_ROW_ID_RE.test(text) && SCHEDULE_BLOCK_RE.test(text));
 }
 
 function hasTableHeaders(text: string): boolean {
@@ -165,6 +175,7 @@ export function classifyDocument(
   const summaryTotalsDetected = hasSummaryTotals(fullText);
   const scheduleRowsDetected = hasScheduleRows(fullText);
   const optionalScopeDetected = hasOptionalScope(fullText);
+  const blockRowIdsDetected = hasBlockRowIds(fullText);
   const numberedRowCount = countNumberedRows(fullText);
   const avgLine = averageLineLength(fullText);
   const tableConf = estimateTableConfidence(fullText);
@@ -173,105 +184,71 @@ export function classifyDocument(
   if (summaryTotalsDetected) reasons.push('Summary total labels detected');
   if (scheduleRowsDetected) reasons.push('Numbered schedule rows detected');
   if (optionalScopeDetected) reasons.push('Optional scope section detected');
+  if (blockRowIdsDetected) reasons.push('Block-style row IDs detected (e.g. B30, B31)');
   if (numberedRowCount > 30) reasons.push(`High numbered row count (${numberedRowCount})`);
   if (ocrQuality === 'poor') reasons.push('Poor OCR quality detected');
 
-  // --- Classification logic ---
-
-  // Poor OCR → scanned_ocr_pdf regardless of other signals
-  if (ocrQuality === 'poor' && tableConf < 0.3) {
-    reasons.push('Low table confidence + poor OCR → scanned_ocr_pdf');
-    return makeResult('scanned_ocr_pdf', 0.75, reasons, {
-      hasSummaryTotals: summaryTotalsDetected,
-      hasScheduleRows: scheduleRowsDetected,
-      hasOptionalScope: optionalScopeDetected,
-      numberedRowCount,
-      pageCount: pages.length,
-      avgLineLength: avgLine,
-      tableConfidence: tableConf,
-      isSpreadsheet,
-      ocrQuality,
-    });
-  }
-
-  // Has authoritative summary totals AND schedule rows → summary_schedule_pdf
-  if (summaryTotalsDetected && scheduleRowsDetected && numberedRowCount > 10) {
-    reasons.push('Summary totals + schedule rows → summary_schedule_pdf');
-    const confidence = summaryTotalsDetected && numberedRowCount > 30 ? 0.92 : 0.80;
-    return makeResult('summary_schedule_pdf', confidence, reasons, {
-      hasSummaryTotals: summaryTotalsDetected,
-      hasScheduleRows: scheduleRowsDetected,
-      hasOptionalScope: optionalScopeDetected,
-      numberedRowCount,
-      pageCount: pages.length,
-      avgLineLength: avgLine,
-      tableConfidence: tableConf,
-      isSpreadsheet,
-      ocrQuality,
-    });
-  }
-
-  // Many numbered rows, no summary totals → schedule_only_pdf
-  if (scheduleRowsDetected && numberedRowCount > 10 && !summaryTotalsDetected) {
-    reasons.push('Schedule rows without summary totals → schedule_only_pdf');
-    return makeResult('schedule_only_pdf', 0.80, reasons, {
-      hasSummaryTotals: false,
-      hasScheduleRows: true,
-      hasOptionalScope: optionalScopeDetected,
-      numberedRowCount,
-      pageCount: pages.length,
-      avgLineLength: avgLine,
-      tableConfidence: tableConf,
-      isSpreadsheet,
-      ocrQuality,
-    });
-  }
-
-  // Summary totals + few rows → simple_line_items_pdf
-  if (summaryTotalsDetected && numberedRowCount <= 10 && tableConf > 0.3) {
-    reasons.push('Summary totals with few rows → simple_line_items_pdf');
-    return makeResult('simple_line_items_pdf', 0.78, reasons, {
-      hasSummaryTotals: true,
-      hasScheduleRows: false,
-      hasOptionalScope: optionalScopeDetected,
-      numberedRowCount,
-      pageCount: pages.length,
-      avgLineLength: avgLine,
-      tableConfidence: tableConf,
-      isSpreadsheet,
-      ocrQuality,
-    });
-  }
-
-  // Has table structure but no numbered rows → simple_line_items_pdf
-  if (tableConf >= 0.5 && numberedRowCount <= 10) {
-    reasons.push('Table structure detected without numbered rows → simple_line_items_pdf');
-    return makeResult('simple_line_items_pdf', 0.65, reasons, {
-      hasSummaryTotals: summaryTotalsDetected,
-      hasScheduleRows: false,
-      hasOptionalScope: optionalScopeDetected,
-      numberedRowCount,
-      pageCount: pages.length,
-      avgLineLength: avgLine,
-      tableConfidence: tableConf,
-      isSpreadsheet,
-      ocrQuality,
-    });
-  }
-
-  // Cannot classify
-  reasons.push('No confident classification signals found → mixed_unknown');
-  return makeResult('mixed_unknown', 0.40, reasons, {
+  const signals = {
     hasSummaryTotals: summaryTotalsDetected,
     hasScheduleRows: scheduleRowsDetected,
     hasOptionalScope: optionalScopeDetected,
+    hasBlockRowIds: blockRowIdsDetected,
     numberedRowCount,
     pageCount: pages.length,
     avgLineLength: avgLine,
     tableConfidence: tableConf,
     isSpreadsheet,
     ocrQuality,
-  });
+  };
+
+  // --- Classification logic ---
+
+  // Poor OCR → scanned_ocr_pdf regardless of other signals
+  if (ocrQuality === 'poor' && tableConf < 0.3) {
+    reasons.push('Low table confidence + poor OCR → scanned_ocr_pdf');
+    return makeResult('scanned_ocr_pdf', 0.75, reasons, signals);
+  }
+
+  // Multi-page BOQ with Grand Total summary page — highest priority check.
+  // Signals: Grand Total present + multi-page (>=3) + block-style row IDs OR
+  // large numbered row count (>=20) with summary on a non-last page.
+  if (
+    summaryTotalsDetected &&
+    pages.length >= 3 &&
+    (blockRowIdsDetected || numberedRowCount >= 20)
+  ) {
+    reasons.push('Grand Total + multi-page + BOQ rows → multi_page_boq_summary_pdf');
+    return makeResult('multi_page_boq_summary_pdf', 0.94, reasons, signals);
+  }
+
+  // Has authoritative summary totals AND schedule rows → summary_schedule_pdf
+  if (summaryTotalsDetected && scheduleRowsDetected && numberedRowCount > 10) {
+    reasons.push('Summary totals + schedule rows → summary_schedule_pdf');
+    const confidence = numberedRowCount > 30 ? 0.92 : 0.80;
+    return makeResult('summary_schedule_pdf', confidence, reasons, signals);
+  }
+
+  // Many numbered rows, no summary totals → schedule_only_pdf
+  if (scheduleRowsDetected && numberedRowCount > 10 && !summaryTotalsDetected) {
+    reasons.push('Schedule rows without summary totals → schedule_only_pdf');
+    return makeResult('schedule_only_pdf', 0.80, reasons, signals);
+  }
+
+  // Summary totals + few rows → simple_line_items_pdf
+  if (summaryTotalsDetected && numberedRowCount <= 10 && tableConf > 0.3) {
+    reasons.push('Summary totals with few rows → simple_line_items_pdf');
+    return makeResult('simple_line_items_pdf', 0.78, reasons, signals);
+  }
+
+  // Has table structure but no numbered rows → simple_line_items_pdf
+  if (tableConf >= 0.5 && numberedRowCount <= 10) {
+    reasons.push('Table structure detected without numbered rows → simple_line_items_pdf');
+    return makeResult('simple_line_items_pdf', 0.65, reasons, signals);
+  }
+
+  // Cannot classify
+  reasons.push('No confident classification signals found → mixed_unknown');
+  return makeResult('mixed_unknown', 0.40, reasons, signals);
 }
 
 function makeResult(

@@ -165,7 +165,15 @@ const ROW_NO_RATE_RE = new RegExp(
 const ROW_TOTAL_ONLY_RE = /^(\d{1,3})\s+(.+?)\s+\$\s*([\d,]+\.\d{2})$/i;
 
 const BY_OTHERS_RE = /\bby\s+others\b/i;
-const OPTIONAL_ROW_RE = /\b(OPTIONAL|ADD\s+TO\s+SCOPE|OPTIONAL\s+EXTRAS)\b/i;
+
+// A line is ONLY optional if it is an explicit section heading — not a row keyword.
+// This prevents "Beam", "Structural", "Flush Box" etc from flipping scope globally.
+const OPTIONAL_SECTION_HEADER_RE = /^\s*OPTIONAL\s+SCOPE\s*$/i;
+const OPTIONAL_SECTION_START_RE = /\b(OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|OPTIONAL\s+EXTRAS)\b/i;
+
+// A new non-optional section heading resets scope back to base
+const BASE_SECTION_RESET_RE = /^\s*(MAIN\s+SCOPE|BASE\s+SCOPE|SCOPE\s+OF\s+WORKS?|SCHEDULE\s+OF\s+(RATES?|QUANTITIES))\s*$/i;
+
 const EXCLUDE_RE = [
   /^\$\s*[-–]$/, /^-+$/, /^n\/?a$/i,
   /not\s+in\s+contract/i,
@@ -189,7 +197,8 @@ function parseRow(rawLine: string, section: string, scopeCategory: 'base' | 'opt
   if (BY_OTHERS_RE.test(line)) return null;
   if (EXCLUDE_RE.some(re => re.test(line))) return null;
 
-  const scope = OPTIONAL_ROW_RE.test(line) ? 'optional' : scopeCategory;
+  // Scope is determined by the current section context, not by row keywords
+  const scope = scopeCategory;
 
   let m = line.match(ROW_FULL_RE);
   if (m) {
@@ -239,15 +248,30 @@ function parseSchedulePages(pages: PageData[]): ParsedLineItem[] {
   let scopeCategory: 'base' | 'optional' = 'base';
 
   for (const page of pages) {
+    // Reset to base scope at each new page — optional scope does not bleed across pages
+    scopeCategory = 'base';
     const lines = page.text.split('\n').map(l => l.trim()).filter(Boolean);
 
     for (const line of lines) {
-      const secMatch = line.replace(/\s+/g, ' ').match(SECTION_RE);
+      const normalized = line.replace(/\s+/g, ' ');
+
+      // Detect new named section (BLOCK, LEVEL, ZONE, STAGE) — always resets to base
+      const secMatch = normalized.match(SECTION_RE);
       if (secMatch) {
         const id = secMatch[1] ?? secMatch[2] ?? secMatch[3] ?? secMatch[4];
         currentSection = `SEC${id}`;
+        scopeCategory = 'base';
       }
-      if (OPTIONAL_ROW_RE.test(line)) scopeCategory = 'optional';
+
+      // Only flip to optional on an explicit section heading line (not a row keyword)
+      if (OPTIONAL_SECTION_START_RE.test(normalized) && !/^\d{1,3}\s/.test(normalized)) {
+        scopeCategory = 'optional';
+      }
+
+      // Explicit base scope reset heading
+      if (BASE_SECTION_RESET_RE.test(normalized)) {
+        scopeCategory = 'base';
+      }
 
       if (!/^\d{1,3}[\s]/.test(line.trimStart())) continue;
 
