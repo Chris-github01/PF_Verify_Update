@@ -1,35 +1,27 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import {
-  cleanText,
-  hasMoney,
-  hasDesc,
-  normalizeLine,
-  extractDocumentTotal,
-  dedupeKey,
-  addRemainderIfNeeded,
-  extractFRRFromDescription,
-  filterTotalRows,
-} from "../_shared/itemNormalizer.ts";
-import { runParseResolution } from "../_shared/parseResolutionEngine.ts";
-import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
-import {
-  documentQualifiesForStructuredParser,
-  runPageStructuredParser,
-} from "../_shared/pageStructuredParser.ts";
+import { cleanText, extractFRRFromDescription } from "../_shared/itemNormalizer.ts";
 import { runParserV3 } from "../_shared/parserRouterV3.ts";
 
-// Feature flag — set PARSER_V3_ENABLED=true in edge function env to activate
-const PARSER_V3_ENABLED = Deno.env.get("PARSER_V3_ENABLED") === "true";
+// =============================================================================
+// PROCESS PARSING JOB — V3 CANONICAL PARSER
+//
+// Single production flow:
+//   1. Download file
+//   2. Extract raw text / pages
+//   3. runParserV3 (classify → route → resolve)
+//   4. Save quote + quote_items
+//   5. Write parse metadata
+//
+// NO other parser paths. No feature flags. No fallbacks to old parsers.
+// If v3 returns empty, job is marked parsing_failed with diagnostics.
+// =============================================================================
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
-
-const PDF_EXTRACTOR_BASE_URL = Deno.env.get("PDF_EXTRACTOR_BASE_URL") || "https://verify-pdf-extractor.onrender.com";
-const PYTHON_PARSER_API_KEY = Deno.env.get("PYTHON_PARSER_API_KEY");
 
 interface ParsingJob {
   id: string;
@@ -40,141 +32,43 @@ interface ParsingJob {
   file_url: string;
   organisation_id: string;
   user_id: string;
-}
-
-async function parseLargeQuoteInChunks(
-  text: string,
-  supplierName: string,
-  llmUrl: string,
-  llmHeaders: Record<string, string>
-): Promise<any> {
-  console.log("Chunking large quote for processing...");
-
-  const lines = text.split('\n');
-  const rawChunks: string[][] = [];
-  let currentChunk: string[] = [];
-  let currentSize = 0;
-  const maxChunkSize = 2500;
-  const overlapLines = 3;
-
-  for (const line of lines) {
-    currentChunk.push(line);
-    currentSize += line.length;
-
-    if (currentSize >= maxChunkSize) {
-      rawChunks.push([...currentChunk]);
-      const overlap = currentChunk.slice(-overlapLines);
-      currentChunk = [...overlap];
-      currentSize = overlap.reduce((s, l) => s + l.length, 0);
-    }
-  }
-
-  if (currentChunk.length > 0) {
-    rawChunks.push(currentChunk);
-  }
-
-  const chunks = rawChunks.map(c => c.join('\n'));
-
-  console.log(`Split into ${chunks.length} chunks`);
-
-  const allItems: any[] = [];
-  const allWarnings: string[] = [];
-  let totalConfidence = 0;
-
-  for (let i = 0; i < chunks.length; i++) {
-    console.log(`Processing chunk ${i + 1}/${chunks.length}...`);
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000);
-
-      const response = await fetch(llmUrl, {
-        method: "POST",
-        headers: llmHeaders,
-        body: JSON.stringify({
-          text: chunks[i],
-          supplierName,
-        }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.items && Array.isArray(result.items)) {
-          allItems.push(...result.items);
-          totalConfidence += (result.confidence || 0.8);
-          if (result.warnings) {
-            allWarnings.push(...result.warnings);
-          }
-          console.log(`Chunk ${i + 1} extracted ${result.items.length} items`);
-        }
-      } else {
-        console.error(`Chunk ${i + 1} failed:`, response.status);
-        allWarnings.push(`Chunk ${i + 1} parse failed`);
-      }
-    } catch (error) {
-      console.error(`Error processing chunk ${i + 1}:`, error);
-      allWarnings.push(`Chunk ${i + 1} error: ${error instanceof Error ? error.message : 'Unknown'}`);
-    }
-  }
-
-  return {
-    items: allItems,
-    totals: {
-      grandTotal: allItems.reduce((sum, item) => sum + (item.total || 0), 0),
-    },
-    metadata: {
-      supplier: supplierName,
-    },
-    confidence: chunks.length > 0 ? totalConfidence / chunks.length : 0,
-    warnings: allWarnings,
-  };
+  trade: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  let jobId: string | null = null;
 
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing authorization header" }),
-        {
-          status: 401,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { jobId } = await req.json();
+    const body = await req.json();
+    jobId = body.jobId;
 
     if (!jobId) {
       return new Response(
         JSON.stringify({ error: "Missing jobId" }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
+    // -------------------------------------------------------------------------
+    // Load job
+    // -------------------------------------------------------------------------
     const { data: job, error: jobError } = await supabase
       .from("parsing_jobs")
       .select("*")
@@ -189,879 +83,379 @@ Deno.serve(async (req: Request) => {
 
     await supabase
       .from("parsing_jobs")
-      .update({
-        status: "processing",
-        progress: 10,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ status: "processing", progress: 10, updated_at: new Date().toISOString() })
       .eq("id", jobId);
 
+    // -------------------------------------------------------------------------
+    // Step 1: Download file
+    // -------------------------------------------------------------------------
     const { data: fileData, error: downloadError } = await supabase
       .storage
       .from("quotes")
       .download(typedJob.file_url);
 
     if (downloadError || !fileData) {
-      await supabase
-        .from("parsing_jobs")
-        .update({
-          status: "failed",
-          error_message: "Failed to download file",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", jobId);
+      throw new Error("Failed to download file from storage");
+    }
 
-      throw new Error("Failed to download file");
+    const fileBuffer = await fileData.arrayBuffer();
+    const fileName = typedJob.filename.toLowerCase();
+
+    await supabase
+      .from("parsing_jobs")
+      .update({ progress: 25, updated_at: new Date().toISOString() })
+      .eq("id", jobId);
+
+    // -------------------------------------------------------------------------
+    // Step 2: Extract raw text / pages
+    // -------------------------------------------------------------------------
+    let allPages: { pageNum: number; text: string }[] = [];
+    let spreadsheetRows: (string | number | null | undefined)[][] | undefined;
+    let fileExtension: string | undefined;
+
+    if (fileName.endsWith(".pdf")) {
+      fileExtension = "pdf";
+      console.log(`[V3] Extracting PDF text with pdfjs...`);
+
+      const pdfjsLib = await import("npm:pdfjs-dist@4.0.379");
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(fileBuffer),
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+      });
+
+      const pdfDocument = await loadingTask.promise;
+      const numPages = pdfDocument.numPages;
+      console.log(`[V3] PDF has ${numPages} pages`);
+
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        const page = await pdfDocument.getPage(pageNum);
+        const textContent = await page.getTextContent();
+
+        let lastY = -1;
+        let pageText = "";
+
+        textContent.items.forEach((item: any) => {
+          const currentY = item.transform[5];
+          if (lastY !== -1 && Math.abs(currentY - lastY) > 5) {
+            pageText += "\n";
+          } else if (pageText.length > 0) {
+            pageText += " ";
+          }
+          pageText += item.str;
+          lastY = currentY;
+        });
+
+        if (pageText.trim()) {
+          allPages.push({ pageNum, text: pageText });
+        }
+      }
+
+    } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+      fileExtension = fileName.endsWith(".xls") ? "xls" : "xlsx";
+      console.log(`[V3] Extracting Excel file...`);
+
+      const XLSX = await import("npm:xlsx@0.18.5");
+      const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as (string | number | null | undefined)[][];
+      spreadsheetRows = rows;
+
+      const textLines = rows
+        .map((row) => row.map((cell) => String(cell || "").trim()).join("\t"))
+        .filter((line) => line.trim());
+
+      allPages = [{ pageNum: 1, text: textLines.join("\n") }];
+
+    } else {
+      throw new Error(`Unsupported file type: ${fileName}`);
+    }
+
+    if (allPages.length === 0) {
+      throw new Error("No text could be extracted from the file");
     }
 
     await supabase
       .from("parsing_jobs")
-      .update({
-        progress: 30,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ progress: 50, updated_at: new Date().toISOString() })
       .eq("id", jobId);
 
-    const fileBuffer = await fileData.arrayBuffer();
-    const fileName = typedJob.filename.toLowerCase();
-    let parsedLines = [];
-
-    try {
-      let allPages: string[] = [];
-      let useExternalExtractor = false;
-      let structuredItems: any[] | null = null;
-
-      if (fileName.endsWith(".pdf")) {
-        console.log("Attempting to use external PDF extractor API...");
-
-        try {
-          const file = new File([fileBuffer], typedJob.filename, { type: "application/pdf" });
-          const formData = new FormData();
-          formData.append("file", file);
-
-          const headers: Record<string, string> = {};
-          if (PYTHON_PARSER_API_KEY) {
-            headers["X-API-Key"] = PYTHON_PARSER_API_KEY;
-          }
-
-          const extractorResponse = await fetch(`${PDF_EXTRACTOR_BASE_URL}/parse/ensemble`, {
-            method: "POST",
-            headers,
-            body: formData,
-          });
-
-          if (extractorResponse.ok) {
-            const extractorData = await extractorResponse.json();
-            console.log("External PDF extractor succeeded:", {
-              recommendation: extractorData.recommendation,
-              parsers_succeeded: extractorData.confidence_breakdown?.parsers_succeeded,
-              overall_confidence: extractorData.confidence_breakdown?.overall,
-              best_parser: extractorData.confidence_breakdown?.best_parser
-            });
-
-            const bestResult = extractorData.best_result;
-            const overallConfidence = extractorData.confidence_breakdown?.overall || 0;
-
-            // CRITICAL: Only use external parser if confidence >= 0.7
-            // This promotes high-quality structured data to "source of truth"
-            if (bestResult && bestResult.success && bestResult.items && bestResult.items.length > 0 && overallConfidence >= 0.7) {
-              const SUMMARY_ROW_LABELS = new Set([
-                'total', 'totals', 'total:', 'grand total', 'grandtotal',
-                'quote total', 'contract sum', 'lump sum total', 'overall total',
-                'subtotal', 'sub-total', 'sub total', 'net total', 'project total',
-                'tender total', 'tender sum', 'contract value', 'total price',
-                'total cost', 'total amount', 'total sum', 'contract total',
-                'contract price', 'price total',
-              ]);
-
-              const isSummaryRow = (desc: string): boolean => {
-                const d = desc.replace(/[:\s]+$/, '').trim().toLowerCase();
-                if (SUMMARY_ROW_LABELS.has(d)) return true;
-                if (/^(grand\s+)?total(\s*(excl|incl|ex|inc)\.?.*)?$/i.test(d)) return true;
-                if (/^sub[-\s]?total/i.test(d)) return true;
-                if (/^contract\s+(sum|total|value|price)$/i.test(d)) return true;
-                return false;
-              };
-
-              const allMapped = bestResult.items.map((item: any) => ({
-                description: item.description || item.item_description || '',
-                qty: parseFloat(item.quantity) || 0,
-                unit: item.unit || item.unit_of_measure || '',
-                rate: parseFloat(item.unit_price) || 0,
-                total: parseFloat(item.total_price || item.line_total) || 0,
-                section: item.section || item.category || '',
-                item_number: item.item_number || item.item_code || '',
-                confidence: overallConfidence,
-                source: bestResult.parser_name,
-                raw_text: item.raw_text || '',
-                validation_flags: []
-              }));
-
-              structuredItems = allMapped.filter((item: any) => {
-                const desc = String(item.description ?? '').trim();
-                if (isSummaryRow(desc)) {
-                  console.log(`Filtered summary row from external extractor: "${desc}" ($${item.total})`);
-                  return false;
-                }
-                return true;
-              });
-
-              useExternalExtractor = true;
-              console.log(`✓ Using external extractor (confidence ${(overallConfidence * 100).toFixed(1)}%) from ${bestResult.parser_name}, ${structuredItems.length} items extracted (${allMapped.length - structuredItems.length} summary rows removed)`);
-
-              await supabase
-                .from("parsing_jobs")
-                .update({
-                  progress: 80,
-                  metadata: {
-                    extractor_used: "external_ensemble",
-                    recommendation: extractorData.recommendation,
-                    parsers_succeeded: extractorData.confidence_breakdown?.parsers_succeeded || 0,
-                    parsers_attempted: extractorData.confidence_breakdown?.parsers_attempted || 0,
-                    best_parser: bestResult.parser_name,
-                    items_count: structuredItems.length,
-                    confidence: overallConfidence,
-                    skip_llm: true
-                  },
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", jobId);
-            } else if (bestResult && bestResult.items && bestResult.items.length > 0) {
-              console.log(`⚠ External extractor low confidence (${(overallConfidence * 100).toFixed(1)}%), falling back to LLM parser`);
-            } else {
-              console.log("External extractor returned no items, falling back to LLM parser");
-            }
-          } else {
-            const errorText = await extractorResponse.text();
-            console.log(`External extractor failed with status ${extractorResponse.status}: ${errorText}, falling back to built-in parser`);
-          }
-        } catch (extractorError) {
-          console.log("External extractor error, falling back to built-in parser:", extractorError.message);
-        }
-
-        if (!useExternalExtractor) {
-          console.log("Processing PDF file with built-in text extraction...");
-
-        const pdfjsLib = await import("npm:pdfjs-dist@4.0.379");
-
-        const loadingTask = pdfjsLib.getDocument({
-          data: new Uint8Array(fileBuffer),
-          useWorkerFetch: false,
-          isEvalSupported: false,
-          useSystemFonts: true,
-        });
-
-        const pdfDocument = await loadingTask.promise;
-        const numPages = pdfDocument.numPages;
-        console.log(`PDF has ${numPages} pages, extracting text...`);
-
-        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-          const page = await pdfDocument.getPage(pageNum);
-          const textContent = await page.getTextContent();
-
-          let lastY = -1;
-          let pageText = '';
-
-          textContent.items.forEach((item: any) => {
-            const currentY = item.transform[5];
-            if (lastY !== -1 && Math.abs(currentY - lastY) > 5) {
-              pageText += '\n';
-            } else if (pageText.length > 0) {
-              pageText += ' ';
-            }
-            pageText += item.str;
-            lastY = currentY;
-          });
-
-          if (pageText.trim()) {
-            allPages.push(pageText);
-          }
-        }
-
-        await supabase
-          .from("parsing_jobs")
-          .update({
-            progress: 40,
-            metadata: { extractor_used: "built-in", num_pages: numPages },
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", jobId);
-      }
-
-      } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-        console.log("Processing Excel file...");
-        const XLSX = await import("npm:xlsx@0.18.5");
-        const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
-
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[][];
-
-        const textLines = rows
-          .map((row) => row.map((cell) => String(cell || "").trim()).join("\t"))
-          .filter((line) => line.trim());
-
-        allPages.push(textLines.join("\n"));
-
-        await supabase
-          .from("parsing_jobs")
-          .update({
-            progress: 40,
-            metadata: { extractor_used: "xlsx", rows_count: rows.length },
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", jobId);
-      } else {
-        throw new Error("Unsupported file type");
-      }
-
-      // -----------------------------------------------------------------------
-      // PARSER V3: Classifier → Router → Resolution Layer (feature flagged)
-      // Enable via PARSER_V3_ENABLED=true env var
-      // -----------------------------------------------------------------------
-      if (PARSER_V3_ENABLED && !structuredItems && allPages.length > 0) {
-        const fileExt = fileName.split('.').pop()?.toLowerCase();
-        const pages = allPages.map((text, i) => ({ pageNum: i + 1, text }));
-        const rawText = allPages.join('\n\n');
-
-        const v3Result = runParserV3({ pages, rawText, fileExtension: fileExt });
-        const { resolution, classification } = v3Result;
-
-        console.log(`[ParserV3] documentClass=${classification.documentClass} confidence=${classification.confidence.toFixed(2)}`);
-        console.log(`[ParserV3] baseItems=${resolution.baseItems.length} optionalItems=${resolution.optionalItems.length}`);
-        console.log(`[ParserV3] grandTotal=${resolution.totals.grandTotal.toFixed(2)} source=${resolution.totals.source}`);
-        console.log(`[ParserV3] summaryDetected=${resolution.debug.summaryDetected} optionalScopeDetected=${resolution.debug.optionalScopeDetected}`);
-
-        if (resolution.totals.grandTotal > 0 || resolution.baseItems.length > 0) {
-          structuredItems = [
-            ...resolution.baseItems.map(item => ({
-              description: item.description, qty: item.qty, unit: item.unit,
-              rate: item.rate, total: item.total, section: item.section,
-              item_number: item.lineId, confidence: item.confidence,
-              source: item.source, scope_category: 'Main', frr: null,
-            })),
-            ...resolution.optionalItems.map(item => ({
-              description: item.description, qty: item.qty, unit: item.unit,
-              rate: item.rate, total: item.total, section: item.section,
-              item_number: item.lineId, confidence: item.confidence,
-              source: item.source, scope_category: 'Optional', frr: null,
-            })),
-          ];
-          structuredPageResult = {
-            base_total: resolution.totals.grandTotal,
-            optional_total: resolution.totals.optionalTotal,
-            subtotal: resolution.totals.subTotal,
-            ps3_qa: null,
-          };
-          usedStructuredPageParser = true;
-
-          await supabase.from("parsing_jobs").update({
-            progress: 80,
-            metadata: {
-              extractor_used: 'parser_v3',
-              document_class: classification.documentClass,
-              classifier_confidence: classification.confidence,
-              parser_used: resolution.parserUsed,
-              items_count: structuredItems.length,
-              grand_total: resolution.totals.grandTotal,
-              optional_total: resolution.totals.optionalTotal,
-              total_source: resolution.totals.source,
-              summary_detected: resolution.debug.summaryDetected,
-              optional_scope_detected: resolution.debug.optionalScopeDetected,
-              rows_detected: resolution.debug.itemCountBase + resolution.debug.itemCountOptional + resolution.debug.itemCountExcluded,
-              validation_risk: resolution.validation.risk,
-              validation_warnings: resolution.validation.warnings,
-              classifier_reasons: resolution.debug.classifierReasons,
-              skip_llm: true,
-            },
-            updated_at: new Date().toISOString(),
-          }).eq("id", jobId);
-        }
-      }
-
-      // -----------------------------------------------------------------------
-      // PARSER MODE A: StructuredPageParser
-      // If the document contains structured schedule pages (e.g. firestopping
-      // schedules with BLOCK headers and numbered line items), parse
-      // page-by-page WITHOUT chunking. This eliminates chunk duplication,
-      // row merging, and block context loss.
-      // -----------------------------------------------------------------------
-      let usedStructuredPageParser = false;
-      let structuredPageResult: any = null;
-
-      if (!structuredItems && allPages.length > 0 && documentQualifiesForStructuredParser(allPages)) {
-        console.log(`[StructuredPageParser] Document qualifies — running page-first parser on ${allPages.length} pages`);
-
-        const pageResult = runPageStructuredParser(allPages);
-        structuredPageResult = pageResult;
-
-        const diag = pageResult.diagnostics ?? {};
-        console.log(`[StructuredPageParser] structured_pages=${pageResult.structured_pages}/${pageResult.page_count}`);
-        console.log(`[StructuredPageParser] summary_detected=${diag.summary_detected ?? false} used_source=${diag.used_source ?? 'unknown'}`);
-        console.log(`[StructuredPageParser] rows_detected=${diag.rows_detected ?? 0} rows_parsed=${diag.rows_parsed ?? 0} rows_failed=${diag.rows_failed ?? 0} rows_excluded_by_others=${diag.rows_excluded_by_others ?? 0}`);
-        console.log(`[StructuredPageParser] base_total=$${pageResult.base_total.toFixed(2)} (source: ${diag.used_source ?? 'unknown'})`);
-        console.log(`[StructuredPageParser] optional_total=$${pageResult.optional_total.toFixed(2)}`);
-        console.log(`[StructuredPageParser] subtotal=${pageResult.subtotal ?? 'null'} ps3_qa=${pageResult.ps3_qa ?? 'null'}`);
-        console.log(`[StructuredPageParser] document_total=${pageResult.document_total ?? 'null'}`);
-        console.log(`[StructuredPageParser] validation risk=${pageResult.validation.risk} variance=${(pageResult.validation.variance * 100).toFixed(1)}%`);
-        if (pageResult.validation.message) {
-          console.warn(`[StructuredPageParser] ${pageResult.validation.message}`);
-        }
-        if (pageResult.fallback_triggered) {
-          console.warn(`[StructuredPageParser] fallback_triggered=true — no summary and no rows, delegating to LLM pipeline`);
-        }
-
-        // Commit when:
-        //  A) summary was detected (grand_total is canonical even if row count is 0), OR
-        //  B) rows were parsed (legacy row-summation path)
-        // Only skip if BOTH are empty (fallback_triggered=true).
-        const hasSummary = diag.summary_detected && pageResult.base_total > 0;
-        const hasRows = pageResult.items.length > 0;
-
-        if (hasSummary || hasRows) {
-          usedStructuredPageParser = true;
-
-          // Map schedule rows to downstream shape.
-          // When summary is source-of-truth, rows are used for item count only.
-          // The grand_total from the summary overrides any per-row summation.
-          structuredItems = pageResult.items.map(item => ({
-            description: item.description,
-            qty: item.qty,
-            unit: item.unit,
-            rate: item.rate,
-            total: item.total,
-            section: item.block_id,
-            item_number: item.line_id,
-            confidence: 1.0,
-            source: 'structured_page_parser',
-            scope_category: item.scope_category === 'optional' ? 'Optional' : 'Main',
-            frr: null,
-          }));
-
-          await supabase
-            .from("parsing_jobs")
-            .update({
-              progress: 80,
-              metadata: {
-                extractor_used: 'structured_page_parser',
-                structured_pages: pageResult.structured_pages,
-                page_count: pageResult.page_count,
-                items_count: structuredItems.length,
-                // SOURCE-OF-TRUTH totals from page 2 summary
-                grand_total: pageResult.base_total,
-                optional_total: pageResult.optional_total,
-                subtotal: pageResult.subtotal,
-                ps3_qa: pageResult.ps3_qa,
-                document_total: pageResult.document_total,
-                // Debug panel fields
-                summary_detected: diag.summary_detected ?? false,
-                used_source: diag.used_source ?? 'row_fallback',
-                rows_detected: diag.rows_detected ?? 0,
-                rows_parsed: diag.rows_parsed ?? 0,
-                rows_failed: diag.rows_failed ?? 0,
-                rows_excluded_by_others: diag.rows_excluded_by_others ?? 0,
-                validation_risk: pageResult.validation.risk,
-                skip_llm: true,
-              },
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", jobId);
-        } else {
-          console.log(`[StructuredPageParser] fallback_triggered — no summary + no rows, delegating to LLM/chunk pipeline`);
-        }
-      }
-
-      let parsedData;
-      if (structuredItems && (structuredItems.length > 0 || (structuredPageResult && structuredPageResult.base_total > 0))) {
-        const label = usedStructuredPageParser ? 'structured_page_parser' : 'external_extractor';
-        console.log(`Using ${structuredItems.length} structured items from ${label}`);
-
-        // SOURCE-OF-TRUTH: use page 2 summary grand_total when available,
-        // otherwise fall back to summing row totals.
-        const rowSum = structuredItems.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
-        const canonicalTotal = (structuredPageResult && structuredPageResult.base_total > 0)
-          ? structuredPageResult.base_total
-          : rowSum;
-        const canonicalOptional = (structuredPageResult && structuredPageResult.optional_total > 0)
-          ? structuredPageResult.optional_total
-          : 0;
-
-        parsedData = {
-          success: true,
-          items: structuredItems,
-          totals: {
-            subtotal: canonicalTotal,
-            gst: 0,
-            grandTotal: canonicalTotal,
-            optional_total: canonicalOptional,
-            ps3_qa: structuredPageResult?.ps3_qa ?? null,
-            // Raw row sum preserved for audit/debug
-            row_sum: rowSum,
-          },
-          metadata: {
-            supplier: typedJob.supplier_name,
-            summary_detected: structuredPageResult?.diagnostics?.summary_detected ?? false,
-            used_source: structuredPageResult?.diagnostics?.used_source ?? 'row_fallback',
-            rows_detected: structuredPageResult?.diagnostics?.rows_detected ?? 0,
-          },
-          confidence: usedStructuredPageParser ? 1.0 : 0.9,
-          warnings: []
-        };
-      } else {
-        const fullText = allPages.join("\n\n");
-        parsedLines = fullText.split("\n").map((line) => line.trim()).filter(Boolean);
-
-        console.log(`Extracted ${parsedLines.length} lines from document, length: ${fullText.length} chars`);
-
-        await supabase
-          .from("parsing_jobs")
-          .update({
-            progress: 60,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", jobId);
-
-        // For large documents, create chunks in database
-        if (fullText.length > 4000 || parsedLines.length > 50) {
-          console.log("Large document detected, creating chunks...");
-
-          const lines = fullText.split('\n');
-          const rawChunks: string[][] = [];
-          let currentChunk: string[] = [];
-          let currentSize = 0;
-          const maxChunkSize = 2500;
-          const overlapLines = 3;
-
-          for (const line of lines) {
-            currentChunk.push(line);
-            currentSize += line.length;
-
-            if (currentSize >= maxChunkSize) {
-              rawChunks.push([...currentChunk]);
-              const overlap = currentChunk.slice(-overlapLines);
-              currentChunk = [...overlap];
-              currentSize = overlap.reduce((s, l) => s + l.length, 0);
-            }
-          }
-
-          if (currentChunk.length > 0) {
-            rawChunks.push(currentChunk);
-          }
-
-          const chunks = rawChunks.map(c => c.join('\n'));
-
-          console.log(`Created ${chunks.length} chunks, saving to database...`);
-
-          // Create chunk records in database
-          const chunkRecords = chunks.map((chunk, index) => ({
-            job_id: jobId,
-            chunk_number: index + 1,
-            total_chunks: chunks.length,
-            chunk_text: chunk,
-            status: 'pending' as const,
-          }));
-
-          const { error: chunksError } = await supabase
-            .from("parsing_chunks")
-            .insert(chunkRecords);
-
-          if (chunksError) {
-            console.error("Failed to create chunks:", chunksError);
-            throw new Error(`Failed to create chunks: ${chunksError.message}`);
-          }
-
-          // Update job to indicate chunks are ready
-          await supabase
-            .from("parsing_jobs")
-            .update({
-              progress: 70,
-              status: "processing",
-              metadata: { ...(job.metadata || {}), chunks_created: chunks.length },
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", jobId);
-
-          console.log(`Chunks created, triggering resume to process them...`);
-
-          // Trigger resume to process the chunks
-          const resumeUrl = `${supabaseUrl}/functions/v1/resume_parsing_job`;
-          fetch(resumeUrl, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${supabaseServiceKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ jobId }),
-          }).catch(err => console.error("Failed to trigger resume:", err));
-
-          // Return early - chunks will be processed by resume function
-          return new Response(
-            JSON.stringify({
-              success: true,
-              message: "Chunks created, processing started",
-              jobId,
-              chunks: chunks.length
-            }),
-            {
-              status: 200,
-              headers: {
-                ...corsHeaders,
-                "Content-Type": "application/json",
-              },
-            }
-          );
-        }
-
-        // For smaller documents, parse directly with v2 parser
-        const llmUrl = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback_v2`;
-        const llmHeaders = {
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-          "Content-Type": "application/json",
-        };
-
-        console.log("Small document, parsing directly with v2 two-phase parser...");
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 55000);
-
-        try {
-          const llmResponse = await fetch(llmUrl, {
-            method: "POST",
-            headers: llmHeaders,
-            body: JSON.stringify({
-              text: fullText,
-              supplierName: typedJob.supplier_name,
-              phase: 'full',
-              trade: typedJob.trade,
-            }),
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeoutId);
-
-          if (!llmResponse.ok) {
-            const errorText = await llmResponse.text();
-            console.error(`LLM parser HTTP error: ${llmResponse.status} ${llmResponse.statusText}`);
-            throw new Error(`LLM parser failed (${llmResponse.status}): ${errorText || llmResponse.statusText}`);
-          }
-
-          parsedData = await llmResponse.json();
-          console.log(`LLM parser returned ${parsedData.items?.length || 0} items`);
-
-        } catch (error) {
-          clearTimeout(timeoutId);
-          console.error("Direct parsing failed:", error);
-          throw error;
-        }
-
-        await supabase
-          .from("parsing_jobs")
-          .update({
-            progress: 80,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", jobId);
-      }
-
-      let quoteData;
-
-      // If quote_id is provided, this is a revision - update the existing quote
-      if (typedJob.quote_id) {
-        console.log(`Updating existing quote ${typedJob.quote_id}`);
-
-        const { data: updatedQuote, error: updateError } = await supabase
-          .from("quotes")
-          .update({
-            status: 'pending',
-            total_amount: parsedData.totals?.grandTotal || 0,
-            total_price: parsedData.totals?.grandTotal || 0,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', typedJob.quote_id)
-          .select()
-          .single();
-
-        if (updateError || !updatedQuote) {
-          console.error("Failed to update quote:", updateError);
-          throw new Error(`Failed to update quote: ${updateError?.message}`);
-        }
-
-        quoteData = updatedQuote;
-        console.log(`Updated quote ${quoteData.id} for supplier ${typedJob.supplier_name}`);
-      } else {
-        // Create new quote
-        // Determine revision number based on dashboard mode
-        const dashboardMode = (job.metadata as any)?.dashboard_mode || "original";
-        let revisionNumber = 1;
-
-        if (dashboardMode === "revisions") {
-          // Get the latest revision number for this supplier
-          const { data: latestQuote } = await supabase
-            .from("quotes")
-            .select("revision_number")
-            .eq("project_id", typedJob.project_id)
-            .eq("supplier_name", typedJob.supplier_name)
-            .order("revision_number", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          revisionNumber = latestQuote && latestQuote.revision_number
-            ? latestQuote.revision_number + 1
-            : 2;
-          console.log(`Setting revision number: ${revisionNumber} for supplier ${typedJob.supplier_name} in ${dashboardMode} mode`);
-        }
-
-        const { data: newQuote, error: quoteError } = await supabase
-          .from("quotes")
-          .insert({
-            project_id: typedJob.project_id,
-            supplier_name: typedJob.supplier_name,
-            organisation_id: typedJob.organisation_id,
-            status: 'pending',
-            total_amount: parsedData.totals?.grandTotal || 0,
-            created_by: typedJob.user_id,
-            revision_number: revisionNumber,
-            trade: typedJob.trade || 'passive_fire'
-          })
-          .select()
-          .single();
-
-        if (quoteError || !newQuote) {
-          console.error("Failed to create quote:", quoteError);
-          throw new Error(`Failed to create quote: ${quoteError?.message}`);
-        }
-
-        quoteData = newQuote;
-        console.log(`Created quote ${quoteData.id} with revision ${revisionNumber} for supplier ${typedJob.supplier_name}`);
-      }
-
-      if (parsedData.items && parsedData.items.length > 0) {
-        // If this is an update (revision), delete old items first
-        if (typedJob.quote_id) {
-          console.log(`Deleting old quote items for quote ${quoteData.id}`);
-          await supabase
-            .from("quote_items")
-            .delete()
-            .eq("quote_id", quoteData.id);
-        }
-
-        const rawItemsCount = parsedData.items.length;
-        console.log(`[IMPORT PATH] function=process_parsing_job trade=${typedJob.trade || 'passive_fire'} parser=${useExternalExtractor ? 'external_parser' : 'llm_v2'}`);
-
-        // STEP 1: Extract document totals from raw PDF text FIRST (before any row filtering)
-        let docTotals = { grandTotal: null as number | null, subTotal: null as number | null, optionalTotal: null as number | null, blockTotals: [] as Array<{label:string;value:number}> };
-        if (allPages && allPages.length > 0) {
-          const fullText = allPages.join("\n\n");
-          docTotals = extractDocumentTotals(fullText);
-        }
-
-        // STEP 2: Keep items that have a description AND a non-zero total (or can calculate one from qty*rate)
-        const isLumpSumTrade = (typedJob.trade || '') === 'plumbing' || (typedJob.trade || '') === 'carpentry';
-        const basicFiltered = parsedData.items.filter((item: any) => {
-          if (!hasDesc(item)) return false;
-          const total = Number(item.total ?? item.total_price ?? item.amount ?? 0);
-          if (total !== 0) return true;
-          if (isLumpSumTrade) return false;
-          const qty = Number(item.qty ?? item.quantity ?? 0);
-          const rate = Number(item.rate ?? item.unit_price ?? 0);
-          return qty > 0 && rate > 0;
-        });
-        console.log(`After safe filter: ${basicFiltered.length} items (removed ${parsedData.items.length - basicFiltered.length} empty/zero rows)`);
-
-        // STEP 3: Split items into main scope vs optional BEFORE any row stripping
-        const OPTIONAL_PATTERNS = /\b(OPTIONAL|ADD TO SCOPE|OPTIONAL SCOPE|BY OTHERS|PROVISIONAL|NOT PART OF PASSIVE FIRE)\b/i;
-        const optionalItems = basicFiltered.filter((item: any) => OPTIONAL_PATTERNS.test(String(item.description ?? '')));
-        const mainScopeItems = basicFiltered.filter((item: any) => !OPTIONAL_PATTERNS.test(String(item.description ?? '')));
-        const optionalTotal = optionalItems.reduce((s: number, i: any) => s + Number(i.total ?? i.total_price ?? 0), 0);
-        if (optionalItems.length > 0) {
-          console.log(`[Resolution] Optional/excluded items: ${optionalItems.length}, optional total=$${optionalTotal.toLocaleString()}`);
-        }
-
-        // STEP 4: Run resolution engine on main-scope rows (still includes summary rows at this point)
-        const preFilterResolutionRows = mainScopeItems.map((item: any) => ({
-          description: String(item.description ?? item.desc ?? ''),
-          quantity: Number(item.qty ?? item.quantity ?? 0) || null,
-          unit: String(item.unit ?? '') || null,
-          unit_price: Number(item.rate ?? item.unit_price ?? 0) || null,
-          total_price: Number(item.total ?? item.total_price ?? 0) || null,
-        }));
-        const rowResolution = runParseResolution(preFilterResolutionRows);
-
-        // STEP 5: Document grand total is authoritative — override row-based resolution
-        const lineItemsTotal = rowResolution.validLineItems.reduce((s, r) => s + (r.total_price ?? 0), 0);
-        let finalTotalAmount: number;
-        let resolutionSource: string;
-        let resolutionConfidence: string;
-
-        if (docTotals.grandTotal && docTotals.grandTotal > 0) {
-          finalTotalAmount = docTotals.grandTotal;
-          resolutionSource = 'document_grand_total';
-          resolutionConfidence = 'HIGH';
-        } else if (rowResolution.resolvedTotal.source === 'summary_grand_total' && rowResolution.resolvedTotal.value > 0) {
-          finalTotalAmount = rowResolution.resolvedTotal.value;
-          resolutionSource = 'row_grand_total';
-          resolutionConfidence = 'HIGH';
-        } else if (docTotals.subTotal && docTotals.subTotal > 0) {
-          finalTotalAmount = docTotals.subTotal;
-          resolutionSource = 'document_sub_total';
-          resolutionConfidence = 'MEDIUM';
-        } else if (rowResolution.resolvedTotal.source === 'summary_sub_total' && rowResolution.resolvedTotal.value > 0) {
-          finalTotalAmount = rowResolution.resolvedTotal.value;
-          resolutionSource = 'row_sub_total';
-          resolutionConfidence = 'MEDIUM';
-        } else {
-          finalTotalAmount = lineItemsTotal;
-          resolutionSource = 'line_items_sum';
-          resolutionConfidence = 'LOW';
-        }
-
-        console.log(`[RESOLUTION]`);
-        console.log(`  grandTotal=${docTotals.grandTotal ?? 'null'}`);
-        console.log(`  subTotal=${docTotals.subTotal ?? 'null'}`);
-        console.log(`  optionalTotal=${optionalTotal}`);
-        console.log(`  lineItemsTotal=${lineItemsTotal.toFixed(2)}`);
-        console.log(`  resolvedTotal=${finalTotalAmount}`);
-        console.log(`  source=${resolutionSource}`);
-        console.log(`  confidence=${resolutionConfidence}`);
-
-        // STEP 6: Strip summary rows and normalize — only main scope items stored
-        const { kept: keptItems, removedCount: totalRowsRemoved, removedDescriptions: totalRowDescs } = filterTotalRows(mainScopeItems);
-        if (totalRowsRemoved > 0) {
-          console.log(`Removed ${totalRowsRemoved} total/summary row(s): ${totalRowDescs.join(', ')}`);
-        }
-
-        const normalizedItems = keptItems.map((item: any, index: number) => normalizeLine(item, index));
-        console.log(`After normalization: ${normalizedItems.length} items`);
-
-        // STEP 7: Map to quote_items — do NOT add remainder adjustment (resolved total is authoritative)
-        const itemSource = useExternalExtractor ? 'external_parser' : 'v2_llm';
-        const quoteItems = normalizedItems.map((item: any) => ({
-          quote_id: quoteData.id,
-          item_number: item.item_number || '',
-          description: cleanText(item.description) || 'No description',
-          quantity: item.qty || 0,
-          unit: item.unit || 'ea',
-          unit_price: item.rate || 0,
-          total_price: item.total || 0,
-          system_id: item.section || '',
-          raw_text: item.raw_text || item.description || '',
-          confidence: item.confidence || 0.85,
-          source: item.source || itemSource,
-          validation_flags: item.validation_flags || [],
-          frr: item.frr || extractFRRFromDescription(cleanText(item.description) || '') || 'Smoke',
-          scope_category: 'Main',
-        }));
-
-        // Also insert optional items tagged correctly
-        const optionalQuoteItems = optionalItems.map((item: any, index: number) => {
-          const norm = normalizeLine(item, index);
-          return {
-            quote_id: quoteData.id,
-            item_number: norm.item_number || '',
-            description: cleanText(norm.description) || 'Optional item',
-            quantity: norm.qty || 0,
-            unit: norm.unit || 'ea',
-            unit_price: norm.rate || 0,
-            total_price: norm.total || 0,
-            system_id: norm.section || '',
-            raw_text: norm.raw_text || norm.description || '',
-            confidence: norm.confidence || 0.85,
-            source: norm.source || itemSource,
-            validation_flags: norm.validation_flags || [],
-            frr: norm.frr || extractFRRFromDescription(cleanText(norm.description) || '') || 'Smoke',
-            scope_category: 'Optional',
-          };
-        });
-
-        const allQuoteItems = [...quoteItems, ...optionalQuoteItems];
-
-        const { error: itemsError } = await supabase
-          .from("quote_items")
-          .insert(allQuoteItems);
-
-        if (itemsError) {
-          console.error("Failed to create quote items:", itemsError);
-          await supabase.from("quotes").delete().eq("id", quoteData.id);
-          throw new Error(`Failed to create quote items: ${itemsError.message}`);
-        }
-
-        console.log(`Created ${quoteItems.length} main + ${optionalQuoteItems.length} optional quote items`);
-
-        // STEP 8: Update quote with authoritative resolved total and full audit metadata
-        await supabase
-          .from("quotes")
-          .update({
-            items_count: quoteItems.length,
-            raw_items_count: rawItemsCount,
-            inserted_items_count: quoteItems.length,
-            total_amount: finalTotalAmount,
-            total_price: finalTotalAmount,
-            resolved_total: finalTotalAmount,
-            resolution_source: resolutionSource,
-            resolution_confidence: resolutionConfidence,
-            document_grand_total: docTotals.grandTotal,
-            document_sub_total: docTotals.subTotal,
-            optional_scope_total: optionalTotal > 0 ? optionalTotal : (docTotals.optionalTotal ?? null),
-            original_line_items_total: lineItemsTotal,
-          })
-          .eq("id", quoteData.id);
-
-        console.log(`[UI TOTAL SOURCE] quoteId=${quoteData.id} displayTotal=${finalTotalAmount} source=quote.total_amount`);
-        console.log(`Raw parsed: ${rawItemsCount}, Inserted: ${quoteItems.length}, Resolved total: $${finalTotalAmount.toLocaleString()} (${resolutionSource})`);
-      }
+    // -------------------------------------------------------------------------
+    // Step 3: Run V3 parser (classify → route → resolve)
+    // -------------------------------------------------------------------------
+    const rawText = allPages.map((p) => p.text).join("\n\n");
+    console.log(`[V3] Running parser on ${allPages.length} pages, ${rawText.length} chars`);
+
+    const v3Result = runParserV3({
+      pages: allPages,
+      rawText,
+      fileExtension,
+      spreadsheetRows,
+    });
+
+    const { resolution, classification, durationMs } = v3Result;
+
+    console.log(`[V3] documentClass=${classification.documentClass} confidence=${classification.confidence.toFixed(2)}`);
+    console.log(`[V3] parserUsed=${resolution.parserUsed}`);
+    console.log(`[V3] baseItems=${resolution.baseItems.length} optionalItems=${resolution.optionalItems.length} excludedItems=${resolution.excludedItems.length}`);
+    console.log(`[V3] grandTotal=${resolution.totals.grandTotal.toFixed(2)} source=${resolution.totals.source} risk=${resolution.validation.risk}`);
+    console.log(`[V3] durationMs=${durationMs}`);
+
+    // -------------------------------------------------------------------------
+    // Step 4: Fail fast if v3 produced nothing usable
+    // -------------------------------------------------------------------------
+    const hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
+    const hasTotal = resolution.totals.grandTotal > 0;
+
+    if (!hasItems && !hasTotal) {
+      const diagnostics = {
+        parser_version: "v3",
+        document_class: classification.documentClass,
+        classifier_confidence: classification.confidence,
+        classifier_reasons: classification.reasons,
+        parser_used: resolution.parserUsed,
+        validation_risk: resolution.validation.risk,
+        validation_warnings: resolution.validation.warnings,
+        duration_ms: durationMs,
+        failure_reason: "V3 parser returned no items and no total",
+      };
+
+      console.error(`[V3] parsing_failed — no items and no total. diagnostics:`, JSON.stringify(diagnostics));
 
       await supabase
         .from("parsing_jobs")
         .update({
-          status: "completed",
-          progress: 100,
-          result_data: parsedData,
-          quote_id: quoteData.id,
+          status: "failed",
+          error_message: "Parser could not extract any items or totals from this document",
+          metadata: diagnostics,
           updated_at: new Date().toISOString(),
         })
         .eq("id", jobId);
 
       return new Response(
-        JSON.stringify({
-          success: true,
-          jobId,
-          quoteId: quoteData.id,
-          itemCount: parsedData.items?.length || 0,
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
+        JSON.stringify({ success: false, jobId, error: "parsing_failed", diagnostics }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    } catch (parseError) {
-      console.error("Parsing error:", parseError);
+    }
 
-      await supabase
-        .from("parsing_jobs")
+    await supabase
+      .from("parsing_jobs")
+      .update({ progress: 75, updated_at: new Date().toISOString() })
+      .eq("id", jobId);
+
+    // -------------------------------------------------------------------------
+    // Step 5: Create or update quote record
+    // ONE module writes quote totals — this block only.
+    // -------------------------------------------------------------------------
+    const canonicalTotal = resolution.totals.grandTotal;
+    const canonicalOptionalTotal = resolution.totals.optionalTotal;
+    const resolutionConfidence =
+      resolution.validation.risk === "OK" ? "HIGH"
+      : resolution.validation.risk === "MEDIUM" ? "MEDIUM"
+      : "LOW";
+
+    let quoteData: { id: string };
+
+    if (typedJob.quote_id) {
+      const { data: updatedQuote, error: updateError } = await supabase
+        .from("quotes")
         .update({
-          status: "failed",
-          error_message: parseError.message || "Parsing failed",
+          status: "pending",
+          total_amount: canonicalTotal,
+          total_price: canonicalTotal,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", jobId);
+        .eq("id", typedJob.quote_id)
+        .select()
+        .single();
 
-      throw parseError;
+      if (updateError || !updatedQuote) {
+        throw new Error(`Failed to update quote: ${updateError?.message}`);
+      }
+
+      quoteData = updatedQuote;
+      console.log(`[V3] Updated existing quote ${quoteData.id}`);
+    } else {
+      const dashboardMode = (typedJob.metadata as any)?.dashboard_mode || "original";
+      let revisionNumber = 1;
+
+      if (dashboardMode === "revisions") {
+        const { data: latestQuote } = await supabase
+          .from("quotes")
+          .select("revision_number")
+          .eq("project_id", typedJob.project_id)
+          .eq("supplier_name", typedJob.supplier_name)
+          .order("revision_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        revisionNumber = latestQuote?.revision_number ? latestQuote.revision_number + 1 : 2;
+      }
+
+      const { data: newQuote, error: quoteError } = await supabase
+        .from("quotes")
+        .insert({
+          project_id: typedJob.project_id,
+          supplier_name: typedJob.supplier_name,
+          organisation_id: typedJob.organisation_id,
+          status: "pending",
+          total_amount: canonicalTotal,
+          total_price: canonicalTotal,
+          created_by: typedJob.user_id,
+          revision_number: revisionNumber,
+          trade: typedJob.trade || "passive_fire",
+        })
+        .select()
+        .single();
+
+      if (quoteError || !newQuote) {
+        throw new Error(`Failed to create quote: ${quoteError?.message}`);
+      }
+
+      quoteData = newQuote;
+      console.log(`[V3] Created new quote ${quoteData.id} rev=${revisionNumber}`);
     }
-  } catch (error) {
-    console.error("Error:", error);
+
+    // -------------------------------------------------------------------------
+    // Step 6: Save quote_items (base + optional)
+    // ONE module writes quote_items — this block only.
+    // -------------------------------------------------------------------------
+    if (typedJob.quote_id) {
+      await supabase.from("quote_items").delete().eq("quote_id", quoteData.id);
+    }
+
+    const mapItem = (item: any, scopeCategory: "Main" | "Optional") => ({
+      quote_id: quoteData.id,
+      item_number: item.lineId || "",
+      description: cleanText(item.description) || "No description",
+      quantity: item.qty || 0,
+      unit: item.unit || "ea",
+      unit_price: item.rate || 0,
+      total_price: item.total || 0,
+      system_id: item.section || "",
+      raw_text: cleanText(item.description) || "",
+      confidence: item.confidence || 0.85,
+      source: item.source || resolution.parserUsed,
+      validation_flags: [],
+      frr: extractFRRFromDescription(cleanText(item.description) || "") || null,
+      scope_category: scopeCategory,
+    });
+
+    const mainQuoteItems = resolution.baseItems.map((item) => mapItem(item, "Main"));
+    const optionalQuoteItems = resolution.optionalItems.map((item) => mapItem(item, "Optional"));
+    const allQuoteItems = [...mainQuoteItems, ...optionalQuoteItems];
+
+    if (allQuoteItems.length > 0) {
+      const { error: itemsError } = await supabase.from("quote_items").insert(allQuoteItems);
+      if (itemsError) {
+        await supabase.from("quotes").delete().eq("id", quoteData.id);
+        throw new Error(`Failed to insert quote items: ${itemsError.message}`);
+      }
+    }
+
+    console.log(`[V3] Saved ${mainQuoteItems.length} main + ${optionalQuoteItems.length} optional items`);
+
+    // -------------------------------------------------------------------------
+    // Step 7: Update quote with canonical totals and metadata
+    // -------------------------------------------------------------------------
+    await supabase
+      .from("quotes")
+      .update({
+        items_count: mainQuoteItems.length,
+        raw_items_count: resolution.baseItems.length + resolution.optionalItems.length + resolution.excludedItems.length,
+        inserted_items_count: mainQuoteItems.length,
+        total_amount: canonicalTotal,
+        total_price: canonicalTotal,
+        resolved_total: canonicalTotal,
+        resolution_source: resolution.totals.source,
+        resolution_confidence: resolutionConfidence,
+        document_grand_total: resolution.totals.grandTotal > 0 ? resolution.totals.grandTotal : null,
+        document_sub_total: resolution.totals.subTotal,
+        optional_scope_total: canonicalOptionalTotal > 0 ? canonicalOptionalTotal : null,
+        original_line_items_total: resolution.totals.rowSum,
+      })
+      .eq("id", quoteData.id);
+
+    // -------------------------------------------------------------------------
+    // Step 8: Write parse metadata to parsing_job
+    // -------------------------------------------------------------------------
+    const parseMetadata = {
+      parser_version: "v3",
+      document_class: classification.documentClass,
+      parser_used: resolution.parserUsed,
+      total_source: resolution.totals.source,
+      confidence: classification.confidence,
+      warnings: resolution.validation.warnings,
+      classifier_reasons: classification.reasons,
+      summary_detected: resolution.debug.summaryDetected,
+      optional_scope_detected: resolution.debug.optionalScopeDetected,
+      item_count_base: resolution.debug.itemCountBase,
+      item_count_optional: resolution.debug.itemCountOptional,
+      item_count_excluded: resolution.debug.itemCountExcluded,
+      grand_total: canonicalTotal,
+      optional_total: canonicalOptionalTotal,
+      row_sum: resolution.totals.rowSum,
+      validation_risk: resolution.validation.risk,
+      duration_ms: durationMs,
+    };
+
+    await supabase
+      .from("parsing_jobs")
+      .update({
+        status: "completed",
+        progress: 100,
+        quote_id: quoteData.id,
+        result_data: parseMetadata,
+        metadata: parseMetadata,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+
+    console.log(`[V3] Job ${jobId} complete. quoteId=${quoteData.id} total=$${canonicalTotal.toLocaleString()} source=${resolution.totals.source}`);
+
     return new Response(
       JSON.stringify({
-        error: error.message || "Internal server error",
+        success: true,
+        jobId,
+        quoteId: quoteData.id,
+        itemCount: allQuoteItems.length,
+        parserVersion: "v3",
+        documentClass: classification.documentClass,
+        parserUsed: resolution.parserUsed,
+        totalSource: resolution.totals.source,
+        grandTotal: canonicalTotal,
+        validationRisk: resolution.validation.risk,
       }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+
+  } catch (error) {
+    console.error("[V3] Fatal error:", error);
+
+    if (jobId) {
+      try {
+        const supabase2 = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+        await supabase2
+          .from("parsing_jobs")
+          .update({
+            status: "failed",
+            error_message: error instanceof Error ? error.message : "Unknown error",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+      } catch (_) {}
+    }
+
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
