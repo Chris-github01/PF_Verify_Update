@@ -81,6 +81,8 @@ Deno.serve(async (req: Request) => {
 
     const typedJob = job as unknown as ParsingJob;
 
+    console.log(`[PIPELINE_START] job_id=${jobId} file=${typedJob.filename} trade=${typedJob.trade || "unset"} supplier=${typedJob.supplier_name}`);
+
     await supabase
       .from("parsing_jobs")
       .update({ status: "processing", progress: 10, updated_at: new Date().toISOString() })
@@ -178,6 +180,8 @@ Deno.serve(async (req: Request) => {
       throw new Error("No text could be extracted from the file");
     }
 
+    console.log(`[STEP_1_EXTRACT] pages=${allPages.length} chars=${allPages.reduce((s, p) => s + p.text.length, 0)} file_type=${fileExtension}`);
+
     await supabase
       .from("parsing_jobs")
       .update({ progress: 50, updated_at: new Date().toISOString() })
@@ -198,11 +202,9 @@ Deno.serve(async (req: Request) => {
 
     const { resolution, classification, durationMs } = v3Result;
 
-    console.log(`[V3] documentClass=${classification.documentClass} confidence=${classification.confidence.toFixed(2)}`);
-    console.log(`[V3] parserUsed=${resolution.parserUsed}`);
-    console.log(`[V3] baseItems=${resolution.baseItems.length} optionalItems=${resolution.optionalItems.length} excludedItems=${resolution.excludedItems.length}`);
-    console.log(`[V3] grandTotal=${resolution.totals.grandTotal.toFixed(2)} source=${resolution.totals.source} risk=${resolution.validation.risk}`);
-    console.log(`[V3] durationMs=${durationMs}`);
+    console.log(`[STEP_2_CLASSIFY] document_class=${classification.documentClass} confidence=${classification.confidence.toFixed(2)} reasons=${JSON.stringify(classification.reasons)}`);
+    console.log(`[STEP_3_ROUTE] parser_used=${resolution.parserUsed}`);
+    console.log(`[STEP_4_PARSE_RESULT] base_items=${resolution.baseItems.length} optional_items=${resolution.optionalItems.length} excluded_items=${resolution.excludedItems.length} base_total=${resolution.totals.rowSum.toFixed(2)} optional_total=${resolution.totals.optionalTotal.toFixed(2)} grand_total=${resolution.totals.grandTotal.toFixed(2)} total_source=${resolution.totals.source} validation_risk=${resolution.validation.risk} duration_ms=${durationMs}`);
 
     // -------------------------------------------------------------------------
     // Step 4: Fail fast if v3 produced nothing usable
@@ -356,6 +358,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    console.log(`[STEP_5_SAVE] quote_id=${quoteData.id} saved_total=${canonicalTotal} items_saved=${allQuoteItems.length} main=${mainQuoteItems.length} optional=${optionalQuoteItems.length}`);
     console.log(`[V3] Saved ${mainQuoteItems.length} main + ${optionalQuoteItems.length} optional items`);
 
     // -------------------------------------------------------------------------
@@ -415,7 +418,7 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", jobId);
 
-    console.log(`[V3] Job ${jobId} complete. quoteId=${quoteData.id} total=$${canonicalTotal.toLocaleString()} source=${resolution.totals.source}`);
+    console.log(`[PIPELINE_END] status=success job_id=${jobId} quote_id=${quoteData.id} parser_version=v3 document_class=${classification.documentClass} parser_used=${resolution.parserUsed} grand_total=${canonicalTotal} total_source=${resolution.totals.source} validation_risk=${resolution.validation.risk} items=${allQuoteItems.length}`);
 
     return new Response(
       JSON.stringify({

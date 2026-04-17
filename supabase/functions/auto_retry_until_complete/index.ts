@@ -40,6 +40,31 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[AutoRetry] Starting auto-retry loop for job ${jobId}, maxRetries: ${maxRetries}`);
 
+    // V3 guard: if this job was processed by the v3 canonical parser it will
+    // already have a quote_id and metadata.parser_version="v3". In that case
+    // the chunk-based resume path must NOT run — v3 does not use chunks.
+    const { data: jobCheck } = await supabase
+      .from("parsing_jobs")
+      .select("quote_id, metadata, status")
+      .eq("id", jobId)
+      .single();
+
+    const jobMeta = jobCheck?.metadata as { parser_version?: string } | null;
+    if (jobMeta?.parser_version === "v3" || (jobCheck?.quote_id && jobCheck?.status === "completed")) {
+      console.log(`[AutoRetry] BLOCKED — job ${jobId} was processed by v3 canonical parser (quote_id=${jobCheck?.quote_id}). Chunk-based resume is not applicable.`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Job already completed by v3 canonical parser. No retry needed.",
+          jobId,
+          quoteId: jobCheck?.quote_id,
+          skipped: true,
+          reason: "v3_canonical_parser",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     let iteration = 0;
     let totalRecovered = 0;
     const iterationResults: any[] = [];

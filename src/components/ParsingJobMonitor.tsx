@@ -3,6 +3,23 @@ import { Loader2, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, AlertCi
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 
+interface ParsingJobMetadata {
+  parser_version?: string;
+  document_class?: string;
+  parser_used?: string;
+  total_source?: string;
+  confidence?: number;
+  validation_risk?: string;
+  warnings?: string[];
+  grand_total?: number;
+  optional_total?: number;
+  row_sum?: number;
+  item_count_base?: number;
+  item_count_optional?: number;
+  item_count_excluded?: number;
+  duration_ms?: number;
+}
+
 interface ParsingJob {
   id: string;
   supplier_name: string;
@@ -11,11 +28,12 @@ interface ParsingJob {
   progress: number;
   error_message: string | null;
   result_data: { items?: any[] } | null;
-  parsed_lines?: any[]; // Parsed line items from chunks
+  metadata?: ParsingJobMetadata | null;
+  parsed_lines?: any[];
   quote_id: string | null;
   created_at: string;
   updated_at: string;
-  is_latest?: boolean; // Track if this job's quote is the latest
+  is_latest?: boolean;
 }
 
 interface ParsingJobMonitorProps {
@@ -399,24 +417,58 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
         <div className="bg-slate-800/60 rounded-lg border border-slate-700 p-5">
           <h3 className="text-lg font-semibold text-slate-100 mb-4">Successfully Imported Quotes</h3>
           <div className="space-y-2">
-            {successful.map((job) => (
-              <div key={job.id} className="flex items-center gap-3 py-2 px-3 hover:bg-slate-700/50 rounded-lg transition-colors">
-                <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-100 text-sm">{job.supplier_name}</span>
-                    {job.is_latest && (
-                      <span className="px-2 py-0.5 text-xs font-semibold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">
-                        Latest
-                      </span>
-                    )}
+            {successful.map((job) => {
+              const meta = (job.metadata as ParsingJobMetadata | null) ?? null;
+              const isV3 = meta?.parser_version === 'v3';
+              const riskColor = meta?.validation_risk === 'OK' ? 'text-green-400' : meta?.validation_risk === 'MEDIUM' ? 'text-yellow-400' : 'text-red-400';
+              return (
+                <div key={job.id} className="py-2 px-3 hover:bg-slate-700/50 rounded-lg transition-colors">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-100 text-sm">{job.supplier_name}</span>
+                        {job.is_latest && (
+                          <span className="px-2 py-0.5 text-xs font-semibold bg-blue-500/20 text-blue-300 rounded-full border border-blue-500/30">
+                            Latest
+                          </span>
+                        )}
+                        {isV3 && (
+                          <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-500/20 text-emerald-300 rounded-full border border-emerald-500/30">
+                            v3
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        {(Array.isArray(job.parsed_lines) ? job.parsed_lines.length : job.result_data?.items?.length) || 0} items parsed • File: {job.filename} • Imported {formatDateTime(job.updated_at)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    {(Array.isArray(job.parsed_lines) ? job.parsed_lines.length : job.result_data?.items?.length) || 0} items parsed • File: {job.filename} • Imported {formatDateTime(job.updated_at)}
-                  </div>
+                  {isV3 && meta && (
+                    <div className="mt-2 ml-7 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs bg-slate-900/60 border border-slate-700 rounded px-3 py-2">
+                      <div className="text-slate-500">parser_version</div>
+                      <div className="text-slate-200">{meta.parser_version}</div>
+                      <div className="text-slate-500">document_class</div>
+                      <div className="text-slate-200">{meta.document_class ?? '—'}</div>
+                      <div className="text-slate-500">parser_used</div>
+                      <div className="text-slate-200">{meta.parser_used ?? '—'}</div>
+                      <div className="text-slate-500">total_source</div>
+                      <div className="text-slate-200">{meta.total_source ?? '—'}</div>
+                      <div className="text-slate-500">confidence</div>
+                      <div className="text-slate-200">{meta.confidence != null ? (meta.confidence * 100).toFixed(0) + '%' : '—'}</div>
+                      <div className="text-slate-500">validation_risk</div>
+                      <div className={riskColor}>{meta.validation_risk ?? '—'}</div>
+                      {meta.warnings && meta.warnings.length > 0 && (
+                        <>
+                          <div className="text-slate-500 col-span-2 pt-1 border-t border-slate-700 mt-1">warnings</div>
+                          <div className="col-span-2 text-yellow-400">{meta.warnings.join(' · ')}</div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -483,6 +535,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                   const reason = itemCount === 0 && job.status === 'completed'
                     ? 'Parsed successfully but returned 0 line items'
                     : job.error_message || 'Could not extract tables';
+                  const failMeta = (job.metadata as ParsingJobMetadata | null) ?? null;
 
                   return (
                     <div key={job.id} className="border border-red-500/30 rounded-lg p-3 bg-red-900/20">
@@ -496,6 +549,13 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                             Reason: {reason}
                           </div>
                           <div className="text-xs text-slate-400">File: {job.filename}</div>
+                          {failMeta?.parser_version === 'v3' && (
+                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono text-xs bg-slate-900/40 border border-slate-700 rounded px-2 py-1.5">
+                              <div className="text-slate-500">document_class</div><div className="text-slate-300">{failMeta.document_class ?? '—'}</div>
+                              <div className="text-slate-500">parser_used</div><div className="text-slate-300">{failMeta.parser_used ?? '—'}</div>
+                              <div className="text-slate-500">failure_reason</div><div className="text-red-400 col-span-1 truncate">{(failMeta as any).failure_reason ?? reason}</div>
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
