@@ -227,7 +227,8 @@ Deno.serve(async (req: Request) => {
         : "no_items_no_total";
 
       const diagnostics = {
-        parser_version: "v3",
+        parser_version: "vNext",
+        entry_point: "process_parsing_job",
         document_class: classification.documentClass,
         classifier_confidence: classification.confidence,
         classifier_reasons: classification.reasons,
@@ -403,7 +404,8 @@ Deno.serve(async (req: Request) => {
     // Step 8: Write parse metadata to parsing_job
     // -------------------------------------------------------------------------
     const parseMetadata = {
-      parser_version: "v3",
+      parser_version: "vNext",
+      entry_point: "process_parsing_job",
       document_class: classification.documentClass,
       parser_used: resolution.parserUsed,
       total_source: resolution.totals.source,

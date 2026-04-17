@@ -230,24 +230,20 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to resume job');
+        throw new Error(result.error || 'Failed to retry job');
       }
 
-      if (result.success && result.quoteId) {
-        onJobCompleted?.(jobId, result.quoteId);
-        // Only log for auto-retries, show alert for manual retries
+      if (result.success) {
         if (isAutoRetry) {
-          console.log(`[Auto-Retry Success] ${result.message || 'Job completed'}`);
+          console.log(`[Auto-Retry] Re-dispatched process_parsing_job for job ${jobId}`);
         }
       }
 
-      // Force reload to update UI
       await loadJobs();
     } catch (error) {
-      console.error('Error resuming job:', error);
-      // Only show alert for manual retries
+      console.error('Error retrying job:', error);
       if (!isAutoRetry) {
-        alert(`Failed to resume job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        alert(`Failed to retry job: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     } finally {
       setResuming(prev => {

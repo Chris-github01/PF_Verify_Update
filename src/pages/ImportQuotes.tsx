@@ -159,7 +159,10 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
       return;
     }
 
-    const normalizedSupplier = supplierName.trim();
+    if (!currentOrganisation?.id) {
+      setMessage({ type: 'error', text: 'No organisation selected.' });
+      return;
+    }
 
     setParsing(true);
     setMessage(null);
@@ -171,73 +174,6 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
       }
 
       for (const file of filesToParse) {
-        const fileName = file.name.toLowerCase();
-        const isPdf = fileName.endsWith('.pdf');
-
-        if (isPdf) {
-          console.log(`PDF detected: ${file.name}, trying external extractor first...`);
-
-          if (!currentOrganisation?.id) {
-            throw new Error('No organisation selected');
-          }
-
-          const extractorFormData = new FormData();
-          extractorFormData.append('file', file);
-          extractorFormData.append('projectId', projectId);
-          extractorFormData.append('supplierName', supplierName.trim());
-          extractorFormData.append('organisationId', currentOrganisation.id);
-          extractorFormData.append('dashboardMode', dashboardMode);
-          extractorFormData.append('trade', currentTrade);
-
-          const extractorUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse_quote_with_extractor`;
-          const extractorHeaders = {
-            'Authorization': `Bearer ${session.access_token}`,
-          };
-
-          try {
-            const extractorResponse = await fetch(extractorUrl, {
-              method: 'POST',
-              headers: extractorHeaders,
-              body: extractorFormData,
-            });
-
-            const extractorResult = await extractorResponse.json();
-
-            if (extractorResponse.ok && extractorResult.success) {
-              console.log('Extractor → Import Quotes:', extractorResult);
-
-              setMessage({
-                type: 'success',
-                text: `${file.name} successfully parsed using external extractor! Found ${extractorResult.itemsCount} items. Redirecting to review...`
-              });
-
-              setFiles([]);
-              setSupplierName('');
-
-              await loadProjectInfo();
-              onQuotesImported();
-
-              setTimeout(() => {
-                if (onNavigateToDashboard) {
-                  onNavigateToDashboard();
-                }
-              }, 1500);
-
-              continue;
-            } else if (extractorResult.fallback_required) {
-              console.log('Extractor failed, falling back to background job...');
-            } else {
-              throw new Error(extractorResult.error || 'Extractor failed');
-            }
-          } catch (extractorError) {
-            console.error('External extractor error, falling back to background job:', extractorError);
-            setMessage({
-              type: 'info',
-              text: `External extractor unavailable for ${file.name}, using background parser...`
-            });
-          }
-        }
-
         const formData = new FormData();
         formData.append('file', file);
         formData.append('projectId', projectId);
@@ -246,26 +182,23 @@ export default function ImportQuotes({ projectId, onQuotesImported, onNavigateTo
         formData.append('dashboardMode', dashboardMode);
         formData.append('trade', currentTrade);
 
-        const jobUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start_parsing_job`;
-        const jobHeaders = {
-          'Authorization': `Bearer ${session.access_token}`,
-        };
-
-        const response = await fetch(jobUrl, {
-          method: 'POST',
-          headers: jobHeaders,
-          body: formData,
-        });
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/start_parsing_job`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${session.access_token}` },
+            body: formData,
+          }
+        );
 
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to start parsing job');
         }
 
-        const result = await response.json();
         setMessage({
           type: 'success',
-          text: `${file.name} is being parsed in the background. You can navigate away and it will continue processing.`
+          text: `${file.name} is being parsed. You can navigate away and it will continue processing.`
         });
       }
 
