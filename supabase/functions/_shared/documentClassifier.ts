@@ -22,6 +22,14 @@ export type DocumentClass =
   | 'spreadsheet_boq'
   | 'mixed_unknown';
 
+export type CommercialFamily =
+  | 'itemized_quote'
+  | 'lump_sum_quote'
+  | 'hybrid_quote'
+  | 'spreadsheet_quote'
+  | 'scanned_ocr_quote'
+  | 'unknown_quote';
+
 export interface PageData {
   pageNum: number;
   text: string;
@@ -29,6 +37,7 @@ export interface PageData {
 
 export interface ClassificationResult {
   documentClass: DocumentClass;
+  commercialFamily: CommercialFamily;
   confidence: number; // 0–1
   reasons: string[];
   signals: {
@@ -36,6 +45,8 @@ export interface ClassificationResult {
     hasScheduleRows: boolean;
     hasOptionalScope: boolean;
     hasBlockRowIds: boolean;
+    hasPrelimsSection: boolean;
+    hasPricedRowsAboveThreshold: boolean;
     numberedRowCount: number;
     pageCount: number;
     avgLineLength: number;
@@ -84,8 +95,37 @@ const BLOCK_ROW_ID_DENSE_RE = /\bB\d{1,3}\b.*\bB\d{1,3}\b/;
 const BROKEN_LINE_RE = /[^\x20-\x7E\n\r\t]{3,}/;
 const VERY_SHORT_LINE_RE = /^.{1,4}$/m;
 
+// Prelims / allowances section markers — hybrid-specific signals
+const PRELIMS_PATTERNS: RegExp[] = [
+  /\bPRELIMS?\b/i,
+  /\bPRELIMINARIES\b/i,
+  /\bALLOWANCES?\b/i,
+  /\bMOBILISATION\b/i,
+  /\bSITE\s+ESTABLISHMENT\b/i,
+  /\bOH\s*&\s*P\b/i,
+  /\bOVERHEADS?\s+(&|AND)\s+PROFIT\b/i,
+  /\bQUALITY\s+ASSURANCE\b/i,
+  /\bWARRANTY\s+(PERIOD|ALLOWANCE)\b/i,
+];
+
+// Lump-sum document signals — few priced rows, scope-description heavy
+const LUMP_SUM_SCOPE_PATTERNS: RegExp[] = [
+  /\bLUMP\s+SUM\b/i,
+  /\bSCOPE\s+OF\s+WORKS?\b/i,
+  /\bINCLUSIONS?\b/i,
+  /\bEXCLUSIONS?\b/i,
+];
+
+// Priced row — a line that carries a dollar amount (used for counting)
+const PRICED_ROW_RE = /\$[\d,]+\.\d{2}/gm;
+
 function countNumberedRows(text: string): number {
   const matches = text.match(/^\s*\d{1,3}[\s\t]+\S/gm);
+  return matches ? matches.length : 0;
+}
+
+function countPricedRows(text: string): number {
+  const matches = text.match(PRICED_ROW_RE);
   return matches ? matches.length : 0;
 }
 
@@ -103,6 +143,14 @@ function hasScheduleRows(text: string): boolean {
 
 function hasBlockRowIds(text: string): boolean {
   return BLOCK_ROW_ID_DENSE_RE.test(text) || (BLOCK_ROW_ID_RE.test(text) && SCHEDULE_BLOCK_RE.test(text));
+}
+
+function hasPrelimsSection(text: string): boolean {
+  return PRELIMS_PATTERNS.some(re => re.test(text));
+}
+
+function hasLumpSumScopeLanguage(text: string): boolean {
+  return LUMP_SUM_SCOPE_PATTERNS.some(re => re.test(text));
 }
 
 function hasTableHeaders(text: string): boolean {
@@ -138,6 +186,57 @@ function estimateOcrQuality(text: string): 'good' | 'poor' | 'unknown' {
 }
 
 // ---------------------------------------------------------------------------
+// Commercial family mapping — structural signals only, no supplier names
+// ---------------------------------------------------------------------------
+
+export function mapToCommercialFamily(
+  documentClass: DocumentClass,
+  signals: ClassificationResult['signals'],
+): CommercialFamily {
+  if (documentClass === 'spreadsheet_boq') return 'spreadsheet_quote';
+  if (documentClass === 'scanned_ocr_pdf') return 'scanned_ocr_quote';
+  if (documentClass === 'mixed_unknown') return 'unknown_quote';
+
+  // Itemized: many rows regardless of whether a summary page exists
+  if (
+    documentClass === 'multi_page_boq_summary_pdf' ||
+    documentClass === 'schedule_only_pdf' ||
+    (documentClass === 'summary_schedule_pdf' && signals.numberedRowCount > 10)
+  ) {
+    return 'itemized_quote';
+  }
+
+  // Hybrid: has some rows AND either prelims or optional scope sections
+  if (
+    signals.hasPricedRowsAboveThreshold &&
+    (signals.hasPrelimsSection || signals.hasOptionalScope)
+  ) {
+    return 'hybrid_quote';
+  }
+
+  // Lump sum: summary total exists, few priced rows, scope-description heavy
+  if (
+    signals.hasSummaryTotals &&
+    !signals.hasPricedRowsAboveThreshold
+  ) {
+    return 'lump_sum_quote';
+  }
+
+  // Default: treat summary_schedule_pdf with borderline rows as hybrid
+  if (documentClass === 'summary_schedule_pdf') {
+    return signals.hasOptionalScope ? 'hybrid_quote' : 'itemized_quote';
+  }
+
+  // simple_line_items with prelims/optionals → hybrid
+  if (documentClass === 'simple_line_items_pdf') {
+    if (signals.hasPrelimsSection || signals.hasOptionalScope) return 'hybrid_quote';
+    return 'lump_sum_quote';
+  }
+
+  return 'unknown_quote';
+}
+
+// ---------------------------------------------------------------------------
 // Main classifier
 // ---------------------------------------------------------------------------
 
@@ -153,12 +252,16 @@ export function classifyDocument(
   if (isSpreadsheet) {
     return {
       documentClass: 'spreadsheet_boq',
+      commercialFamily: 'spreadsheet_quote',
       confidence: 1.0,
       reasons: ['File extension indicates spreadsheet format'],
       signals: {
         hasSummaryTotals: false,
         hasScheduleRows: false,
         hasOptionalScope: false,
+        hasBlockRowIds: false,
+        hasPrelimsSection: false,
+        hasPricedRowsAboveThreshold: false,
         numberedRowCount: 0,
         pageCount: pages.length,
         avgLineLength: 0,
@@ -176,7 +279,10 @@ export function classifyDocument(
   const scheduleRowsDetected = hasScheduleRows(fullText);
   const optionalScopeDetected = hasOptionalScope(fullText);
   const blockRowIdsDetected = hasBlockRowIds(fullText);
+  const prelimsSectionDetected = hasPrelimsSection(fullText);
   const numberedRowCount = countNumberedRows(fullText);
+  const pricedRowCount = countPricedRows(fullText);
+  const pricedRowsAboveThreshold = pricedRowCount > 5;
   const avgLine = averageLineLength(fullText);
   const tableConf = estimateTableConfidence(fullText);
   const ocrQuality = estimateOcrQuality(fullText);
@@ -185,14 +291,17 @@ export function classifyDocument(
   if (scheduleRowsDetected) reasons.push('Numbered schedule rows detected');
   if (optionalScopeDetected) reasons.push('Optional scope section detected');
   if (blockRowIdsDetected) reasons.push('Block-style row IDs detected (e.g. B30, B31)');
+  if (prelimsSectionDetected) reasons.push('Prelims/allowances section detected');
   if (numberedRowCount > 30) reasons.push(`High numbered row count (${numberedRowCount})`);
   if (ocrQuality === 'poor') reasons.push('Poor OCR quality detected');
 
-  const signals = {
+  const signals: ClassificationResult['signals'] = {
     hasSummaryTotals: summaryTotalsDetected,
     hasScheduleRows: scheduleRowsDetected,
     hasOptionalScope: optionalScopeDetected,
     hasBlockRowIds: blockRowIdsDetected,
+    hasPrelimsSection: prelimsSectionDetected,
+    hasPricedRowsAboveThreshold: pricedRowsAboveThreshold,
     numberedRowCount,
     pageCount: pages.length,
     avgLineLength: avgLine,
@@ -257,5 +366,5 @@ function makeResult(
   reasons: string[],
   signals: ClassificationResult['signals'],
 ): ClassificationResult {
-  return { documentClass, confidence, reasons, signals };
+  return { documentClass, commercialFamily: mapToCommercialFamily(documentClass, signals), confidence, reasons, signals };
 }

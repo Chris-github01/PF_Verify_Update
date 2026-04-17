@@ -1,15 +1,24 @@
 // =============================================================================
 // PARSER ROUTER V3  (Deno edge-function compatible)
 //
-// Classifier → Router → Resolution Layer
-// No vendor-specific logic. Classify by structure only.
+// Classify → Map to CommercialFamily → Route to family parser → Resolution Layer
+//
+// Three commercial parser families:
+//   itemized_quote   — many rows, preserves qty/unit/rate/total
+//   lump_sum_quote   — few rows, grand total is sole financial truth
+//   hybrid_quote     — rows + prelims + optional scope sections
+//
+// Fixed paths (unchanged):
+//   spreadsheet_quote — parseSpreadsheetBoq
+//   scanned_ocr_quote — parseScannedOcrPdf
+//   unknown_quote     — tryHybrid → tryItemized → tryLumpSum
 // =============================================================================
 
 import { classifyDocument } from './documentClassifier.ts';
 import { runResolutionLayer } from './parseResolutionLayerV3.ts';
-import { parseSummarySchedulePdf } from './parsers/parseSummarySchedulePdf.ts';
-import { parseScheduleOnlyPdf } from './parsers/parseScheduleOnlyPdf.ts';
-import { parseSimpleLineItemsPdf } from './parsers/parseSimpleLineItemsPdf.ts';
+import { parseItemizedQuote } from './parsers/parseItemizedQuote.ts';
+import { parseLumpSumQuote } from './parsers/parseLumpSumQuote.ts';
+import { parseHybridQuote } from './parsers/parseHybridQuote.ts';
 import { parseScannedOcrPdf } from './parsers/parseScannedOcrPdf.ts';
 import { parseSpreadsheetBoq } from './parsers/parseSpreadsheetBoq.ts';
 
@@ -32,20 +41,25 @@ export interface ParserV3Output {
 }
 
 // ---------------------------------------------------------------------------
-// Fallback: try each parser in order of likeliness
+// Unknown fallback: try each family in order of likelihood
 // ---------------------------------------------------------------------------
 
-function parseMixedUnknown(pages: PageData[]): RawParserOutput {
-  const simple = parseSimpleLineItemsPdf(pages);
-  if (simple.allItems.length > 0 || simple.summaryDetected) {
-    return { ...simple, parserUsed: 'parseMixedUnknown(simple_fallback)' };
+function parseUnknownFallback(pages: PageData[], signals: ClassificationResult['signals']): RawParserOutput {
+  // Try hybrid first (most tolerant — handles rows + optional sections)
+  const hybrid = parseHybridQuote(pages);
+  if (hybrid.allItems.length > 0 || hybrid.summaryDetected) {
+    return { ...hybrid, parserUsed: 'unknown_fallback(hybrid)' };
   }
-  const schedule = parseScheduleOnlyPdf(pages);
-  if (schedule.allItems.length > 0) {
-    return { ...schedule, parserUsed: 'parseMixedUnknown(schedule_fallback)' };
+
+  // Try itemized (numbered rows only)
+  const itemized = parseItemizedQuote(pages, signals.hasSummaryTotals);
+  if (itemized.allItems.length > 0) {
+    return { ...itemized, parserUsed: 'unknown_fallback(itemized)' };
   }
-  const ocr = parseScannedOcrPdf(pages);
-  return { ...ocr, parserUsed: 'parseMixedUnknown(ocr_fallback)' };
+
+  // Last resort: lump sum (extract any grand total + priced lines)
+  const lumpSum = parseLumpSumQuote(pages);
+  return { ...lumpSum, parserUsed: 'unknown_fallback(lump_sum)' };
 }
 
 // ---------------------------------------------------------------------------
@@ -58,36 +72,40 @@ export function runParserV3(input: ParserV3Input): ParserV3Output {
 
   // Step 1: Classify
   const classification = classifyDocument(rawText, pages, fileExtension);
-  console.log(`[ParserV3] documentClass=${classification.documentClass} confidence=${classification.confidence.toFixed(2)}`);
+  const { documentClass, commercialFamily, signals } = classification;
+
+  console.log(`[ParserV3] documentClass=${documentClass} commercialFamily=${commercialFamily} confidence=${classification.confidence.toFixed(2)}`);
   console.log(`[ParserV3] reasons: ${classification.reasons.join(' | ')}`);
 
-  // Step 2: Route to parser
+  // Step 2: Route by commercial family
   let rawOutput: RawParserOutput;
 
-  switch (classification.documentClass) {
-    case 'multi_page_boq_summary_pdf':
-      rawOutput = parseSummarySchedulePdf(pages);
+  switch (commercialFamily) {
+    case 'itemized_quote':
+      rawOutput = parseItemizedQuote(pages, signals.hasSummaryTotals);
       break;
-    case 'summary_schedule_pdf':
-      rawOutput = parseSummarySchedulePdf(pages);
+
+    case 'lump_sum_quote':
+      rawOutput = parseLumpSumQuote(pages);
       break;
-    case 'schedule_only_pdf':
-      rawOutput = parseScheduleOnlyPdf(pages);
+
+    case 'hybrid_quote':
+      rawOutput = parseHybridQuote(pages);
       break;
-    case 'simple_line_items_pdf':
-      rawOutput = parseSimpleLineItemsPdf(pages);
-      break;
-    case 'scanned_ocr_pdf':
-      rawOutput = parseScannedOcrPdf(pages);
-      break;
-    case 'spreadsheet_boq':
+
+    case 'spreadsheet_quote':
       rawOutput = spreadsheetRows && spreadsheetRows.length > 0
         ? parseSpreadsheetBoq(spreadsheetRows)
-        : parseSimpleLineItemsPdf(pages);
+        : parseItemizedQuote(pages, signals.hasSummaryTotals);
       break;
-    case 'mixed_unknown':
+
+    case 'scanned_ocr_quote':
+      rawOutput = parseScannedOcrPdf(pages);
+      break;
+
+    case 'unknown_quote':
     default:
-      rawOutput = parseMixedUnknown(pages);
+      rawOutput = parseUnknownFallback(pages, signals);
       break;
   }
 
@@ -99,6 +117,7 @@ export function runParserV3(input: ParserV3Input): ParserV3Output {
 
   console.log(`[ParserV3] baseItems=${resolution.baseItems.length} optionalItems=${resolution.optionalItems.length} excludedItems=${resolution.excludedItems.length}`);
   console.log(`[ParserV3] resolvedTotal=${resolution.totals.grandTotal.toFixed(2)} source=${resolution.totals.source} risk=${resolution.validation.risk}`);
+
   if (resolution.validation.warnings.length > 0) {
     for (const w of resolution.validation.warnings) {
       console.warn(`[ParserV3] WARNING: ${w}`);
