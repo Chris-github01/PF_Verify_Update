@@ -190,6 +190,11 @@ const OPTIONAL_SECTION_START_RE = /\b(OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|OPTIONAL
 const BASE_SECTION_RESET_RE = /^\s*(MAIN\s+SCOPE|BASE\s+SCOPE|SCOPE\s+OF\s+WORKS?|SCHEDULE\s+OF\s+(RATES?|QUANTITIES))\s*$/i;
 const SKIP_LINE_RE = /^(Page\s+\d|Description|Item\s+No|Qty|Quantity|Unit|Rate|Total|Amount|Ref|Notes?|Prepared\s+by|Date:|Project:)/i;
 
+// Description-level trade prefixes that force Main scope regardless of section context
+const FORCE_BASE_DESC_RE = /^(Electrical|Fire\s+Protection|Hydraulics|Mechanical)\b/i;
+// Description-level prefixes that force Optional scope
+const FORCE_OPTIONAL_DESC_RE = /^(Architectural\s*\/?\s*Structural\s+Details?|Optional\s+Extras?)\b/i;
+
 function normaliseUnit(raw: string): string {
   const u = raw.toLowerCase().trim().replace(/\.$/, '');
   const map: Record<string, string> = {
@@ -340,7 +345,8 @@ function parseSchedulePages(
   });
 
   for (const page of pages) {
-    // Do NOT reset scopeCategory here — optional scope persists across page boundaries
+    // Reset to base at every new page — optional scope never carries across page boundaries
+    scopeCategory = 'base';
 
     const rawLines = page.text.split('\n');
     const trimmedLines = rawLines.map(l => l.trim()).filter(Boolean);
@@ -399,8 +405,8 @@ function parseSchedulePages(
       if (secMatch) {
         const id = secMatch[1] ?? secMatch[2] ?? secMatch[3] ?? secMatch[4];
         currentSection = `SEC${id}`;
-        // BLOCK/LEVEL/ZONE/STAGE headers do NOT reset optional scope —
-        // only explicit BASE_SECTION_RESET_RE does that.
+        // BLOCK/LEVEL/ZONE/STAGE headers always reset scope back to base
+        scopeCategory = 'base';
       }
 
       if (OPTIONAL_SECTION_START_RE.test(normalized) && !/^\d{1,3}\s/.test(normalized)) {
@@ -427,7 +433,16 @@ function parseSchedulePages(
         parsed_result: 'failed',
       };
 
-      const item = tryParseRow(normalized, currentSection, scopeCategory, page.pageNum, trace);
+      // Description-level override: certain trade prefixes force the scope category
+      // regardless of the current section heading state
+      let effectiveScopeCategory = scopeCategory;
+      if (FORCE_BASE_DESC_RE.test(normalized)) {
+        effectiveScopeCategory = 'base';
+      } else if (FORCE_OPTIONAL_DESC_RE.test(normalized)) {
+        effectiveScopeCategory = 'optional';
+      }
+
+      const item = tryParseRow(normalized, currentSection, effectiveScopeCategory, page.pageNum, trace);
 
       // Collect first 25 line attempts for forensic output
       if (debug.lineAttempts.length < 25) {
