@@ -73,6 +73,11 @@ export interface RawParserOutput {
   warnings?: string[];
   parser_mode?: string;
 
+  // Analytics-only: raw schedule row sum before any total override.
+  // Populated by parseSummarySchedulePdf when a document grand total exists.
+  // Consumers must NOT use this as the commercial total — use totals.grandTotal.
+  derived_items_total?: number;
+
   // Optional — document-level total fields from extractDocumentTotals
   documentTotals?: {
     grandTotal: number | null;
@@ -123,6 +128,10 @@ export interface ResolutionOutput {
   resolution_source: TotalSource;
   resolution_confidence: number;
   warnings: string[];
+  // Analytics-only schedule row sum — only set when a document grand total exists
+  // and differs from the row sum. Never use as commercial total.
+  derived_items_total?: number;
+  optional_scope_total: number;
 
   // Backward-compat aliases
   documentClass: DocumentClass;
@@ -516,6 +525,15 @@ export function runResolutionLayer(
     parserMode,
   };
 
+  // derived_items_total: only surface when parser explicitly set it AND a real
+  // document grand total was found (meaning the two differ meaningfully).
+  const derivedItemsTotal: number | undefined =
+    typeof parserOutput.derived_items_total === 'number' &&
+    parserOutput.derived_items_total > 0 &&
+    resolvedSource !== 'row_sum'
+      ? parserOutput.derived_items_total
+      : undefined;
+
   return {
     // Standard shape
     base_items: baseItems,
@@ -525,6 +543,8 @@ export function runResolutionLayer(
     resolution_source: resolvedSource,
     resolution_confidence: resolutionConfidence,
     warnings: allWarnings,
+    derived_items_total: derivedItemsTotal,
+    optional_scope_total: canonicalOptionalTotal,
 
     // Backward-compat
     documentClass: classification.documentClass,

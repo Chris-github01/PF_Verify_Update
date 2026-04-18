@@ -26,15 +26,22 @@ interface SummaryTotals {
   foundOnPage: number | null;
 }
 
+// Money pattern: allows optional $, optional spaces/commas between digits, mandatory cents
+// Handles both "59,278.75" and "59 278.75" (spaced thousands from OCR)
+const MONEY_CAPTURE = '\\$?\\s*([\\d][\\d\\s,]*\\.\\d{2})';
+
 const GRAND_TOTAL_PATTERNS: Array<{ key: string; re: RegExp }> = [
-  { key: 'grand_total_excl_gst', re: /Grand\s+Total\s*\(excl(?:uding)?\.?\s*(?:of\s+)?GST\)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i },
-  { key: 'grand_total', re: /Grand\s+Total\s*:?\s*\$?\s*([\d,]+\.\d{2})/i },
-  { key: 'contract_total', re: /Contract\s+(?:Sum|Total|Price)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i },
-  { key: 'quote_total', re: /Quote\s+Total\s*:?\s*\$?\s*([\d,]+\.\d{2})/i },
-  { key: 'total_excl_gst', re: /Total\s*\(excl(?:uding)?\.?\s*(?:of\s+)?GST\)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i },
-  { key: 'net_total', re: /Net\s+Total\s*:?\s*\$?\s*([\d,]+\.\d{2})/i },
-  { key: 'lump_sum_total', re: /Lump\s+Sum\s+Total\s*:?\s*\$?\s*([\d,]+\.\d{2})/i },
-  { key: 'total_price', re: /Total\s+Price\s*:?\s*\$?\s*([\d,]+\.\d{2})/i },
+  { key: 'grand_total_excl_gst', re: new RegExp(`Grand\\s+Total\\s*\\(excl(?:uding)?\\.?\\s*(?:of\\s+)?GST\\)\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'grand_total', re: new RegExp(`Grand\\s+Total\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'contract_total', re: new RegExp(`Contract\\s+(?:Sum|Total|Price)\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'quote_total', re: new RegExp(`Quote\\s+Total\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'total_excl_gst', re: new RegExp(`Total\\s*\\(excl(?:uding)?\\.?\\s*(?:of\\s+)?GST\\)\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'total_ex_gst', re: new RegExp(`Total\\s+Ex\\.?\\s*GST\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'total_excluding_gst', re: new RegExp(`Total\\s+Excluding\\s+GST\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'net_total', re: new RegExp(`Net\\s+Total\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'lump_sum_total', re: new RegExp(`Lump\\s+Sum\\s+Total\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'total_price', re: new RegExp(`Total\\s+Price\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
+  { key: 'tender_total', re: new RegExp(`Tender\\s+(?:Sum|Total)\\s*:?\\s*${MONEY_CAPTURE}`, 'i') },
 ];
 
 const SUBTOTAL_PATTERNS: Array<{ key: string; re: RegExp }> = [
@@ -58,10 +65,45 @@ function parseMoney(raw: string): number {
   return isNaN(v) ? 0 : v;
 }
 
+// Proximity scan: try matching a label regex against each line, then look at the
+// same line and the next 1–2 lines for a money value.  This handles PDFs where
+// the label and its dollar amount fall on separate lines.
+function proximityMatch(
+  lines: string[],
+  labelRe: RegExp,
+  moneyRe: RegExp,
+): { matched: string; value: number } | null {
+  for (let i = 0; i < lines.length; i++) {
+    if (!labelRe.test(lines[i])) continue;
+    // Try the current line first (label + amount on same line)
+    const sameLine = lines[i].match(moneyRe);
+    if (sameLine) {
+      const val = parseMoney(sameLine[1]);
+      if (val > 0) return { matched: lines[i].trim(), value: val };
+    }
+    // Try next two lines (label on one line, amount on subsequent line)
+    for (let j = i + 1; j <= i + 2 && j < lines.length; j++) {
+      const nextLine = lines[j].match(moneyRe);
+      if (nextLine) {
+        const val = parseMoney(nextLine[1]);
+        if (val > 0) return { matched: `${lines[i].trim()} | ${lines[j].trim()}`, value: val };
+      }
+    }
+  }
+  return null;
+}
+
+// Standalone money pattern for proximity next-line extraction
+const STANDALONE_MONEY_RE = /\$?\s*([\d][\d\s,]*\.\d{2})\s*$/;
+
 function scanPageForTotals(pageText: string, pageNum: number, result: SummaryTotals): void {
+  // Single-line flat scan — handles label + amount on same line
   const flat = pageText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
+  // Per-line array — for proximity (multi-line) scanning
+  const lines = pageText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
   if (result.grandTotal === null) {
+    // Pass 1: flat single-line match
     for (const { key, re } of GRAND_TOTAL_PATTERNS) {
       const m = flat.match(re);
       if (m) {
@@ -69,6 +111,21 @@ function scanPageForTotals(pageText: string, pageNum: number, result: SummaryTot
         if (val > 0) {
           result.grandTotal = val;
           result.rawMatches[key] = m[0].trim();
+          result.foundOnPage = pageNum;
+          break;
+        }
+      }
+    }
+    // Pass 2: proximity multi-line scan (label on one line, amount on next)
+    if (result.grandTotal === null) {
+      for (const { key, re } of GRAND_TOTAL_PATTERNS) {
+        // Build a label-only regex by stripping the trailing money capture group
+        const labelSource = re.source.replace(/\\s\*:?\?\\s\*\$\?.*$/, '').replace(/\\s\*\$\?\\s\*\$\?.*$/, '');
+        const labelRe = new RegExp(labelSource, 'i');
+        const hit = proximityMatch(lines, labelRe, STANDALONE_MONEY_RE);
+        if (hit) {
+          result.grandTotal = hit.value;
+          result.rawMatches[key] = hit.matched;
           result.foundOnPage = pageNum;
           break;
         }
@@ -88,6 +145,18 @@ function scanPageForTotals(pageText: string, pageNum: number, result: SummaryTot
         }
       }
     }
+    if (result.subTotal === null) {
+      for (const { key, re } of SUBTOTAL_PATTERNS) {
+        const labelSource = re.source.replace(/\\s\*:?\?\\s\*\$\?.*$/, '').replace(/\\s\*\$\?\\s\*\$\?.*$/, '');
+        const labelRe = new RegExp(labelSource, 'i');
+        const hit = proximityMatch(lines, labelRe, STANDALONE_MONEY_RE);
+        if (hit) {
+          result.subTotal = hit.value;
+          result.rawMatches[key] = hit.matched;
+          break;
+        }
+      }
+    }
   }
 
   if (result.optionalTotal === null) {
@@ -98,6 +167,18 @@ function scanPageForTotals(pageText: string, pageNum: number, result: SummaryTot
         if (val > 0) {
           result.optionalTotal = val;
           result.rawMatches[key] = m[0].trim();
+          break;
+        }
+      }
+    }
+    if (result.optionalTotal === null) {
+      for (const { key, re } of OPTIONAL_TOTAL_PATTERNS) {
+        const labelSource = re.source.replace(/\\s\*:?\?\\s\*\$\?.*$/, '').replace(/\\s\*\$\?\\s\*\$\?.*$/, '');
+        const labelRe = new RegExp(labelSource, 'i');
+        const hit = proximityMatch(lines, labelRe, STANDALONE_MONEY_RE);
+        if (hit) {
+          result.optionalTotal = hit.value;
+          result.rawMatches[key] = hit.matched;
           break;
         }
       }
@@ -514,7 +595,14 @@ export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
   const failureCode = debug.failureCode
     ?? (scheduleItems.length === 0 ? 'parser_state_bug' : null);
 
-  console.log(`[parseSummarySchedulePdf] EXIT rows_seen=${debug.rowsSeen} rows_valid=${debug.rowsValid} rows_failed=${debug.rowsFailed} failure_code=${failureCode}`);
+  // derived_items_total = raw schedule row sum — kept for analytics only.
+  // resolved_total will be summary.grandTotal when found (commercial truth).
+  const derivedItemsTotal = rowBaseSum;
+
+  console.log(
+    `[parseSummarySchedulePdf] EXIT rows_seen=${debug.rowsSeen} rows_valid=${debug.rowsValid} rows_failed=${debug.rowsFailed} failure_code=${failureCode}` +
+    ` | summary_grand_total=${summary.grandTotal} derived_items_total=${derivedItemsTotal} canonical_optional=${canonicalOptionalTotal}`
+  );
   console.log(`[parseSummarySchedulePdf] LINE_ATTEMPTS sample: ${JSON.stringify(debug.lineAttempts.slice(0, 5))}`);
 
   const parserReasons: string[] = [
@@ -523,6 +611,8 @@ export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
     `summary_grand_total=${summary.grandTotal}`,
     `summary_found_on_page=${summary.foundOnPage ?? 'not_found'}`,
     `summary_raw_matches=${JSON.stringify(summary.rawMatches)}`,
+    `derived_items_total=${derivedItemsTotal}`,
+    `optional_scope_total=${canonicalOptionalTotal}`,
     ...debug.pageTraces.map(pt =>
       `page=${pt.pageNum} chars=${pt.pageChars} raw_lines=${pt.totalLinesRaw} trimmed=${pt.totalLinesAfterTrim} numbered=${pt.numberedLinesDetected} continuation_joins=${pt.continuationLinesJoined}`
     ),
@@ -552,9 +642,13 @@ export function parseSummarySchedulePdf(pages: PageData[]): RawParserOutput {
       grandTotal: canonicalGrandTotal,
       optionalTotal: canonicalOptionalTotal,
       subTotal: summary.subTotal,
+      // rowSum always reflects the raw schedule line-item sum (analytics layer)
       rowSum: rowBaseSum,
       source: summary.grandTotal !== null ? 'summary_page' : 'row_sum',
     },
+    // derived_items_total: schedule row sum kept separately as analytics-only field.
+    // Consumers MUST use totals.grandTotal (= resolved_total) as the commercial figure.
+    derived_items_total: derivedItemsTotal,
     summaryDetected: summary.grandTotal !== null,
     optionalScopeDetected: summary.optionalTotal !== null || optionalItems.length > 0,
     parserReasons,
