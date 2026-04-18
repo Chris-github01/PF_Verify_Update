@@ -460,6 +460,17 @@ export function runResolutionLayer(
   // Collect all warnings
   const allWarnings: string[] = [...validation.warnings];
 
+  // Warn if document declares an optional total but no optional items were classified
+  const declaredOptionalTotal =
+    (documentTotals?.optionalTotal && documentTotals.optionalTotal > 0)
+      ? documentTotals.optionalTotal
+      : (totals.optionalTotal > 0 ? totals.optionalTotal : null);
+  if (declaredOptionalTotal && declaredOptionalTotal > 0 && optionalItems.length === 0) {
+    allWarnings.push(
+      `optional_scope_total $${declaredOptionalTotal.toFixed(2)} declared in document but 0 optional items classified — scope heading may not have been detected`,
+    );
+  }
+
   if (totalDupsRemoved > 0) {
     allWarnings.push(
       `${totalDupsRemoved} duplicate item(s) removed` +

@@ -340,7 +340,7 @@ function parseSchedulePages(
   });
 
   for (const page of pages) {
-    scopeCategory = 'base';
+    // Do NOT reset scopeCategory here — optional scope persists across page boundaries
 
     const rawLines = page.text.split('\n');
     const trimmedLines = rawLines.map(l => l.trim()).filter(Boolean);
@@ -399,7 +399,8 @@ function parseSchedulePages(
       if (secMatch) {
         const id = secMatch[1] ?? secMatch[2] ?? secMatch[3] ?? secMatch[4];
         currentSection = `SEC${id}`;
-        scopeCategory = 'base';
+        // BLOCK/LEVEL/ZONE/STAGE headers do NOT reset optional scope —
+        // only explicit BASE_SECTION_RESET_RE does that.
       }
 
       if (OPTIONAL_SECTION_START_RE.test(normalized) && !/^\d{1,3}\s/.test(normalized)) {
