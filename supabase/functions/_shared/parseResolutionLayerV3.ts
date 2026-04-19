@@ -38,9 +38,9 @@ export interface ParsedLineItem {
   lineId: string;
   section: string;
   description: string;
-  qty: number;
+  qty: number | null;
   unit: string;
-  rate: number;
+  rate: number | null;
   total: number;
   scopeCategory: 'base' | 'optional';
   pageNum: number;
@@ -211,8 +211,8 @@ function deduplicateItems(items: ParsedLineItem[]): DedupeResult {
 
     const exactKey = [
       normDesc,
-      item.qty.toFixed(4),
-      item.rate.toFixed(4),
+      (item.qty ?? 0).toFixed(4),
+      (item.rate ?? 0).toFixed(4),
       item.total.toFixed(2),
       item.scopeCategory,
     ].join('||');

@@ -283,12 +283,14 @@ function tryParseNumberedRow(
   if (m) {
     const [, lineId, desc, qtyRaw, unitRaw, totalRaw] = m;
     const total = parseMoney(totalRaw);
-    const qty = parseFloat(qtyRaw) || 1;
+    const parsedQty = parseFloat(qtyRaw);
+    const qty = Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : null;
     if (total === 0) return null;
+    const rate = qty !== null ? parseFloat((total / qty).toFixed(4)) : null;
     return {
       lineId, section, description: desc.trim(),
-      qty, unit: normaliseUnit(unitRaw),
-      rate: qty > 0 ? parseFloat((total / qty).toFixed(4)) : total,
+      qty: qty as unknown as number, unit: normaliseUnit(unitRaw),
+      rate: rate as unknown as number,
       total, scopeCategory, pageNum,
       confidence: 0.90, source: 'hybrid_numbered',
     };
@@ -301,7 +303,10 @@ function tryParseNumberedRow(
     if (total === 0 || desc.trim().length < 3) return null;
     return {
       lineId, section, description: desc.trim(),
-      qty: 1, unit: 'item', rate: total, total,
+      qty: null as unknown as number,
+      unit: 'item',
+      rate: null as unknown as number,
+      total,
       scopeCategory, pageNum,
       confidence: 0.72, source: 'hybrid_numbered',
     };

@@ -46,9 +46,9 @@ export interface DetectedSection {
 
 export interface ParsedLineItem {
   description: string;
-  qty: number;
+  qty: number | null;
   unit: string;
-  rate: number;
+  rate: number | null;
   total: number;
   scope: ScopeCategory;
   section_heading: string;
@@ -594,7 +594,12 @@ function runPass1Deterministic(rawText: string): Pass1Result {
   }
 
   const statedTotalsFromRegex = extractStatedTotals(rawText);
-  if (statedTotalsFromRegex.grand_total) statedGrandTotal = statedTotalsFromRegex.grand_total;
+  const rankedGrandTotal =
+    statedTotalsFromRegex.grand_total ??
+    statedTotalsFromRegex.total_incl_gst ??
+    statedGrandTotal ??
+    statedSubTotal;
+  if (rankedGrandTotal) statedGrandTotal = rankedGrandTotal;
   if (statedTotalsFromRegex.sub_total) statedSubTotal = statedTotalsFromRegex.sub_total;
 
   let documentType: string;
@@ -696,12 +701,23 @@ async function runPass2(
       const raw = await callLLM(apiKey, model, systemPrompt, userPrompt, 8192, chunkTimeoutMs) as Record<string, unknown>;
 
       const rawItems = (raw.items as ParsedLineItem[]) ?? [];
-      const validItems = rawItems.filter(
-        (item) =>
-          item.description &&
-          typeof item.total === "number" &&
-          item.total > 0,
-      );
+      const validItems = rawItems.filter((item) => {
+        if (!item.description) return false;
+        if (typeof item.total !== "number" || item.total <= 0) return false;
+        const qty = typeof item.qty === "number" && item.qty > 0 ? item.qty : null;
+        const rate = typeof item.rate === "number" && item.rate > 0 ? item.rate : null;
+        if (qty !== null && rate !== null) {
+          const expected = qty * rate;
+          const tolerance = Math.max(0.02 * item.total, 0.5);
+          if (Math.abs(expected - item.total) > tolerance) {
+            allWarnings.push(
+              `Pass2 arithmetic mismatch rejected: "${item.description}" (${qty} * ${rate} != ${item.total})`,
+            );
+            return false;
+          }
+        }
+        return true;
+      });
 
       allItems.push(...validItems);
       allWarnings.push(...((raw.warnings as string[]) ?? []));
@@ -801,19 +817,40 @@ function postProcess(items: ParsedLineItem[]): {
     return true;
   });
 
-  filtered = filtered.map((item) => ({
-    ...item,
-    unit:
-      !item.unit || item.unit === "0" || item.unit === "-" || item.unit === "N/A"
-        ? item.qty === 1 ? "LS" : "ea"
-        : item.unit,
-    qty: item.qty > 0 ? item.qty : 1,
-    rate: item.rate > 0 ? item.rate : item.total,
-    scope: item.scope ?? "included",
-    frr: item.frr ?? "",
-    raw_source: item.raw_source ?? "",
-    section_heading: item.section_heading ?? "",
-  }));
+  filtered = filtered.map((item) => {
+    const qty = typeof item.qty === "number" && item.qty > 0 ? item.qty : null;
+    let rate = typeof item.rate === "number" && item.rate > 0 ? item.rate : null;
+    if (rate === null && qty !== null && item.total > 0) {
+      rate = parseFloat((item.total / qty).toFixed(4));
+    }
+    return {
+      ...item,
+      unit:
+        !item.unit || item.unit === "0" || item.unit === "-" || item.unit === "N/A"
+          ? qty === 1 ? "LS" : "ea"
+          : item.unit,
+      qty,
+      rate,
+      scope: item.scope ?? "included",
+      frr: item.frr ?? "",
+      raw_source: item.raw_source ?? "",
+      section_heading: item.section_heading ?? "",
+    };
+  });
+
+  filtered = filtered.filter((item) => {
+    if (item.qty !== null && item.rate !== null && item.total > 0) {
+      const expected = item.qty * item.rate;
+      const tolerance = Math.max(0.02 * item.total, 0.5);
+      if (Math.abs(expected - item.total) > tolerance) {
+        warnings.push(
+          `Arithmetic mismatch dropped: "${item.description}" qty=${item.qty} * rate=${item.rate} != total=${item.total}`,
+        );
+        return false;
+      }
+    }
+    return true;
+  });
 
   return { items: filtered, warnings };
 }

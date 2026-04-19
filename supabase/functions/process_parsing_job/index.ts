@@ -268,9 +268,21 @@ async function runDeterministicPlusTwoPass(
 
 function adaptLlmItem(item: any, index: number, parserUsed: string): ParsedLineItem {
   const desc = cleanText(String(item.description ?? "")) || `Item ${index + 1}`;
-  const qty = Number(item.qty ?? item.quantity ?? 1);
-  const rate = Number(item.rate ?? item.unit_price ?? 0);
-  const total = Number(item.total ?? item.total_price ?? 0);
+  const rawQty = item.qty ?? item.quantity;
+  const rawRate = item.rate ?? item.unit_price;
+  const rawTotal = item.total ?? item.total_price;
+  const qtyNum = rawQty === null || rawQty === undefined || rawQty === "" ? NaN : Number(rawQty);
+  const rateNum = rawRate === null || rawRate === undefined || rawRate === "" ? NaN : Number(rawRate);
+  const totalNum = rawTotal === null || rawTotal === undefined || rawTotal === "" ? NaN : Number(rawTotal);
+
+  const qty = Number.isFinite(qtyNum) && qtyNum > 0 ? qtyNum : null;
+  let rate = Number.isFinite(rateNum) && rateNum > 0 ? rateNum : null;
+  const total = Number.isFinite(totalNum) ? totalNum : 0;
+
+  if (rate === null && qty !== null && total > 0) {
+    rate = parseFloat((total / qty).toFixed(4));
+  }
+
   const isOptional =
     /optional|option\b|\(opt\)/i.test(desc) ||
     String(item.section ?? "").toLowerCase().includes("optional") ||
@@ -280,10 +292,10 @@ function adaptLlmItem(item: any, index: number, parserUsed: string): ParsedLineI
     lineId: String(index + 1),
     section: cleanText(String(item.section ?? "")),
     description: desc,
-    qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+    qty,
     unit: cleanText(String(item.unit ?? "ea")) || "ea",
-    rate: Number.isFinite(rate) ? rate : 0,
-    total: Number.isFinite(total) ? total : 0,
+    rate,
+    total,
     scopeCategory: isOptional ? "optional" : "base",
     pageNum: 0,
     confidence: Number(item.confidence ?? 0.85),
@@ -291,10 +303,19 @@ function adaptLlmItem(item: any, index: number, parserUsed: string): ParsedLineI
   };
 }
 
+function arithmeticallyValid(item: ParsedLineItem): boolean {
+  if (item.qty === null || item.rate === null || item.total <= 0) return true;
+  const expected = item.qty * item.rate;
+  const tolerance = Math.max(0.02 * item.total, 0.5);
+  return Math.abs(expected - item.total) <= tolerance;
+}
+
 function dedupKey(item: ParsedLineItem): string {
   return [
     item.description.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 80),
-    item.qty.toFixed(3), item.rate.toFixed(2), item.total.toFixed(2),
+    (item.qty ?? 0).toFixed(3),
+    (item.rate ?? 0).toFixed(2),
+    item.total.toFixed(2),
   ].join("|");
 }
 
