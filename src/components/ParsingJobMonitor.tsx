@@ -192,6 +192,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
   const [resuming, setResuming] = useState<Set<string>>(new Set());
   const autoRetriedJobs = useRef<Set<string>>(new Set());
   const isAutoRetrying = useRef<Set<string>>(new Set());
+  const jobsRef = useRef<ParsingJob[]>([]);
 
   useEffect(() => {
     loadJobs();
@@ -208,31 +209,42 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setJobs(prev => [payload.new as ParsingJob, ...prev]);
+            setJobs(prev => {
+              const next = [payload.new as ParsingJob, ...prev];
+              jobsRef.current = next;
+              return next;
+            });
           } else if (payload.eventType === 'UPDATE') {
             const updated = payload.new as ParsingJob;
-            setJobs(prev =>
-              prev.map(job => (job.id === updated.id ? updated : job))
-            );
+            setJobs(prev => {
+              const next = prev.map(job => (job.id === updated.id ? updated : job));
+              jobsRef.current = next;
+              return next;
+            });
             if (updated.status === 'completed' && updated.quote_id) {
               onJobCompleted?.(updated.id, updated.quote_id);
             }
           } else if (payload.eventType === 'DELETE') {
-            setJobs(prev => prev.filter(job => job.id !== payload.old.id));
+            setJobs(prev => {
+              const next = prev.filter(job => job.id !== payload.old.id);
+              jobsRef.current = next;
+              return next;
+            });
           }
         }
       )
       .subscribe();
 
     const pollInterval = setInterval(async () => {
-      const hasActiveJobs = jobs.some(
+      const currentJobs = jobsRef.current;
+      const hasActiveJobs = currentJobs.some(
         job => job.status === 'pending' || job.status === 'processing'
       );
       if (hasActiveJobs) {
         await loadJobs();
 
         // Auto-retry: only if stuck AND attempt_count < 2 (loop-breaker)
-        jobs.forEach(job => {
+        currentJobs.forEach(job => {
           const jobKey = `${job.id}_${job.updated_at}`;
           const attemptCount = job.attempt_count ?? 0;
           const priorLlmFailed = job.llm_attempted === true && job.llm_fail_reason != null;
@@ -273,7 +285,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
       subscription.unsubscribe();
       clearInterval(pollInterval);
     };
-  }, [projectId, dashboardMode, currentTrade, jobs]);
+  }, [projectId, dashboardMode, currentTrade]);
 
   const loadJobs = async () => {
     try {
@@ -312,9 +324,13 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
           is_latest: job.quote_id ? quoteLatestMap.get(job.quote_id) || false : false
         }));
 
-        setJobs(filteredJobs.slice(0, 20) as ParsingJob[]);
+        const result = filteredJobs.slice(0, 20) as ParsingJob[];
+        jobsRef.current = result;
+        setJobs(result);
       } else {
-        setJobs(allJobs.slice(0, 20) as ParsingJob[]);
+        const result = allJobs.slice(0, 20) as ParsingJob[];
+        jobsRef.current = result;
+        setJobs(result);
       }
     } catch (error) {
       console.error('Error loading parsing jobs:', error);
