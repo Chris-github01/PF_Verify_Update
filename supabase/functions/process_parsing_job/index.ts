@@ -5,15 +5,19 @@ import { runParserV3 } from "../_shared/parserRouterV3.ts";
 import { runResolutionLayer } from "../_shared/parseResolutionLayerV3.ts";
 import { classifyDocument } from "../_shared/documentClassifier.ts";
 import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
+import { runThreePassParser } from "../_shared/threePassParser.ts";
 import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
 
 // =============================================================================
-// PROCESS PARSING JOB — LLM-PRIMARY WITH REGEX RECOVERY
+// PROCESS PARSING JOB — DETERMINISTIC PRE-PASS + LLM EXTRACTION
 //
-// Hard timeout: LLM total wall-time capped at 90 seconds across all 3 attempts.
-// Loop breaker: If attempt_count >= 3, LLM is skipped entirely — regex runs directly.
-// Stage labels: Written to DB at every transition so UI shows exact stage.
-// Trace: Full parser_attempt_order array written to trace_json column.
+// Runtime flow:
+//   STEP 1: Deterministic pre-pass (<500ms) — section map, totals, document type
+//   STEP 2: LLM row extraction only (Pass 2 chunked) — NO structural LLM pass
+//   STEP 3: Arithmetic reconciliation (Pass 3, pure computation)
+//
+// Old 3-attempt LLM Pass 1 loop (fast-pass1/60%/5k) is REMOVED.
+// Fallback: regex_recovery if threePass returns 0 items or confidence < 0.55
 // =============================================================================
 
 const corsHeaders = {
@@ -22,17 +26,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const BUILD_VERSION = "2026-04-19-1200";
-const THREE_PASS_VERSION = "v2-fast-pass1";
+const BUILD_VERSION = "2026-04-19-det-pass1";
+const THREE_PASS_VERSION = "v3-det-prepass";
 
-// Hard cap for total LLM wall time across all attempts
-const LLM_TOTAL_WALL_TIME_MS = 75_000;
-
-// Per-attempt timeouts (shrink with each retry)
-// Attempt 1: fast-model Pass 1 (≤5s) + chunked Pass 2 (25s/chunk) — budget 40s
-// Attempt 2: 60% text, same model — budget 30s
-// Attempt 3: short prompt, 5000 chars — budget 25s
-const LLM_ATTEMPT_TIMEOUTS = [40_000, 30_000, 25_000];
+// LLM budget for Pass 2 row extraction only (no structural Pass 1 LLM)
+const LLM_EXTRACTION_TIMEOUT_MS = 90_000;
 
 interface ParsingJob {
   id: string;
@@ -128,7 +126,7 @@ async function setStage(
   console.log(`[STAGE] ${stage}${progress !== undefined ? ` (${progress}%)` : ""}`);
 }
 
-interface LlmCallResult {
+interface ThreePassCallResult {
   items: any[];
   confidence: number;
   totals: { grandTotal?: number; subtotal?: number };
@@ -138,183 +136,118 @@ interface LlmCallResult {
   failMessage: string;
   chunksStarted: number;
   chunksCompleted: number;
+  prepassDurationMs: number;
+  prepassSections: number;
+  prepassDocType: string;
 }
 
-async function attemptLlmCall(
-  supabaseUrl: string,
-  serviceKey: string,
-  text: string,
-  supplierName: string,
-  trade: string,
-  options: { shorterPrompt?: boolean; timeoutMs?: number } = {},
-): Promise<LlmCallResult> {
-  const url = `${supabaseUrl}/functions/v1/parse_quote_llm_fallback`;
-  const timeoutMs = options.timeoutMs ?? 60_000;
-  const payload: Record<string, unknown> = { text, supplierName, trade };
-  if (options.shorterPrompt) payload.shorterPrompt = true;
-
-  let responseStatus: number | undefined;
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-
-    responseStatus = res.status;
-
-    if (!res.ok) {
-      const errText = await res.text();
-      const failMsg = `HTTP ${res.status}: ${errText.slice(0, 200)}`;
-      return {
-        items: [], confidence: 0, totals: {}, warnings: [failMsg],
-        success: false, failReason: classifyLlmFailure(new Error(failMsg), res.status),
-        failMessage: failMsg, chunksStarted: 0, chunksCompleted: 0,
-      };
-    }
-
-    let data: any;
-    const rawText = await res.text();
-    try {
-      data = JSON.parse(rawText);
-    } catch {
-      try {
-        data = JSON.parse(repairJson(rawText));
-        console.warn("[LLM] JSON repaired successfully");
-      } catch {
-        const failMsg = `JSON unparseable after repair (len=${rawText.length})`;
-        return {
-          items: [], confidence: 0, totals: {}, warnings: [failMsg],
-          success: false, failReason: "json_parse", failMessage: failMsg,
-          chunksStarted: 0, chunksCompleted: 0,
-        };
-      }
-    }
-
-    const items: any[] = data.items ?? data.lines ?? [];
-    const chunksCompleted: number = data.metadata?.chunksCompleted ?? (items.length > 0 ? 1 : 0);
-    const chunksStarted: number = data.metadata?.chunksStarted ?? chunksCompleted;
-
-    if (!data.success && items.length === 0) {
-      const failMsg = data.error ?? "LLM returned success=false with 0 items";
-      return {
-        items: [], confidence: 0, totals: data.totals ?? {}, warnings: data.warnings ?? [],
-        success: false, failReason: "empty_response", failMessage: failMsg,
-        chunksStarted, chunksCompleted,
-      };
-    }
-
-    return {
-      items, confidence: Number(data.confidence ?? 0),
-      totals: data.totals ?? {}, warnings: data.warnings ?? [],
-      success: data.success === true, failReason: null, failMessage: "",
-      chunksStarted, chunksCompleted,
-    };
-  } catch (err) {
-    const reason = classifyLlmFailure(err, responseStatus);
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      items: [], confidence: 0, totals: {}, warnings: [`LLM threw: ${msg}`],
-      success: false, failReason: reason, failMessage: msg,
-      chunksStarted: 0, chunksCompleted: 0,
-    };
-  }
-}
-
-async function callLlmParserWithRetry(
+async function runDeterministicPlusTwoPass(
   supabase: ReturnType<typeof createClient>,
   jobId: string,
-  supabaseUrl: string,
-  serviceKey: string,
-  text: string,
+  rawText: string,
   supplierName: string,
-  trade: string,
-): Promise<{ result: LlmCallResult; attemptsMade: number; traceEntries: ParserAttemptEntry[] }> {
-  const wallStart = Date.now();
+): Promise<{ result: ThreePassCallResult; traceEntries: ParserAttemptEntry[] }> {
   const traceEntries: ParserAttemptEntry[] = [];
-  let lastResult: LlmCallResult | null = null;
-  let attemptsMade = 0;
+  const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
 
-  const attempts = [
-    { label: "three_pass_llm (attempt 1/3 — fast-pass1 full text)", text: text, shorterPrompt: false, timeoutMs: LLM_ATTEMPT_TIMEOUTS[0] },
-    { label: "three_pass_llm (attempt 2/3 — fast-pass1 60% text)", text: text.slice(0, Math.floor(text.length * 0.6)), shorterPrompt: false, timeoutMs: LLM_ATTEMPT_TIMEOUTS[1] },
-    { label: "three_pass_llm (attempt 3/3 — short prompt 5k)", text: text.slice(0, 5000), shorterPrompt: true, timeoutMs: LLM_ATTEMPT_TIMEOUTS[2] },
-  ];
+  // STEP 1: Deterministic pre-pass
+  const prepassStart = Date.now();
+  await setStage(supabase, jobId, "Running Deterministic Pre-Pass", 35);
+  console.log("[DET] Starting deterministic pre-pass");
 
-  for (let i = 0; i < attempts.length; i++) {
-    const elapsed = Date.now() - wallStart;
-    const remaining = LLM_TOTAL_WALL_TIME_MS - elapsed;
+  let threePassOutput;
+  let prepassDurationMs = 0;
+  let prepassSections = 0;
+  let prepassDocType = "unknown";
 
-    if (remaining <= 5000) {
-      console.warn(`[LLM] Wall-time budget exhausted (${elapsed}ms) — aborting LLM phase`);
-      traceEntries.push({
-        parser: attempts[i].label,
-        started_at: new Date().toISOString(),
-        ended_at: new Date().toISOString(),
-        duration_ms: 0,
-        status: "skipped",
-        reason: `Wall-time budget exhausted (${elapsed}ms / ${LLM_TOTAL_WALL_TIME_MS}ms)`,
-      });
-      break;
-    }
-
-    const attemptTimeout = Math.min(attempts[i].timeoutMs, remaining - 2000);
-    const stageLabel = i === 0
-      ? "Running LLM Structural Pass"
-      : i === 1 ? "Running LLM Extraction Pass (retry)"
-      : "Running LLM Extraction Pass (short prompt)";
-
-    await setStage(supabase, jobId, stageLabel, 45 + i * 5);
-
-    const attemptStart = Date.now();
-    console.log(`[LLM] ${attempts[i].label} — ${attempts[i].text.length} chars, timeout=${attemptTimeout}ms`);
-
-    const result = await attemptLlmCall(
-      supabaseUrl, serviceKey,
-      attempts[i].text, supplierName, trade,
-      { shorterPrompt: attempts[i].shorterPrompt, timeoutMs: attemptTimeout },
-    );
-
-    const duration = Date.now() - attemptStart;
-    attemptsMade = i + 1;
-
-    const entryStatus: ParserAttemptEntry["status"] =
-      result.success && result.items.length > 0 ? "success"
-      : result.failReason === "timeout" ? "timeout"
-      : "failed";
-
-    traceEntries.push({
-      parser: attempts[i].label,
-      started_at: new Date(attemptStart).toISOString(),
-      ended_at: new Date().toISOString(),
-      duration_ms: duration,
-      status: entryStatus,
-      reason: result.failReason
-        ? `${result.failReason}: ${result.failMessage.slice(0, 200)}`
-        : `${result.items.length} items, confidence=${result.confidence.toFixed(2)}`,
+  try {
+    threePassOutput = await runThreePassParser({
+      rawText,
+      supplierName,
+      apiKey: openAiKey,
+      model: "gpt-4o-mini",
+      onChunkComplete: async (completed: number) => {
+        await setStage(supabase, jobId, `LLM Extraction — chunk ${completed} completed`, 45 + Math.min(completed * 5, 40));
+      },
     });
 
-    lastResult = result;
+    prepassDurationMs = threePassOutput.debug?.pass1_duration_ms ?? (Date.now() - prepassStart);
+    prepassSections = threePassOutput.sections.length;
+    prepassDocType = threePassOutput.items.length > 0 ? "itemized_schedule" : "unknown";
 
-    if (result.success && result.items.length > 0) {
-      console.log(`[LLM] Attempt ${i + 1} succeeded — ${result.items.length} items`);
-      break;
+    traceEntries.push({
+      parser: "deterministic_prepass",
+      started_at: new Date(prepassStart).toISOString(),
+      ended_at: new Date(prepassStart + prepassDurationMs).toISOString(),
+      duration_ms: prepassDurationMs,
+      status: "success",
+      reason: `${prepassSections} sections detected, doc_type=${prepassDocType}, duration=${prepassDurationMs}ms`,
+    });
+
+    const llmStart = prepassStart + prepassDurationMs;
+    const llmDuration = Date.now() - llmStart;
+    const chunksStarted = threePassOutput.debug?.pass2_chunks_started ?? 0;
+    const chunksCompleted = threePassOutput.debug?.pass2_chunks_completed ?? 0;
+
+    for (let c = 0; c < chunksCompleted; c++) {
+      traceEntries.push({
+        parser: `llm_extraction chunk ${c + 1}`,
+        started_at: new Date(llmStart + (c * (llmDuration / Math.max(chunksCompleted, 1)))).toISOString(),
+        ended_at: new Date(llmStart + ((c + 1) * (llmDuration / Math.max(chunksCompleted, 1)))).toISOString(),
+        duration_ms: Math.round(llmDuration / Math.max(chunksCompleted, 1)),
+        status: "success",
+        reason: `chunk ${c + 1}/${chunksStarted} extracted`,
+      });
     }
 
-    console.warn(`[LLM] Attempt ${i + 1} failed (${result.failReason ?? "no items"}) — ${i < 2 ? "retrying" : "exhausted"}`);
-  }
+    console.log(`[DET] Pre-pass done: sections=${prepassSections} items=${threePassOutput.items.length} confidence=${threePassOutput.confidence}`);
 
-  return {
-    result: lastResult ?? {
-      items: [], confidence: 0, totals: {}, warnings: ["All LLM attempts exhausted"],
-      success: false, failReason: "unknown_error", failMessage: "All attempts exhausted",
-      chunksStarted: 0, chunksCompleted: 0,
-    },
-    attemptsMade,
-    traceEntries,
-  };
+    return {
+      result: {
+        items: threePassOutput.items,
+        confidence: threePassOutput.confidence,
+        totals: {
+          grandTotal: threePassOutput.totals.stated_grand_total ?? threePassOutput.totals.included_items_total,
+          subtotal: threePassOutput.totals.stated_subtotal ?? undefined,
+        },
+        warnings: threePassOutput.warnings,
+        success: threePassOutput.items.length > 0,
+        failReason: threePassOutput.items.length === 0 ? "empty_response" : null,
+        failMessage: threePassOutput.items.length === 0 ? "Three-pass parser returned 0 items" : "",
+        chunksStarted: threePassOutput.debug?.pass2_chunks_started ?? 0,
+        chunksCompleted: threePassOutput.debug?.pass2_chunks_completed ?? 0,
+        prepassDurationMs,
+        prepassSections,
+        prepassDocType,
+      },
+      traceEntries,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const reason = classifyLlmFailure(err);
+    prepassDurationMs = Date.now() - prepassStart;
+
+    traceEntries.push({
+      parser: "deterministic_prepass",
+      started_at: new Date(prepassStart).toISOString(),
+      ended_at: new Date().toISOString(),
+      duration_ms: prepassDurationMs,
+      status: "failed",
+      reason: msg.slice(0, 300),
+    });
+
+    console.error("[DET] Three-pass parser threw:", msg);
+
+    return {
+      result: {
+        items: [], confidence: 0, totals: {}, warnings: [`Three-pass failed: ${msg}`],
+        success: false, failReason: reason, failMessage: msg,
+        chunksStarted: 0, chunksCompleted: 0,
+        prepassDurationMs, prepassSections: 0, prepassDocType: "unknown",
+      },
+      traceEntries,
+    };
+  }
 }
 
 function adaptLlmItem(item: any, index: number, parserUsed: string): ParsedLineItem {
@@ -491,13 +424,16 @@ Deno.serve(async (req: Request) => {
     let llmFailMessage = "";
     let llmChunksStarted: number | null = null;
     let llmChunksCompleted: number | null = null;
-    let llmAttemptsMade = 0;
     let llmConfidence = 0;
+    // llmAttemptsMade removed — no retry loop with det pre-pass
     let llmWarnings: string[] = [];
     let llmRawItems: any[] = [];
     let llmGrandTotal = 0;
     let regexRecoveryUsed = false;
     let regexResult: ReturnType<typeof runParserV3> | null = null;
+    let prepassDurationMs = 0;
+    let prepassSections = 0;
+    let prepassDocType = "unknown";
 
     const skipLlmDueToLoop = !isSpreadsheet && (
       currentAttemptCount >= 3 ||
@@ -522,7 +458,7 @@ Deno.serve(async (req: Request) => {
     } else if (skipLlmDueToLoop) {
       console.warn(`[LOOP_BREAKER] attempt=${currentAttemptCount} priorLlmFailed=${priorLlmFailed} — skipping LLM`);
       parserTrace.push({
-        parser: "three_pass_llm",
+        parser: "deterministic_prepass",
         started_at: new Date().toISOString(),
         ended_at: new Date().toISOString(),
         duration_ms: 0,
@@ -549,34 +485,39 @@ Deno.serve(async (req: Request) => {
       await setStage(supabase, jobId, "Finalizing Totals", 75);
 
     } else {
-      // PDF — LLM primary with retry + hard wall-time
+      // PDF — deterministic pre-pass + LLM row extraction (NO structural LLM Pass 1)
       llmAttempted = true;
-      await supabase.from("parsing_jobs").update({ primary_parser: "three_pass_llm", updated_at: new Date().toISOString() }).eq("id", jobId);
+      await supabase.from("parsing_jobs").update({
+        primary_parser: "three_pass_llm",
+        updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
 
-      const { result: llmResult, attemptsMade, traceEntries } = await callLlmParserWithRetry(
-        supabase, jobId, supabaseUrl, supabaseServiceKey, rawText, typedJob.supplier_name, trade,
+      const { result: threePassResult, traceEntries } = await runDeterministicPlusTwoPass(
+        supabase, jobId, rawText, typedJob.supplier_name,
       );
 
       parserTrace.push(...traceEntries);
-      llmAttemptsMade = attemptsMade;
-      llmChunksStarted = llmResult.chunksStarted;
-      llmChunksCompleted = llmResult.chunksCompleted;
-      llmFailReason = llmResult.failReason;
-      llmFailMessage = llmResult.failMessage;
+      prepassDurationMs = threePassResult.prepassDurationMs;
+      prepassSections = threePassResult.prepassSections;
+      prepassDocType = threePassResult.prepassDocType;
+      llmChunksStarted = threePassResult.chunksStarted;
+      llmChunksCompleted = threePassResult.chunksCompleted;
+      llmFailReason = threePassResult.failReason;
+      llmFailMessage = threePassResult.failMessage;
 
-      if (llmResult.items.length > 0) {
+      if (threePassResult.items.length > 0) {
         llmSuccess = true;
-        llmConfidence = llmResult.confidence;
-        llmWarnings = llmResult.warnings;
-        llmGrandTotal = llmResult.totals.grandTotal ?? 0;
-        const { kept: filteredLlmItems, removed } = filterLlmSummaryRows(llmResult.items);
-        llmRawItems = filteredLlmItems;
-        if (removed > 0) console.log(`[LLM] Removed ${removed} summary rows`);
+        llmConfidence = threePassResult.confidence;
+        llmWarnings = threePassResult.warnings;
+        llmGrandTotal = threePassResult.totals.grandTotal ?? 0;
+        const { kept: filteredItems, removed } = filterLlmSummaryRows(threePassResult.items);
+        llmRawItems = filteredItems;
+        if (removed > 0) console.log(`[DET] Removed ${removed} summary rows post-filter`);
       } else {
         llmSuccess = false;
       }
 
-      // Persist LLM audit state immediately — Resume reads this to decide whether to skip LLM
+      // Persist audit state
       await supabase.from("parsing_jobs").update({
         llm_attempted: llmAttempted,
         llm_success: llmSuccess,
@@ -590,8 +531,10 @@ Deno.serve(async (req: Request) => {
       // Evaluate if regex recovery needed
       const docTotals = extractDocumentTotals(rawText);
       const documentTotal = docTotals.grandTotal ?? 0;
-      const llmItemsSum = llmRawItems.reduce((s: number, i: any) => s + Number(i.total ?? 0), 0);
-      const mismatchRatio = documentTotal > 0 && llmItemsSum > 0 ? Math.abs(documentTotal - llmItemsSum) / documentTotal : 0;
+      const threePassItemsSum = llmRawItems.reduce((s: number, i: any) => s + Number(i.total ?? 0), 0);
+      const mismatchRatio = documentTotal > 0 && threePassItemsSum > 0
+        ? Math.abs(documentTotal - threePassItemsSum) / documentTotal
+        : 0;
 
       const needsRegexRecovery = llmRawItems.length === 0 || llmConfidence < 0.55 || (documentTotal > 0 && mismatchRatio > 0.20);
 
@@ -602,7 +545,7 @@ Deno.serve(async (req: Request) => {
         if (llmConfidence < 0.55) reasons.push(`low_confidence(${llmConfidence.toFixed(2)})`);
         if (documentTotal > 0 && mismatchRatio > 0.20) reasons.push(`totals_mismatch(${(mismatchRatio * 100).toFixed(1)}%)`);
 
-        await setStage(supabase, jobId, "LLM Timeout — Switching to Fallback", 65);
+        await setStage(supabase, jobId, "Three-Pass Low Confidence — Switching to Fallback", 65);
         await supabase.from("parsing_jobs").update({ fallback_parser: "regex_recovery" }).eq("id", jobId);
 
         const t0 = Date.now();
@@ -691,11 +634,15 @@ Deno.serve(async (req: Request) => {
     const traceReport = {
       build_version: BUILD_VERSION,
       three_pass_version: THREE_PASS_VERSION,
-      parser_attempt_order: parserTrace,
-      final_parser_used: finalParserUsed,
+      primary_parser: "three_pass_llm",
+      prepass: prepassDurationMs > 0 ? "deterministic OK" : "skipped",
+      prepass_duration_ms: prepassDurationMs,
+      prepass_sections_detected: prepassSections,
+      prepass_doc_type: prepassDocType,
+      llm_chunks: `${llmChunksCompleted ?? 0} / ${llmChunksStarted ?? 0} completed`,
       fallback_triggered: regexRecoveryUsed,
-      llm_chunks_started: llmChunksStarted,
-      llm_chunks_completed: llmChunksCompleted,
+      final_parser_used: finalParserUsed,
+      attempt_order: parserTrace,
     };
 
     // Fail-fast — nothing usable
@@ -803,18 +750,24 @@ Deno.serve(async (req: Request) => {
 
     const parseMetadata = {
       parser_strategy: parserStrategy,
-      parser_version: "vNext-llm-primary",
+      parser_version: "v3-det-prepass",
       entry_point: "process_parsing_job",
       document_class: classification.documentClass,
       commercial_family: classification.commercialFamily,
       parser_used: finalParserUsed,
+      primary_parser: "three_pass_llm",
+      prepass: prepassDurationMs > 0 ? "deterministic OK" : "skipped",
+      prepass_duration_ms: prepassDurationMs,
+      prepass_sections_detected: prepassSections,
+      prepass_doc_type: prepassDocType,
+      llm_chunks: `${llmChunksCompleted ?? 0} / ${llmChunksStarted ?? 0} completed`,
+      fallback_triggered: regexRecoveryUsed,
       llm_attempted: llmAttempted,
       llm_success: llmSuccess,
       llm_fail_reason: llmFailReason,
       llm_fail_message: llmFailMessage.slice(0, 300),
       llm_chunks_started: llmChunksStarted,
       llm_chunks_completed: llmChunksCompleted,
-      llm_attempts_made: llmAttemptsMade,
       llm_confidence: llmConfidence,
       regex_recovery_used: regexRecoveryUsed,
       total_source: resolution.totals.source,
