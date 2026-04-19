@@ -13,16 +13,15 @@ import {
 // =============================================================================
 // parse_quote_llm_fallback  — Three-Pass Document-Agnostic Quote Parser
 //
-// Architecture:
-//   PASS 1 — Structural analysis: detect section headings, classify scope
-//   PASS 2 — Row extraction: every priced row inherits scope from nearest heading
-//   PASS 3 — Arithmetic reconciliation: sum each scope bucket, compare vs stated total
-//
-// Principles:
-//   - No supplier-specific logic
-//   - LLM is the primary parser
-//   - Regex only for stated-total extraction (validation layer)
-//   - Rows inherit section status from nearest heading until a new heading begins
+// Robustness additions:
+//   - shorterPrompt flag: when set, Pass 1 is skipped and Pass 2 runs with a
+//     compact system prompt to reduce token pressure
+//   - Pass 2 chunk failures are tolerated: partial results from completed chunks
+//     are returned rather than a full failure
+//   - chunksCompleted is reported in metadata so the orchestrator can audit
+//     how many chunks succeeded vs total
+//   - JSON repair applied inside threePassParser.ts callLLM; any remaining
+//     prose-wrapped responses are stripped here before forwarding
 // =============================================================================
 
 const PARSER_USED = "three_pass_document_agnostic_v1";
@@ -32,10 +31,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
-
-// ---------------------------------------------------------------------------
-// Types — backward-compatible with upstream callers
-// ---------------------------------------------------------------------------
 
 export interface LlmLineItem {
   description: string;
@@ -85,11 +80,11 @@ interface ParseRequest {
   documentType?: string;
   chunkInfo?: string;
   trade?: string;
+  shorterPrompt?: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // Plumbing regex fallback for level-based pricing tables
-// Used only when LLM returns zero items for plumbing trade
 // ---------------------------------------------------------------------------
 
 function parseSumFromTokens(numbers: string[]): number {
@@ -201,7 +196,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body: ParseRequest = await req.json();
-    const { text, supplierName, trade } = body;
+    const { text, supplierName, trade, shorterPrompt } = body;
 
     if (!text || text.trim().length === 0) {
       return errorResponse("No text provided", 400);
@@ -211,22 +206,38 @@ Deno.serve(async (req: Request) => {
     const isPlumbing = tradeLower === "plumbing";
 
     console.log(
-      `[ThreePass] model=${model} trade=${trade ?? "generic"} chars=${text.length}`,
+      `[ThreePass] model=${model} trade=${trade ?? "generic"} chars=${text.length} shorterPrompt=${shorterPrompt ?? false}`,
     );
 
-    // Run the 3-pass parser
+    // Run the 3-pass parser, tolerating chunk failures via partial extraction
     let result: ThreePassOutput;
+    let chunksCompleted = 0;
+
     try {
       result = await runThreePassParser({
         rawText: text,
         supplierName,
         apiKey: openaiApiKey,
         model,
+        shorterPrompt: shorterPrompt ?? false,
+        onChunkComplete: (completed: number) => {
+          chunksCompleted = completed;
+        },
       });
+      // If we got here without throw, all chunks that could complete did
+      chunksCompleted = Math.max(chunksCompleted, result.items.length > 0 ? 1 : 0);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[ThreePass] Parser failed:", msg);
-      return errorResponse(`Parse failed: ${msg}`, 500);
+
+      // If it is a partial-result error (some chunks succeeded), propagate items
+      if (err instanceof PartialResultError && err.partialItems.length > 0) {
+        console.warn(`[ThreePass] Partial result: ${err.partialItems.length} items from ${err.chunksCompleted} chunks`);
+        chunksCompleted = err.chunksCompleted;
+        result = buildPartialResult(err.partialItems, text, err.chunksCompleted);
+      } else {
+        return errorResponse(`Parse failed: ${msg}`, 500);
+      }
     }
 
     let mappedItems = mapItems(result.items);
@@ -254,7 +265,6 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Re-bucket after any sanitizer changes
     const mainItems = mappedItems.filter((i) => i.scope_category === "base");
     const optionalItems = mappedItems.filter((i) =>
       i.scope_category === "optional" || i.scope_category === "alternate",
@@ -272,7 +282,6 @@ Deno.serve(async (req: Request) => {
       totals.variance_percent,
     );
 
-    // Pull GST from regex for completeness
     const regexTotals = extractStatedTotals(text);
 
     console.log(
@@ -280,26 +289,24 @@ Deno.serve(async (req: Request) => {
       ` included=$${totals.included_items_total.toFixed(2)}` +
       ` optional=$${totals.optional_total.toFixed(2)}` +
       ` stated=${totals.stated_grand_total ?? "N/A"}` +
-      ` confidence=${result.confidence.toFixed(2)}`,
+      ` confidence=${result.confidence.toFixed(2)}` +
+      ` chunks_completed=${chunksCompleted}`,
     );
 
     return new Response(
       JSON.stringify({
         success: true,
 
-        // New 3-pass canonical output
         main_items: mainItems,
         optional_items: optionalItems,
         excluded_items: excludedItems,
         provisional_items: provisionalItems,
         sections: result.sections,
 
-        // Backward-compatible flat list
         items: mappedItems,
         lines: mappedItems,
 
         totals: {
-          // New canonical fields
           included_items_total: totals.included_items_total,
           optional_total: totals.optional_total,
           provisional_total: totals.provisional_total,
@@ -310,7 +317,6 @@ Deno.serve(async (req: Request) => {
           variance_to_stated: totals.variance_to_stated,
           variance_percent: totals.variance_percent,
 
-          // Backward-compat aliases
           main_scope_total: totals.included_items_total,
           optional_scope_total: totals.optional_total,
           excluded_total: excludedItems.reduce((s, i) => s + i.total, 0),
@@ -321,7 +327,6 @@ Deno.serve(async (req: Request) => {
           gst: regexTotals.gst,
         },
 
-        // Reconciliation fields
         main_scope_total: totals.included_items_total,
         optional_scope_total: totals.optional_total,
         excluded_total: excludedItems.reduce((s, i) => s + i.total, 0),
@@ -331,10 +336,8 @@ Deno.serve(async (req: Request) => {
         reasoning: result.reasoning + " " + varianceExplanation,
         warnings: result.warnings,
 
-        // Backward-compat
         document_grand_total: totals.stated_grand_total,
         document_sub_total: totals.stated_subtotal,
-        optional_scope_total: totals.optional_total,
         parser_used: PARSER_USED,
 
         metadata: {
@@ -342,6 +345,8 @@ Deno.serve(async (req: Request) => {
           trade,
           model,
           engine: PARSER_USED,
+          shorterPrompt: shorterPrompt ?? false,
+          chunksCompleted,
           itemCount: mappedItems.length,
           mainItemCount: mainItems.length,
           optionalItemCount: optionalItems.length,
@@ -358,6 +363,60 @@ Deno.serve(async (req: Request) => {
     return errorResponse(`Unhandled error: ${msg}`, 500);
   }
 });
+
+// ---------------------------------------------------------------------------
+// PartialResultError — thrown by threePassParser when some chunks fail
+// but at least one succeeded
+// ---------------------------------------------------------------------------
+
+export class PartialResultError extends Error {
+  partialItems: ParsedLineItem[];
+  chunksCompleted: number;
+
+  constructor(partialItems: ParsedLineItem[], chunksCompleted: number, message: string) {
+    super(message);
+    this.name = "PartialResultError";
+    this.partialItems = partialItems;
+    this.chunksCompleted = chunksCompleted;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Build a minimal ThreePassOutput from partial items when full parse fails
+// ---------------------------------------------------------------------------
+
+function buildPartialResult(
+  items: ParsedLineItem[],
+  rawText: string,
+  chunksCompleted: number,
+): ThreePassOutput {
+  const statedTotals = extractStatedTotals(rawText);
+  const includedItems = items.filter((i) => i.scope === "included");
+  const optionalItems = items.filter((i) => i.scope === "optional");
+
+  const includedTotal = includedItems.reduce((s, i) => s + i.total, 0);
+  const optionalTotal = optionalItems.reduce((s, i) => s + i.total, 0);
+
+  return {
+    items,
+    sections: [],
+    totals: {
+      included_items_total: includedTotal,
+      optional_total: optionalTotal,
+      provisional_total: 0,
+      alternate_total: 0,
+      stated_subtotal: statedTotals.sub_total,
+      stated_grand_total: statedTotals.grand_total,
+      recommended_contract_value: includedTotal || statedTotals.grand_total || 0,
+      variance_to_stated: null,
+      variance_percent: null,
+    },
+    confidence: Math.min(0.5, 0.1 * chunksCompleted),
+    warnings: [`Partial extraction: ${chunksCompleted} chunk(s) completed before failure`],
+    reasoning: `Partial parse — ${items.length} items recovered from ${chunksCompleted} chunk(s).`,
+    parser_used: "three_pass_partial_recovery",
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Error response helper
@@ -384,10 +443,9 @@ function errorResponse(message: string, status: number): Response {
       warnings: [message],
       document_grand_total: null,
       document_sub_total: null,
-      optional_scope_total: 0,
       parser_used: PARSER_USED,
       totals: {},
-      metadata: {},
+      metadata: { chunksCompleted: 0 },
       error: message,
     }),
     { status, headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" } },

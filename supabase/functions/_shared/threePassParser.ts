@@ -421,6 +421,43 @@ function chunkText(
 // OpenAI call helper
 // ---------------------------------------------------------------------------
 
+function repairJson(raw: string): string {
+  let s = raw.trim();
+
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+
+  const firstBrace = s.indexOf("{");
+  const firstBracket = s.indexOf("[");
+  let start = -1;
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    start = firstBrace;
+  } else if (firstBracket !== -1) {
+    start = firstBracket;
+  }
+  if (start > 0) s = s.slice(start);
+
+  const lastBrace = s.lastIndexOf("}");
+  const lastBracket = s.lastIndexOf("]");
+  const end = Math.max(lastBrace, lastBracket);
+  if (end !== -1 && end < s.length - 1) s = s.slice(0, end + 1);
+
+  s = s.replace(/,\s*([}\]])/g, "$1");
+
+  const openBraces = (s.match(/\{/g) ?? []).length;
+  const closeBraces = (s.match(/\}/g) ?? []).length;
+  const openBrackets = (s.match(/\[/g) ?? []).length;
+  const closeBrackets = (s.match(/\]/g) ?? []).length;
+
+  if (openBrackets > closeBrackets) {
+    s = s + "]".repeat(openBrackets - closeBrackets);
+  }
+  if (openBraces > closeBraces) {
+    s = s + "}".repeat(openBraces - closeBraces);
+  }
+
+  return s;
+}
+
 async function callLLM(
   apiKey: string,
   model: string,
@@ -456,13 +493,28 @@ async function callLLM(
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`OpenAI ${res.status}: ${body.slice(0, 300)}`);
+      const status = res.status;
+      if (status === 429) throw new Error(`OpenAI rate limit (429): ${body.slice(0, 200)}`);
+      if (status === 413) throw new Error(`OpenAI token limit (413): ${body.slice(0, 200)}`);
+      throw new Error(`OpenAI ${status}: ${body.slice(0, 300)}`);
     }
 
     const data = await res.json() as { choices: { message: { content: string } }[] };
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty OpenAI response");
-    return JSON.parse(content);
+
+    try {
+      return JSON.parse(content);
+    } catch {
+      const repaired = repairJson(content);
+      try {
+        const parsed = JSON.parse(repaired);
+        console.warn("[ThreePass] JSON repaired successfully");
+        return parsed;
+      } catch {
+        throw new Error(`JSON parse failed after repair attempt. Raw length=${content.length}`);
+      }
+    }
   } catch (err) {
     clearTimeout(timer);
     if (err instanceof Error && err.name === "AbortError") {
@@ -506,12 +558,36 @@ async function runPass1(
 // PASS 2 — Row extraction per chunk, with section map injected
 // ---------------------------------------------------------------------------
 
+export class PartialResultError extends Error {
+  partialItems: ParsedLineItem[];
+  chunksCompleted: number;
+
+  constructor(partialItems: ParsedLineItem[], chunksCompleted: number, message: string) {
+    super(message);
+    this.name = "PartialResultError";
+    this.partialItems = partialItems;
+    this.chunksCompleted = chunksCompleted;
+  }
+}
+
+const PASS2_SYSTEM_PROMPT_SHORT = `You are a quantity surveyor. Extract every priced line item from this construction quote text.
+
+For each row output: description, qty (number), unit (string), rate (number), total (number), scope ("included"|"optional"|"exclusion"|"provisional"|"alternate"|"by_others"), section_heading (string), frr (string), raw_source (string).
+
+Skip: grand totals, section subtotals, GST rows, page totals, blank rows.
+
+Return strict JSON only: {"items": [...], "warnings": [], "confidence": 0.8}`;
+
 async function runPass2(
   rawText: string,
   sections: DetectedSection[],
   apiKey: string,
   model: string,
+  onChunkComplete?: (completed: number) => void,
+  shorterPrompt?: boolean,
 ): Promise<Pass2Result> {
+  const systemPrompt = shorterPrompt ? PASS2_SYSTEM_PROMPT_SHORT : PASS2_SYSTEM_PROMPT;
+
   const sectionMapText =
     sections.length > 0
       ? JSON.stringify(sections, null, 2)
@@ -521,20 +597,24 @@ async function runPass2(
   const allItems: ParsedLineItem[] = [];
   const allWarnings: string[] = [];
   let confSum = 0;
+  let chunksSucceeded = 0;
+  let chunksFailed = 0;
 
   for (let i = 0; i < chunks.length; i++) {
-    const userPrompt = [
-      `SECTION MAP (from structural analysis):`,
-      sectionMapText,
-      ``,
-      `CHUNK ${i + 1} of ${chunks.length}:`,
-      `Extract every priced row. Assign scope based on the section map above.`,
-      ``,
-      chunks[i],
-    ].join("\n");
+    const userPrompt = shorterPrompt
+      ? [`CHUNK ${i + 1} of ${chunks.length}:`, ``, chunks[i]].join("\n")
+      : [
+          `SECTION MAP (from structural analysis):`,
+          sectionMapText,
+          ``,
+          `CHUNK ${i + 1} of ${chunks.length}:`,
+          `Extract every priced row. Assign scope based on the section map above.`,
+          ``,
+          chunks[i],
+        ].join("\n");
 
     try {
-      const raw = await callLLM(apiKey, model, PASS2_SYSTEM_PROMPT, userPrompt, 8192, 45000) as Record<string, unknown>;
+      const raw = await callLLM(apiKey, model, systemPrompt, userPrompt, 8192, 45000) as Record<string, unknown>;
 
       const rawItems = (raw.items as ParsedLineItem[]) ?? [];
       const validItems = rawItems.filter(
@@ -547,18 +627,38 @@ async function runPass2(
       allItems.push(...validItems);
       allWarnings.push(...((raw.warnings as string[]) ?? []));
       confSum += typeof raw.confidence === "number" ? (raw.confidence as number) : 0.75;
+      chunksSucceeded++;
 
       console.log(
         `[ThreePass] Pass2 chunk ${i + 1}/${chunks.length} → ${validItems.length} items`,
       );
+
+      if (onChunkComplete) onChunkComplete(chunksSucceeded);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       allWarnings.push(`Chunk ${i + 1} extraction failed: ${msg}`);
       console.error(`[ThreePass] Pass2 chunk ${i + 1} error:`, msg);
+      chunksFailed++;
     }
   }
 
-  // Group by section for reference
+  if (chunksFailed > 0 && chunksSucceeded === 0) {
+    throw new PartialResultError(
+      allItems,
+      chunksSucceeded,
+      `All ${chunks.length} chunk(s) failed in Pass 2`,
+    );
+  }
+
+  if (chunksFailed > 0 && chunksSucceeded > 0) {
+    console.warn(
+      `[ThreePass] Pass2 partial: ${chunksSucceeded}/${chunks.length} chunks succeeded, ${chunksFailed} failed`,
+    );
+    allWarnings.push(
+      `Pass 2 partial extraction: ${chunksSucceeded} of ${chunks.length} chunks succeeded`,
+    );
+  }
+
   const rawSectionItems: Record<string, ParsedLineItem[]> = {};
   for (const item of allItems) {
     const key = item.section_heading || "Ungrouped";
@@ -569,7 +669,7 @@ async function runPass2(
   return {
     items: allItems,
     warnings: allWarnings,
-    confidence: chunks.length > 0 ? confSum / chunks.length : 0,
+    confidence: chunksSucceeded > 0 ? confSum / chunksSucceeded : 0,
     raw_section_items: rawSectionItems,
   };
 }
@@ -733,58 +833,86 @@ export async function runThreePassParser(params: {
   supplierName?: string;
   apiKey: string;
   model: string;
+  shorterPrompt?: boolean;
+  onChunkComplete?: (completed: number) => void;
 }): Promise<ThreePassOutput> {
-  const { rawText, supplierName, apiKey, model } = params;
+  const { rawText, supplierName, apiKey, model, shorterPrompt = false, onChunkComplete } = params;
   const allWarnings: string[] = [];
 
   console.log(
-    `[ThreePass] Starting — supplier="${supplierName ?? "unknown"}" chars=${rawText.length}`,
+    `[ThreePass] Starting — supplier="${supplierName ?? "unknown"}" chars=${rawText.length} shorterPrompt=${shorterPrompt}`,
   );
 
   // Regex total extraction — done upfront for reconciliation
   const statedTotals = extractStatedTotals(rawText);
   console.log("[ThreePass] Stated totals from regex:", statedTotals);
 
-  // PASS 1 — structural analysis
-  console.log("[ThreePass] Pass 1: structural analysis");
+  // PASS 1 — structural analysis (skipped when shorterPrompt=true to reduce token pressure)
   let pass1: Pass1Result;
-  try {
-    pass1 = await runPass1(rawText, apiKey, model);
-    console.log(
-      `[ThreePass] Pass 1 complete: ${pass1.sections.length} sections, type=${pass1.document_type}`,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    allWarnings.push(`Pass 1 (structural analysis) failed: ${msg}`);
-    console.error("[ThreePass] Pass 1 error:", msg);
+  if (shorterPrompt) {
+    console.log("[ThreePass] Pass 1: skipped (shorterPrompt mode)");
     pass1 = {
       sections: [],
       document_type: "unknown",
       has_summary_page: false,
       stated_grand_total: statedTotals.grand_total,
       stated_subtotal: statedTotals.sub_total,
-      reasoning: "Pass 1 failed",
-      confidence: 0.3,
+      reasoning: "Pass 1 skipped (shorterPrompt mode)",
+      confidence: 0.5,
     };
+  } else {
+    console.log("[ThreePass] Pass 1: structural analysis");
+    try {
+      pass1 = await runPass1(rawText, apiKey, model);
+      console.log(
+        `[ThreePass] Pass 1 complete: ${pass1.sections.length} sections, type=${pass1.document_type}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      allWarnings.push(`Pass 1 (structural analysis) failed: ${msg}`);
+      console.error("[ThreePass] Pass 1 error:", msg);
+      pass1 = {
+        sections: [],
+        document_type: "unknown",
+        has_summary_page: false,
+        stated_grand_total: statedTotals.grand_total,
+        stated_subtotal: statedTotals.sub_total,
+        reasoning: "Pass 1 failed",
+        confidence: 0.3,
+      };
+    }
   }
 
   // PASS 2 — row extraction
   console.log("[ThreePass] Pass 2: row extraction");
   let pass2: Pass2Result;
   try {
-    pass2 = await runPass2(rawText, pass1.sections, apiKey, model);
+    pass2 = await runPass2(rawText, pass1.sections, apiKey, model, onChunkComplete, shorterPrompt);
     console.log(`[ThreePass] Pass 2 complete: ${pass2.items.length} raw items`);
     allWarnings.push(...pass2.warnings);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    allWarnings.push(`Pass 2 (row extraction) failed: ${msg}`);
-    console.error("[ThreePass] Pass 2 error:", msg);
-    pass2 = {
-      items: [],
-      warnings: [msg],
-      confidence: 0,
-      raw_section_items: {},
-    };
+    if (err instanceof PartialResultError && err.partialItems.length > 0) {
+      console.warn(
+        `[ThreePass] Pass 2 partial: ${err.partialItems.length} items from ${err.chunksCompleted} chunk(s)`,
+      );
+      allWarnings.push(`Pass 2 partial extraction: ${err.partialItems.length} items recovered`);
+      pass2 = {
+        items: err.partialItems,
+        warnings: [`Partial extraction: ${err.chunksCompleted} chunk(s) completed before failure`],
+        confidence: Math.min(0.5, 0.1 * err.chunksCompleted),
+        raw_section_items: {},
+      };
+    } else {
+      const msg = err instanceof Error ? err.message : String(err);
+      allWarnings.push(`Pass 2 (row extraction) failed: ${msg}`);
+      console.error("[ThreePass] Pass 2 error:", msg);
+      pass2 = {
+        items: [],
+        warnings: [msg],
+        confidence: 0,
+        raw_section_items: {},
+      };
+    }
   }
 
   // Post-processing
