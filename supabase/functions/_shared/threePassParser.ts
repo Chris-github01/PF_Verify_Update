@@ -491,78 +491,134 @@ async function callLLM(
 }
 
 // ---------------------------------------------------------------------------
-// PASS 1 — Structural analysis
+// PASS 1 — Deterministic structural scanner (NO LLM, <500ms)
 // ---------------------------------------------------------------------------
 
-function selectFastModel(primaryModel: string): string {
-  const fastModelEnv = (typeof Deno !== "undefined")
-    ? Deno.env.get("OPENAI_FAST_MODEL")
-    : undefined;
-  if (fastModelEnv) return fastModelEnv;
-  // prefer mini variants of known models
-  if (primaryModel.includes("gpt-4o")) return "gpt-4o-mini";
-  if (primaryModel.includes("gpt-4")) return "gpt-4o-mini";
-  return "gpt-4o-mini";
+const OPTIONAL_RE = /\b(optional|add\s+to\s+scope|add\s+alt|addendum|variation|extra[s]?)\b/i;
+const EXCLUSION_RE = /\b(exclusion[s]?|not\s+included|nic|by\s+others|by\s+main\s+contractor|excluded)\b/i;
+const PROVISIONAL_RE = /\b(provisional\s+sum|pc\s+sum|prime\s+cost|contingency|allowance)\b/i;
+const ALTERNATE_RE = /\b(alternate|alternative|alt\s+[a-z]|value\s+engineering)\b/i;
+const BY_OTHERS_RE = /\b(by\s+others|by\s+main\s+contractor|by\s+builder)\b/i;
+const GRAND_TOTAL_RE = /\b(grand\s+total|contract\s+sum|tender\s+sum|quote\s+total|net\s+total|overall\s+total|project\s+total|contract\s+value|lump\s+sum\s+total)\b/i;
+const SUBTOTAL_RE = /\b(sub[\s-]?total|subtotal)\b/i;
+const GST_RE = /\b(gst|goods\s+and\s+services\s+tax)\b/i;
+const SUMMARY_PAGE_RE = /\b(summary|schedule\s+of\s+rates|trade\s+summary|section\s+summary)\b/i;
+const TABLE_RE = /(\t|\s{3,}|\|)[\d,]+\.?\d*(\t|\s{3,}|\|)/;
+const DOLLAR_RE = /\$?\s*([\d,]+\.?\d{0,2})/g;
+const ALL_CAPS_HEADING_RE = /^[A-Z][A-Z\s\d&\/\-()]{4,}$/;
+
+function parseMoney(s: string): number | null {
+  const cleaned = s.replace(/[^0-9.]/g, "");
+  const v = parseFloat(cleaned);
+  return v > 0 && Number.isFinite(v) ? v : null;
 }
 
-async function runPass1(
-  rawText: string,
-  apiKey: string,
-  model: string,
-): Promise<Pass1Result> {
-  const fastModel = selectFastModel(model);
-  const PASS1_INPUT_CHARS = 4000;
-  const PASS1_INPUT_CHARS_RETRY = 2500;
-  const PASS1_TIMEOUT_MS = 20_000;
-  const PASS1_MAX_TOKENS = 600;
+function classifyLineScope(line: string): ScopeCategory | null {
+  const t = line.trim();
+  if (BY_OTHERS_RE.test(t)) return "by_others";
+  if (EXCLUSION_RE.test(t)) return "exclusion";
+  if (OPTIONAL_RE.test(t)) return "optional";
+  if (PROVISIONAL_RE.test(t)) return "provisional";
+  if (ALTERNATE_RE.test(t)) return "alternate";
+  return null;
+}
 
-  const buildPrompt = (chars: number) =>
-    [
-      "Identify section headings and classify scope in this construction quote.",
-      "",
-      "DOCUMENT TEXT (first " + chars + " chars):",
-      rawText.slice(0, chars),
-    ].join("\n");
+function isLikelyHeading(line: string): boolean {
+  const t = line.trim();
+  if (t.length < 3 || t.length > 120) return false;
+  if (ALL_CAPS_HEADING_RE.test(t)) return true;
+  if (/^(section|part|division|trade|scope|level|area|zone|system|floor|roof|basement)\s*[\d:.-]/i.test(t)) return true;
+  if (/^\d+(\.\d+)*\s+[A-Z]/.test(t) && !/\$/.test(t)) return true;
+  return false;
+}
 
+function runPass1Deterministic(rawText: string): Pass1Result {
   const t0 = Date.now();
-  let retryUsed = false;
-  let inputCharsUsed = PASS1_INPUT_CHARS;
-  let raw: Record<string, unknown>;
+  const lines = rawText.split("\n");
 
-  console.log(`[ThreePass] Pass 1: model=${fastModel} input_chars=${PASS1_INPUT_CHARS} timeout=${PASS1_TIMEOUT_MS}ms`);
+  const sections: DetectedSection[] = [];
+  let hasSummaryPage = false;
+  let statedGrandTotal: number | null = null;
+  let statedSubTotal: number | null = null;
+  let hasTableStructure = false;
+  let pageCount = 1;
 
-  try {
-    raw = await callLLM(
-      apiKey, fastModel, PASS1_SYSTEM_PROMPT,
-      buildPrompt(PASS1_INPUT_CHARS),
-      PASS1_MAX_TOKENS, PASS1_TIMEOUT_MS,
-    ) as Record<string, unknown>;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[ThreePass] Pass 1 attempt 1 failed (${msg}), retrying with ${PASS1_INPUT_CHARS_RETRY} chars...`);
-    retryUsed = true;
-    inputCharsUsed = PASS1_INPUT_CHARS_RETRY;
-    // single retry with shorter input, same tight timeout
-    raw = await callLLM(
-      apiKey, fastModel, PASS1_SYSTEM_PROMPT,
-      buildPrompt(PASS1_INPUT_CHARS_RETRY),
-      PASS1_MAX_TOKENS, PASS1_TIMEOUT_MS,
-    ) as Record<string, unknown>;
+  let currentSection: DetectedSection | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const t = raw.trim();
+
+    if (!t) continue;
+
+    if (/page\s+\d+/i.test(t) || /\f/.test(raw)) pageCount++;
+
+    if (TABLE_RE.test(raw)) hasTableStructure = true;
+
+    if (SUMMARY_PAGE_RE.test(t) && !/\$/.test(t)) hasSummaryPage = true;
+
+    const scopeOverride = classifyLineScope(t);
+    const headingLike = isLikelyHeading(t);
+
+    if (headingLike || scopeOverride !== null) {
+      const scope: ScopeCategory = scopeOverride ?? "included";
+      currentSection = { heading: t, scope, start_line: i };
+      sections.push(currentSection);
+    }
+
+    if (GRAND_TOTAL_RE.test(t)) {
+      const matches = [...raw.matchAll(DOLLAR_RE)];
+      for (const m of matches) {
+        const v = parseMoney(m[1]);
+        if (v && v > 1000) {
+          statedGrandTotal = v;
+          break;
+        }
+      }
+    }
+
+    if (SUBTOTAL_RE.test(t) && statedSubTotal === null) {
+      const matches = [...raw.matchAll(DOLLAR_RE)];
+      for (const m of matches) {
+        const v = parseMoney(m[1]);
+        if (v && v > 1000) {
+          statedSubTotal = v;
+          break;
+        }
+      }
+    }
+
+    if (GST_RE.test(t) && hasSummaryPage === false && i > lines.length * 0.8) {
+      hasSummaryPage = true;
+    }
   }
 
+  const statedTotalsFromRegex = extractStatedTotals(rawText);
+  if (statedTotalsFromRegex.grand_total) statedGrandTotal = statedTotalsFromRegex.grand_total;
+  if (statedTotalsFromRegex.sub_total) statedSubTotal = statedTotalsFromRegex.sub_total;
+
+  let documentType: string;
+  if (sections.length === 0 && hasTableStructure) documentType = "itemized_schedule";
+  else if (sections.length === 0) documentType = "lump_sum";
+  else if (sections.some(s => s.scope !== "included")) documentType = "mixed";
+  else documentType = "itemized_schedule";
+
   const duration = Date.now() - t0;
-  console.log(`[ThreePass] Pass 1 complete: ${(raw.sections as unknown[])?.length ?? 0} sections in ${duration}ms (retry=${retryUsed})`);
+  console.log(
+    `[ThreePass] Pass 1 (deterministic): ${sections.length} sections, type=${documentType},` +
+    ` has_summary=${hasSummaryPage}, grand_total=${statedGrandTotal}, pages≈${pageCount}, duration=${duration}ms`
+  );
 
   return {
-    sections: (raw.sections as DetectedSection[]) ?? [],
-    document_type: (raw.document_type as string) ?? "unknown",
-    has_summary_page: (raw.has_summary_page as boolean) ?? false,
-    stated_grand_total: (raw.stated_grand_total as number | null) ?? null,
-    stated_subtotal: (raw.stated_subtotal as number | null) ?? null,
-    confidence: 0.8,
-    pass1_model: fastModel,
-    pass1_input_chars: inputCharsUsed,
-    pass1_retry_used: retryUsed,
+    sections,
+    document_type: documentType,
+    has_summary_page: hasSummaryPage,
+    stated_grand_total: statedGrandTotal,
+    stated_subtotal: statedSubTotal,
+    confidence: sections.length > 0 ? 0.85 : 0.70,
+    pass1_model: "deterministic_regex",
+    pass1_input_chars: rawText.length,
+    pass1_retry_used: false,
     pass1_duration_ms: duration,
   };
 }
@@ -856,8 +912,8 @@ export async function runThreePassParser(params: {
   let pass1Started = false;
   let pass1Completed = false;
   let pass1TimedOut = false;
-  let pass1Model = selectFastModel(model);
-  let pass1InputChars = 4000;
+  let pass1Model = "deterministic_regex";
+  let pass1InputChars = rawText.length;
   let pass1RetryUsed = false;
   let pass1DurationMs = 0;
   let pass2ChunksStarted = 0;
@@ -870,46 +926,18 @@ export async function runThreePassParser(params: {
   const statedTotals = extractStatedTotals(rawText);
   console.log("[ThreePass] Stated totals from regex:", statedTotals);
 
-  // PASS 1
+  // PASS 1 — deterministic regex scanner, no LLM, <500ms
   let pass1: Pass1Result;
-  if (shorterPrompt) {
-    console.log("[ThreePass] Pass 1: skipped (shorterPrompt mode)");
-    pass1 = {
-      sections: [],
-      document_type: "unknown",
-      has_summary_page: false,
-      stated_grand_total: statedTotals.grand_total,
-      stated_subtotal: statedTotals.sub_total,
-      confidence: 0.5,
-    };
-  } else {
-    pass1Started = true;
-    console.log("[ThreePass] Pass 1: structural analysis");
-    try {
-      pass1 = await runPass1(rawText, apiKey, model);
-      pass1Completed = true;
-      pass1Model = pass1.pass1_model ?? pass1Model;
-      pass1InputChars = pass1.pass1_input_chars ?? pass1InputChars;
-      pass1RetryUsed = pass1.pass1_retry_used ?? false;
-      pass1DurationMs = pass1.pass1_duration_ms ?? 0;
-      console.log(
-        `[ThreePass] Pass 1 complete: ${pass1.sections.length} sections, type=${pass1.document_type}`,
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      pass1TimedOut = msg.includes("timeout");
-      allWarnings.push(`Pass 1 (structural analysis) failed: ${msg}`);
-      console.error("[ThreePass] Pass 1 error:", msg);
-      pass1 = {
-        sections: [],
-        document_type: "unknown",
-        has_summary_page: false,
-        stated_grand_total: statedTotals.grand_total,
-        stated_subtotal: statedTotals.sub_total,
-        confidence: 0.3,
-      };
-    }
-  }
+  pass1Started = true;
+  pass1 = runPass1Deterministic(rawText);
+  pass1Completed = true;
+  pass1Model = pass1.pass1_model ?? "deterministic_regex";
+  pass1InputChars = pass1.pass1_input_chars ?? rawText.length;
+  pass1RetryUsed = false;
+  pass1DurationMs = pass1.pass1_duration_ms ?? 0;
+  console.log(
+    `[ThreePass] Pass 1 (det): ${pass1.sections.length} sections, type=${pass1.document_type}, ${pass1DurationMs}ms`,
+  );
 
   // PASS 2 — instrument chunk counting via wrapper
   const chunks = chunkText(rawText, 6000, 20);
@@ -1002,7 +1030,7 @@ export async function runThreePassParser(params: {
     confidence,
     warnings: allWarnings,
     reasoning,
-    parser_used: "three_pass_document_agnostic_v1",
+    parser_used: "three_pass_document_agnostic_v2-det-pass1",
     debug: {
       pass1_started: pass1Started,
       pass1_completed: pass1Completed,
