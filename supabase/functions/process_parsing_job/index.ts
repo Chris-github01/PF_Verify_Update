@@ -22,11 +22,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const BUILD_VERSION = "2026-04-19-1200";
+const THREE_PASS_VERSION = "v2-fast-pass1";
+
 // Hard cap for total LLM wall time across all attempts
-const LLM_TOTAL_WALL_TIME_MS = 90_000;
+const LLM_TOTAL_WALL_TIME_MS = 75_000;
 
 // Per-attempt timeouts (shrink with each retry)
-const LLM_ATTEMPT_TIMEOUTS = [60_000, 45_000, 25_000];
+// Attempt 1: fast-model Pass 1 (≤5s) + chunked Pass 2 (25s/chunk) — budget 40s
+// Attempt 2: 60% text, same model — budget 30s
+// Attempt 3: short prompt, 5000 chars — budget 25s
+const LLM_ATTEMPT_TIMEOUTS = [40_000, 30_000, 25_000];
 
 interface ParsingJob {
   id: string;
@@ -232,9 +238,9 @@ async function callLlmParserWithRetry(
   let attemptsMade = 0;
 
   const attempts = [
-    { label: "three_pass_llm (attempt 1/3 — full text)", text: text, shorterPrompt: false, timeoutMs: LLM_ATTEMPT_TIMEOUTS[0] },
-    { label: "three_pass_llm (attempt 2/3 — 60% text)", text: text.slice(0, Math.floor(text.length * 0.6)), shorterPrompt: false, timeoutMs: LLM_ATTEMPT_TIMEOUTS[1] },
-    { label: "three_pass_llm (attempt 3/3 — short prompt)", text: text.slice(0, 5000), shorterPrompt: true, timeoutMs: LLM_ATTEMPT_TIMEOUTS[2] },
+    { label: "three_pass_llm (attempt 1/3 — fast-pass1 full text)", text: text, shorterPrompt: false, timeoutMs: LLM_ATTEMPT_TIMEOUTS[0] },
+    { label: "three_pass_llm (attempt 2/3 — fast-pass1 60% text)", text: text.slice(0, Math.floor(text.length * 0.6)), shorterPrompt: false, timeoutMs: LLM_ATTEMPT_TIMEOUTS[1] },
+    { label: "three_pass_llm (attempt 3/3 — short prompt 5k)", text: text.slice(0, 5000), shorterPrompt: true, timeoutMs: LLM_ATTEMPT_TIMEOUTS[2] },
   ];
 
   for (let i = 0; i < attempts.length; i++) {
@@ -683,6 +689,8 @@ Deno.serve(async (req: Request) => {
     const hasTotal = resolution.totals.grandTotal > 0;
 
     const traceReport = {
+      build_version: BUILD_VERSION,
+      three_pass_version: THREE_PASS_VERSION,
       parser_attempt_order: parserTrace,
       final_parser_used: finalParserUsed,
       fallback_triggered: regexRecoveryUsed,
