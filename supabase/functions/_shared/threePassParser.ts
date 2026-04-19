@@ -41,7 +41,7 @@ export interface DetectedSection {
   heading: string;
   scope: ScopeCategory;
   start_line: number;
-  reasoning: string;
+  reasoning?: string;
 }
 
 export interface ParsedLineItem {
@@ -63,8 +63,18 @@ export interface Pass1Result {
   has_summary_page: boolean;
   stated_grand_total: number | null;
   stated_subtotal: number | null;
-  reasoning: string;
+  reasoning?: string;
   confidence: number;
+  // debug fields
+  pass1_model?: string;
+  pass1_input_chars?: number;
+  pass1_retry_used?: boolean;
+  pass1_duration_ms?: number;
+}
+
+export interface Pass2DebugInfo {
+  pass2_chunks_started: number;
+  pass2_chunks_completed: number;
 }
 
 export interface Pass2Result {
@@ -92,88 +102,44 @@ export interface ThreePassOutput {
   warnings: string[];
   reasoning: string;
   parser_used: string;
+  // pass debug info — exposed in parser report
+  debug?: {
+    pass1_started: boolean;
+    pass1_completed: boolean;
+    pass1_timeout: boolean;
+    pass1_model: string;
+    pass1_input_chars: number;
+    pass1_retry_used: boolean;
+    pass1_duration_ms: number;
+    pass2_chunks_started: number;
+    pass2_chunks_completed: number;
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Pass 1 system prompt — structural analysis
 // ---------------------------------------------------------------------------
 
-const PASS1_SYSTEM_PROMPT = `You are a senior quantity surveyor and construction document analyst. Your task is to perform structural analysis of a subcontractor quote document.
+const PASS1_SYSTEM_PROMPT = `You are a construction document analyst. Identify section headings in a subcontractor quote and classify each as: included, optional, provisional, alternate, exclusion, or by_others.
 
-## YOUR PRIMARY TASK
-Identify every section heading in the document and classify its scope category. This section map will drive how every priced row is later bucketed — get this right.
+SCOPE RULES:
+- included: trade/floor/system headings with priced base-scope rows (e.g. Hydraulics, Level 1, Scope of Works)
+- optional: headings containing Optional/Option/Add Alt/Extra/Addendum/Variation
+- provisional: Provisional Sum/PC Sum/Prime Cost/Contingency (as a sum)
+- alternate: heading implies substitution not addition (Alt A, Alternative Spec, Value Engineering)
+- exclusion: Exclusions/Not Included/NIC
+- by_others: By Others/By Main Contractor
 
-## SCOPE CATEGORIES (DEFINITIONS)
+DOCUMENT TYPE: itemized_schedule | lump_sum | mixed | summary_only | unknown
+SUMMARY PAGE: set has_summary_page=true if page shows trade totals only (not line items). Extract stated totals from it.
 
-**included** — Base contract work. The subcontractor is committing to deliver this for the stated price.
-Signals: Trade names (Hydraulics, Electrical, Passive Fire, HVAC, Sprinkler, etc.), floor/level names (Level 1, Ground Floor, Lower Ground, Basement, Roof), room-type groupings (Bathrooms, Amenities, Kitchen, Plant Room), system names (Hot Water System, Chilled Water, Fire Hydrant), work-package headings (Scope of Works, Contract Works, Bill of Quantities, Schedule of Rates, Base Bid, Schedule A), any numbered section that contains priced line items without an "optional" or "alternate" qualifier.
-
-**optional** — Additional scope that has been priced but is NOT committed. Accepting these items adds to the base contract.
-Signals: Any heading containing the words: Optional, Option, Add Alt, Add to Scope, Addendum, Addition, Extra, Add-On, Variation. Must be a distinct section — not a single footnote inside a base-scope table.
-CRITICAL: If a row inside an "included" section is labelled "Optional Extra" or "Add Allowance", treat it as optional scope — create a sub-section boundary for it even if no formal heading exists.
-
-**provisional** — Work that is uncertain in quantity or definition. Money is reserved but final cost is not yet known.
-Signals: Provisional Sum, PC Sum, Prime Cost, PS Items, Provisional Allowance, Contingency (only when formatted as a sum, not a percentage), Nominated Sub-Contractor Allowance.
-CRITICAL: Do NOT classify ordinary base-scope items as provisional just because they have round numbers.
-
-**alternate** — A different method or specification to deliver base-scope work. Accepting an alternate REPLACES the corresponding included item — it does not ADD to the total.
-Signals: Alternate 1 / Alt A / Alternative Specification / Option B (when framed as a swap, not an addition), Value Engineering Alternate.
-IMPORTANT: Alternate ≠ Optional. An alternate replaces; an optional adds. If ambiguous, check whether the heading implies addition (optional) or substitution (alternate).
-
-**exclusion** — Items explicitly NOT included in this contract. No money is committed; the prime contractor must source this elsewhere.
-Signals: Exclusions, Not Included, NIC, Items Not in Contract, Scope Exclusions, Items Excluded From This Quotation.
-
-**by_others** — Work in scope but to be performed by another party (main contractor, another subcontractor, client).
-Signals: By Others, By Main Contractor, Builder's Work in Connection, Civil Works by Others, Structural by Principal Contractor.
-
-## NESTED AND SUBSECTION HANDLING
-
-Documents often have hierarchies. Rules:
-1. A top-level heading sets the scope for everything beneath it until a sibling-level heading appears.
-2. A sub-heading INSIDE an included section may override the scope for its own rows. Example: "Optional Extras" appearing as a sub-heading inside a "Hydraulics" section — those rows become optional, not included.
-3. Alternates may appear as sub-headings inside an included section — treat them as alternate scope.
-4. Level/floor groupings (Level 1, Level 2, Basement, etc.) appearing inside a base-scope section are NOT separate scope buckets — they are structural subdivisions of the included scope.
-5. Room-type groupings (Wet Areas, Bathrooms, Amenities) inside base scope are structural subdivisions — do NOT split them into separate scope categories.
-
-## SUMMARY PAGE DETECTION
-
-Identify if the document contains a summary page or totals page. These pages aggregate numbers already priced in the line-item schedules. Rules:
-- A summary page contains rows like "Hydraulics $X", "Electrical $X", "Total $X" — where each row IS the total of an earlier detailed section.
-- Do NOT treat a summary page as a priced section. Mark it as non-extractable.
-- Set "has_summary_page": true when detected.
-- Extract stated_grand_total and stated_subtotal from the summary page — these are for validation only.
-- If a document has ONLY a summary page and no line-item schedule, set document_type to "summary_only".
-
-## DOCUMENT TYPE CLASSIFICATION
-
-- **itemized_schedule** — rows with qty, unit, rate, total (most structured quotes)
-- **lump_sum** — sections priced as a single amount with no line-item breakdown
-- **mixed** — some sections itemized, some lump sum
-- **summary_only** — only a totals/summary page, no detailed line items
-- **unknown** — cannot determine structure
-
-## WHAT TO SKIP (NOT SECTION HEADINGS)
-- Individual line items that happen to have bold text
-- Arithmetic total rows ("Total this section $xxx")
-- Cover page text, company names, project names, date lines
-- Terms and conditions, qualifications, exclusions narrative (unless it IS a formal exclusions section)
-- Page numbers, headers, footers
-
-## RETURN FORMAT (strict JSON, no markdown, no code fences):
+Return strict JSON only — no markdown, no code fences:
 {
-  "sections": [
-    {
-      "heading": "exact heading text as it appears",
-      "scope": "included|optional|exclusion|provisional|alternate|by_others",
-      "start_line": 0,
-      "reasoning": "one sentence: why this scope was assigned"
-    }
-  ],
+  "sections": [{"heading": "string", "scope": "included|optional|provisional|alternate|exclusion|by_others", "start_line": 0}],
   "document_type": "itemized_schedule|lump_sum|mixed|summary_only|unknown",
-  "has_summary_page": true,
+  "has_summary_page": false,
   "stated_grand_total": null,
-  "stated_subtotal": null,
-  "reasoning": "2-3 sentence summary of overall document structure and any structural observations"
+  "stated_subtotal": null
 }`;
 
 // ---------------------------------------------------------------------------
@@ -528,20 +494,64 @@ async function callLLM(
 // PASS 1 — Structural analysis
 // ---------------------------------------------------------------------------
 
+function selectFastModel(primaryModel: string): string {
+  const fastModelEnv = (typeof Deno !== "undefined")
+    ? Deno.env.get("OPENAI_FAST_MODEL")
+    : undefined;
+  if (fastModelEnv) return fastModelEnv;
+  // prefer mini variants of known models
+  if (primaryModel.includes("gpt-4o")) return "gpt-4o-mini";
+  if (primaryModel.includes("gpt-4")) return "gpt-4o-mini";
+  return "gpt-4o-mini";
+}
+
 async function runPass1(
   rawText: string,
   apiKey: string,
   model: string,
 ): Promise<Pass1Result> {
-  const userPrompt = [
-    "Analyse the structure of this construction subcontractor quote.",
-    "Identify all section headings and classify each section's scope.",
-    "",
-    "DOCUMENT TEXT:",
-    rawText.slice(0, 8000),
-  ].join("\n");
+  const fastModel = selectFastModel(model);
+  const PASS1_INPUT_CHARS = 4000;
+  const PASS1_INPUT_CHARS_RETRY = 2500;
+  const PASS1_TIMEOUT_MS = 20_000;
+  const PASS1_MAX_TOKENS = 600;
 
-  const raw = await callLLM(apiKey, model, PASS1_SYSTEM_PROMPT, userPrompt, 2048, 30000) as Record<string, unknown>;
+  const buildPrompt = (chars: number) =>
+    [
+      "Identify section headings and classify scope in this construction quote.",
+      "",
+      "DOCUMENT TEXT (first " + chars + " chars):",
+      rawText.slice(0, chars),
+    ].join("\n");
+
+  const t0 = Date.now();
+  let retryUsed = false;
+  let inputCharsUsed = PASS1_INPUT_CHARS;
+  let raw: Record<string, unknown>;
+
+  console.log(`[ThreePass] Pass 1: model=${fastModel} input_chars=${PASS1_INPUT_CHARS} timeout=${PASS1_TIMEOUT_MS}ms`);
+
+  try {
+    raw = await callLLM(
+      apiKey, fastModel, PASS1_SYSTEM_PROMPT,
+      buildPrompt(PASS1_INPUT_CHARS),
+      PASS1_MAX_TOKENS, PASS1_TIMEOUT_MS,
+    ) as Record<string, unknown>;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[ThreePass] Pass 1 attempt 1 failed (${msg}), retrying with ${PASS1_INPUT_CHARS_RETRY} chars...`);
+    retryUsed = true;
+    inputCharsUsed = PASS1_INPUT_CHARS_RETRY;
+    // single retry with shorter input, same tight timeout
+    raw = await callLLM(
+      apiKey, fastModel, PASS1_SYSTEM_PROMPT,
+      buildPrompt(PASS1_INPUT_CHARS_RETRY),
+      PASS1_MAX_TOKENS, PASS1_TIMEOUT_MS,
+    ) as Record<string, unknown>;
+  }
+
+  const duration = Date.now() - t0;
+  console.log(`[ThreePass] Pass 1 complete: ${(raw.sections as unknown[])?.length ?? 0} sections in ${duration}ms (retry=${retryUsed})`);
 
   return {
     sections: (raw.sections as DetectedSection[]) ?? [],
@@ -549,8 +559,11 @@ async function runPass1(
     has_summary_page: (raw.has_summary_page as boolean) ?? false,
     stated_grand_total: (raw.stated_grand_total as number | null) ?? null,
     stated_subtotal: (raw.stated_subtotal as number | null) ?? null,
-    reasoning: (raw.reasoning as string) ?? "",
     confidence: 0.8,
+    pass1_model: fastModel,
+    pass1_input_chars: inputCharsUsed,
+    pass1_retry_used: retryUsed,
+    pass1_duration_ms: duration,
   };
 }
 
@@ -614,7 +627,7 @@ async function runPass2(
         ].join("\n");
 
     try {
-      const raw = await callLLM(apiKey, model, systemPrompt, userPrompt, 8192, 45000) as Record<string, unknown>;
+      const raw = await callLLM(apiKey, model, systemPrompt, userPrompt, 8192, 25000) as Record<string, unknown>;
 
       const rawItems = (raw.items as ParsedLineItem[]) ?? [];
       const validItems = rawItems.filter(
@@ -839,15 +852,25 @@ export async function runThreePassParser(params: {
   const { rawText, supplierName, apiKey, model, shorterPrompt = false, onChunkComplete } = params;
   const allWarnings: string[] = [];
 
+  // Debug state
+  let pass1Started = false;
+  let pass1Completed = false;
+  let pass1TimedOut = false;
+  let pass1Model = selectFastModel(model);
+  let pass1InputChars = 4000;
+  let pass1RetryUsed = false;
+  let pass1DurationMs = 0;
+  let pass2ChunksStarted = 0;
+  let pass2ChunksCompleted = 0;
+
   console.log(
     `[ThreePass] Starting — supplier="${supplierName ?? "unknown"}" chars=${rawText.length} shorterPrompt=${shorterPrompt}`,
   );
 
-  // Regex total extraction — done upfront for reconciliation
   const statedTotals = extractStatedTotals(rawText);
   console.log("[ThreePass] Stated totals from regex:", statedTotals);
 
-  // PASS 1 — structural analysis (skipped when shorterPrompt=true to reduce token pressure)
+  // PASS 1
   let pass1: Pass1Result;
   if (shorterPrompt) {
     console.log("[ThreePass] Pass 1: skipped (shorterPrompt mode)");
@@ -857,18 +880,24 @@ export async function runThreePassParser(params: {
       has_summary_page: false,
       stated_grand_total: statedTotals.grand_total,
       stated_subtotal: statedTotals.sub_total,
-      reasoning: "Pass 1 skipped (shorterPrompt mode)",
       confidence: 0.5,
     };
   } else {
+    pass1Started = true;
     console.log("[ThreePass] Pass 1: structural analysis");
     try {
       pass1 = await runPass1(rawText, apiKey, model);
+      pass1Completed = true;
+      pass1Model = pass1.pass1_model ?? pass1Model;
+      pass1InputChars = pass1.pass1_input_chars ?? pass1InputChars;
+      pass1RetryUsed = pass1.pass1_retry_used ?? false;
+      pass1DurationMs = pass1.pass1_duration_ms ?? 0;
       console.log(
         `[ThreePass] Pass 1 complete: ${pass1.sections.length} sections, type=${pass1.document_type}`,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      pass1TimedOut = msg.includes("timeout");
       allWarnings.push(`Pass 1 (structural analysis) failed: ${msg}`);
       console.error("[ThreePass] Pass 1 error:", msg);
       pass1 = {
@@ -877,21 +906,30 @@ export async function runThreePassParser(params: {
         has_summary_page: false,
         stated_grand_total: statedTotals.grand_total,
         stated_subtotal: statedTotals.sub_total,
-        reasoning: "Pass 1 failed",
         confidence: 0.3,
       };
     }
   }
 
-  // PASS 2 — row extraction
+  // PASS 2 — instrument chunk counting via wrapper
+  const chunks = chunkText(rawText, 6000, 20);
+  pass2ChunksStarted = chunks.length;
+
+  const onChunkCompleteWrapped = (completed: number) => {
+    pass2ChunksCompleted = completed;
+    onChunkComplete?.(completed);
+  };
+
   console.log("[ThreePass] Pass 2: row extraction");
   let pass2: Pass2Result;
   try {
-    pass2 = await runPass2(rawText, pass1.sections, apiKey, model, onChunkComplete, shorterPrompt);
+    pass2 = await runPass2(rawText, pass1.sections, apiKey, model, onChunkCompleteWrapped, shorterPrompt);
+    pass2ChunksCompleted = chunks.length;
     console.log(`[ThreePass] Pass 2 complete: ${pass2.items.length} raw items`);
     allWarnings.push(...pass2.warnings);
   } catch (err) {
     if (err instanceof PartialResultError && err.partialItems.length > 0) {
+      pass2ChunksCompleted = err.chunksCompleted;
       console.warn(
         `[ThreePass] Pass 2 partial: ${err.partialItems.length} items from ${err.chunksCompleted} chunk(s)`,
       );
@@ -915,23 +953,13 @@ export async function runThreePassParser(params: {
     }
   }
 
-  // Post-processing
   const { items: cleanItems, warnings: cleanWarnings } = postProcess(pass2.items);
   allWarnings.push(...cleanWarnings);
   console.log(`[ThreePass] Post-processing: ${pass2.items.length} → ${cleanItems.length} items`);
 
-  // Resolve stated totals (prefer regex over LLM-reported, as regex is deterministic)
-  const statedGrandTotal =
-    statedTotals.grand_total ??
-    pass1.stated_grand_total ??
-    null;
+  const statedGrandTotal = statedTotals.grand_total ?? pass1.stated_grand_total ?? null;
+  const statedSubTotal = statedTotals.sub_total ?? pass1.stated_subtotal ?? null;
 
-  const statedSubTotal =
-    statedTotals.sub_total ??
-    pass1.stated_subtotal ??
-    null;
-
-  // PASS 3 — arithmetic reconciliation
   console.log("[ThreePass] Pass 3: arithmetic reconciliation");
   const totals = reconcile(cleanItems, statedGrandTotal, statedSubTotal);
 
@@ -962,7 +990,9 @@ export async function runThreePassParser(params: {
   const reasoning = buildReasoning(pass1, totals, allWarnings);
 
   console.log(
-    `[ThreePass] Final: items=${cleanItems.length} confidence=${confidence.toFixed(2)}`,
+    `[ThreePass] Final: items=${cleanItems.length} confidence=${confidence.toFixed(2)} ` +
+    `pass1=${pass1Completed ? "ok" : pass1TimedOut ? "timeout" : "failed"} ` +
+    `pass2=${pass2ChunksCompleted}/${pass2ChunksStarted} chunks`,
   );
 
   return {
@@ -973,5 +1003,16 @@ export async function runThreePassParser(params: {
     warnings: allWarnings,
     reasoning,
     parser_used: "three_pass_document_agnostic_v1",
+    debug: {
+      pass1_started: pass1Started,
+      pass1_completed: pass1Completed,
+      pass1_timeout: pass1TimedOut,
+      pass1_model: pass1Model,
+      pass1_input_chars: pass1InputChars,
+      pass1_retry_used: pass1RetryUsed,
+      pass1_duration_ms: pass1DurationMs,
+      pass2_chunks_started: pass2ChunksStarted,
+      pass2_chunks_completed: pass2ChunksCompleted,
+    },
   };
 }
