@@ -654,6 +654,7 @@ async function runPass2(
   model: string,
   onChunkComplete?: (completed: number) => void,
   shorterPrompt?: boolean,
+  wallDeadlineMs?: number,
 ): Promise<Pass2Result> {
   const systemPrompt = shorterPrompt ? PASS2_SYSTEM_PROMPT_SHORT : PASS2_SYSTEM_PROMPT;
 
@@ -670,6 +671,12 @@ async function runPass2(
   let chunksFailed = 0;
 
   for (let i = 0; i < chunks.length; i++) {
+    if (wallDeadlineMs !== undefined && Date.now() > wallDeadlineMs) {
+      const msg = `Wall-time limit reached before chunk ${i + 1}/${chunks.length} — stopping early with ${chunksSucceeded} chunks completed`;
+      console.warn(`[ThreePass] ${msg}`);
+      allWarnings.push(msg);
+      break;
+    }
     const userPrompt = shorterPrompt
       ? [`CHUNK ${i + 1} of ${chunks.length}:`, ``, chunks[i]].join("\n")
       : [
@@ -683,7 +690,7 @@ async function runPass2(
         ].join("\n");
 
     try {
-      const raw = await callLLM(apiKey, model, systemPrompt, userPrompt, 8192, 25000) as Record<string, unknown>;
+      const raw = await callLLM(apiKey, model, systemPrompt, userPrompt, 8192, 18000) as Record<string, unknown>;
 
       const rawItems = (raw.items as ParsedLineItem[]) ?? [];
       const validItems = rawItems.filter(
@@ -904,8 +911,11 @@ export async function runThreePassParser(params: {
   model: string;
   shorterPrompt?: boolean;
   onChunkComplete?: (completed: number) => void;
+  wallTimeLimitMs?: number;
 }): Promise<ThreePassOutput> {
-  const { rawText, supplierName, apiKey, model, shorterPrompt = false, onChunkComplete } = params;
+  const { rawText, supplierName, apiKey, model, shorterPrompt = false, onChunkComplete, wallTimeLimitMs = 110_000 } = params;
+  const globalStart = Date.now();
+  const wallDeadlineMs = globalStart + wallTimeLimitMs;
   const allWarnings: string[] = [];
 
   // Debug state
@@ -951,7 +961,7 @@ export async function runThreePassParser(params: {
   console.log("[ThreePass] Pass 2: row extraction");
   let pass2: Pass2Result;
   try {
-    pass2 = await runPass2(rawText, pass1.sections, apiKey, model, onChunkCompleteWrapped, shorterPrompt);
+    pass2 = await runPass2(rawText, pass1.sections, apiKey, model, onChunkCompleteWrapped, shorterPrompt, wallDeadlineMs);
     pass2ChunksCompleted = chunks.length;
     console.log(`[ThreePass] Pass 2 complete: ${pass2.items.length} raw items`);
     allWarnings.push(...pass2.warnings);
