@@ -26,11 +26,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const BUILD_VERSION = "2026-04-19-det-pass1";
+const BUILD_VERSION = "2026-04-19-stable-prod";
 const THREE_PASS_VERSION = "v3-det-prepass";
 
 // LLM budget for Pass 2 row extraction only (no structural Pass 1 LLM)
 const LLM_EXTRACTION_TIMEOUT_MS = 90_000;
+
+// =============================================================================
+// PRODUCTION MODE SWITCH
+//
+// PRODUCTION_MODE=stable   (DEFAULT — live imports)
+//   - parserRouterV3 is the primary row extractor
+//   - parseResolutionLayerV3 handles totals
+//   - LLM runs ONLY as a lightweight post-pass (categorise, scope cleanup, FRR)
+//   - threePassParser is DISABLED for live imports
+//
+// PRODUCTION_MODE=experimental
+//   - Re-enables the three-pass LLM primary path (the previous live behaviour)
+//   - Enable by setting edge function secret: PRODUCTION_MODE=experimental
+// =============================================================================
+const PRODUCTION_MODE = (Deno.env.get("PRODUCTION_MODE") ?? "stable").toLowerCase();
+const STABLE_MODE = PRODUCTION_MODE !== "experimental";
 
 interface ParsingJob {
   id: string;
@@ -296,6 +312,106 @@ function mergeItems(llmItems: ParsedLineItem[], regexItems: ParsedLineItem[]): P
   return [...llmItems, ...additions];
 }
 
+// ---------------------------------------------------------------------------
+// STABLE MODE — LLM enhancement pass
+// Operates ONLY on already-extracted regex items. Enhances:
+//   - scope_category (base | optional) cleanup when ambiguous
+//   - category tagging (plumbing, fire, joinery, etc.)
+//   - FRR normalisation (e.g. "90 / 90 / -" -> "90/90/-")
+// Never adds or removes rows. Never touches qty / rate / total.
+// If the LLM call fails, the caller swallows the error and ships regex output.
+// ---------------------------------------------------------------------------
+async function runLlmEnhancementPass(
+  apiKey: string,
+  baseItems: ParsedLineItem[],
+  optionalItems: ParsedLineItem[],
+): Promise<{ baseItems: ParsedLineItem[]; optionalItems: ParsedLineItem[]; touched: number } | null> {
+  if (!apiKey) return null;
+  const all = [...baseItems, ...optionalItems];
+  if (all.length === 0) return null;
+
+  // Hard cap so the enhancement pass is fast and cheap.
+  const MAX_ITEMS = 250;
+  const sample = all.slice(0, MAX_ITEMS);
+
+  const payload = sample.map((it, i) => ({
+    i,
+    description: it.description.slice(0, 240),
+    current_scope: it.scopeCategory,
+    frr: extractFRRFromDescription(it.description) || null,
+  }));
+
+  const system = `You enhance already-extracted construction quote line items.
+You MUST NOT add, remove, or re-order items.
+You MUST NOT modify quantity, unit price, or total.
+For each item, return the same index and:
+  - scope: "base" or "optional"
+  - category: short tag ("plumbing","fire_stopping","joinery","hvac","electrical","general", etc.)
+  - frr: normalised fire-resistance rating as "N/N/N" or null
+Return JSON: {"items":[{"i":0,"scope":"base","category":"fire_stopping","frr":"90/90/90"}]}.`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        response_format: { type: "json_object" },
+        max_completion_tokens: 4096,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: JSON.stringify(payload) },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) throw new Error(`OpenAI enhance ${res.status}`);
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(repairJson(content));
+    const updates: Array<{ i: number; scope?: string; category?: string; frr?: string | null }> = parsed?.items ?? [];
+
+    let touched = 0;
+    const enhanced = [...baseItems, ...optionalItems];
+    for (const u of updates) {
+      const target = enhanced[u.i];
+      if (!target) continue;
+      let changed = false;
+      if (u.scope === "base" || u.scope === "optional") {
+        if (target.scopeCategory !== u.scope) {
+          target.scopeCategory = u.scope;
+          changed = true;
+        }
+      }
+      if (u.category) {
+        (target as any).category = u.category;
+        changed = true;
+      }
+      if (u.frr) {
+        (target as any).frrNormalised = u.frr;
+        changed = true;
+      }
+      if (changed) touched++;
+    }
+
+    // Re-split by scope after enhancement (LLM may have moved items between base/optional)
+    const newBase = enhanced.filter((it) => it.scopeCategory === "base");
+    const newOptional = enhanced.filter((it) => it.scopeCategory === "optional");
+    return { baseItems: newBase, optionalItems: newOptional, touched };
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
 function filterLlmSummaryRows(items: any[]): { kept: any[]; removed: number } {
   let removed = 0;
   const labelFiltered = items.filter((item) => { if (isTotalRow(item)) { removed++; return false; } return true; });
@@ -416,7 +532,12 @@ Deno.serve(async (req: Request) => {
     // =========================================================================
 
     const parserTrace: ParserAttemptEntry[] = [];
-    let parserStrategy: "llm_primary" | "regex_only" = isSpreadsheet ? "regex_only" : "llm_primary";
+    let parserStrategy: "llm_primary" | "regex_only" | "regex_primary_llm_enhance" =
+      isSpreadsheet ? "regex_only"
+        : STABLE_MODE ? "regex_primary_llm_enhance"
+        : "llm_primary";
+
+    console.log(`[MODE] PRODUCTION_MODE=${PRODUCTION_MODE} stable=${STABLE_MODE} strategy=${parserStrategy}`);
 
     let llmAttempted = false;
     let llmSuccess: boolean | null = null;
@@ -440,6 +561,10 @@ Deno.serve(async (req: Request) => {
       (priorLlmFailed && currentAttemptCount >= 2)
     );
 
+    // STABLE MODE: regex_primary path — parserRouterV3 runs first, LLM is optional enhancement only.
+    // This completely bypasses threePassParser for PDFs.
+    const runStableRegexPrimary = STABLE_MODE && !isSpreadsheet;
+
     if (isSpreadsheet) {
       await setStage(supabase, jobId, "Running Regex Parser", 50);
       const t0 = Date.now();
@@ -453,6 +578,72 @@ Deno.serve(async (req: Request) => {
         status: "success",
         reason: `Spreadsheet — ${regexResult.resolution.baseItems.length} base items`,
       });
+      await setStage(supabase, jobId, "Finalizing Totals", 75);
+
+    } else if (runStableRegexPrimary) {
+      // =====================================================================
+      // STABLE PRODUCTION PATH
+      // parserRouterV3 -> items
+      // parseResolutionLayerV3 -> totals
+      // LLM (optional, best-effort) -> categorise + scope cleanup + FRR enhancement
+      // threePassParser is NOT called in this path.
+      // =====================================================================
+      await setStage(supabase, jobId, "Running Stable Parser (regex primary)", 45);
+      const t0 = Date.now();
+      regexResult = runParserV3({ pages: allPages, rawText, fileExtension });
+      const dur = Date.now() - t0;
+      regexRecoveryUsed = false;
+
+      parserTrace.push({
+        parser: "regex_primary_v3",
+        started_at: new Date(Date.now() - dur).toISOString(),
+        ended_at: new Date().toISOString(),
+        duration_ms: dur,
+        status: "success",
+        reason: `STABLE_MODE — ${regexResult.resolution.baseItems.length} base items`,
+      });
+
+      // Best-effort LLM enhancement (NON-BLOCKING). If it fails, we still ship the stable result.
+      try {
+        await setStage(supabase, jobId, "Enhancing items (categorise + FRR)", 65);
+        const enhanceStart = Date.now();
+        const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+        const enhanced = await runLlmEnhancementPass(
+          openAiKey,
+          regexResult.resolution.baseItems,
+          regexResult.resolution.optionalItems,
+        );
+        if (enhanced) {
+          regexResult.resolution.baseItems = enhanced.baseItems;
+          regexResult.resolution.optionalItems = enhanced.optionalItems;
+          parserTrace.push({
+            parser: "llm_enhancement",
+            started_at: new Date(enhanceStart).toISOString(),
+            ended_at: new Date().toISOString(),
+            duration_ms: Date.now() - enhanceStart,
+            status: "success",
+            reason: `Enhanced ${enhanced.touched} items (scope/FRR/category)`,
+          });
+          llmAttempted = true;
+          llmSuccess = true;
+        }
+      } catch (enhanceErr) {
+        const msg = enhanceErr instanceof Error ? enhanceErr.message : String(enhanceErr);
+        console.warn(`[ENHANCE] LLM enhancement failed (non-fatal): ${msg}`);
+        parserTrace.push({
+          parser: "llm_enhancement",
+          started_at: new Date().toISOString(),
+          ended_at: new Date().toISOString(),
+          duration_ms: 0,
+          status: "failed",
+          reason: msg.slice(0, 200),
+        });
+        llmAttempted = true;
+        llmSuccess = false;
+        llmFailReason = classifyLlmFailure(enhanceErr);
+        llmFailMessage = msg;
+      }
+
       await setStage(supabase, jobId, "Finalizing Totals", 75);
 
     } else if (skipLlmDueToLoop) {
@@ -572,7 +763,8 @@ Deno.serve(async (req: Request) => {
     let finalResolution: ReturnType<typeof runParserV3>["resolution"];
     const finalClassification = regexResult?.classification ?? classification;
 
-    if (isSpreadsheet && regexResult) {
+    if ((isSpreadsheet || runStableRegexPrimary) && regexResult) {
+      // Spreadsheet OR stable-mode PDF path — resolution already produced by parserRouterV3
       finalResolution = regexResult.resolution;
 
     } else if (!regexRecoveryUsed) {
@@ -633,8 +825,10 @@ Deno.serve(async (req: Request) => {
 
     const traceReport = {
       build_version: BUILD_VERSION,
+      production_mode: PRODUCTION_MODE,
+      stable_mode: STABLE_MODE,
       three_pass_version: THREE_PASS_VERSION,
-      primary_parser: "three_pass_llm",
+      primary_parser: runStableRegexPrimary ? "regex_primary_v3" : "three_pass_llm",
       prepass: prepassDurationMs > 0 ? "deterministic OK" : "skipped",
       prepass_duration_ms: prepassDurationMs,
       prepass_sections_detected: prepassSections,
@@ -755,7 +949,9 @@ Deno.serve(async (req: Request) => {
       document_class: classification.documentClass,
       commercial_family: classification.commercialFamily,
       parser_used: finalParserUsed,
-      primary_parser: "three_pass_llm",
+      primary_parser: runStableRegexPrimary ? "regex_primary_v3" : "three_pass_llm",
+      production_mode: PRODUCTION_MODE,
+      stable_mode: STABLE_MODE,
       prepass: prepassDurationMs > 0 ? "deterministic OK" : "skipped",
       prepass_duration_ms: prepassDurationMs,
       prepass_sections_detected: prepassSections,

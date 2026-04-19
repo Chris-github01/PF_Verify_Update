@@ -1,4 +1,4 @@
-import { Search, Download, ChevronLeft, ChevronRight, Edit3, Check, X, AlertTriangle } from 'lucide-react';
+import { Search, Download, ChevronLeft, ChevronRight, CreditCard as Edit3, Check, X, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { needsQuantity } from '../lib/quoteUtils';
@@ -46,7 +46,7 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
     try {
       const { data: quotesData } = await supabase
         .from('quotes')
-        .select('id, supplier_name, total_amount, status, updated_at, quoted_total, contingency_amount')
+        .select('id, supplier_name, total_amount, resolved_total, status, updated_at, quoted_total, contingency_amount')
         .eq('project_id', projectId)
         .order('updated_at', { ascending: false });
 
@@ -74,7 +74,7 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
           const lineItemsTotal = lineItemsTotalByQuote.get(q.id) || 0;
           const quotedTotal = q.quoted_total;
           const contingencyAmount = q.contingency_amount || 0;
-          const displayTotal = quotedTotal || q.total_amount || lineItemsTotal;
+          const displayTotal = (q as any).resolved_total ?? quotedTotal ?? q.total_amount ?? lineItemsTotal;
 
           return {
             id: q.id,

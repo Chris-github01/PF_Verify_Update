@@ -1178,7 +1178,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                     {' | '}
                     <strong>PDF Total:</strong> ${selectedQuoteData.quoted_total.toLocaleString()}
                     {' | '}
-                    <strong>Extracted Total:</strong> ${selectedQuoteData.total_amount.toLocaleString()}
+                    <strong>Extracted Total:</strong> ${(((selectedQuoteData as any).resolved_total ?? selectedQuoteData.total_amount) || 0).toLocaleString()}
                   </>
                 )}
               </p>
@@ -1306,7 +1306,7 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                         onClick={() => setSelectedQuote(quote.id)}
                       >
                         <span className="text-base font-bold text-slate-100">
-                          ${(quote.main_scope_total ?? quote.total_amount).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${(quote.main_scope_total ?? (quote as any).resolved_total ?? quote.total_amount).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-500/20 text-green-300 border border-green-500/30">
                           Ready
