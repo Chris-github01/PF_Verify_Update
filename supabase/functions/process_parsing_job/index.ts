@@ -588,7 +588,7 @@ Deno.serve(async (req: Request) => {
         totals: { grandTotal, optionalTotal: docTotals.optionalTotal ?? 0, subTotal: docTotals.subTotal, rowSum: baseRowSum, source: totalSource },
         summaryDetected: llmGrandTotal > 0,
         optionalScopeDetected: llmAdapted.some(i => i.scopeCategory === "optional"),
-        parserReasons: [`llm confidence=${llmConfidence.toFixed(2)}`, `attempts=${llmAttemptsMade}`, ...llmWarnings.slice(0, 4)],
+        parserReasons: [`llm confidence=${llmConfidence.toFixed(2)}`, `attempts=1`, ...llmWarnings.slice(0, 4)],
         rawSummary: null,
       } as RawParserOutput, classification);
 
