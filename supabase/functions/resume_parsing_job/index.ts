@@ -1,22 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
-// =============================================================================
-// RESUME PARSING JOB — Phase 1 Stabilization
-//
-// This function is the retry/recovery entry point called by ParsingJobMonitor
-// when a job is stuck or failed.
-//
-// Production behaviour (Phase 1):
-//   1. Load the job record
-//   2. Reset job status to "pending"
-//   3. Re-dispatch process_parsing_job (the ONLY parser path)
-//   4. Return immediately (fire-and-forget, same pattern as start_parsing_job)
-//
-// NO V2 chunk logic. NO legacy LLM fallback. NO alternative parser paths.
-// If V3 fails again, the job is marked failed with diagnostics by process_parsing_job.
-// =============================================================================
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -52,7 +36,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: job, error: jobError } = await supabase
       .from("parsing_jobs")
-      .select("id, supplier_name, status, file_url, filename, trade, metadata")
+      .select("id, supplier_name, status, file_url, filename, trade, metadata, attempt_count, llm_attempted, llm_fail_reason")
       .eq("id", jobId)
       .single();
 
@@ -63,7 +47,14 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`[Resume] Re-dispatching job ${jobId} (${job.supplier_name}) via process_parsing_job`);
+    const attemptCount = (job.attempt_count as number) ?? 0;
+    const priorLlmFailed = job.llm_attempted === true && job.llm_fail_reason != null;
+
+    // Loop-breaker: if LLM already failed and we've had 2+ attempts, inform the caller
+    // that the next run will skip LLM entirely (handled in process_parsing_job)
+    const willSkipLlm = attemptCount >= 2 || (priorLlmFailed && attemptCount >= 1);
+
+    console.log(`[Resume] Job ${jobId} (${job.supplier_name}) — attempt_count=${attemptCount}, priorLlmFailed=${priorLlmFailed}, willSkipLlm=${willSkipLlm}`);
 
     await supabase
       .from("parsing_jobs")
@@ -71,11 +62,15 @@ Deno.serve(async (req: Request) => {
         status: "pending",
         progress: 0,
         error_message: null,
+        current_stage: willSkipLlm ? "Queued — Regex Recovery (LLM skipped)" : "Queued — Retrying",
         updated_at: new Date().toISOString(),
         metadata: {
           ...(job.metadata as Record<string, unknown> || {}),
           retry_triggered_at: new Date().toISOString(),
           entry_point: "resume_parsing_job",
+          prior_attempt_count: attemptCount,
+          prior_llm_fail_reason: job.llm_fail_reason ?? null,
+          will_skip_llm: willSkipLlm,
         },
       })
       .eq("id", jobId);
@@ -97,7 +92,11 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         jobId,
-        message: "Job re-dispatched to process_parsing_job (V3 parser)",
+        message: willSkipLlm
+          ? "Re-dispatched — LLM will be skipped (prior failures detected), running regex recovery"
+          : "Re-dispatched to process_parsing_job",
+        willSkipLlm,
+        attemptCount,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
