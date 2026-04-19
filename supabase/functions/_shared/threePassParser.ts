@@ -690,7 +690,10 @@ async function runPass2(
         ].join("\n");
 
     try {
-      const raw = await callLLM(apiKey, model, systemPrompt, userPrompt, 8192, 18000) as Record<string, unknown>;
+      const chunkTimeoutMs = wallDeadlineMs !== undefined
+        ? Math.min(25000, Math.max(8000, wallDeadlineMs - Date.now() - 10000))
+        : 25000;
+      const raw = await callLLM(apiKey, model, systemPrompt, userPrompt, 8192, chunkTimeoutMs) as Record<string, unknown>;
 
       const rawItems = (raw.items as ParsedLineItem[]) ?? [];
       const validItems = rawItems.filter(
