@@ -7,6 +7,7 @@ import { classifyDocument } from "../_shared/documentClassifier.ts";
 import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
 import { runThreePassParser } from "../_shared/threePassParser.ts";
 import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
+import { arbitrate } from "../_shared/arbitration/arbitrationEngine.ts";
 
 // =============================================================================
 // PROCESS PARSING JOB — DETERMINISTIC PRE-PASS + LLM EXTRACTION
@@ -844,6 +845,49 @@ Deno.serve(async (req: Request) => {
     const hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
     const hasTotal = resolution.totals.grandTotal > 0;
 
+    // =========================================================================
+    // HYBRID ARBITRATION ENGINE — universal, company-agnostic
+    // =========================================================================
+    const allFlatItems = [...resolution.baseItems, ...resolution.optionalItems];
+    const arbitrationItems = allFlatItems.map((it) => ({
+      description: it.description || "",
+      qty: it.qty ?? null,
+      unit: it.unit ?? null,
+      rate: it.rate ?? null,
+      total: typeof it.total === "number" ? it.total : null,
+      block: it.section ?? null,
+      page: null,
+      line_id: it.lineId ?? null,
+      line_number: null,
+      confidence: it.confidence ?? null,
+      source: it.source ?? finalParserUsed,
+      scope: it.scopeCategory === "optional" ? "optional" as const : it.scopeCategory === "excluded" ? "excluded" as const : "main" as const,
+    }));
+
+    const arbitration = arbitrate({
+      rawText,
+      items: arbitrationItems,
+      rowSum: resolution.totals.rowSum ?? null,
+      parserUsed: finalParserUsed,
+    });
+
+    if (
+      arbitration.resolved_total !== null &&
+      arbitration.resolved_total_label !== null &&
+      arbitration.resolved_total_label !== "row_sum" &&
+      resolution.totals.grandTotal > 0 &&
+      Math.abs(arbitration.resolved_total - resolution.totals.grandTotal) / resolution.totals.grandTotal > 0.02
+    ) {
+      console.log(
+        `[Arbitration] Labelled total override: ${arbitration.resolved_total_label}=${arbitration.resolved_total} replaces grandTotal=${resolution.totals.grandTotal}`,
+      );
+      resolution.totals.grandTotal = arbitration.resolved_total;
+      resolution.totals.source = "labelled_total_priority";
+    } else if (arbitration.resolved_total !== null && resolution.totals.grandTotal === 0) {
+      resolution.totals.grandTotal = arbitration.resolved_total;
+      resolution.totals.source = arbitration.resolved_total_label ?? "row_sum";
+    }
+
     const traceReport = {
       build_version: BUILD_VERSION,
       production_mode: PRODUCTION_MODE,
@@ -983,6 +1027,14 @@ Deno.serve(async (req: Request) => {
       llm_success: llmSuccess,
       llm_fail_reason: llmFailReason,
       llm_fail_message: llmFailMessage.slice(0, 300),
+      arbitration: {
+        resolved_total: arbitration.resolved_total,
+        resolved_total_label: arbitration.resolved_total_label,
+        total_candidates: arbitration.total_candidates,
+        headings_detected: arbitration.headings.length,
+        confidence: arbitration.confidence,
+        warnings: arbitration.warnings.slice(0, 20),
+      },
       llm_chunks_started: llmChunksStarted,
       llm_chunks_completed: llmChunksCompleted,
       llm_confidence: llmConfidence,
