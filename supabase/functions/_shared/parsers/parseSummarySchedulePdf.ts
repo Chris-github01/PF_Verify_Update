@@ -267,14 +267,17 @@ const EXCLUDE_DESC_RE = [
 ];
 
 const SECTION_RE = /\bBLOCK\s*B?(\d+)\b|\bLEVEL\s+(\d+)\b|\bZONE\s+([A-Z0-9]+)\b|\bSTAGE\s+(\d+)\b/i;
-const OPTIONAL_SECTION_START_RE = /\b(OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|OPTIONAL\s+EXTRAS)\b/i;
+const OPTIONAL_SECTION_START_RE = /\b(OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|OPTIONAL\s+EXTRAS?|CONFIRMATION\s+REQUIRED|EXTRAS\s+TO\s+SCOPE)\b/i;
 const BASE_SECTION_RESET_RE = /^\s*(MAIN\s+SCOPE|BASE\s+SCOPE|SCOPE\s+OF\s+WORKS?|SCHEDULE\s+OF\s+(RATES?|QUANTITIES))\s*$/i;
 const SKIP_LINE_RE = /^(Page\s+\d|Description|Item\s+No|Qty|Quantity|Unit|Rate|Total|Amount|Ref|Notes?|Prepared\s+by|Date:|Project:)/i;
 
 // Description-level trade prefixes that force Main scope regardless of section context
 const FORCE_BASE_DESC_RE = /^(Electrical|Fire\s+Protection|Hydraulics|Mechanical)\b/i;
-// Description-level prefixes that force Optional scope
-const FORCE_OPTIONAL_DESC_RE = /^(Architectural\s*\/?\s*Structural\s+Details?|Optional\s+Extras?)\b/i;
+// Description-level: rows whose description starts with optional keywords are always optional
+// regardless of what section header was last seen
+const FORCE_OPTIONAL_DESC_RE = /^(Architectural\s*\/?\s*Structural\s+Details?|Optional\s+Extras?|Optional\s+Scope|Add\s+to\s+Scope)\b/i;
+// Inline description signals that a row is optional even without a section header
+const INLINE_OPTIONAL_RE = /\b(optional|confirmation\s+required|add\s+to\s+scope|extras?\s+to\s+scope)\b/i;
 
 function normaliseUnit(raw: string): string {
   const u = raw.toLowerCase().trim().replace(/\.$/, '');
@@ -482,20 +485,27 @@ function parseSchedulePages(
       if (!normalized) continue;
       if (SKIP_LINE_RE.test(normalized)) continue;
 
-      const secMatch = normalized.match(SECTION_RE);
-      if (secMatch) {
-        const id = secMatch[1] ?? secMatch[2] ?? secMatch[3] ?? secMatch[4];
-        currentSection = `SEC${id}`;
-        // BLOCK/LEVEL/ZONE/STAGE headers always reset scope back to base
-        scopeCategory = 'base';
-      }
-
+      // Optional section header: switch scope state (non-numbered lines only)
       if (OPTIONAL_SECTION_START_RE.test(normalized) && !/^\d{1,3}\s/.test(normalized)) {
         scopeCategory = 'optional';
       }
 
+      // Explicit base scope reset (e.g. "MAIN SCOPE", "SCOPE OF WORKS")
       if (BASE_SECTION_RESET_RE.test(normalized)) {
         scopeCategory = 'base';
+      }
+
+      // Block/Level/Zone/Stage headers update the section label but ONLY reset
+      // scope to 'base' when we are NOT already inside an optional section.
+      // This prevents "BLOCK B32" appearing within the OPTIONAL SCOPE block from
+      // incorrectly flipping items back to main scope.
+      const secMatch = normalized.match(SECTION_RE);
+      if (secMatch) {
+        const id = secMatch[1] ?? secMatch[2] ?? secMatch[3] ?? secMatch[4];
+        currentSection = `SEC${id}`;
+        if (scopeCategory !== 'optional') {
+          scopeCategory = 'base';
+        }
       }
 
       if (!/^\d{1,3}\s/.test(normalized)) continue;
@@ -514,12 +524,19 @@ function parseSchedulePages(
         parsed_result: 'failed',
       };
 
-      // Description-level override: certain trade prefixes force the scope category
-      // regardless of the current section heading state
+      // Description-level override — highest priority, applied after section state.
+      // 1. Explicit base-trade prefix always wins (never optional).
+      // 2. Explicit optional prefix in description → optional.
+      // 3. Inline optional keyword anywhere in description → optional.
+      // 4. Otherwise inherit current section state.
       let effectiveScopeCategory = scopeCategory;
       if (FORCE_BASE_DESC_RE.test(normalized)) {
         effectiveScopeCategory = 'base';
       } else if (FORCE_OPTIONAL_DESC_RE.test(normalized)) {
+        effectiveScopeCategory = 'optional';
+      } else if (scopeCategory === 'base' && INLINE_OPTIONAL_RE.test(normalized)) {
+        // Row description contains an optional keyword even though section header
+        // hasn't been detected — classify as optional
         effectiveScopeCategory = 'optional';
       }
 

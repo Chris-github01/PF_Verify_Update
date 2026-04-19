@@ -294,6 +294,47 @@ function resolveTrustedTotal(
 }
 
 // ---------------------------------------------------------------------------
+// Optional-contamination guard
+// When a document declares an optional total AND the row sum exceeds the
+// parser-resolved total by more than 15%, the row sum is contaminated by
+// optional items that were misclassified as base.  Force the parser total.
+// ---------------------------------------------------------------------------
+function applyContaminationGuard(
+  resolution: TotalResolution,
+  baseRowSum: number,
+  declaredOptionalTotal: number | null,
+  parserTotals: RawParserOutput['totals'],
+  documentTotals: RawParserOutput['documentTotals'],
+  warnings: string[],
+): TotalResolution {
+  if (resolution.source !== 'row_sum') return resolution;
+
+  // We only need the guard when we fell back to row_sum
+  const optTotal = declaredOptionalTotal ?? 0;
+  if (optTotal <= 0) return resolution;
+
+  const rowExcess = baseRowSum - resolution.grandTotal;
+  const excessPct = resolution.grandTotal > 0 ? (rowExcess / resolution.grandTotal) * 100 : 0;
+
+  if (excessPct > 15) {
+    // Try to recover a trustworthy total from subtotal fields
+    const recovered =
+      documentTotals?.subTotal
+        ? documentTotals.subTotal + (documentTotals.qaTotal ?? 0)
+        : parserTotals.subTotal ?? null;
+
+    if (recovered && recovered > 0) {
+      warnings.push(
+        `optional_contamination_guard: row_sum $${baseRowSum.toFixed(2)} exceeds resolved total by ${excessPct.toFixed(1)}% with optional_total $${optTotal.toFixed(2)} declared — forced to subtotal+qa $${recovered.toFixed(2)}`,
+      );
+      return { grandTotal: recovered, source: 'document_subtotal' };
+    }
+  }
+
+  return resolution;
+}
+
+// ---------------------------------------------------------------------------
 // Variance grading
 // ---------------------------------------------------------------------------
 
@@ -447,7 +488,8 @@ export function runResolutionLayer(
   // Step 4: Resolve trusted total using priority chain
   // ------------------------------------------------------------------
 
-  const { grandTotal: resolvedGrandTotal, source: resolvedSource } = resolveTrustedTotal(
+  const guardWarnings: string[] = [];
+  let { grandTotal: resolvedGrandTotal, source: resolvedSource } = resolveTrustedTotal(
     totals,
     documentTotals,
     baseRowSum,
@@ -460,6 +502,27 @@ export function runResolutionLayer(
       : (totals.optionalTotal > 0 ? totals.optionalTotal : optRowSum);
 
   // ------------------------------------------------------------------
+  // Step 4b: Optional-contamination guard
+  // If we fell back to row_sum AND an optional total is declared, the
+  // base row sum may include misclassified optional rows. Apply guard.
+  // ------------------------------------------------------------------
+  const declaredOptionalTotal =
+    (documentTotals?.optionalTotal && documentTotals.optionalTotal > 0)
+      ? documentTotals.optionalTotal
+      : (totals.optionalTotal > 0 ? totals.optionalTotal : null);
+
+  const guarded = applyContaminationGuard(
+    { grandTotal: resolvedGrandTotal, source: resolvedSource },
+    baseRowSum,
+    declaredOptionalTotal,
+    totals,
+    documentTotals,
+    guardWarnings,
+  );
+  resolvedGrandTotal = guarded.grandTotal;
+  resolvedSource = guarded.source;
+
+  // ------------------------------------------------------------------
   // Step 5: Validate / grade variance
   // ------------------------------------------------------------------
 
@@ -467,13 +530,9 @@ export function runResolutionLayer(
   const validation = validate(baseRowSum, summaryTotal, parserOutput, incomingParserWarnings);
 
   // Collect all warnings
-  const allWarnings: string[] = [...validation.warnings];
+  const allWarnings: string[] = [...validation.warnings, ...guardWarnings];
 
   // Warn if document declares an optional total but no optional items were classified
-  const declaredOptionalTotal =
-    (documentTotals?.optionalTotal && documentTotals.optionalTotal > 0)
-      ? documentTotals.optionalTotal
-      : (totals.optionalTotal > 0 ? totals.optionalTotal : null);
   if (declaredOptionalTotal && declaredOptionalTotal > 0 && optionalItems.length === 0) {
     allWarnings.push(
       `optional_scope_total $${declaredOptionalTotal.toFixed(2)} declared in document but 0 optional items classified — scope heading may not have been detected`,

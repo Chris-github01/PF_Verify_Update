@@ -48,18 +48,29 @@ function flattenText(text: string): string {
 
 // ---------------------------------------------------------------------------
 // Grand Total patterns — label before amount (forward)
+// IMPORTANT: Capture group must be tight — only digits/commas/dot, no spaces,
+// to prevent parseSpacedAmount from greedily consuming adjacent amounts on the
+// same flattened line.  Spaced-thousands (OCR artifact) are handled by a
+// secondary spaced-digit variant appended below.
 // ---------------------------------------------------------------------------
 const GRAND_TOTAL_FWD_PATTERNS: RegExp[] = [
-  /Grand\s+Total\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Grand\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /TOTAL\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Total\s+Price\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Contract\s+(?:Sum|Total|Price|Value)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Quote\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Lump\s+Sum\s+(?:Total\s+)?:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Net\s+Total\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Tender\s+(?:Sum|Total)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
-  /Total\s+(?:excl(?:uding)?\.?\s*(?:of\s+)?GST)\s*:?\s*\$?\s*([\d][\d\s,]*(?:\.\d{1,2})?)/i,
+  // Strict: label + optional whitespace + $ + amount (no space between digits)
+  /Grand\s+Total\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Grand\s+Total\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /TOTAL\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Total\s+Price\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Contract\s+(?:Sum|Total|Price|Value)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Quote\s+Total\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Lump\s+Sum\s+(?:Total\s+)?:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Net\s+Total\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Tender\s+(?:Sum|Total)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Total\s+(?:excl(?:uding)?\.?\s*(?:of\s+)?GST)\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Total\s+Ex\.?\s*GST\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  /Total\s+Excluding\s+GST\s*:?\s*\$?\s*([\d,]+\.\d{2})/i,
+  // Spaced-thousands OCR variant: digits may have a space as thousands separator
+  // e.g. "59 278.75".  Only allow a single internal space (not free-form).
+  /Grand\s+Total\s*\(\s*excl(?:uding)?\.?\s*(?:of\s+)?GST\s*\)\s*:?\s*\$?\s*([\d]{1,3}\s[\d]{3}\.\d{2})/i,
+  /Grand\s+Total\s*:?\s*\$?\s*([\d]{1,3}\s[\d]{3}\.\d{2})/i,
 ];
 
 // ---------------------------------------------------------------------------
@@ -116,26 +127,40 @@ const BLOCK_TOTAL_PATTERNS: RegExp[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Proximity search — for PDFs where label and amount are on adjacent lines
-// (label on one line, amount on next, or vice versa)
+// Proximity search — for PDFs where label and amount are on adjacent lines.
+// FORWARD-ONLY for grand totals: never look backward.  Backward search risks
+// picking up an unrelated amount that appears above the label (e.g. a block
+// total from earlier in the document).
 // ---------------------------------------------------------------------------
 function proximitySearch(
   lines: string[],
   labelRe: RegExp,
-  windowLines = 3,
+  windowLines = 2,
+  allowBackward = false,
 ): number | null {
-  const AMOUNT_RE = /\$?\s*([\d][\d,]+\.\d{2})/;
+  // Tight money pattern — no spaced-thousands here to avoid false matches
+  const AMOUNT_RE = /\$?\s*([\d,]+\.\d{2})/;
   for (let i = 0; i < lines.length; i++) {
-    if (labelRe.test(lines[i])) {
-      // Search forward
-      for (let j = i + 1; j <= Math.min(i + windowLines, lines.length - 1); j++) {
-        const m = lines[j].match(AMOUNT_RE);
-        if (m) {
-          const v = parseMoney(m[1]);
-          if (v > 100) return v;
-        }
+    if (!labelRe.test(lines[i])) continue;
+
+    // Same-line amount takes highest priority
+    const sameLine = lines[i].match(AMOUNT_RE);
+    if (sameLine) {
+      const v = parseMoney(sameLine[1]);
+      if (v > 100) return v;
+    }
+
+    // Forward window (next 1-2 lines)
+    for (let j = i + 1; j <= Math.min(i + windowLines, lines.length - 1); j++) {
+      const m = lines[j].match(AMOUNT_RE);
+      if (m) {
+        const v = parseMoney(m[1]);
+        if (v > 100) return v;
       }
-      // Search backward
+    }
+
+    // Backward window — only used for non-grand-total fields like subtotals
+    if (allowBackward) {
       for (let j = i - 1; j >= Math.max(i - windowLines, 0); j--) {
         const m = lines[j].match(AMOUNT_RE);
         if (m) {
@@ -178,33 +203,45 @@ export function extractDocumentTotals(rawText: string): DocumentTotals {
   const flat = flattenText(rawText);
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // --- Grand Total ---
+  // --- Grand Total (forward-only proximity — never look backward) ---
   let grandTotal = firstMatch(flat, GRAND_TOTAL_FWD_PATTERNS);
   if (!grandTotal) grandTotal = firstMatch(flat, GRAND_TOTAL_REV_PATTERNS);
   if (!grandTotal) {
-    grandTotal = proximitySearch(lines, /Grand\s+Total|Contract\s+(?:Sum|Total)|Total\s+excl/i);
+    grandTotal = proximitySearch(
+      lines,
+      /Grand\s+Total|Contract\s+(?:Sum|Total)|Total\s+excl|Total\s+Ex\.?\s*GST|Total\s+Excluding\s+GST/i,
+      2,
+      false, // forward-only — no backward scan for grand total
+    );
   }
 
-  // --- Sub Total (take largest to handle multiple sub-totals) ---
+  // --- Sub Total (take SMALLEST non-zero to avoid block totals polluting) ---
+  // Block totals and section subtotals can be large; the true commercial subtotal
+  // is usually the smallest one on the summary page.
   const subTotalMatches = [
     ...allMatchValues(flat, SUB_TOTAL_FWD_PATTERNS),
     ...allMatchValues(flat, SUB_TOTAL_REV_PATTERNS),
-  ];
+  ].filter(v => v > 100);
   const subTotal = subTotalMatches.length > 0
-    ? subTotalMatches.reduce((a, b) => a > b ? a : b, 0)
+    ? subTotalMatches.reduce((a, b) => a < b ? a : b)
     : null;
 
   // --- QA / PS3 Total ---
   let qaTotal = firstMatch(flat, QA_TOTAL_PATTERNS);
   if (!qaTotal) {
-    qaTotal = proximitySearch(lines, /PS3\s*&\s*QA|Quality\s+Assurance/i);
+    qaTotal = proximitySearch(lines, /PS3\s*&\s*QA|Quality\s+Assurance/i, 2, true);
   }
 
-  // --- Optional Total ---
+  // --- Optional Total (forward-only proximity) ---
   let optionalTotal = firstMatch(flat, OPTIONAL_SCOPE_FWD_PATTERNS);
   if (!optionalTotal) optionalTotal = firstMatch(flat, OPTIONAL_SCOPE_REV_PATTERNS);
   if (!optionalTotal) {
-    optionalTotal = proximitySearch(lines, /OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|Items?\s+with\s+Confirmation/i);
+    optionalTotal = proximitySearch(
+      lines,
+      /OPTIONAL\s+SCOPE|ADD\s+TO\s+SCOPE|Items?\s+with\s+Confirmation/i,
+      2,
+      false,
+    );
   }
 
   // --- Block Totals ---
