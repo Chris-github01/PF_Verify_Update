@@ -1091,6 +1091,32 @@ Deno.serve(async (req: Request) => {
     }
 
     // ========================================================================
+    // STRICT TOTAL TAXONOMY — ban total-label rows BEFORE consensus so totals
+    // are recomputed from cleaned rows only. Order:
+    //   (1) extract rows  (2) ban totals rows  (3) recompute consensus
+    //   (4) persist cleaned rows  (5) save totals
+    // ========================================================================
+    const baseBanFilter = filterBannedItems(resolution.baseItems as any[]);
+    const optionalBanFilter = filterBannedItems(resolution.optionalItems as any[]);
+    const excludedBanFilter = filterBannedItems(resolution.excludedItems as any[]);
+    resolution.baseItems = baseBanFilter.kept as any;
+    resolution.optionalItems = optionalBanFilter.kept as any;
+    resolution.excludedItems = excludedBanFilter.kept as any;
+    const bannedRows = [
+      ...baseBanFilter.rejected,
+      ...optionalBanFilter.rejected,
+      ...excludedBanFilter.rejected,
+    ];
+    console.log(
+      `[PIPELINE] debug_version=${DEBUG_VERSION} deployed_at=${DEPLOYED_AT} ` +
+      `banned_rows_rejected=${bannedRows.length} ` +
+      `base_kept=${resolution.baseItems.length} optional_kept=${resolution.optionalItems.length} excluded_kept=${resolution.excludedItems.length}`,
+    );
+    for (const r of bannedRows.slice(0, 20)) {
+      console.log(`[PIPELINE] banned_row desc="${(r as any).description}" qty=${(r as any).qty} rate=${(r as any).rate} total=${(r as any).total}`);
+    }
+
+    // ========================================================================
     // CONSENSUS TOTALS — recompute authoritative main/optional/grand from
     // classified rows + labelled document totals. Overrides row_sum display.
     // ========================================================================
@@ -1243,22 +1269,6 @@ Deno.serve(async (req: Request) => {
       frr: extractFRRFromDescription(cleanText(item.description) || "") || null,
       scope_category: scopeCategory,
     });
-
-    const baseBanFilter = filterBannedItems(resolution.baseItems);
-    const optionalBanFilter = filterBannedItems(resolution.optionalItems);
-    const excludedBanFilter = filterBannedItems(resolution.excludedItems);
-    resolution.baseItems = baseBanFilter.kept;
-    resolution.optionalItems = optionalBanFilter.kept;
-    resolution.excludedItems = excludedBanFilter.kept;
-    const bannedRows = [
-      ...baseBanFilter.rejected,
-      ...optionalBanFilter.rejected,
-      ...excludedBanFilter.rejected,
-    ];
-    console.log(`[PIPELINE] debug_version=${DEBUG_VERSION} deployed_at=${DEPLOYED_AT} banned_rows_rejected=${bannedRows.length}`);
-    for (const r of bannedRows.slice(0, 20)) {
-      console.log(`[PIPELINE] banned_row desc="${(r as any).description}" qty=${(r as any).qty} rate=${(r as any).rate} total=${(r as any).total}`);
-    }
 
     const mainQuoteItems = resolution.baseItems.map((item) => mapItem(item, "Main"));
     const optionalQuoteItems = resolution.optionalItems.map((item) => mapItem(item, "Optional"));
