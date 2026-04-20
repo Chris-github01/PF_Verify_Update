@@ -972,28 +972,147 @@ export function resolveConsensusTotals(
     );
   }
 
-  // Confidence recalibration based on evidence quality:
-  //   HIGH:   labelled grand + (subtotal+qa match OR labelled main) AND within tolerance AND not dual-option
-  //   MEDIUM: labelled grand OR labelled main, minor gaps (no tolerance break, no dual-option)
-  //   LOW:    row_sum_only, outside_tolerance, dual_option unresolved, or no labels at all
-  const hasStrongEvidence =
-    subtotalPlusQaMatch ||
-    (hasLabelledGrand && (hasLabelledMain || (hasLabelledSubtotal && hasLabelledOptional)));
-  const hasBrokenEvidence =
-    withinTolerance === false ||
-    dual_option_suspected ||
-    parse_anomalies.includes("row_sum_only") ||
-    parse_anomalies.includes("no_labelled_totals");
+  // (legacy confidence recalibration removed — superseded by Main Scope Truth
+  //  Layer's evidence-score based recalibration below.)
 
-  if (hasBrokenEvidence) {
-    confidence = "LOW";
-  } else if (hasStrongEvidence && grand_total > 0) {
-    confidence = "HIGH";
-  } else if (hasLabelledGrand || hasLabelledMain || hasLabelledSubtotal) {
-    confidence = "MEDIUM";
-  } else {
-    confidence = "LOW";
+  // =========================================================================
+  // MAIN SCOPE TRUTH LAYER
+  // Corrects commercially-implausible splits (e.g. main=0 on a single-grand
+  // quote) and recalibrates confidence based on evidence corroboration.
+  // Runs AFTER base resolution so it can observe the chosen main/opt/grand.
+  // =========================================================================
+  const truthSources: string[] = [];
+  let mainTruth = main_total;
+  let optTruth = optional_total;
+  let mainScopeSource: "labelled_split" | "variant_primary" | "row_scope_ratio" | "grand_only" | "classified_rows" | "unchanged" = "unchanged";
+
+  const labelledMainVal = hasLabelledMain && (labelled.main_total as number) < grand_total
+    ? round2(labelled.main_total as number)
+    : hasLabelledSubtotal && (labelled.subtotal as number) < grand_total
+      ? round2(labelled.subtotal as number)
+      : null;
+  const labelledOptVal = hasLabelledOptional && (labelled.optional_total as number) < grand_total
+    ? round2(labelled.optional_total as number)
+    : null;
+
+  if (grand_total > 0) {
+    if (labelledMainVal !== null && labelledOptVal !== null) {
+      mainTruth = labelledMainVal;
+      optTruth = labelledOptVal;
+      mainScopeSource = "labelled_split";
+      truthSources.push(`labelled main(${labelledMainVal}) + labelled optional(${labelledOptVal})`);
+    } else if (labelledMainVal !== null) {
+      mainTruth = labelledMainVal;
+      optTruth = round2(Math.max(0, grand_total - labelledMainVal));
+      mainScopeSource = "labelled_split";
+      truthSources.push(`labelled main(${labelledMainVal}), optional = grand - main`);
+    } else if (labelledOptVal !== null) {
+      optTruth = labelledOptVal;
+      mainTruth = round2(Math.max(0, grand_total - labelledOptVal));
+      mainScopeSource = "labelled_split";
+      truthSources.push(`labelled optional(${labelledOptVal}), main = grand - optional`);
+    } else if (dual_option_suspected && variants.length > 0) {
+      const primary = variants.find((v) => v.is_primary) ?? variants[variants.length - 1];
+      mainTruth = round2(primary.main_total);
+      optTruth = round2(primary.optional_total);
+      mainScopeSource = "variant_primary";
+      truthSources.push(`primary variant '${primary.variant_label}'`);
+    } else if (summed_main + summed_optional > 0) {
+      // Use classified-row ratio (robust to inflation — we project ratio, not absolute).
+      const scopedTotal = summed_main + summed_optional;
+      const mainRatio = summed_main / scopedTotal;
+      const optRatio = summed_optional / scopedTotal;
+      const ratioMain = round2(grand_total * mainRatio);
+      const ratioOpt = round2(Math.max(0, grand_total - ratioMain));
+      // Only trust ratio when Main share is non-trivial (>= 10%), otherwise the
+      // classifier has likely mis-tagged the scope — fall back to main=grand.
+      if (mainRatio >= 0.1) {
+        mainTruth = ratioMain;
+        optTruth = ratioOpt;
+        mainScopeSource = "row_scope_ratio";
+        truthSources.push(
+          `classified ratio main=${(mainRatio * 100).toFixed(1)}% opt=${(optRatio * 100).toFixed(1)}% projected onto grand(${grand_total})`,
+        );
+      } else {
+        mainTruth = grand_total;
+        optTruth = 0;
+        mainScopeSource = "grand_only";
+        truthSources.push(
+          `classified main ratio(${(mainRatio * 100).toFixed(1)}%) below 10% threshold — treating grand as main-only`,
+        );
+      }
+    } else {
+      mainTruth = grand_total;
+      optTruth = 0;
+      mainScopeSource = "grand_only";
+      truthSources.push(`no scope evidence — main=grand(${grand_total}), optional=0`);
+    }
   }
+
+  // Commercial sanity guard: single-grand non-dual quotes with main=0 are
+  // almost certainly mis-split. Flip to main=grand unless explicit optional
+  // labelling dominates.
+  if (
+    !dual_option_suspected &&
+    mainTruth === 0 &&
+    optTruth > 0 &&
+    labelledOptVal === null &&
+    !hasSummaryOptional
+  ) {
+    mainTruth = grand_total;
+    optTruth = 0;
+    mainScopeSource = "grand_only";
+    truthSources.push("commercial-sanity: rejected main=0 with no labelled optional — reverted to main=grand");
+  }
+
+  if (mainTruth !== main_total || optTruth !== optional_total) {
+    notes.push(
+      `main-scope-truth: main ${main_total} -> ${mainTruth}, optional ${optional_total} -> ${optTruth} via ${mainScopeSource} [${truthSources.join("; ")}]`,
+    );
+    main_total = mainTruth;
+    optional_total = optTruth;
+  } else if (mainScopeSource !== "unchanged") {
+    notes.push(`main-scope-truth: source=${mainScopeSource} (no change) [${truthSources.join("; ")}]`);
+  }
+
+  // =========================================================================
+  // CONFIDENCE RECALIBRATION (evidence corroboration score)
+  // +2 labelled grand; +2 labelled main or subtotal; +1 labelled optional;
+  // +2 subtotal+optional=grand; +1 summary total matches labelled grand;
+  // +1 classified rows corroborate ratio; -2 row-sum inflated;
+  // -3 dual-option unresolved; -2 outside tolerance.
+  // HIGH >= 5, MEDIUM 2-4, LOW <= 1.
+  // =========================================================================
+  let evidenceScore = 0;
+  const scoreNotes: string[] = [];
+  if (hasLabelledGrand) { evidenceScore += 2; scoreNotes.push("labelled_grand(+2)"); }
+  if (hasLabelledMain || hasLabelledSubtotal) { evidenceScore += 2; scoreNotes.push("labelled_main_or_subtotal(+2)"); }
+  if (hasLabelledOptional) { evidenceScore += 1; scoreNotes.push("labelled_optional(+1)"); }
+  if (subtotalPlusQaMatch) { evidenceScore += 2; scoreNotes.push("subtotal+opt=grand(+2)"); }
+  if (hasSummaryTotal && hasLabelledGrand && Math.abs((labelled.summary_total ?? 0) - (labelled.grand_total ?? 0)) <= computeTotalsTolerance(labelled.grand_total ?? 0).effective) {
+    evidenceScore += 1;
+    scoreNotes.push("summary_matches_labelled(+1)");
+  }
+  if (mainScopeSource === "row_scope_ratio" && hasLabelledGrand) {
+    evidenceScore += 1;
+    scoreNotes.push("row_ratio_corroborates(+1)");
+  }
+  if (rowSumsRejected) { evidenceScore -= 2; scoreNotes.push("row_sum_inflated(-2)"); }
+  if (dual_option_suspected) { evidenceScore -= 3; scoreNotes.push("dual_option_unresolved(-3)"); }
+  if (withinTolerance === false) { evidenceScore -= 2; scoreNotes.push("outside_tolerance(-2)"); }
+
+  let recalibrated: ConsensusTotalsResult["confidence"];
+  if (evidenceScore >= 5) recalibrated = "HIGH";
+  else if (evidenceScore >= 2) recalibrated = "MEDIUM";
+  else recalibrated = "LOW";
+
+  // Never upgrade past MEDIUM when there's no labelled grand — we have no anchor.
+  if (!hasLabelledGrand && recalibrated === "HIGH") recalibrated = "MEDIUM";
+  // Never upgrade past LOW when raw row-sum fallback is the only source.
+  if (resolution_source === "summed_rows_fallback") recalibrated = "LOW";
+
+  confidence = recalibrated;
+  notes.push(`confidence-recalibrated: score=${evidenceScore} -> ${confidence} [${scoreNotes.join(", ")}]`);
 
   // HOTFIX (fix #1): re-check tolerance AFTER all resolution paths (including
   // dual-option isolation) so any residual mismatch is caught.
