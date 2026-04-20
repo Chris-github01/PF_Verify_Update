@@ -587,6 +587,7 @@ export function resolveConsensusTotals(
   let grand_total: number;
   let resolution_source: ConsensusTotalsResult["resolution_source"];
   let confidence: ConsensusTotalsResult["confidence"];
+  let inflation_guard_resolved = false;
 
   const hasLabelledGrand = labelled.grand_total !== null && labelled.grand_total > 0;
   const hasLabelledOptional = labelled.optional_total !== null && labelled.optional_total > 0;
@@ -755,6 +756,7 @@ export function resolveConsensusTotals(
     excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
     resolution_source = "labelled_grand_total";
     confidence = "LOW";
+    inflation_guard_resolved = true;
     notes.push(
       `P0-inflation-guard: labelled grand(${grand_total}) trusted; main reconstructed via ${reconstructionSource}; summed_main(${summed_main}) rejected as inflated`,
     );
@@ -958,6 +960,7 @@ export function resolveConsensusTotals(
 
   // HOTFIX (fix #2): when dual-option is suspected, final totals MUST come
   // from a single variant. Never aggregate totals across variant boundaries.
+  let variant_primary_adopted = false;
   if (dual_option_suspected && variants.length > 0) {
     const primary = variants.find((v) => v.is_primary) ?? variants[variants.length - 1];
     const priorMain = main_total;
@@ -967,6 +970,7 @@ export function resolveConsensusTotals(
     optional_total = round2(primary.optional_total);
     grand_total = round2(primary.grand_total);
     resolution_source = "labelled_grand_total";
+    variant_primary_adopted = true;
     notes.push(
       `dual-option isolation: adopted primary variant '${primary.variant_label}' (main=${main_total}, optional=${optional_total}, grand=${grand_total}); prior cross-variant values (main=${priorMain}, optional=${priorOpt}, grand=${priorGrand}) discarded`,
     );
@@ -1097,8 +1101,10 @@ export function resolveConsensusTotals(
     evidenceScore += 1;
     scoreNotes.push("row_ratio_corroborates(+1)");
   }
-  if (rowSumsRejected) { evidenceScore -= 2; scoreNotes.push("row_sum_inflated(-2)"); }
-  if (dual_option_suspected) { evidenceScore -= 3; scoreNotes.push("dual_option_unresolved(-3)"); }
+  if (rowSumsRejected && !inflation_guard_resolved) { evidenceScore -= 2; scoreNotes.push("row_sum_inflated(-2)"); }
+  else if (rowSumsRejected && inflation_guard_resolved) { scoreNotes.push("row_sum_inflated_bypassed(0)"); }
+  if (dual_option_suspected && !variant_primary_adopted) { evidenceScore -= 3; scoreNotes.push("dual_option_unresolved(-3)"); }
+  else if (dual_option_suspected && variant_primary_adopted) { scoreNotes.push("variant_primary_adopted(0)"); }
   if (withinTolerance === false) { evidenceScore -= 2; scoreNotes.push("outside_tolerance(-2)"); }
 
   let recalibrated: ConsensusTotalsResult["confidence"];

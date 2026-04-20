@@ -1292,7 +1292,7 @@ Deno.serve(async (req: Request) => {
       totals_confidence: resolutionConfidence,
       totals_evidence: evidenceForPersist,
       document_grand_total: canonicalTotal > 0 ? canonicalTotal : null,
-      document_sub_total: resolution.totals.subTotal,
+      document_sub_total: canonicalMainTotal > 0 ? canonicalMainTotal : null,
       optional_scope_total: canonicalOptionalTotal > 0 ? canonicalOptionalTotal : null,
       original_line_items_total: resolution.totals.rowSum,
       parse_anomalies: consensus.parse_anomalies ?? [],
@@ -1447,9 +1447,6 @@ Deno.serve(async (req: Request) => {
     if (requiresReview) {
       await supabase.from("quotes").update({
         requires_review: true,
-        resolution_source: "needs_review",
-        resolution_confidence: "LOW",
-        totals_confidence: "LOW",
       }).eq("id", quoteData.id);
     }
 
