@@ -32,7 +32,10 @@ export interface LabelledTotals {
   optional_total: number | null;
   excluded_total: number | null;
   subtotal: number | null;
-  labels_found: Array<{ label: string; value: number; kind: "grand" | "main" | "optional" | "excluded" | "subtotal"; position: number }>;
+  summary_total: number | null;
+  summary_total_position: number | null;
+  summary_optional_total: number | null;
+  labels_found: Array<{ label: string; value: number; kind: "grand" | "main" | "optional" | "excluded" | "subtotal" | "summary_grand" | "summary_optional"; position: number }>;
 }
 
 export type ParseAnomaly =
@@ -43,7 +46,10 @@ export type ParseAnomaly =
   | "dual_option_detected"
   | "no_labelled_totals"
   | "outside_tolerance"
-  | "negative_main_clamped";
+  | "negative_main_clamped"
+  | "row_sum_rejected_inflated"
+  | "summary_total_trusted"
+  | "schedule_subtotals_ignored";
 
 export interface QuoteVariant {
   variant_index: number;
@@ -76,6 +82,10 @@ export interface TotalsEvidenceSnapshot {
   parse_anomalies: ParseAnomaly[];
   variants: QuoteVariant[];
   subtotal_plus_optional_matches_grand: boolean | null;
+  summary_total_detected: boolean;
+  summary_total_value: number | null;
+  row_sum_rejected: boolean;
+  authoritative_grand_source: "summary" | "labelled_grand" | "labelled_main" | "summed" | "none";
   notes: string[];
   decided_at: string;
 }
@@ -90,6 +100,7 @@ export interface ConsensusTotalsResult {
     | "consensus[labelled-main]"
     | "consensus[main+optional]"
     | "consensus[subtotal+qa=grand]"
+    | "summary_page_total"
     | "labelled_grand_total"
     | "summed_main_rows"
     | "summed_rows_fallback";
@@ -177,9 +188,71 @@ export function parseLabelledTotals(rawText: string): LabelledTotals {
     optional_total: null,
     excluded_total: null,
     subtotal: null,
+    summary_total: null,
+    summary_total_position: null,
+    summary_optional_total: null,
     labels_found: [],
   };
   if (!rawText) return out;
+
+  // Detect a "QUOTE SUMMARY" / "PRICING SUMMARY" section and capture the
+  // authoritative total within that block. Summary pages carry the
+  // authoritative contract figure whereas schedule pages carry sectional
+  // subtotals that MUST NOT be summed into a grand total.
+  const summaryHeaderRegex = /\b(quote\s*summary|pricing\s*summary|summary\s*of\s*pricing|tender\s*summary|proposal\s*summary)\b/i;
+  const summaryMatch = summaryHeaderRegex.exec(rawText);
+  if (summaryMatch) {
+    const summaryStart = summaryMatch.index;
+    const windowText = rawText.slice(summaryStart, summaryStart + 4000);
+    const summaryGrandPatterns: RegExp[] = [
+      /\b(total\s*(?:\(ex|excl\.?|excluding)\s*gst\)?)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
+      /\b(grand\s*total)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
+      /\b(quote\s*total)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
+      /\b(contract\s*sum)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
+      /\b(total\s*(?:price|amount|contract|tender))\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
+    ];
+    let bestSummaryTotal: { value: number; position: number } | null = null;
+    for (const p of summaryGrandPatterns) {
+      const m = p.exec(windowText);
+      if (!m) continue;
+      const v = parseCurrency(m[2] ?? "");
+      if (v === null || v <= 0) continue;
+      const absPos = summaryStart + m.index;
+      if (!bestSummaryTotal || absPos < bestSummaryTotal.position) {
+        bestSummaryTotal = { value: v, position: absPos };
+      }
+    }
+    if (bestSummaryTotal) {
+      out.summary_total = bestSummaryTotal.value;
+      out.summary_total_position = bestSummaryTotal.position;
+      out.labels_found.push({
+        label: "summary_total",
+        value: bestSummaryTotal.value,
+        kind: "summary_grand",
+        position: bestSummaryTotal.position,
+      });
+    }
+    // Optional total within the same summary block (separate "add to scope" figure).
+    const summaryOptionalPatterns: RegExp[] = [
+      /\b(optional\s*(?:add\s*to\s*scope|extras?|items?|scope)?\s*total)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
+      /\b(add\s*to\s*scope(?:\s*total)?)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
+      /\b(total\s*optional(?:\s*extras?|\s*add\s*to\s*scope)?)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
+    ];
+    for (const p of summaryOptionalPatterns) {
+      const m = p.exec(windowText);
+      if (!m) continue;
+      const v = parseCurrency(m[2] ?? "");
+      if (v === null || v <= 0) continue;
+      out.summary_optional_total = v;
+      out.labels_found.push({
+        label: "summary_optional",
+        value: v,
+        kind: "summary_optional",
+        position: summaryStart + m.index,
+      });
+      break;
+    }
+  }
 
   for (const group of LABEL_GROUPS) {
     for (const pattern of group.patterns) {
@@ -260,6 +333,29 @@ export function resolveConsensusTotals(
   const hasLabelledMain = labelled.main_total !== null && labelled.main_total > 0;
   const hasLabelledSubtotal = labelled.subtotal !== null && labelled.subtotal > 0;
   const hasLabelledExcluded = labelled.excluded_total !== null && labelled.excluded_total > 0;
+  const hasSummaryTotal = labelled.summary_total !== null && (labelled.summary_total ?? 0) > 0;
+  const hasSummaryOptional = labelled.summary_optional_total !== null && (labelled.summary_optional_total ?? 0) > 0;
+
+  // Row-sum inflation rejection: when we have an authoritative labelled total
+  // (summary page OR labelled grand) and the summed Main rows exceed it by more
+  // than 1.3x, the summed rows are almost certainly counting schedule line
+  // items + sectional subtotals + grand totals + optionals — reject them.
+  const authoritativeGrand = hasSummaryTotal
+    ? (labelled.summary_total as number)
+    : hasLabelledGrand
+      ? (labelled.grand_total as number)
+      : null;
+  const rowSumInflated =
+    authoritativeGrand !== null &&
+    authoritativeGrand > 0 &&
+    summed_main > authoritativeGrand * 1.3;
+  let rowSumsRejected = false;
+  if (rowSumInflated) {
+    rowSumsRejected = true;
+    notes.push(
+      `row-sum rejected: summed_main(${summed_main}) > 1.3x labelled authoritative total(${authoritativeGrand})`,
+    );
+  }
 
   // Strict precedence per product spec:
   //   1. Explicit labelled totals (labelled main / subtotal)
@@ -278,7 +374,37 @@ export function resolveConsensusTotals(
       ((labelled.subtotal ?? 0) + (labelled.optional_total ?? 0)) - (labelled.grand_total ?? 0),
     ) <= preCheckTolerance.effective;
 
-  if (subtotalPlusQaMatch) {
+  if (hasSummaryTotal) {
+    // Priority 0 (strongest): QUOTE SUMMARY page provides the authoritative
+    // contract total. Breakdown/schedule pages must not contribute additive
+    // totals when a summary total exists. Optional scope uses the summary-block
+    // optional total when present, else labelled optional, else summed optional
+    // capped by (grand - any main/subtotal labels to avoid overflow).
+    grand_total = round2(labelled.summary_total as number);
+    if (hasSummaryOptional) {
+      optional_total = round2(labelled.summary_optional_total as number);
+    } else if (hasLabelledOptional) {
+      optional_total = round2(labelled.optional_total as number);
+    } else {
+      // Fall back to summed optional only if it does not push main negative.
+      const candidateOpt = summed_optional;
+      optional_total = candidateOpt > 0 && candidateOpt < grand_total ? candidateOpt : 0;
+    }
+    // Main is ALWAYS derived from the summary grand total (never summed rows)
+    // because schedule pages contain additive inflation.
+    main_total = round2(Math.max(0, grand_total - optional_total));
+    excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
+    resolution_source = "summary_page_total";
+    confidence = "HIGH";
+    notes.push(
+      `P0-summary: QUOTE SUMMARY authoritative total(${grand_total}), optional(${optional_total}), main(${main_total}) — schedule row sums discarded`,
+    );
+    if (rowSumsRejected) {
+      notes.push(
+        `schedule subtotals ignored: summed_main(${summed_main}) rejected in favour of summary total`,
+      );
+    }
+  } else if (subtotalPlusQaMatch) {
     grand_total = round2(labelled.grand_total as number);
     main_total = round2(labelled.subtotal as number);
     optional_total = round2(labelled.optional_total as number);
@@ -287,6 +413,18 @@ export function resolveConsensusTotals(
     confidence = "HIGH";
     notes.push(
       `P0: subtotal(${main_total}) + optional(${optional_total}) = grand(${grand_total}) within tolerance — grand trusted`,
+    );
+  } else if (rowSumsRejected && hasLabelledGrand) {
+    // Labelled grand total is authoritative when summed rows are inflated —
+    // never fall through to P3 row-sum branch.
+    grand_total = round2(labelled.grand_total as number);
+    optional_total = hasLabelledOptional ? round2(labelled.optional_total as number) : 0;
+    main_total = round2(Math.max(0, grand_total - optional_total));
+    excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
+    resolution_source = "labelled_grand_total";
+    confidence = "MEDIUM";
+    notes.push(
+      `P0-inflation-guard: labelled grand(${grand_total}) trusted over inflated summed_main(${summed_main})`,
     );
   } else if (hasLabelledMain || hasLabelledSubtotal) {
     // Priority 1: explicit labelled main total
@@ -442,6 +580,11 @@ export function resolveConsensusTotals(
   if (dual_option_suspected) parse_anomalies.push("dual_option_detected");
   if (withinTolerance === false) parse_anomalies.push("outside_tolerance");
   if (negativeMainClamped) parse_anomalies.push("negative_main_clamped");
+  if (hasSummaryTotal) parse_anomalies.push("summary_total_trusted");
+  if (rowSumsRejected) {
+    parse_anomalies.push("row_sum_rejected_inflated");
+    parse_anomalies.push("schedule_subtotals_ignored");
+  }
 
   // Build quote_variants. When dual-option is suspected, each distinct grand
   // label becomes its own variant so items are NEVER merged across options.
@@ -555,6 +698,18 @@ export function resolveConsensusTotals(
     parse_anomalies,
     variants,
     subtotal_plus_optional_matches_grand: subtotalPlusQaMatch || null,
+    summary_total_detected: hasSummaryTotal,
+    summary_total_value: hasSummaryTotal ? (labelled.summary_total as number) : null,
+    row_sum_rejected: rowSumsRejected,
+    authoritative_grand_source: hasSummaryTotal
+      ? "summary"
+      : hasLabelledGrand
+        ? "labelled_grand"
+        : hasLabelledMain || hasLabelledSubtotal
+          ? "labelled_main"
+          : grand_total > 0
+            ? "summed"
+            : "none",
     notes: [...notes],
     decided_at: new Date().toISOString(),
   };
