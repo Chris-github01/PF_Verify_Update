@@ -477,6 +477,39 @@ Deno.serve(async (req: Request) => {
     const typedJob = job as unknown as ParsingJob;
     const trade = typedJob.trade || "passive_fire";
 
+    // =========================================================================
+    // IDEMPOTENCY LOCK — reject if another worker is actively processing this
+    // job (status=processing AND heartbeat within last 120s).
+    // =========================================================================
+    const ACTIVE_LOCK_WINDOW_MS = 120_000;
+    const jobUpdatedAt = typedJob.updated_at ? new Date(typedJob.updated_at).getTime() : 0;
+    const isRecentlyUpdated = Date.now() - jobUpdatedAt < ACTIVE_LOCK_WINDOW_MS;
+    if (typedJob.status === "processing" && isRecentlyUpdated) {
+      console.warn(`[PIPELINE_START] Rejecting duplicate dispatch for job ${jobId} — already processing (updated ${Math.round((Date.now() - jobUpdatedAt) / 1000)}s ago)`);
+      return new Response(
+        JSON.stringify({ error: "job_already_processing", jobId, message: "Job is already being processed by another worker" }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Hard stop — prevent infinite retry loops
+    const HARD_MAX_ATTEMPTS = 5;
+    if ((typedJob.attempt_count ?? 0) >= HARD_MAX_ATTEMPTS) {
+      console.error(`[PIPELINE_START] Job ${jobId} has reached hard max attempts (${HARD_MAX_ATTEMPTS}). Marking as permanently failed.`);
+      await supabase.from("parsing_jobs").update({
+        status: "failed",
+        current_stage: "Failed — Max Attempts Exceeded",
+        error_message: `Job exceeded hard maximum of ${HARD_MAX_ATTEMPTS} attempts. Manual intervention required.`,
+        last_error: "hard_max_attempts_exceeded",
+        last_error_code: "hard_failure",
+        updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      return new Response(
+        JSON.stringify({ error: "hard_max_attempts_exceeded", jobId }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const currentAttemptCount = (typedJob.attempt_count ?? 0) + 1;
     const priorLlmFailed = typedJob.llm_attempted === true && typedJob.llm_fail_reason != null;
 
@@ -926,8 +959,11 @@ Deno.serve(async (req: Request) => {
     console.log(
       `[GPT Value Review] entering reviewer: items=${deterministicCandidateItems.length} confidence=${arbitration.confidence.overall_confidence.toFixed(3)} parserUsed=${resolution.parserUsed} openAiKey=${Deno.env.get("OPENAI_API_KEY") ? "present" : "MISSING"}`,
     );
+    await setStage(supabase, jobId, "GPT Value Review", 72);
     try {
-      gptValueReview = await runValueReview(
+      // Timeout guard — prevent edge function SIGKILL by capping GPT review at 75s
+      const GPT_REVIEW_MAX_MS = 75_000;
+      const gptPromise = runValueReview(
         {
           documentText: rawText,
           candidateItems: deterministicCandidateItems,
@@ -952,17 +988,21 @@ Deno.serve(async (req: Request) => {
         },
         { openAiKey: Deno.env.get("OPENAI_API_KEY") ?? "" },
       );
+      const gptTimeoutPromise = new Promise<ValueReviewResult>((_, reject) =>
+        setTimeout(() => reject(new Error(`GPT Value Review exceeded ${GPT_REVIEW_MAX_MS}ms timeout`)), GPT_REVIEW_MAX_MS),
+      );
+      gptValueReview = await Promise.race([gptPromise, gptTimeoutPromise]);
       console.log(
         `[GPT Value Review] exit: used=${gptValueReview.used} fallback=${gptValueReview.fallback_to_deterministic} skipped=${gptValueReview.skipped_reason ?? "n/a"} error=${gptValueReview.error ?? "n/a"} triggers_fired=${gptValueReview.trigger_reasons.length} elapsed_ms=${gptValueReview.elapsed_ms ?? 0}`,
       );
     } catch (e) {
-      console.error("[GPT Value Review] unexpected error:", e);
+      console.error("[GPT Value Review] unexpected error (will fall back to deterministic):", e);
       gptValueReview = {
         used: false,
         trigger_reasons: [],
         trigger_debug: [],
-        fallback_to_deterministic: false,
-        mark_for_review: false,
+        fallback_to_deterministic: true,
+        mark_for_review: true,
         error: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300),
       };
     }

@@ -36,7 +36,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: job, error: jobError } = await supabase
       .from("parsing_jobs")
-      .select("id, supplier_name, status, file_url, filename, trade, metadata, attempt_count, llm_attempted, llm_fail_reason")
+      .select("id, supplier_name, status, file_url, filename, trade, metadata, attempt_count, llm_attempted, llm_fail_reason, last_error_code, updated_at")
       .eq("id", jobId)
       .single();
 
@@ -49,6 +49,79 @@ Deno.serve(async (req: Request) => {
 
     const attemptCount = (job.attempt_count as number) ?? 0;
     const priorLlmFailed = job.llm_attempted === true && job.llm_fail_reason != null;
+
+    // Guard 1 — idempotency: reject if already processing with recent heartbeat
+    const ACTIVE_LOCK_WINDOW_MS = 120_000;
+    const jobUpdatedAt = job.updated_at ? new Date(job.updated_at as string).getTime() : 0;
+    const isRecentlyUpdated = Date.now() - jobUpdatedAt < ACTIVE_LOCK_WINDOW_MS;
+    if (job.status === "processing" && isRecentlyUpdated) {
+      const ageSec = Math.round((Date.now() - jobUpdatedAt) / 1000);
+      console.warn(`[Resume] Job ${jobId} already processing (heartbeat ${ageSec}s ago). Rejecting duplicate resume.`);
+      return new Response(
+        JSON.stringify({
+          error: "job_already_processing",
+          jobId,
+          heartbeat_age_seconds: ageSec,
+          message: "Job is already being processed. Wait for it to complete or fail before resuming.",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Guard 2 — hard failure: reject resume if job was marked as hard failure
+    if (job.last_error_code === "hard_failure") {
+      console.warn(`[Resume] Job ${jobId} is in hard_failure state. Rejecting resume.`);
+      return new Response(
+        JSON.stringify({
+          error: "hard_failure_cannot_resume",
+          jobId,
+          message: "Job has been marked as a hard failure. Please re-upload the document.",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Guard 3 — max attempts: reject if exceeded hard cap
+    const HARD_MAX_ATTEMPTS = 5;
+    if (attemptCount >= HARD_MAX_ATTEMPTS) {
+      console.warn(`[Resume] Job ${jobId} reached hard_max_attempts=${HARD_MAX_ATTEMPTS}. Marking hard failure.`);
+      await supabase
+        .from("parsing_jobs")
+        .update({
+          status: "failed",
+          current_stage: "Failed — Max Attempts Exceeded",
+          error_message: `Exceeded hard maximum of ${HARD_MAX_ATTEMPTS} attempts`,
+          last_error: "hard_max_attempts_exceeded",
+          last_error_code: "hard_failure",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+      return new Response(
+        JSON.stringify({
+          error: "hard_max_attempts_exceeded",
+          jobId,
+          attempt_count: attemptCount,
+          message: "Job exceeded maximum retry attempts. Please re-upload the document.",
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Guard 4 — stuck processing job >2min old: mark failed so attempt counter increments cleanly
+    if (job.status === "processing" && !isRecentlyUpdated) {
+      console.warn(`[Resume] Job ${jobId} stuck in processing for ${Math.round((Date.now() - jobUpdatedAt) / 1000)}s. Marking failed before resume.`);
+      await supabase
+        .from("parsing_jobs")
+        .update({
+          status: "failed",
+          current_stage: "Failed — Zombie Worker Detected",
+          error_message: `Worker silently died during processing (last heartbeat ${Math.round((Date.now() - jobUpdatedAt) / 1000)}s ago)`,
+          last_error: "zombie_worker_timeout",
+          last_error_code: "worker_timeout",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+    }
 
     // Loop-breaker: if LLM already failed and we've had 2+ attempts, inform the caller
     // that the next run will skip LLM entirely (handled in process_parsing_job)

@@ -335,8 +335,13 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
           const attemptCount = job.attempt_count ?? 0;
           const priorLlmFailed = job.llm_attempted === true && job.llm_fail_reason != null;
 
-          // Never auto-retry if LLM already failed twice — user must click Resume manually
-          const autoRetryAllowed = !(priorLlmFailed && attemptCount >= 2);
+          // Auto-retry guards: never if hard failure, max attempts, or LLM already failed twice
+          const isHardFailure = job.last_error_code === 'hard_failure';
+          const hasReachedMaxAttempts = attemptCount >= 5;
+          const autoRetryAllowed =
+            !isHardFailure &&
+            !hasReachedMaxAttempts &&
+            !(priorLlmFailed && attemptCount >= 2);
 
           if (
             job.status === 'processing' &&
@@ -580,7 +585,10 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
               const attemptCount = job.attempt_count ?? 0;
               const priorLlmFailed = job.llm_attempted === true && job.llm_fail_reason != null;
               const isHardStuck = isJobStuck(job);
-              const showResumeButton = isHardStuck;
+              const isHardFailure = job.last_error_code === 'hard_failure';
+              const hasReachedMaxAttempts = attemptCount >= 5;
+              // Resume button only shown when stuck, not hard failed, and below max attempts
+              const showResumeButton = isHardStuck && !isHardFailure && !hasReachedMaxAttempts;
               const resumeLabel = (priorLlmFailed && attemptCount >= 2) ? 'Resume (Regex Only)' : 'Resume';
 
               return (
@@ -605,6 +613,16 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                       </span>
                     </div>
                   </div>
+                  {hasReachedMaxAttempts && (
+                    <span className="text-xs font-medium text-red-300 bg-red-500/20 border border-red-500/40 px-2 py-1 rounded flex-shrink-0 mt-0.5">
+                      Max attempts reached — re-upload required
+                    </span>
+                  )}
+                  {isHardFailure && !hasReachedMaxAttempts && (
+                    <span className="text-xs font-medium text-red-300 bg-red-500/20 border border-red-500/40 px-2 py-1 rounded flex-shrink-0 mt-0.5">
+                      Hard failure — re-upload required
+                    </span>
+                  )}
                   {showResumeButton && (
                     <button
                       onClick={() => handleResumeJob(job.id)}
