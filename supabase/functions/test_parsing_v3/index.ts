@@ -2,6 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { runParserV3 } from "../_shared/parserRouterV3.ts";
 import type { PageData } from "../_shared/documentClassifier.ts";
 
+const PARSER_VERSION = "strict_total_taxonomy_v1";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -115,6 +117,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const startMs = Date.now();
+  console.log(`[TestParsingV3] PARSER_VERSION=${PARSER_VERSION}`);
 
   try {
     if (req.method !== "POST") {
@@ -190,6 +193,7 @@ Deno.serve(async (req: Request) => {
     const processingMs = Date.now() - startMs;
 
     const response = {
+      PARSER_VERSION,
       parserVersion: "v3",
       items: resolution.baseItems,
       optionalItems: resolution.optionalItems,
