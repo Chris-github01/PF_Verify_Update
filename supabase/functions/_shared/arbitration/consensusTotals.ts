@@ -44,6 +44,10 @@ export interface TotalsEvidenceSnapshot {
   final: { main: number; optional: number; excluded: number; grand: number };
   delta_vs_labelled_grand: number | null;
   within_tolerance: boolean | null;
+  dual_option_suspected: boolean;
+  dual_option_reasons: string[];
+  distinct_grand_totals: number[];
+  page_footer_totals_found: boolean;
   notes: string[];
   decided_at: string;
 }
@@ -312,6 +316,66 @@ export function resolveConsensusTotals(
     }
   }
 
+  // Dual-option PDF detection (generic, no supplier rules).
+  // Signal A: >=2 distinct labelled grand totals at distant positions.
+  // Signal B: summed_main exceeds labelled_grand by >=40% with optional scope
+  //           not accounting for the overflow (rows from 2 options collapsed).
+  // Signal C: >=2 subtotal labels each ~= a separate grand value (option blocks).
+  const dual_option_reasons: string[] = [];
+  const grandLabels = labelled.labels_found.filter((l) => l.kind === "grand");
+  const distinctGrands = Array.from(
+    new Set(grandLabels.map((l) => round2(l.value))),
+  ).filter((v) => v > 0);
+  if (distinctGrands.length >= 2) {
+    const minPos = Math.min(...grandLabels.map((l) => l.position));
+    const maxPos = Math.max(...grandLabels.map((l) => l.position));
+    if (maxPos - minPos > 1000) {
+      dual_option_reasons.push(
+        `multiple distinct grand totals at distant positions: [${distinctGrands.join(", ")}] spread=${maxPos - minPos}`,
+      );
+    }
+  }
+  if (hasLabelledGrand) {
+    const lg = labelled.grand_total as number;
+    const mainOverflowRatio = lg > 0 ? summed_main / lg : 0;
+    const uncoveredOverflow = summed_main - (lg + summed_optional);
+    if (mainOverflowRatio >= 1.4 && uncoveredOverflow > tolerance.effective) {
+      dual_option_reasons.push(
+        `summed_main(${summed_main}) exceeds labelled_grand(${lg}) by ${(mainOverflowRatio * 100 - 100).toFixed(0)}% — suggests two options merged`,
+      );
+    }
+  }
+  const subtotalLabels = labelled.labels_found.filter((l) => l.kind === "subtotal");
+  const distinctSubtotals = Array.from(
+    new Set(subtotalLabels.map((l) => round2(l.value))),
+  ).filter((v) => v > 0);
+  if (
+    distinctSubtotals.length >= 2 &&
+    distinctGrands.length >= 2 &&
+    Math.min(...distinctSubtotals) > 0
+  ) {
+    const ratio = Math.max(...distinctSubtotals) / Math.min(...distinctSubtotals);
+    if (ratio >= 1.15 && ratio <= 3) {
+      dual_option_reasons.push(
+        `multiple subtotals of different magnitudes alongside multiple grand totals — option blocks suspected`,
+      );
+    }
+  }
+  const dual_option_suspected = dual_option_reasons.length > 0;
+  if (dual_option_suspected) {
+    notes.push(`dual-option PDF suspected: ${dual_option_reasons.join("; ")}`);
+  }
+
+  const page_footer_totals_found = grandLabels.length > 0 || labelled.subtotal !== null;
+
+  // No negative main totals ever (Priority rule 4).
+  if (main_total < 0) {
+    notes.push(`main_total clamp: raw ${main_total} < 0 — forced to 0`);
+    main_total = 0;
+  }
+  if (optional_total < 0) optional_total = 0;
+  if (excluded_total < 0) excluded_total = 0;
+
   // Review gate: raw-row-sum fallback is explicitly untrusted.
   let requires_review = false;
   let review_reason: string | null = null;
@@ -324,6 +388,25 @@ export function resolveConsensusTotals(
   } else if (!(grand_total > 0)) {
     requires_review = true;
     review_reason = "zero grand total";
+  } else if (withinTolerance === false) {
+    // Priority rule 6: if uncertain -> review_required.
+    requires_review = true;
+    review_reason = `labelled grand vs main+optional outside tolerance (delta $${deltaVsLabelled})`;
+    confidence = confidence === "HIGH" ? "MEDIUM" : confidence;
+  } else if (dual_option_suspected) {
+    requires_review = true;
+    review_reason = `dual-option quote suspected — ${dual_option_reasons[0]}`;
+    confidence = confidence === "HIGH" ? "MEDIUM" : confidence;
+  } else if (
+    !hasLabelledGrand &&
+    !hasLabelledMain &&
+    !hasLabelledSubtotal &&
+    summed_main + summed_optional > 0
+  ) {
+    // No labelled evidence whatsoever — uncertain by definition.
+    requires_review = true;
+    review_reason = "no labelled totals found in document — totals inferred from row sums only";
+    confidence = "LOW";
   }
 
   const evidence: TotalsEvidenceSnapshot = {
@@ -335,6 +418,10 @@ export function resolveConsensusTotals(
     final: { main: main_total, optional: optional_total, excluded: excluded_total, grand: grand_total },
     delta_vs_labelled_grand: deltaVsLabelled,
     within_tolerance: withinTolerance,
+    dual_option_suspected,
+    dual_option_reasons,
+    distinct_grand_totals: distinctGrands,
+    page_footer_totals_found,
     notes: [...notes],
     decided_at: new Date().toISOString(),
   };
