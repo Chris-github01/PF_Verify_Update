@@ -2,6 +2,8 @@ import { Search, Download, ChevronLeft, ChevronRight, CreditCard as Edit3, Check
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { needsQuantity } from '../lib/quoteUtils';
+import { resolveDisplayTotal, type TotalsResolution } from '../lib/quoteTotals';
+import TotalsConfidenceBadge from './TotalsConfidenceBadge';
 
 interface Quote {
   id: string;
@@ -14,6 +16,7 @@ interface Quote {
   lastUpdated: string;
   owner: string;
   missingQtyCount?: number;
+  totalsResolution: TotalsResolution;
 }
 
 interface QuotesTableProps {
@@ -46,7 +49,7 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
     try {
       const { data: quotesData } = await supabase
         .from('quotes')
-        .select('id, supplier_name, total_amount, resolved_total, status, updated_at, quoted_total, contingency_amount')
+        .select('id, supplier_name, total_amount, resolved_total, resolution_confidence, status, updated_at, quoted_total, contingency_amount')
         .eq('project_id', projectId)
         .order('updated_at', { ascending: false });
 
@@ -74,12 +77,12 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
           const lineItemsTotal = lineItemsTotalByQuote.get(q.id) || 0;
           const quotedTotal = q.quoted_total;
           const contingencyAmount = q.contingency_amount || 0;
-          const displayTotal = (q as any).resolved_total ?? quotedTotal ?? q.total_amount ?? lineItemsTotal;
+          const resolution = resolveDisplayTotal(q as any, lineItemsTotal);
 
           return {
             id: q.id,
             supplier: q.supplier_name || 'Unknown Supplier',
-            quoteValue: displayTotal,
+            quoteValue: resolution.total,
             quotedTotal: quotedTotal,
             contingencyAmount: contingencyAmount,
             lineItemsTotal: lineItemsTotal,
@@ -87,6 +90,7 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
             lastUpdated: new Date(q.updated_at).toLocaleDateString(),
             owner: 'PV',
             missingQtyCount: missingQtyByQuote.get(q.id) || 0,
+            totalsResolution: resolution,
           };
         });
         setQuotes(formattedQuotes);
@@ -417,6 +421,8 @@ export default function QuotesTable({ projectId }: QuotesTableProps) {
                           <span className="font-semibold text-gray-900">
                             ${quote.quoteValue.toLocaleString()}
                           </span>
+                          <TotalsConfidenceBadge resolution={quote.totalsResolution} />
+
                           <button
                             onClick={() => startEditTotal(quote)}
                             className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded cursor-pointer text-slate-400 group-hover:text-[#0A66C2] hover:bg-slate-100 transition-colors duration-150"

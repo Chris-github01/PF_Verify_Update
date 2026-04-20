@@ -13,6 +13,8 @@ import { SYSTEM_TEMPLATES } from '../lib/mapping/systemTemplates';
 import { matchCarpentryLineToSystem } from '../lib/mapping/carpentrySystemMatcher';
 import WorkflowNav from '../components/WorkflowNav';
 import { needsQuantity } from '../lib/quoteUtils';
+import { resolveDisplayTotal, isOptionalRow, isSuspiciousQtyRate } from '../lib/quoteTotals';
+import TotalsConfidenceBadge from '../components/TotalsConfidenceBadge';
 import { getStatusColor, getStatusLabel, type QuoteStatus } from '../lib/quoteProcessing/quotePipeline';
 import { QuoteRevisionsHub } from './QuoteRevisionsHub';
 import ScoringWeightsEditor from '../components/ScoringWeightsEditor';
@@ -1306,11 +1308,9 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                         onClick={() => setSelectedQuote(quote.id)}
                       >
                         <span className="text-base font-bold text-slate-100">
-                          ${(quote.main_scope_total ?? (quote as any).resolved_total ?? quote.total_amount).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${resolveDisplayTotal(quote as any, quote.main_scope_total ?? undefined).total.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
-                        <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-500/20 text-green-300 border border-green-500/30">
-                          Ready
-                        </span>
+                        <TotalsConfidenceBadge resolution={resolveDisplayTotal(quote as any, quote.main_scope_total ?? undefined)} />
                       </div>
                     </div>
                   </div>
@@ -1397,8 +1397,10 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                 <tbody className="divide-y divide-slate-700">
                   {(isTableExpanded ? items : items.slice(0, 5)).map((item) => {
                     const issues = parseIssues(item.issues);
+                    const optional = isOptionalRow(item as any);
+                    const suspiciousQty = isSuspiciousQtyRate(item as any);
                     return (
-                      <tr key={item.id} className={item.is_excluded ? 'bg-slate-800/30 opacity-60' : 'hover:bg-slate-800/20'}>
+                      <tr key={item.id} className={item.is_excluded ? 'bg-slate-800/30 opacity-60' : optional ? 'bg-amber-500/5 hover:bg-slate-800/30' : 'hover:bg-slate-800/20'}>
                         <>
                             <td className="px-3 py-3">
                               <div className="flex flex-col gap-0.5 min-w-0">
@@ -1406,14 +1408,27 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                                   rawDescription={item.raw_description || item.description}
                                   normalizedDescription={item.normalized_description}
                                 />
-                                {needsQuantity(item) && (
-                                  <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 w-fit">
-                                    Needs Qty
-                                  </span>
-                                )}
+                                <div className="flex flex-wrap gap-1">
+                                  {optional && (
+                                    <span className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 w-fit">
+                                      Optional
+                                    </span>
+                                  )}
+                                  {needsQuantity(item) && !optional && (
+                                    <span className="inline-flex px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 w-fit">
+                                      Needs Qty
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </td>
-                            <td className="px-2 py-3 text-sm text-slate-100">{item.quantity}</td>
+                            <td className="px-2 py-3 text-sm text-slate-100">
+                              {suspiciousQty ? (
+                                <span className="text-slate-500 italic" title="Quantity blanked — rate equals total, qty may be unreliable">—</span>
+                              ) : (
+                                item.quantity
+                              )}
+                            </td>
                             <td className="px-2 py-3">
                               <UnitCell
                                 rawUnit={item.raw_unit || item.unit}
