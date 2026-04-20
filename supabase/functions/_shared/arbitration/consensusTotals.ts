@@ -32,7 +32,20 @@ export interface LabelledTotals {
   optional_total: number | null;
   excluded_total: number | null;
   subtotal: number | null;
-  labels_found: Array<{ label: string; value: number; kind: "grand" | "main" | "optional" | "excluded" | "subtotal" }>;
+  labels_found: Array<{ label: string; value: number; kind: "grand" | "main" | "optional" | "excluded" | "subtotal"; position: number }>;
+}
+
+export interface TotalsEvidenceSnapshot {
+  resolution_source: string;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  tolerance_applied: { absolute: number; percent: number; effective: number };
+  labelled: LabelledTotals;
+  summed: { main: number; optional: number; excluded: number };
+  final: { main: number; optional: number; excluded: number; grand: number };
+  delta_vs_labelled_grand: number | null;
+  within_tolerance: boolean | null;
+  notes: string[];
+  decided_at: string;
 }
 
 export interface ConsensusTotalsResult {
@@ -53,6 +66,20 @@ export interface ConsensusTotalsResult {
   summed_excluded: number;
   labelled: LabelledTotals;
   notes: string[];
+  requires_review: boolean;
+  review_reason: string | null;
+  evidence: TotalsEvidenceSnapshot;
+}
+
+/**
+ * Compute the reconciliation tolerance for a labelled grand total.
+ * Per product spec: tolerance = max(1% of value, $1).
+ */
+export function computeTotalsTolerance(value: number): { absolute: number; percent: number; effective: number } {
+  const absolute = 1;
+  const percent = Math.abs(value) * 0.01;
+  const effective = Math.max(absolute, percent);
+  return { absolute, percent, effective };
 }
 
 /** Parse a currency-ish number from raw text, tolerating $, commas, and trailing decimals. */
@@ -127,23 +154,32 @@ export function parseLabelledTotals(rawText: string): LabelledTotals {
         const label = m[1];
         const value = parseCurrency(m[2] ?? "");
         if (value === null || value <= 0) continue;
-        out.labels_found.push({ label, value, kind: group.kind });
+        out.labels_found.push({ label, value, kind: group.kind, position: m.index });
       }
     }
   }
 
-  // Pick largest value per kind (labels often repeat; largest tends to be cumulative)
-  const pickLargest = (kind: LabelledTotals["labels_found"][number]["kind"]): number | null => {
-    const vals = out.labels_found.filter((l) => l.kind === kind).map((l) => l.value);
-    if (vals.length === 0) return null;
-    return Math.max(...vals);
+  // Prefer the LAST-OCCURRING labelled total per kind (footer bias).
+  // Suppliers typically state the authoritative total at the bottom of the
+  // document; earlier occurrences are usually running subtotals or per-section
+  // breakdowns that should not be treated as the canonical value. Falling back
+  // to "largest" previously caused inflated optional totals and incorrect main
+  // resolution when a section subtotal happened to exceed the true footer total.
+  const pickLastOccurring = (kind: LabelledTotals["labels_found"][number]["kind"]): number | null => {
+    const hits = out.labels_found.filter((l) => l.kind === kind);
+    if (hits.length === 0) return null;
+    // Already in match-emit order (forward scan per pattern), but patterns are
+    // scanned in declared order per kind — sort by position to guarantee
+    // document-order selection regardless of pattern iteration.
+    hits.sort((a, b) => a.position - b.position);
+    return hits[hits.length - 1].value;
   };
 
-  out.grand_total = pickLargest("grand");
-  out.main_total = pickLargest("main");
-  out.optional_total = pickLargest("optional");
-  out.excluded_total = pickLargest("excluded");
-  out.subtotal = pickLargest("subtotal");
+  out.grand_total = pickLastOccurring("grand");
+  out.main_total = pickLastOccurring("main");
+  out.optional_total = pickLastOccurring("optional");
+  out.excluded_total = pickLastOccurring("excluded");
+  out.subtotal = pickLastOccurring("subtotal");
   return out;
 }
 
@@ -252,18 +288,56 @@ export function resolveConsensusTotals(
     notes.push("no labelled totals and no priced rows — review required");
   }
 
-  // Sanity: if labelled grand disagrees with main+optional by >2%, downgrade confidence
+  // Sanity: reconcile labelled grand vs main+optional using tolerance = max(1%, $1).
+  // Was previously a flat 2% which caused false-positive HIGH on small-value quotes.
+  const tolerance = computeTotalsTolerance(labelled.grand_total ?? grand_total);
+  let deltaVsLabelled: number | null = null;
+  let withinTolerance: boolean | null = null;
   if (hasLabelledGrand && resolution_source !== "consensus[grand-optional]") {
     const calc = main_total + optional_total;
     const labelledGrand = labelled.grand_total as number;
     if (labelledGrand > 0) {
-      const delta = Math.abs(calc - labelledGrand) / labelledGrand;
-      if (delta > 0.02) {
+      const absDelta = Math.abs(calc - labelledGrand);
+      deltaVsLabelled = round2(absDelta);
+      withinTolerance = absDelta <= tolerance.effective;
+      if (!withinTolerance) {
         confidence = confidence === "HIGH" ? "MEDIUM" : "LOW";
-        notes.push(`labelled grand(${labelledGrand}) disagrees with main+optional(${round2(calc)}) by ${(delta * 100).toFixed(1)}%`);
+        notes.push(
+          `labelled grand(${labelledGrand}) disagrees with main+optional(${round2(calc)}) by $${round2(absDelta)} ` +
+          `(tolerance max(1%,$1) = $${round2(tolerance.effective)})`
+        );
+      } else {
+        notes.push(`within tolerance: delta $${round2(absDelta)} <= $${round2(tolerance.effective)}`);
       }
     }
   }
+
+  // Review gate: raw-row-sum fallback is explicitly untrusted.
+  let requires_review = false;
+  let review_reason: string | null = null;
+  if (resolution_source === "summed_rows_fallback") {
+    requires_review = true;
+    review_reason = "totals resolved via raw row-sum fallback — no labelled totals and no classified rows";
+  } else if (confidence === "LOW") {
+    requires_review = true;
+    review_reason = "totals confidence LOW";
+  } else if (!(grand_total > 0)) {
+    requires_review = true;
+    review_reason = "zero grand total";
+  }
+
+  const evidence: TotalsEvidenceSnapshot = {
+    resolution_source,
+    confidence,
+    tolerance_applied: tolerance,
+    labelled,
+    summed: { main: summed_main, optional: summed_optional, excluded: summed_excluded },
+    final: { main: main_total, optional: optional_total, excluded: excluded_total, grand: grand_total },
+    delta_vs_labelled_grand: deltaVsLabelled,
+    within_tolerance: withinTolerance,
+    notes: [...notes],
+    decided_at: new Date().toISOString(),
+  };
 
   return {
     main_total,
@@ -277,7 +351,22 @@ export function resolveConsensusTotals(
     summed_excluded,
     labelled,
     notes,
+    requires_review,
+    review_reason,
+    evidence,
   };
+}
+
+/**
+ * Confidence ordering helper. HIGH > MEDIUM > LOW.
+ * Used by the writer to prevent lower-confidence reparses from overwriting
+ * a previously-stored HIGH confidence totals decision.
+ */
+export function confidenceRank(c: string | null | undefined): number {
+  if (c === "HIGH") return 3;
+  if (c === "MEDIUM") return 2;
+  if (c === "LOW") return 1;
+  return 0;
 }
 
 function round2(n: number): number {

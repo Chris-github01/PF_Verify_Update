@@ -9,7 +9,7 @@ import { runThreePassParser } from "../_shared/threePassParser.ts";
 import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
 import { arbitrate } from "../_shared/arbitration/arbitrationEngine.ts";
 import { runValueReview, type CandidateItem, type ValueReviewResult } from "../_shared/arbitration/gptValueReviewer.ts";
-import { resolveConsensusTotals, type ScopedRow } from "../_shared/arbitration/consensusTotals.ts";
+import { resolveConsensusTotals, confidenceRank, type ScopedRow } from "../_shared/arbitration/consensusTotals.ts";
 
 // =============================================================================
 // PROCESS PARSING JOB — DETERMINISTIC PRE-PASS + LLM EXTRACTION
@@ -1124,15 +1124,50 @@ Deno.serve(async (req: Request) => {
 
     await setStage(supabase, jobId, "Saving Results", 80);
 
-    const canonicalTotal = consensus.grand_total;
-    const canonicalOptionalTotal = consensus.optional_total;
-    const canonicalMainTotal = consensus.main_total;
-    const canonicalExcludedTotal = consensus.excluded_total;
-    const resolutionConfidence = consensus.confidence;
+    let canonicalTotal = consensus.grand_total;
+    let canonicalOptionalTotal = consensus.optional_total;
+    let canonicalMainTotal = consensus.main_total;
+    let canonicalExcludedTotal = consensus.excluded_total;
+    let resolutionConfidence = consensus.confidence;
+    let resolutionSourceFinal = consensus.resolution_source;
+    let evidenceForPersist = consensus.evidence;
+    let highConfidenceGuardTriggered = false;
 
     let quoteData: { id: string };
 
     if (typedJob.quote_id) {
+      // Totals Trust Layer: never overwrite an existing HIGH-confidence decision
+      // with a lower-confidence reparse. Fetch prior state first.
+      const { data: priorQuote } = await supabase
+        .from("quotes")
+        .select("total_amount, resolution_confidence, totals_confidence, resolution_source, resolved_total, optional_scope_total, totals_evidence")
+        .eq("id", typedJob.quote_id)
+        .maybeSingle();
+
+      const priorConf = (priorQuote?.totals_confidence ?? priorQuote?.resolution_confidence) as string | null | undefined;
+      if (
+        priorConf === "HIGH" &&
+        confidenceRank(consensus.confidence) < confidenceRank("HIGH") &&
+        Number(priorQuote?.resolved_total ?? priorQuote?.total_amount ?? 0) > 0
+      ) {
+        highConfidenceGuardTriggered = true;
+        canonicalTotal = Number(priorQuote?.resolved_total ?? priorQuote?.total_amount ?? 0);
+        canonicalMainTotal = Number(priorQuote?.resolved_total ?? priorQuote?.total_amount ?? 0) -
+          Number(priorQuote?.optional_scope_total ?? 0);
+        canonicalOptionalTotal = Number(priorQuote?.optional_scope_total ?? 0);
+        resolutionConfidence = "HIGH";
+        resolutionSourceFinal = (priorQuote?.resolution_source as typeof resolutionSourceFinal) ?? resolutionSourceFinal;
+        evidenceForPersist = {
+          ...consensus.evidence,
+          notes: [
+            `HIGH-confidence totals guard: retained prior total $${canonicalTotal} (source=${priorQuote?.resolution_source}); ` +
+            `new parse confidence=${consensus.confidence} source=${consensus.resolution_source} was rejected`,
+            ...consensus.evidence.notes,
+          ],
+        };
+        console.log(`[TotalsTrust] HIGH guard active for quote=${typedJob.quote_id} — rejected ${consensus.confidence}/${consensus.resolution_source}`);
+      }
+
       const { data: updatedQuote, error: updateError } = await supabase.from("quotes").update({
         status: "pending", total_amount: canonicalTotal, total_price: canonicalTotal, updated_at: new Date().toISOString(),
       }).eq("id", typedJob.quote_id).select().single();
@@ -1194,8 +1229,10 @@ Deno.serve(async (req: Request) => {
       raw_items_count: resolution.baseItems.length + resolution.optionalItems.length + resolution.excludedItems.length,
       inserted_items_count: mainQuoteItems.length,
       total_amount: canonicalTotal, total_price: canonicalTotal,
-      resolved_total: canonicalTotal, resolution_source: consensus.resolution_source,
+      resolved_total: canonicalTotal, resolution_source: resolutionSourceFinal,
       resolution_confidence: resolutionConfidence,
+      totals_confidence: resolutionConfidence,
+      totals_evidence: evidenceForPersist,
       document_grand_total: canonicalTotal > 0 ? canonicalTotal : null,
       document_sub_total: resolution.totals.subTotal,
       optional_scope_total: canonicalOptionalTotal > 0 ? canonicalOptionalTotal : null,
@@ -1290,22 +1327,35 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    // Parser trust gate: a zero grand_total is NEVER "completed".
-    // Flag the job as review_required so the frontend surfaces it for human review.
-    const requiresReview = !(canonicalTotal > 0) || resolutionConfidence === "LOW";
+    // Parser trust gate: a zero grand_total is NEVER "completed". Also honor
+    // consensus's own requires_review flag — which triggers on summed_rows_fallback.
+    // When the HIGH-confidence guard retained the prior total, we do NOT mark for review.
+    const consensusRequiresReview = consensus.requires_review && !highConfidenceGuardTriggered;
+    const requiresReview =
+      !highConfidenceGuardTriggered && (
+        !(canonicalTotal > 0) ||
+        resolutionConfidence === "LOW" ||
+        consensusRequiresReview ||
+        resolutionSourceFinal === "summed_rows_fallback"
+      );
     const finalStatus = requiresReview ? "review_required" : "completed";
     const finalStage = requiresReview ? "Review Required — Totals Need Verification" : "Completed";
     const reviewReason = !(canonicalTotal > 0)
       ? "Parser produced zero grand total"
-      : resolutionConfidence === "LOW"
-        ? "Parser confidence LOW"
-        : null;
+      : resolutionSourceFinal === "summed_rows_fallback"
+        ? "Totals resolved via raw row-sum fallback — no labelled totals or classified rows"
+        : resolutionConfidence === "LOW"
+          ? "Parser confidence LOW"
+          : consensusRequiresReview
+            ? (consensus.review_reason ?? "Consensus engine flagged totals for review")
+            : null;
 
     if (requiresReview) {
       await supabase.from("quotes").update({
         requires_review: true,
         resolution_source: "needs_review",
         resolution_confidence: "LOW",
+        totals_confidence: "LOW",
       }).eq("id", quoteData.id);
     }
 
