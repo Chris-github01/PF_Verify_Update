@@ -31,6 +31,38 @@ const corsHeaders = {
 
 const BUILD_VERSION = "2026-04-19-stable-prod";
 const THREE_PASS_VERSION = "v3-det-prepass";
+const DEBUG_VERSION = "strict_total_taxonomy_v1";
+const DEPLOYED_AT = "2026-04-20T11:05Z";
+
+const ROW_BAN_PATTERNS: RegExp[] = [
+  /\bbase\s*rate\b/i,
+  /\bpenetration\s+works\s+total\b/i,
+  /\btotal\s*:/i,
+  /^\s*total\s*$/i,
+  /^\s*total\b[^a-z]/i,
+  /\blump\s*sum\b/i,
+  /\bquote\s*total\b/i,
+  /\bsub[-\s]?total\b/i,
+  /\bgrand\s*total\b/i,
+  /\bproject\s*total\b/i,
+];
+
+function isBannedItemRow(description: unknown): boolean {
+  if (typeof description !== "string") return false;
+  const s = description.trim();
+  if (!s) return false;
+  return ROW_BAN_PATTERNS.some((rx) => rx.test(s));
+}
+
+function filterBannedItems<T extends { description?: string }>(items: T[]): { kept: T[]; rejected: T[] } {
+  const kept: T[] = [];
+  const rejected: T[] = [];
+  for (const it of items) {
+    if (isBannedItemRow(it?.description)) rejected.push(it);
+    else kept.push(it);
+  }
+  return { kept, rejected };
+}
 
 // LLM budget for Pass 2 row extraction only (no structural Pass 1 LLM)
 const LLM_EXTRACTION_TIMEOUT_MS = 90_000;
@@ -1212,6 +1244,22 @@ Deno.serve(async (req: Request) => {
       scope_category: scopeCategory,
     });
 
+    const baseBanFilter = filterBannedItems(resolution.baseItems);
+    const optionalBanFilter = filterBannedItems(resolution.optionalItems);
+    const excludedBanFilter = filterBannedItems(resolution.excludedItems);
+    resolution.baseItems = baseBanFilter.kept;
+    resolution.optionalItems = optionalBanFilter.kept;
+    resolution.excludedItems = excludedBanFilter.kept;
+    const bannedRows = [
+      ...baseBanFilter.rejected,
+      ...optionalBanFilter.rejected,
+      ...excludedBanFilter.rejected,
+    ];
+    console.log(`[PIPELINE] debug_version=${DEBUG_VERSION} deployed_at=${DEPLOYED_AT} banned_rows_rejected=${bannedRows.length}`);
+    for (const r of bannedRows.slice(0, 20)) {
+      console.log(`[PIPELINE] banned_row desc="${(r as any).description}" qty=${(r as any).qty} rate=${(r as any).rate} total=${(r as any).total}`);
+    }
+
     const mainQuoteItems = resolution.baseItems.map((item) => mapItem(item, "Main"));
     const optionalQuoteItems = resolution.optionalItems.map((item) => mapItem(item, "Optional"));
     const allQuoteItems = [...mainQuoteItems, ...optionalQuoteItems];
@@ -1269,6 +1317,15 @@ Deno.serve(async (req: Request) => {
     const parseMetadata = {
       parser_strategy: parserStrategy,
       parser_version: "v3-det-prepass",
+      debug_version: DEBUG_VERSION,
+      deployed_at: DEPLOYED_AT,
+      banned_rows_rejected: bannedRows.length,
+      banned_rows_samples: bannedRows.slice(0, 10).map((r: any) => ({
+        description: r?.description,
+        qty: r?.qty,
+        rate: r?.rate,
+        total: r?.total,
+      })),
       entry_point: "process_parsing_job",
       document_class: classification.documentClass,
       commercial_family: classification.commercialFamily,
@@ -1411,6 +1468,11 @@ Deno.serve(async (req: Request) => {
       success: true, jobId, quoteId: quoteData.id, itemCount: allQuoteItems.length,
       parserUsed: finalParserUsed, llmSuccess, llmFailReason, regexRecoveryUsed,
       grandTotal: canonicalTotal, trace: traceReport,
+      debug_version: DEBUG_VERSION,
+      deployed_at: DEPLOYED_AT,
+      parser_version: "v3-det-prepass",
+      edge_function: "process_parsing_job",
+      banned_rows_rejected: bannedRows.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
