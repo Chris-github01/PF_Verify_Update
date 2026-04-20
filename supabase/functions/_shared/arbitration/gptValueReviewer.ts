@@ -94,19 +94,45 @@ export interface ValueReviewResult {
   mark_for_review: boolean;
 }
 
-const SYSTEM_PROMPT = `You are a commercial construction quote parser.
+const SYSTEM_PROMPT = `You are a commercial construction quote value reviewer.
 Your task is to validate and correct extracted quote values.
 
+OUTPUT CONTRACT (strict):
+You MUST return a single JSON object that EXACTLY matches this shape. Do not wrap it in any other key (no "valid_quote", no "result", no "data", no "response"). Do not return pass/fail. Do not return the raw document. Return ONLY this object:
+
+{
+  "items": [
+    {
+      "description": "string",
+      "qty": number | null,
+      "unit": "string",
+      "rate": number | null,
+      "total": number | null,
+      "scope": "Main" | "Optional" | "Excluded",
+      "confidence": number,
+      "reason": "string"
+    }
+  ],
+  "final_totals": {
+    "main_total": number | null,
+    "optional_total": number | null,
+    "excluded_total": number | null,
+    "grand_total": number | null
+  },
+  "document_confidence": number,
+  "warnings": ["string"]
+}
+
 Rules:
-1. Never invent numbers.
-2. Prefer labelled totals:
-   Grand Total > Total Ex GST > Contract Sum > Subtotal > Row Sum
-3. If qty x rate is approximately equal to total, trust row.
-4. If row total equals unit rate and qty missing, likely unit rate/total confusion.
-5. Preserve unknown values as null.
-6. Detect Optional / Add Alternate / Excluded sections.
-7. Keep repeated rows if they belong to different blocks / locations.
-8. Return only valid JSON.`;
+1. Top-level keys MUST be exactly: items, final_totals, document_confidence, warnings. No other top-level keys.
+2. "items" MUST be an array (use [] if there are none). Never return items as an object or map.
+3. Never invent numbers. Use null when unknown.
+4. Prefer labelled totals: Grand Total > Total Ex GST > Contract Sum > Subtotal > Row Sum.
+5. If qty x rate is approximately equal to total, trust the row.
+6. If row total equals unit rate and qty missing, treat as unit-rate/total confusion.
+7. Detect Optional / Add Alternate / Excluded / Variation / Provisional Sum sections and tag via the "scope" field on each item.
+8. Keep repeated rows if they belong to different blocks / locations.
+9. Return only valid JSON that parses with JSON.parse. No markdown, no commentary, no backticks.`;
 
 const MAX_DOCUMENT_TEXT_CHARS = 60_000;
 const MAX_CANDIDATE_ITEMS = 400;
@@ -229,15 +255,95 @@ function truncateCandidateItems(items: CandidateItem[]): CandidateItem[] {
   return items.slice(0, MAX_CANDIDATE_ITEMS);
 }
 
-function validateGptJson(obj: unknown): { ok: ValueReviewOutput } | { reason: string } {
-  if (!obj || typeof obj !== "object") return { reason: `root not object (typeof=${typeof obj})` };
-  const o = obj as Record<string, unknown>;
+/**
+ * Unwrap common wrapper shapes the model sometimes returns:
+ *   { valid_quote: { items, final_totals, ... } }
+ *   { result: { ... } } / { data: { ... } } / { response: { ... } } / { output: { ... } } / { quote: { ... } }
+ * Also maps common item alias keys (rows, line_items, lineItems, entries, records) to "items".
+ * Returns the (possibly unwrapped) object along with a list of transformations applied.
+ */
+function unwrapCommonWrappers(input: unknown): { obj: Record<string, unknown>; transforms: string[] } | null {
+  if (!input || typeof input !== "object") return null;
+  const transforms: string[] = [];
+  let current = input as Record<string, unknown>;
+
+  const WRAPPER_KEYS = ["valid_quote", "result", "data", "response", "output", "quote", "payload", "body"];
+  const ITEM_ALIAS_KEYS = ["rows", "line_items", "lineItems", "entries", "records", "line_item", "lines"];
+  const TOTALS_ALIAS_KEYS = ["totals", "final_total", "finalTotals", "document_totals", "grand_totals"];
+
+  // Peel up to 3 levels of single-key wrappers
+  for (let i = 0; i < 3; i++) {
+    const keys = Object.keys(current);
+    if (keys.length === 1 && WRAPPER_KEYS.includes(keys[0]) && current[keys[0]] && typeof current[keys[0]] === "object") {
+      transforms.push(`unwrapped[${keys[0]}]`);
+      current = current[keys[0]] as Record<string, unknown>;
+      continue;
+    }
+    // Any top-level wrapper key whose value itself contains items/final_totals
+    const wrapperHit = keys.find((k) => WRAPPER_KEYS.includes(k) && current[k] && typeof current[k] === "object");
+    if (wrapperHit) {
+      const inner = current[wrapperHit] as Record<string, unknown>;
+      if ("items" in inner || "final_totals" in inner || ITEM_ALIAS_KEYS.some((a) => a in inner)) {
+        transforms.push(`unwrapped[${wrapperHit}]`);
+        current = inner;
+        continue;
+      }
+    }
+    break;
+  }
+
+  // Map alias keys → items
+  if (!Array.isArray(current.items)) {
+    for (const alias of ITEM_ALIAS_KEYS) {
+      if (Array.isArray(current[alias])) {
+        transforms.push(`aliased_items_from[${alias}]`);
+        current = { ...current, items: current[alias] };
+        break;
+      }
+    }
+  }
+
+  // Map alias keys → final_totals
+  if (!current.final_totals || typeof current.final_totals !== "object") {
+    for (const alias of TOTALS_ALIAS_KEYS) {
+      if (current[alias] && typeof current[alias] === "object") {
+        transforms.push(`aliased_final_totals_from[${alias}]`);
+        current = { ...current, final_totals: current[alias] };
+        break;
+      }
+    }
+  }
+
+  // If final_totals still missing, synthesise an empty shell so downstream items can still flow through
+  if ((!current.final_totals || typeof current.final_totals !== "object") && Array.isArray(current.items)) {
+    transforms.push("synthesised_empty_final_totals");
+    current = {
+      ...current,
+      final_totals: { main_total: null, optional_total: null, excluded_total: null, grand_total: null },
+    };
+  }
+
+  return { obj: current, transforms };
+}
+
+function validateGptJson(obj: unknown): { ok: ValueReviewOutput; transforms: string[] } | { reason: string; transforms: string[] } {
+  const unwrapped = unwrapCommonWrappers(obj);
+  if (!unwrapped) return { reason: `root not object (typeof=${typeof obj})`, transforms: [] };
+  const o = unwrapped.obj;
+  const transforms = unwrapped.transforms;
+
   if (!Array.isArray(o.items)) {
     const keys = Object.keys(o).slice(0, 20).join(",");
-    return { reason: `items not array (typeof=${typeof o.items}); top-level keys=[${keys}]` };
+    return {
+      reason: `items not array (typeof=${typeof o.items}); top-level keys=[${keys}]; transforms=[${transforms.join("|") || "none"}]`,
+      transforms,
+    };
   }
   if (!o.final_totals || typeof o.final_totals !== "object") {
-    return { reason: `final_totals missing or not object (typeof=${typeof o.final_totals})` };
+    return {
+      reason: `final_totals missing or not object (typeof=${typeof o.final_totals}); transforms=[${transforms.join("|") || "none"}]`,
+      transforms,
+    };
   }
   const items = (o.items as unknown[])
     .map((raw) => {
@@ -268,9 +374,12 @@ function validateGptJson(obj: unknown): { ok: ValueReviewOutput } | { reason: st
   const warnings = Array.isArray(o.warnings) ? (o.warnings as unknown[]).filter((w) => typeof w === "string").map((w) => w as string) : [];
   if (items.length === 0) {
     const rawItemCount = (o.items as unknown[]).length;
-    return { reason: `all ${rawItemCount} items rejected (missing description or non-object entries)` };
+    return {
+      reason: `all ${rawItemCount} items rejected (missing description or non-object entries); transforms=[${transforms.join("|") || "none"}]`,
+      transforms,
+    };
   }
-  return { ok: { items, final_totals, document_confidence, warnings } };
+  return { ok: { items, final_totals, document_confidence, warnings }, transforms };
 }
 
 /**
@@ -343,7 +452,7 @@ export async function runValueReview(
     warnings: input.warnings.slice(0, 20),
   };
 
-  const userMessage = JSON.stringify(userPayload);
+  const userMessage = `Return ONLY a JSON object with EXACTLY these top-level keys: "items" (array), "final_totals" (object with main_total, optional_total, excluded_total, grand_total), "document_confidence" (number 0-1), "warnings" (array of strings). Do NOT wrap the response in any other key such as "valid_quote", "result", "data", "response", or "output". Do NOT return pass/fail status. Input payload follows:\n\n${JSON.stringify(userPayload)}`;
   const started = Date.now();
 
   try {
@@ -406,13 +515,13 @@ export async function runValueReview(
     const validation = validateGptJson(parsed);
     if ("reason" in validation) {
       console.error(
-        `[GPT Value Review] schema validation failed: ${validation.reason} | raw_preview=${raw.slice(0, 300)}`,
+        `[GPT Value Review] schema validation failed: ${validation.reason} | raw_preview=${raw.slice(0, 400)}`,
       );
       return {
         used: true,
         trigger_reasons: decision.reasons,
         trigger_debug: decision.debug,
-        raw_response: raw.slice(0, 2000),
+        raw_response: raw.slice(0, 8000),
         error: "GPT JSON failed schema validation",
         error_detail: validation.reason,
         fallback_to_deterministic: true,
@@ -422,6 +531,9 @@ export async function runValueReview(
       };
     }
     const validated = validation.ok;
+    if (validation.transforms.length > 0) {
+      console.log(`[GPT Value Review] schema auto-unwrapped: transforms=[${validation.transforms.join("|")}]`);
+    }
 
     const evaluation = evaluateGptOutput(input.candidateItems, validated);
     const warnings = [...validated.warnings];
@@ -434,7 +546,7 @@ export async function runValueReview(
       used: true,
       trigger_reasons: decision.reasons,
       trigger_debug: decision.debug,
-      raw_response: raw.slice(0, 1000),
+      raw_response: raw.slice(0, 8000),
       parsed: validated,
       fallback_to_deterministic: evaluation.fallback,
       mark_for_review: evaluation.mark_for_review,
