@@ -3,6 +3,35 @@ import { runParserV3 } from "../_shared/parserRouterV3.ts";
 import type { PageData } from "../_shared/documentClassifier.ts";
 
 const PARSER_VERSION = "strict_total_taxonomy_v1";
+const DEPLOYED_AT = "2026-04-20T11:05Z";
+
+const ROW_BAN_PATTERNS: RegExp[] = [
+  /\bbase\s*rate\b/i,
+  /\bpenetration\s+works\s+total\b/i,
+  /\btotal\s*:/i,
+  /^\s*total\b/i,
+  /\blump\s*sum\b/i,
+  /\bquote\s*total\b/i,
+  /\bsub[-\s]?total\b/i,
+  /\bgrand\s*total\b/i,
+];
+
+function isBannedRow(description: unknown): boolean {
+  if (typeof description !== "string") return false;
+  const s = description.trim();
+  if (!s) return false;
+  return ROW_BAN_PATTERNS.some((rx) => rx.test(s));
+}
+
+function filterBannedRows<T extends { description?: unknown }>(items: T[]): { kept: T[]; rejected: T[] } {
+  const kept: T[] = [];
+  const rejected: T[] = [];
+  for (const it of items) {
+    if (isBannedRow(it?.description)) rejected.push(it);
+    else kept.push(it);
+  }
+  return { kept, rejected };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -172,6 +201,15 @@ Deno.serve(async (req: Request) => {
 
     const { resolution, classification, durationMs } = v3Result;
 
+    const baseFilter = filterBannedRows(resolution.baseItems);
+    const optionalFilter = filterBannedRows(resolution.optionalItems);
+    const excludedFilter = filterBannedRows(resolution.excludedItems);
+    resolution.baseItems = baseFilter.kept;
+    resolution.optionalItems = optionalFilter.kept;
+    resolution.excludedItems = excludedFilter.kept;
+    const bannedRows = [...baseFilter.rejected, ...optionalFilter.rejected, ...excludedFilter.rejected];
+    console.log(`[TestParsingV3] banned_rows_rejected=${bannedRows.length}`);
+
     const allItems = [
       ...resolution.baseItems,
       ...resolution.optionalItems,
@@ -194,6 +232,15 @@ Deno.serve(async (req: Request) => {
 
     const response = {
       PARSER_VERSION,
+      debug_version: PARSER_VERSION,
+      deployed_at: DEPLOYED_AT,
+      banned_rows_rejected: bannedRows.length,
+      banned_rows_samples: bannedRows.slice(0, 10).map((r: any) => ({
+        description: r?.description,
+        quantity: r?.quantity,
+        unit_price: r?.unit_price ?? r?.unitPrice,
+        total: r?.total ?? r?.lineTotal,
+      })),
       parserVersion: "v3",
       items: resolution.baseItems,
       optionalItems: resolution.optionalItems,
