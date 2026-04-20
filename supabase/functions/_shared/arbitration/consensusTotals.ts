@@ -35,6 +35,31 @@ export interface LabelledTotals {
   labels_found: Array<{ label: string; value: number; kind: "grand" | "main" | "optional" | "excluded" | "subtotal"; position: number }>;
 }
 
+export type ParseAnomaly =
+  | "row_sum_only"
+  | "multiple_grand_totals"
+  | "subtotal_plus_qa_match"
+  | "optional_detected"
+  | "dual_option_detected"
+  | "no_labelled_totals"
+  | "outside_tolerance"
+  | "negative_main_clamped";
+
+export interface QuoteVariant {
+  variant_index: number;
+  variant_label: string;
+  main_total: number;
+  optional_total: number;
+  grand_total: number;
+  is_primary: boolean;
+  source_evidence: {
+    grand_label_position: number | null;
+    subtotal_label_position: number | null;
+    grand_value: number;
+    subtotal_value: number | null;
+  };
+}
+
 export interface TotalsEvidenceSnapshot {
   resolution_source: string;
   confidence: "HIGH" | "MEDIUM" | "LOW";
@@ -48,6 +73,9 @@ export interface TotalsEvidenceSnapshot {
   dual_option_reasons: string[];
   distinct_grand_totals: number[];
   page_footer_totals_found: boolean;
+  parse_anomalies: ParseAnomaly[];
+  variants: QuoteVariant[];
+  subtotal_plus_optional_matches_grand: boolean | null;
   notes: string[];
   decided_at: string;
 }
@@ -61,6 +89,7 @@ export interface ConsensusTotalsResult {
     | "consensus[grand-optional]"
     | "consensus[labelled-main]"
     | "consensus[main+optional]"
+    | "consensus[subtotal+qa=grand]"
     | "labelled_grand_total"
     | "summed_main_rows"
     | "summed_rows_fallback";
@@ -72,6 +101,8 @@ export interface ConsensusTotalsResult {
   notes: string[];
   requires_review: boolean;
   review_reason: string | null;
+  parse_anomalies: ParseAnomaly[];
+  variants: QuoteVariant[];
   evidence: TotalsEvidenceSnapshot;
 }
 
@@ -237,7 +268,27 @@ export function resolveConsensusTotals(
   //   4. Raw row_sum fallback
   const raw_row_sum = round2(summed_main + summed_optional + summed_excluded);
 
-  if (hasLabelledMain || hasLabelledSubtotal) {
+  // Priority 0 (strongest): if labelled subtotal + labelled optional == labelled grand
+  //   within tolerance, trust the grand total — all three numbers corroborate.
+  //   "qa" in product spec = quote additional (aka optional scope).
+  const preCheckTolerance = computeTotalsTolerance(labelled.grand_total ?? 0);
+  const subtotalPlusQaMatch =
+    hasLabelledGrand && hasLabelledSubtotal && hasLabelledOptional &&
+    Math.abs(
+      ((labelled.subtotal ?? 0) + (labelled.optional_total ?? 0)) - (labelled.grand_total ?? 0),
+    ) <= preCheckTolerance.effective;
+
+  if (subtotalPlusQaMatch) {
+    grand_total = round2(labelled.grand_total as number);
+    main_total = round2(labelled.subtotal as number);
+    optional_total = round2(labelled.optional_total as number);
+    excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
+    resolution_source = "consensus[subtotal+qa=grand]";
+    confidence = "HIGH";
+    notes.push(
+      `P0: subtotal(${main_total}) + optional(${optional_total}) = grand(${grand_total}) within tolerance — grand trusted`,
+    );
+  } else if (hasLabelledMain || hasLabelledSubtotal) {
     // Priority 1: explicit labelled main total
     main_total = round2((hasLabelledMain ? labelled.main_total : labelled.subtotal) as number);
     optional_total = hasLabelledOptional ? round2(labelled.optional_total as number) : summed_optional;
@@ -369,12 +420,91 @@ export function resolveConsensusTotals(
   const page_footer_totals_found = grandLabels.length > 0 || labelled.subtotal !== null;
 
   // No negative main totals ever (Priority rule 4).
+  let negativeMainClamped = false;
   if (main_total < 0) {
     notes.push(`main_total clamp: raw ${main_total} < 0 — forced to 0`);
     main_total = 0;
+    negativeMainClamped = true;
   }
   if (optional_total < 0) optional_total = 0;
   if (excluded_total < 0) excluded_total = 0;
+
+  // Parse anomaly badges.
+  const parse_anomalies: ParseAnomaly[] = [];
+  const anyLabels = labelled.labels_found.length > 0;
+  if (!anyLabels) parse_anomalies.push("no_labelled_totals");
+  if (resolution_source === "summed_rows_fallback" || (!anyLabels && raw_row_sum > 0)) {
+    parse_anomalies.push("row_sum_only");
+  }
+  if (distinctGrands.length >= 2) parse_anomalies.push("multiple_grand_totals");
+  if (subtotalPlusQaMatch) parse_anomalies.push("subtotal_plus_qa_match");
+  if (hasLabelledOptional || summed_optional > 0) parse_anomalies.push("optional_detected");
+  if (dual_option_suspected) parse_anomalies.push("dual_option_detected");
+  if (withinTolerance === false) parse_anomalies.push("outside_tolerance");
+  if (negativeMainClamped) parse_anomalies.push("negative_main_clamped");
+
+  // Build quote_variants. When dual-option is suspected, each distinct grand
+  // label becomes its own variant so items are NEVER merged across options.
+  // Primary variant = the footer-selected (last-occurring) grand total, which
+  // matches what the rest of the pipeline treats as canonical.
+  const variants: QuoteVariant[] = [];
+  if (dual_option_suspected && distinctGrands.length >= 2) {
+    const sortedGrandHits = [...grandLabels].sort((a, b) => a.position - b.position);
+    const primaryGrandValue = sortedGrandHits[sortedGrandHits.length - 1]?.value ?? null;
+    const seen = new Set<number>();
+    let idx = 0;
+    for (const hit of sortedGrandHits) {
+      const gv = round2(hit.value);
+      if (seen.has(gv)) continue;
+      seen.add(gv);
+      const nearestSubtotal = [...subtotalLabels]
+        .filter((s) => s.position < hit.position)
+        .sort((a, b) => b.position - a.position)[0] ?? null;
+      const subVal = nearestSubtotal ? round2(nearestSubtotal.value) : null;
+      const optVal = subVal !== null ? round2(Math.max(0, gv - subVal)) : 0;
+      variants.push({
+        variant_index: idx,
+        variant_label: `Option ${idx + 1}`,
+        main_total: subVal !== null ? subVal : gv,
+        optional_total: optVal,
+        grand_total: gv,
+        is_primary: primaryGrandValue !== null && round2(primaryGrandValue) === gv,
+        source_evidence: {
+          grand_label_position: hit.position,
+          subtotal_label_position: nearestSubtotal?.position ?? null,
+          grand_value: gv,
+          subtotal_value: subVal,
+        },
+      });
+      idx += 1;
+    }
+    if (!variants.some((v) => v.is_primary) && variants.length > 0) {
+      variants[variants.length - 1].is_primary = true;
+    }
+  }
+
+  // Confidence recalibration based on evidence quality:
+  //   HIGH:   labelled grand + (subtotal+qa match OR labelled main) AND within tolerance AND not dual-option
+  //   MEDIUM: labelled grand OR labelled main, minor gaps (no tolerance break, no dual-option)
+  //   LOW:    row_sum_only, outside_tolerance, dual_option unresolved, or no labels at all
+  const hasStrongEvidence =
+    subtotalPlusQaMatch ||
+    (hasLabelledGrand && (hasLabelledMain || (hasLabelledSubtotal && hasLabelledOptional)));
+  const hasBrokenEvidence =
+    withinTolerance === false ||
+    dual_option_suspected ||
+    parse_anomalies.includes("row_sum_only") ||
+    parse_anomalies.includes("no_labelled_totals");
+
+  if (hasBrokenEvidence) {
+    confidence = "LOW";
+  } else if (hasStrongEvidence && grand_total > 0) {
+    confidence = "HIGH";
+  } else if (hasLabelledGrand || hasLabelledMain || hasLabelledSubtotal) {
+    confidence = "MEDIUM";
+  } else {
+    confidence = "LOW";
+  }
 
   // Review gate: raw-row-sum fallback is explicitly untrusted.
   let requires_review = false;
@@ -422,6 +552,9 @@ export function resolveConsensusTotals(
     dual_option_reasons,
     distinct_grand_totals: distinctGrands,
     page_footer_totals_found,
+    parse_anomalies,
+    variants,
+    subtotal_plus_optional_matches_grand: subtotalPlusQaMatch || null,
     notes: [...notes],
     decided_at: new Date().toISOString(),
   };
@@ -441,6 +574,8 @@ export function resolveConsensusTotals(
     requires_review,
     review_reason,
     evidence,
+    parse_anomalies,
+    variants,
   };
 }
 

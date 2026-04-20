@@ -1237,7 +1237,34 @@ Deno.serve(async (req: Request) => {
       document_sub_total: resolution.totals.subTotal,
       optional_scope_total: canonicalOptionalTotal > 0 ? canonicalOptionalTotal : null,
       original_line_items_total: resolution.totals.rowSum,
+      parse_anomalies: consensus.parse_anomalies ?? [],
+      has_variants: (consensus.variants?.length ?? 0) > 0,
     }).eq("id", quoteData.id);
+
+    if (consensus.variants && consensus.variants.length > 0) {
+      try {
+        await supabase.from("quote_variants").delete().eq("quote_id", quoteData.id);
+        const variantRows = consensus.variants.map((v, idx) => ({
+          quote_id: quoteData.id,
+          organisation_id: quoteData.organisation_id,
+          variant_index: v.variant_index ?? idx,
+          variant_label: v.variant_label ?? `Option ${idx + 1}`,
+          main_total: v.main_total ?? 0,
+          optional_total: v.optional_total ?? 0,
+          grand_total: v.grand_total ?? 0,
+          is_primary: v.is_primary ?? (idx === 0),
+          source_evidence: v.source_evidence ?? {},
+        }));
+        const { error: variantError } = await supabase.from("quote_variants").insert(variantRows);
+        if (variantError) {
+          console.error("[quote_variants] insert failed:", variantError.message);
+        } else {
+          console.log(`[quote_variants] persisted ${variantRows.length} variants for quote ${quoteData.id}`);
+        }
+      } catch (e) {
+        console.error("[quote_variants] error:", e instanceof Error ? e.message : String(e));
+      }
+    }
 
     const parseMetadata = {
       parser_strategy: parserStrategy,

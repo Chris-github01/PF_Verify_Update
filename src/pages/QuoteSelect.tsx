@@ -1749,6 +1749,7 @@ export default function QuoteSelect({
 
       {parseModal && (
         <ParseResultsModal
+          key={parseModal.quoteId}
           quoteId={parseModal.quoteId}
           quoteName={parseModal.quoteName}
           fileUrl={parseModal.fileUrl}
