@@ -593,8 +593,39 @@ export function resolveConsensusTotals(
   const hasLabelledMain = labelled.main_total !== null && labelled.main_total > 0;
   const hasLabelledSubtotal = labelled.subtotal !== null && labelled.subtotal > 0;
   const hasLabelledExcluded = labelled.excluded_total !== null && labelled.excluded_total > 0;
-  const hasSummaryTotal = labelled.summary_total !== null && (labelled.summary_total ?? 0) > 0;
+  const hasSummaryTotalRaw = labelled.summary_total !== null && (labelled.summary_total ?? 0) > 0;
   const hasSummaryOptional = labelled.summary_optional_total !== null && (labelled.summary_optional_total ?? 0) > 0;
+
+  // HOTFIX (fix #3): early dual-option detection — must run BEFORE summary-total
+  // trust so summary-page totals cannot be authoritative on dual-option PDFs.
+  const earlyGrandLabels = labelled.labels_found.filter((l) => l.kind === "grand");
+  const earlyDistinctGrands = Array.from(
+    new Set(earlyGrandLabels.map((l) => round2(l.value))),
+  ).filter((v) => v > 0);
+  const earlySubtotalLabels = labelled.labels_found.filter((l) => l.kind === "subtotal");
+  let earlyDualOption = false;
+  if (earlyDistinctGrands.length >= 2 && earlyGrandLabels.length >= 2) {
+    const minPos = Math.min(...earlyGrandLabels.map((l) => l.position));
+    const maxPos = Math.max(...earlyGrandLabels.map((l) => l.position));
+    if (maxPos - minPos > 1000) earlyDualOption = true;
+  }
+  if (hasLabelledGrand) {
+    const lg = labelled.grand_total as number;
+    const preSumOpt = round2(sumBy(rows, "Optional"));
+    const preSumMain = round2(sumBy(rows, "Main"));
+    const mainOverflowRatio = lg > 0 ? preSumMain / lg : 0;
+    const uncoveredOverflow = preSumMain - (lg + preSumOpt);
+    const preTol = computeTotalsTolerance(lg);
+    if (mainOverflowRatio >= 1.4 && uncoveredOverflow > preTol.effective) {
+      earlyDualOption = true;
+    }
+  }
+  const hasSummaryTotal = hasSummaryTotalRaw && !earlyDualOption;
+  if (hasSummaryTotalRaw && earlyDualOption) {
+    notes.push(
+      `summary-page total ignored: dual-option PDF suspected — summary likely combines multiple options`,
+    );
+  }
 
   // Row-sum inflation rejection: when we have an authoritative labelled total
   // (summary page OR labelled grand) and the summed Main rows exceed it by more
@@ -675,16 +706,57 @@ export function resolveConsensusTotals(
       `P0: subtotal(${main_total}) + optional(${optional_total}) = grand(${grand_total}) within tolerance — grand trusted`,
     );
   } else if (rowSumsRejected && hasLabelledGrand) {
-    // Labelled grand total is authoritative when summed rows are inflated —
-    // never fall through to P3 row-sum branch.
+    // HOTFIX (fix #4): when row-sum is rejected as inflated, DO NOT default
+    // main_total to grand_total. Reconstruct from labelled subtotal / optional /
+    // scoped rows so the main figure reflects the true base scope.
     grand_total = round2(labelled.grand_total as number);
-    optional_total = hasLabelledOptional ? round2(labelled.optional_total as number) : 0;
-    main_total = round2(Math.max(0, grand_total - optional_total));
+    const grandHits = labelled.labels_found.filter(
+      (l) => l.kind === "grand" && round2(l.value) === grand_total,
+    );
+    const grandPos = grandHits.length > 0
+      ? Math.max(...grandHits.map((l) => l.position))
+      : null;
+    const nearestSubtotal = grandPos !== null
+      ? [...labelled.labels_found]
+          .filter((l) => l.kind === "subtotal" && l.position < (grandPos as number))
+          .sort((a, b) => b.position - a.position)[0] ?? null
+      : null;
+    let reconstructedMain: number | null = null;
+    let reconstructionSource = "";
+    if (nearestSubtotal && nearestSubtotal.value > 0 && nearestSubtotal.value < grand_total) {
+      reconstructedMain = round2(nearestSubtotal.value);
+      reconstructionSource = `nearest subtotal(${reconstructedMain})`;
+    } else if (hasLabelledMain && (labelled.main_total as number) < grand_total) {
+      reconstructedMain = round2(labelled.main_total as number);
+      reconstructionSource = `labelled main(${reconstructedMain})`;
+    } else if (hasLabelledSubtotal && (labelled.subtotal as number) < grand_total) {
+      reconstructedMain = round2(labelled.subtotal as number);
+      reconstructionSource = `labelled subtotal(${reconstructedMain})`;
+    } else if (hasLabelledOptional && (labelled.optional_total as number) < grand_total) {
+      reconstructedMain = round2(grand_total - (labelled.optional_total as number));
+      reconstructionSource = `grand - labelled optional(${reconstructedMain})`;
+    }
+    if (reconstructedMain !== null && reconstructedMain > 0) {
+      main_total = reconstructedMain;
+      if (hasLabelledOptional && (labelled.optional_total as number) > 0) {
+        optional_total = round2(labelled.optional_total as number);
+      } else {
+        optional_total = round2(Math.max(0, grand_total - main_total));
+      }
+    } else if (earlyDualOption || earlyDistinctGrands.length >= 2) {
+      main_total = 0;
+      optional_total = round2(grand_total);
+      reconstructionSource = "dual-option, no anchor — main=0, optional=grand";
+    } else {
+      main_total = round2(Math.max(0, grand_total - summed_optional));
+      optional_total = summed_optional;
+      reconstructionSource = `single-grand fallback: main=grand(${grand_total}) - summed_optional(${summed_optional})`;
+    }
     excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
     resolution_source = "labelled_grand_total";
-    confidence = "MEDIUM";
+    confidence = "LOW";
     notes.push(
-      `P0-inflation-guard: labelled grand(${grand_total}) trusted over inflated summed_main(${summed_main})`,
+      `P0-inflation-guard: labelled grand(${grand_total}) trusted; main reconstructed via ${reconstructionSource}; summed_main(${summed_main}) rejected as inflated`,
     );
   } else if (hasLabelledMain || hasLabelledSubtotal) {
     // Priority 1: explicit labelled main total
@@ -771,10 +843,8 @@ export function resolveConsensusTotals(
   //           not accounting for the overflow (rows from 2 options collapsed).
   // Signal C: >=2 subtotal labels each ~= a separate grand value (option blocks).
   const dual_option_reasons: string[] = [];
-  const grandLabels = labelled.labels_found.filter((l) => l.kind === "grand");
-  const distinctGrands = Array.from(
-    new Set(grandLabels.map((l) => round2(l.value))),
-  ).filter((v) => v > 0);
+  const grandLabels = earlyGrandLabels;
+  const distinctGrands = earlyDistinctGrands;
   if (distinctGrands.length >= 2) {
     const minPos = Math.min(...grandLabels.map((l) => l.position));
     const maxPos = Math.max(...grandLabels.map((l) => l.position));
@@ -794,7 +864,7 @@ export function resolveConsensusTotals(
       );
     }
   }
-  const subtotalLabels = labelled.labels_found.filter((l) => l.kind === "subtotal");
+  const subtotalLabels = earlySubtotalLabels;
   const distinctSubtotals = Array.from(
     new Set(subtotalLabels.map((l) => round2(l.value))),
   ).filter((v) => v > 0);
@@ -886,6 +956,22 @@ export function resolveConsensusTotals(
     }
   }
 
+  // HOTFIX (fix #2): when dual-option is suspected, final totals MUST come
+  // from a single variant. Never aggregate totals across variant boundaries.
+  if (dual_option_suspected && variants.length > 0) {
+    const primary = variants.find((v) => v.is_primary) ?? variants[variants.length - 1];
+    const priorMain = main_total;
+    const priorOpt = optional_total;
+    const priorGrand = grand_total;
+    main_total = round2(primary.main_total);
+    optional_total = round2(primary.optional_total);
+    grand_total = round2(primary.grand_total);
+    resolution_source = "labelled_grand_total";
+    notes.push(
+      `dual-option isolation: adopted primary variant '${primary.variant_label}' (main=${main_total}, optional=${optional_total}, grand=${grand_total}); prior cross-variant values (main=${priorMain}, optional=${priorOpt}, grand=${priorGrand}) discarded`,
+    );
+  }
+
   // Confidence recalibration based on evidence quality:
   //   HIGH:   labelled grand + (subtotal+qa match OR labelled main) AND within tolerance AND not dual-option
   //   MEDIUM: labelled grand OR labelled main, minor gaps (no tolerance break, no dual-option)
@@ -909,26 +995,43 @@ export function resolveConsensusTotals(
     confidence = "LOW";
   }
 
-  // Review gate: raw-row-sum fallback is explicitly untrusted.
+  // HOTFIX (fix #1): re-check tolerance AFTER all resolution paths (including
+  // dual-option isolation) so any residual mismatch is caught.
+  if (hasLabelledGrand && labelled.grand_total !== null && (labelled.grand_total as number) > 0) {
+    const finalCalc = main_total + optional_total;
+    const lg = labelled.grand_total as number;
+    const finalDelta = Math.abs(finalCalc - lg);
+    const finalTol = computeTotalsTolerance(lg).effective;
+    deltaVsLabelled = round2(finalDelta);
+    withinTolerance = finalDelta <= finalTol;
+    if (!withinTolerance && !notes.some((n) => n.startsWith("final-tolerance:"))) {
+      notes.push(
+        `final-tolerance: main+optional(${round2(finalCalc)}) vs labelled grand(${lg}) delta ${round2(finalDelta)} > ${round2(finalTol)}`,
+      );
+    }
+  }
+
+  // Review gate. HOTFIX (fix #1): tolerance breach is an UNCONDITIONAL review
+  // trigger — must be checked first so it is never masked by other branches.
   let requires_review = false;
   let review_reason: string | null = null;
-  if (resolution_source === "summed_rows_fallback") {
-    requires_review = true;
-    review_reason = "totals resolved via raw row-sum fallback — no labelled totals and no classified rows";
-  } else if (confidence === "LOW") {
-    requires_review = true;
-    review_reason = "totals confidence LOW";
-  } else if (!(grand_total > 0)) {
-    requires_review = true;
-    review_reason = "zero grand total";
-  } else if (withinTolerance === false) {
-    // Priority rule 6: if uncertain -> review_required.
+  if (withinTolerance === false) {
     requires_review = true;
     review_reason = `labelled grand vs main+optional outside tolerance (delta $${deltaVsLabelled})`;
     confidence = confidence === "HIGH" ? "MEDIUM" : confidence;
+  }
+  if (resolution_source === "summed_rows_fallback") {
+    requires_review = true;
+    review_reason = review_reason ?? "totals resolved via raw row-sum fallback — no labelled totals and no classified rows";
+  } else if (confidence === "LOW") {
+    requires_review = true;
+    review_reason = review_reason ?? "totals confidence LOW";
+  } else if (!(grand_total > 0)) {
+    requires_review = true;
+    review_reason = review_reason ?? "zero grand total";
   } else if (dual_option_suspected) {
     requires_review = true;
-    review_reason = `dual-option quote suspected — ${dual_option_reasons[0]}`;
+    review_reason = review_reason ?? `dual-option quote suspected — ${dual_option_reasons[0] ?? "multiple option blocks"}`;
     confidence = confidence === "HIGH" ? "MEDIUM" : confidence;
   } else if (
     !hasLabelledGrand &&
@@ -936,10 +1039,12 @@ export function resolveConsensusTotals(
     !hasLabelledSubtotal &&
     summed_main + summed_optional > 0
   ) {
-    // No labelled evidence whatsoever — uncertain by definition.
     requires_review = true;
-    review_reason = "no labelled totals found in document — totals inferred from row sums only";
+    review_reason = review_reason ?? "no labelled totals found in document — totals inferred from row sums only";
     confidence = "LOW";
+  }
+  if (withinTolerance === false && !parse_anomalies.includes("outside_tolerance")) {
+    parse_anomalies.push("outside_tolerance");
   }
 
   const evidence: TotalsEvidenceSnapshot = {
