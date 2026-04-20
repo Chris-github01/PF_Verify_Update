@@ -8,6 +8,7 @@ import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
 import { runThreePassParser } from "../_shared/threePassParser.ts";
 import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
 import { arbitrate } from "../_shared/arbitration/arbitrationEngine.ts";
+import { runValueReview, type CandidateItem, type ValueReviewResult } from "../_shared/arbitration/gptValueReviewer.ts";
 
 // =============================================================================
 // PROCESS PARSING JOB — DETERMINISTIC PRE-PASS + LLM EXTRACTION
@@ -841,9 +842,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const { resolution } = { resolution: finalResolution };
-    const finalParserUsed = resolution.parserUsed;
-    const hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
-    const hasTotal = resolution.totals.grandTotal > 0;
+    let finalParserUsed = resolution.parserUsed;
+    let hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
+    let hasTotal = resolution.totals.grandTotal > 0;
 
     // =========================================================================
     // HYBRID ARBITRATION ENGINE — universal, company-agnostic
@@ -887,6 +888,124 @@ Deno.serve(async (req: Request) => {
       resolution.totals.grandTotal = arbitration.resolved_total;
       resolution.totals.source = arbitration.resolved_total_label ?? "row_sum";
     }
+
+    // =========================================================================
+    // GPT-4o-mini VALUE REVIEW — validator/corrector/arbitrator of VALUES
+    // Not metadata tagging. Decides qty/rate/total/scope and final totals.
+    // =========================================================================
+    let gptValueReview: ValueReviewResult = {
+      used: false,
+      trigger_reasons: [],
+      fallback_to_deterministic: false,
+      mark_for_review: false,
+    };
+    let gptQuoteNeedsManualReview = false;
+
+    const deterministicCandidateItems: CandidateItem[] = arbitration.items.map((it) => ({
+      description: it.description,
+      qty: it.qty,
+      unit: it.unit ?? "",
+      rate: it.rate,
+      total: it.total,
+      scope: it.scope === "optional" ? "Optional" : it.scope === "excluded" ? "Excluded" : "Main",
+      line_number: it.line_number ?? null,
+      block: it.block ?? null,
+      confidence: it.confidence ?? null,
+    }));
+
+    const arithmeticMismatchCount = deterministicCandidateItems.reduce((acc, it) => {
+      if (it.qty !== null && it.rate !== null && it.total !== null && it.total > 0) {
+        const tol = Math.max(it.total * 0.02, 0.5);
+        if (Math.abs(it.qty * it.rate - it.total) > tol) return acc + 1;
+      }
+      return acc;
+    }, 0);
+
+    try {
+      gptValueReview = await runValueReview(
+        {
+          documentText: rawText,
+          candidateItems: deterministicCandidateItems,
+          candidateTotals: {
+            grand_total: resolution.totals.grandTotal > 0 ? resolution.totals.grandTotal : null,
+            subtotal: resolution.totals.subTotal ?? null,
+            optional_total: resolution.totals.optionalTotal > 0 ? resolution.totals.optionalTotal : null,
+            row_sum: resolution.totals.rowSum ?? null,
+            source: resolution.totals.source ?? null,
+            labelled_total_label: arbitration.resolved_total_label ?? null,
+          },
+          warnings: arbitration.warnings,
+          candidateConfidence: arbitration.confidence.overall_confidence,
+          duplicatesRemovedCount: Math.max(0, allFlatItems.length - arbitration.items.length),
+          arithmeticMismatchCount,
+        },
+        { openAiKey: Deno.env.get("OPENAI_API_KEY") ?? "" },
+      );
+    } catch (e) {
+      console.error("[GPT Value Review] unexpected error:", e);
+      gptValueReview = {
+        used: false,
+        trigger_reasons: [],
+        fallback_to_deterministic: false,
+        mark_for_review: false,
+        error: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300),
+      };
+    }
+
+    if (gptValueReview.used && gptValueReview.parsed && !gptValueReview.fallback_to_deterministic) {
+      const gpt = gptValueReview.parsed;
+      console.log(
+        `[GPT Value Review] applied: items=${gpt.items.length} conf=${gpt.document_confidence.toFixed(2)} triggers=[${gptValueReview.trigger_reasons.join("|")}]`,
+      );
+
+      const correctedBase = gpt.items.filter((i) => i.scope === "Main");
+      const correctedOptional = gpt.items.filter((i) => i.scope === "Optional");
+      const correctedExcluded = gpt.items.filter((i) => i.scope === "Excluded");
+
+      const toResolutionItem = (it: typeof gpt.items[number], idx: number) => ({
+        lineId: `gpt-${idx + 1}`,
+        description: it.description,
+        qty: it.qty ?? 1,
+        unit: it.unit || "",
+        rate: it.rate ?? 0,
+        total: it.total ?? 0,
+        section: null,
+        scopeCategory: it.scope === "Optional" ? "optional" : it.scope === "Excluded" ? "excluded" : "base",
+        source: "gpt_value_review(gpt-4o-mini)",
+        confidence: it.confidence,
+      }) as unknown as ParsedLineItem;
+
+      resolution.baseItems = correctedBase.map(toResolutionItem);
+      resolution.optionalItems = correctedOptional.map(toResolutionItem);
+      resolution.excludedItems = correctedExcluded.map(toResolutionItem);
+
+      const ft = gpt.final_totals;
+      if (ft.grand_total !== null && ft.grand_total > 0) {
+        resolution.totals.grandTotal = ft.grand_total;
+        resolution.totals.source = "gpt_value_review";
+      }
+      if (ft.optional_total !== null && ft.optional_total > 0) {
+        resolution.totals.optionalTotal = ft.optional_total;
+      }
+      if (ft.main_total !== null && ft.main_total > 0) {
+        resolution.totals.rowSum = ft.main_total;
+      }
+
+      resolution.parserUsed = `${resolution.parserUsed}+gpt_value_review`;
+
+      if (gptValueReview.mark_for_review || gpt.document_confidence < 0.65) {
+        gptQuoteNeedsManualReview = true;
+      }
+    } else if (gptValueReview.used && gptValueReview.fallback_to_deterministic) {
+      console.log(
+        `[GPT Value Review] fallback to deterministic: ${gptValueReview.error ?? "output worse than deterministic"}`,
+      );
+      if (gptValueReview.mark_for_review) gptQuoteNeedsManualReview = true;
+    }
+
+    finalParserUsed = resolution.parserUsed;
+    hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
+    hasTotal = resolution.totals.grandTotal > 0;
 
     const traceReport = {
       build_version: BUILD_VERSION,
@@ -1035,6 +1154,20 @@ Deno.serve(async (req: Request) => {
         confidence: arbitration.confidence,
         warnings: arbitration.warnings.slice(0, 20),
       },
+      gpt_value_review: {
+        used: gptValueReview.used,
+        skipped_reason: gptValueReview.skipped_reason ?? null,
+        trigger_reasons: gptValueReview.trigger_reasons,
+        fallback_to_deterministic: gptValueReview.fallback_to_deterministic,
+        mark_for_review: gptValueReview.mark_for_review,
+        document_confidence: gptValueReview.parsed?.document_confidence ?? null,
+        items_returned: gptValueReview.parsed?.items.length ?? 0,
+        final_totals: gptValueReview.parsed?.final_totals ?? null,
+        elapsed_ms: gptValueReview.elapsed_ms ?? null,
+        cost_estimate_usd: gptValueReview.cost_estimate_usd ?? null,
+        error: gptValueReview.error ?? null,
+      },
+      needs_manual_review: gptQuoteNeedsManualReview,
       llm_chunks_started: llmChunksStarted,
       llm_chunks_completed: llmChunksCompleted,
       llm_confidence: llmConfidence,
