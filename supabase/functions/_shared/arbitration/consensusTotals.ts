@@ -26,6 +26,18 @@ export interface ScopedRow {
   scope?: ConsensusScope | "main" | "optional" | "excluded" | null;
 }
 
+export interface GrandTotalCandidate {
+  label: string;
+  value: number;
+  position: number;
+  page: number;
+  within_summary_block: boolean;
+  score: number;
+  reasons: string[];
+  deprioritised: boolean;
+  context_snippet: string;
+}
+
 export interface LabelledTotals {
   grand_total: number | null;
   main_total: number | null;
@@ -35,6 +47,8 @@ export interface LabelledTotals {
   summary_total: number | null;
   summary_total_position: number | null;
   summary_optional_total: number | null;
+  grand_candidates: GrandTotalCandidate[];
+  summary_block_position: number | null;
   labels_found: Array<{ label: string; value: number; kind: "grand" | "main" | "optional" | "excluded" | "subtotal" | "summary_grand" | "summary_optional"; position: number }>;
 }
 
@@ -84,6 +98,9 @@ export interface TotalsEvidenceSnapshot {
   subtotal_plus_optional_matches_grand: boolean | null;
   summary_total_detected: boolean;
   summary_total_value: number | null;
+  summary_block_position: number | null;
+  grand_total_candidates: GrandTotalCandidate[];
+  chosen_grand_candidate_position: number | null;
   row_sum_rejected: boolean;
   authoritative_grand_source: "summary" | "labelled_grand" | "labelled_main" | "summed" | "none";
   notes: string[];
@@ -181,6 +198,107 @@ const LABEL_GROUPS: Array<{ kind: LabelledTotals["labels_found"][number]["kind"]
   },
 ];
 
+/** Approximate page number from a character offset using form-feed or explicit page markers. */
+function estimatePageNumber(rawText: string, position: number): number {
+  const before = rawText.slice(0, position);
+  const formFeeds = (before.match(/\f/g) ?? []).length;
+  if (formFeeds > 0) return formFeeds + 1;
+  const pageMatches = before.match(/\bPage\s+(\d+)\s+of\s+\d+\b/gi);
+  if (pageMatches && pageMatches.length > 0) {
+    const last = pageMatches[pageMatches.length - 1];
+    const n = parseInt(last.replace(/\D+/g, ""), 10);
+    if (Number.isFinite(n)) return n;
+  }
+  // Fallback: estimate ~3500 chars per page.
+  return Math.floor(position / 3500) + 1;
+}
+
+/**
+ * Score a grand-total candidate using surrounding semantic context.
+ * Higher is better. Candidates within a "QUOTE SUMMARY" block and/or on page 1
+ * receive a boost; candidates near Optional/Package/Breakdown/Section labels are
+ * deprioritised.
+ */
+function scoreGrandCandidate(
+  rawText: string,
+  match: { label: string; value: number; position: number },
+  summaryBlockStart: number | null,
+  summaryBlockEnd: number | null,
+): { score: number; reasons: string[]; withinSummary: boolean; page: number; snippet: string; deprioritised: boolean } {
+  const reasons: string[] = [];
+  let score = 0;
+
+  const ctxStart = Math.max(0, match.position - 220);
+  const ctxEnd = Math.min(rawText.length, match.position + (match.label?.length ?? 0) + 120);
+  const snippet = rawText.slice(ctxStart, ctxEnd).replace(/\s+/g, " ").trim();
+  const pre = rawText.slice(ctxStart, match.position).toLowerCase();
+  const post = rawText.slice(match.position, ctxEnd).toLowerCase();
+  const ctx = `${pre} ${post}`;
+
+  const withinSummary =
+    summaryBlockStart !== null &&
+    summaryBlockEnd !== null &&
+    match.position >= summaryBlockStart &&
+    match.position <= summaryBlockEnd;
+  if (withinSummary) {
+    score += 4;
+    reasons.push("inside QUOTE SUMMARY block (+4)");
+  }
+
+  const page = estimatePageNumber(rawText, match.position);
+  if (page === 1) {
+    score += 2;
+    reasons.push("page 1 (+2)");
+  } else if (page === 2) {
+    score += 1;
+    reasons.push("page 2 (+1)");
+  }
+
+  const lbl = (match.label ?? "").toLowerCase();
+  if (/total\s*\(?\s*excl?\.?|total\s*\(ex(?:cl)?|total\s*excluding\s*gst/.test(lbl)) {
+    score += 3;
+    reasons.push("label 'Total (excl GST)' (+3)");
+  }
+  if (/\bgrand\s*total\b/.test(lbl)) {
+    score += 2;
+    reasons.push("label 'Grand Total' (+2)");
+  }
+  if (/\bcontract\s*sum\b|\bquote\s*total\b/.test(lbl)) {
+    score += 2;
+    reasons.push("label 'Contract Sum'/'Quote Total' (+2)");
+  }
+
+  // Deprioritisation terms — when these appear within ~200 chars before the
+  // label, the total is almost certainly a sectional / optional / package
+  // figure rather than the authoritative contract sum.
+  const negatives: Array<{ re: RegExp; penalty: number; reason: string }> = [
+    { re: /\boptional\b/, penalty: 4, reason: "near 'Optional' (-4)" },
+    { re: /\badd\s*to\s*scope\b/, penalty: 4, reason: "near 'Add to Scope' (-4)" },
+    { re: /\badd\s*alternates?\b/, penalty: 4, reason: "near 'Add Alternate' (-4)" },
+    { re: /\bpackage\b/, penalty: 3, reason: "near 'Package' (-3)" },
+    { re: /\bbreakdown\b/, penalty: 3, reason: "near 'Breakdown' (-3)" },
+    { re: /\bsection\s*\w*\s*total\b/, penalty: 3, reason: "near 'Section Total' (-3)" },
+    { re: /\bsub\s*-?\s*total\b/, penalty: 2, reason: "near 'Subtotal' (-2)" },
+    { re: /\bexcluded?\b/, penalty: 2, reason: "near 'Excluded' (-2)" },
+    { re: /\bprovisional\s*sum/, penalty: 3, reason: "near 'Provisional Sum' (-3)" },
+    { re: /\balternative\b/, penalty: 2, reason: "near 'Alternative' (-2)" },
+  ];
+  let deprioritised = false;
+  for (const n of negatives) {
+    if (n.re.test(pre) || n.re.test(post.slice(0, 40))) {
+      score -= n.penalty;
+      reasons.push(n.reason);
+      deprioritised = true;
+    }
+  }
+
+  // Tiny-value heuristic: grand totals usually dwarf line items; penalise
+  // candidates with suspiciously tiny values when larger peers exist (handled
+  // by caller via comparison). Not applied here.
+
+  return { score, reasons, withinSummary, page, snippet, deprioritised };
+}
+
 export function parseLabelledTotals(rawText: string): LabelledTotals {
   const out: LabelledTotals = {
     grand_total: null,
@@ -191,48 +309,113 @@ export function parseLabelledTotals(rawText: string): LabelledTotals {
     summary_total: null,
     summary_total_position: null,
     summary_optional_total: null,
+    grand_candidates: [],
+    summary_block_position: null,
     labels_found: [],
   };
   if (!rawText) return out;
 
-  // Detect a "QUOTE SUMMARY" / "PRICING SUMMARY" section and capture the
-  // authoritative total within that block. Summary pages carry the
-  // authoritative contract figure whereas schedule pages carry sectional
-  // subtotals that MUST NOT be summed into a grand total.
+  // Detect a "QUOTE SUMMARY" / "PRICING SUMMARY" section (page-1 trust).
   const summaryHeaderRegex = /\b(quote\s*summary|pricing\s*summary|summary\s*of\s*pricing|tender\s*summary|proposal\s*summary)\b/i;
   const summaryMatch = summaryHeaderRegex.exec(rawText);
-  if (summaryMatch) {
-    const summaryStart = summaryMatch.index;
-    const windowText = rawText.slice(summaryStart, summaryStart + 4000);
-    const summaryGrandPatterns: RegExp[] = [
-      /\b(total\s*(?:\(ex|excl\.?|excluding)\s*gst\)?)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
-      /\b(grand\s*total)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
-      /\b(quote\s*total)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
-      /\b(contract\s*sum)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
-      /\b(total\s*(?:price|amount|contract|tender))\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
-    ];
-    let bestSummaryTotal: { value: number; position: number } | null = null;
-    for (const p of summaryGrandPatterns) {
-      const m = p.exec(windowText);
-      if (!m) continue;
-      const v = parseCurrency(m[2] ?? "");
-      if (v === null || v <= 0) continue;
-      const absPos = summaryStart + m.index;
-      if (!bestSummaryTotal || absPos < bestSummaryTotal.position) {
-        bestSummaryTotal = { value: v, position: absPos };
-      }
+  const summaryBlockStart: number | null = summaryMatch ? summaryMatch.index : null;
+  const summaryBlockEnd: number | null =
+    summaryBlockStart !== null ? Math.min(rawText.length, summaryBlockStart + 4500) : null;
+  out.summary_block_position = summaryBlockStart;
+
+  // Enumerate ALL grand-like label occurrences across the whole document, then
+  // rank them by semantic context. This replaces the previous "first hit inside
+  // summary block" heuristic which could latch onto a package/breakdown total
+  // that happened to appear before the authoritative figure.
+  const grandLikePatterns: RegExp[] = [
+    /\b(total\s*\(\s*excl?\.?\s*gst\s*\))[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
+    /\b(total\s*excluding\s*gst)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
+    /\b(grand\s*total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
+    /\b(quote\s*total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
+    /\b(contract\s*sum)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
+    /\b(total\s*(?:price|amount|contract|tender))[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
+    /\b(tender\s*total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
+    /\b(fixed\s*lump\s*sum)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
+  ];
+
+  const rawCandidates: Array<{ label: string; value: number; position: number }> = [];
+  const seenPositions = new Set<string>();
+  for (const p of grandLikePatterns) {
+    const re = new RegExp(p.source, p.flags.includes("g") ? p.flags : p.flags + "g");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(rawText)) !== null) {
+      const value = parseCurrency(m[2] ?? "");
+      if (value === null || value <= 0) continue;
+      const key = `${m.index}:${value}`;
+      if (seenPositions.has(key)) continue;
+      seenPositions.add(key);
+      rawCandidates.push({ label: m[1], value, position: m.index });
     }
-    if (bestSummaryTotal) {
-      out.summary_total = bestSummaryTotal.value;
-      out.summary_total_position = bestSummaryTotal.position;
-      out.labels_found.push({
-        label: "summary_total",
-        value: bestSummaryTotal.value,
-        kind: "summary_grand",
-        position: bestSummaryTotal.position,
-      });
+  }
+
+  const scored: GrandTotalCandidate[] = rawCandidates.map((c) => {
+    const s = scoreGrandCandidate(rawText, c, summaryBlockStart, summaryBlockEnd);
+    return {
+      label: c.label,
+      value: c.value,
+      position: c.position,
+      page: s.page,
+      within_summary_block: s.withinSummary,
+      score: s.score,
+      reasons: s.reasons,
+      deprioritised: s.deprioritised,
+      context_snippet: s.snippet,
+    };
+  });
+
+  // Sort by score desc, then within-summary preference, then higher value
+  // (authoritative contract sums are usually the largest figure), then earlier
+  // position as final tiebreak (page-1 bias).
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (a.within_summary_block !== b.within_summary_block) {
+      return a.within_summary_block ? -1 : 1;
     }
-    // Optional total within the same summary block (separate "add to scope" figure).
+    if (b.value !== a.value) return b.value - a.value;
+    return a.position - b.position;
+  });
+
+  out.grand_candidates = scored;
+
+  // Select the highest-confidence summary total. It must:
+  //   - have a positive score, OR
+  //   - be inside the QUOTE SUMMARY block (even with small score)
+  //   - not be deprioritised unless it's the only candidate
+  let chosen: GrandTotalCandidate | null = null;
+  for (const c of scored) {
+    if (c.deprioritised) continue;
+    if (c.within_summary_block || c.score >= 3) {
+      chosen = c;
+      break;
+    }
+  }
+  if (!chosen) {
+    // Take the top-scored non-negative candidate if any.
+    chosen = scored.find((c) => c.score > 0 && !c.deprioritised) ?? null;
+  }
+  if (!chosen && scored.length > 0) {
+    chosen = scored[0];
+  }
+
+  if (chosen) {
+    out.summary_total = chosen.value;
+    out.summary_total_position = chosen.position;
+    out.labels_found.push({
+      label: `summary_total:${chosen.label}`,
+      value: chosen.value,
+      kind: "summary_grand",
+      position: chosen.position,
+    });
+  }
+
+  // Summary-block optional total (separate "add to scope" figure).
+  if (summaryBlockStart !== null && summaryBlockEnd !== null) {
+    const windowText = rawText.slice(summaryBlockStart, summaryBlockEnd);
     const summaryOptionalPatterns: RegExp[] = [
       /\b(optional\s*(?:add\s*to\s*scope|extras?|items?|scope)?\s*total)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
       /\b(add\s*to\s*scope(?:\s*total)?)\b[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/i,
@@ -243,12 +426,15 @@ export function parseLabelledTotals(rawText: string): LabelledTotals {
       if (!m) continue;
       const v = parseCurrency(m[2] ?? "");
       if (v === null || v <= 0) continue;
+      // Do not adopt the optional total if it equals the chosen summary total
+      // (avoids double-counting when the same figure is matched by both).
+      if (chosen && Math.abs(v - chosen.value) < 0.01) continue;
       out.summary_optional_total = v;
       out.labels_found.push({
         label: "summary_optional",
         value: v,
         kind: "summary_optional",
-        position: summaryStart + m.index,
+        position: summaryBlockStart + m.index,
       });
       break;
     }
@@ -700,6 +886,9 @@ export function resolveConsensusTotals(
     subtotal_plus_optional_matches_grand: subtotalPlusQaMatch || null,
     summary_total_detected: hasSummaryTotal,
     summary_total_value: hasSummaryTotal ? (labelled.summary_total as number) : null,
+    summary_block_position: labelled.summary_block_position,
+    grand_total_candidates: labelled.grand_candidates,
+    chosen_grand_candidate_position: labelled.summary_total_position,
     row_sum_rejected: rowSumsRejected,
     authoritative_grand_source: hasSummaryTotal
       ? "summary"
