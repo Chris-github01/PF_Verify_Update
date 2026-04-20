@@ -14,6 +14,7 @@ import { matchCarpentryLineToSystem } from '../lib/mapping/carpentrySystemMatche
 import WorkflowNav from '../components/WorkflowNav';
 import { needsQuantity } from '../lib/quoteUtils';
 import { resolveDisplayTotal, isOptionalRow, isSuspiciousQtyRate } from '../lib/quoteTotals';
+import { buildConsensusTotals, filterItemsForDisplay } from '../lib/quoteTotals/consensusTotals';
 import TotalsConfidenceBadge from '../components/TotalsConfidenceBadge';
 import { getStatusColor, getStatusLabel, type QuoteStatus } from '../lib/quoteProcessing/quotePipeline';
 import { QuoteRevisionsHub } from './QuoteRevisionsHub';
@@ -396,101 +397,12 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
     if (!error && data) {
       console.log('loadItems: Loaded', data.length, 'items');
 
-      // CRITICAL: Remove lump sum items if we have itemized items
-      const lumpSumItems = data.filter(item => {
-        const unit = String(item.unit || '').toUpperCase().trim();
-        return ['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM'].includes(unit);
-      });
-
-      const itemizedItems = data.filter(item => {
-        const unit = String(item.unit || '').toUpperCase().trim();
-        return !['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM'].includes(unit);
-      });
-
-      console.log('loadItems: Item breakdown -', lumpSumItems.length, 'LS items,', itemizedItems.length, 'itemized items');
-
-      // HARD RULE: If we have ANY itemized items, REMOVE ALL lump sum items
-      let filteredData = data;
-      if (itemizedItems.length > 0) {
-        console.log('loadItems: FILTERING - Removing ALL', lumpSumItems.length, 'lump sum items, keeping', itemizedItems.length, 'itemized items');
-        filteredData = itemizedItems;
-      } else {
-        console.log('loadItems: Only LS items found - keeping all', data.length, 'items');
-      }
-
-      // CRITICAL: Remove items marked as "Optional" to avoid double-counting
-      const optionalItems = filteredData.filter(item => {
-        const desc = String(item.description || '').toLowerCase();
-        return desc.includes('optional');
-      });
-
-      const nonOptionalItems = filteredData.filter(item => {
-        const desc = String(item.description || '').toLowerCase();
-        return !desc.includes('optional');
-      });
-
-      console.log('loadItems: Optional filtering -', optionalItems.length, 'optional items,', nonOptionalItems.length, 'base items');
-
-      // If we have both optional and non-optional items, keep only non-optional
-      if (nonOptionalItems.length > 0 && optionalItems.length > 0) {
-        console.log('loadItems: FILTERING - Removing', optionalItems.length, 'optional items to avoid double-counting');
-        filteredData = nonOptionalItems;
-      }
-
-      if (filteredData.length > 0) {
-        console.log('loadItems: First item sample:', {
-          id: filteredData[0].id,
-          size: filteredData[0].size,
-          frr: filteredData[0].frr,
-          service: filteredData[0].service,
-          confidence: filteredData[0].confidence,
-          system_label: filteredData[0].system_label
-        });
-      }
-      setItems(filteredData);
-
-      // Recalculate quote total based on filtered items AND delete unwanted items from database
-      if (filteredData.length !== data.length) {
-        const recalculatedTotal = filteredData.reduce((sum, item) => {
-          return sum + (item.total_price || 0);
-        }, 0);
-
-        console.log('loadItems: Recalculated total after filtering:', recalculatedTotal);
-
-        // DELETE lump sum AND optional items from database permanently
-        const itemsToDelete = [...lumpSumItems, ...optionalItems];
-        const uniqueIdsToDelete = [...new Set(itemsToDelete.map(item => item.id))];
-
-        if (uniqueIdsToDelete.length > 0) {
-          const { error: deleteError } = await supabase
-            .from('quote_items')
-            .delete()
-            .in('id', uniqueIdsToDelete);
-
-          if (deleteError) {
-            console.error('loadItems: Error deleting filtered items:', deleteError);
-          } else {
-            console.log('loadItems: DELETED', uniqueIdsToDelete.length, 'items from database (LS + Optional)');
-          }
-        }
-
-        // Update the quote in the database with the correct total
-        const { error: updateError } = await supabase
-          .from('quotes')
-          .update({
-            total_amount: recalculatedTotal,
-            items_count: filteredData.length
-          })
-          .eq('id', quoteId);
-
-        if (updateError) {
-          console.error('loadItems: Error updating quote total:', updateError);
-        } else {
-          console.log('loadItems: Updated quote - items:', data.length, '→', filteredData.length, ', total: $' + recalculatedTotal.toLocaleString());
-          // Reload quotes to reflect updated total
-          loadQuotes();
-        }
-      }
+      // NON-DESTRUCTIVE display filter only.
+      // We never delete rows and never rewrite quotes.total_amount from the client.
+      // Canonical totals come from the parser consensus (edge function) and are
+      // presented via buildConsensusTotals. Rows remain in the database for audit.
+      const displayItems = filterItemsForDisplay(data) as QuoteItem[];
+      setItems(displayItems);
     } else if (error) {
       console.error('loadItems: Error loading items:', error);
     }
@@ -1307,10 +1219,25 @@ export default function ReviewClean({ projectId, onNavigateBack, onNavigateNext,
                         className="flex items-center justify-between cursor-pointer"
                         onClick={() => setSelectedQuote(quote.id)}
                       >
-                        <span className="text-base font-bold text-slate-100">
-                          ${resolveDisplayTotal(quote as any, quote.main_scope_total ?? undefined).total.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                        <TotalsConfidenceBadge resolution={resolveDisplayTotal(quote as any, quote.main_scope_total ?? undefined)} />
+                        {(() => {
+                          const consensus = buildConsensusTotals(quote as any, []);
+                          const resolution = resolveDisplayTotal(quote as any, quote.main_scope_total ?? undefined);
+                          return (
+                            <>
+                              <div className="flex flex-col">
+                                <span className="text-base font-bold text-slate-100">
+                                  ${consensus.grand_total.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                {consensus.requires_review && (
+                                  <span className="text-[10px] font-medium text-amber-300 uppercase tracking-wide">
+                                    Review Required
+                                  </span>
+                                )}
+                              </div>
+                              <TotalsConfidenceBadge resolution={resolution} />
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>

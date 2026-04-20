@@ -1290,21 +1290,40 @@ Deno.serve(async (req: Request) => {
       },
     };
 
+    // Parser trust gate: a zero grand_total is NEVER "completed".
+    // Flag the job as review_required so the frontend surfaces it for human review.
+    const requiresReview = !(canonicalTotal > 0) || resolutionConfidence === "LOW";
+    const finalStatus = requiresReview ? "review_required" : "completed";
+    const finalStage = requiresReview ? "Review Required — Totals Need Verification" : "Completed";
+    const reviewReason = !(canonicalTotal > 0)
+      ? "Parser produced zero grand total"
+      : resolutionConfidence === "LOW"
+        ? "Parser confidence LOW"
+        : null;
+
+    if (requiresReview) {
+      await supabase.from("quotes").update({
+        requires_review: true,
+        resolution_source: "needs_review",
+        resolution_confidence: "LOW",
+      }).eq("id", quoteData.id);
+    }
+
     await supabase.from("parsing_jobs").update({
-      status: "completed",
+      status: finalStatus,
       progress: 100,
-      current_stage: "Completed",
+      current_stage: finalStage,
       quote_id: quoteData.id,
-      result_data: parseMetadata,
-      metadata: parseMetadata,
+      result_data: { ...parseMetadata, requires_review: requiresReview, review_reason: reviewReason },
+      metadata: { ...parseMetadata, requires_review: requiresReview, review_reason: reviewReason },
       llm_attempted: llmAttempted,
       llm_success: llmSuccess,
       llm_fail_reason: llmFailReason,
       llm_chunks_completed: llmChunksCompleted,
       final_parser_used: finalParserUsed,
       trace_json: traceReport,
-      last_error: null,
-      last_error_code: null,
+      last_error: reviewReason,
+      last_error_code: requiresReview ? "review_required" : null,
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", jobId);
