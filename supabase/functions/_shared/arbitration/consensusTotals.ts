@@ -35,7 +35,82 @@ export interface GrandTotalCandidate {
   score: number;
   reasons: string[];
   deprioritised: boolean;
+  banned: boolean;
+  ban_reason: string | null;
+  allow_category: string | null;
   context_snippet: string;
+}
+
+/**
+ * Hard ban list: these label fragments describe sectional / package /
+ * schedule figures and MUST NEVER be treated as the authoritative contract
+ * total, regardless of surrounding context.
+ */
+const GRAND_TOTAL_BAN_PATTERNS: Array<{ re: RegExp; reason: string }> = [
+  { re: /\bworks\s+total\b/i, reason: "banned label: works total" },
+  { re: /\bsection\s+total\b/i, reason: "banned label: section total" },
+  { re: /\bpackage\s+total\b/i, reason: "banned label: package total" },
+  { re: /\bbase\s+rate\b/i, reason: "banned label: base rate" },
+  { re: /\bschedule\s+total\b/i, reason: "banned label: schedule total" },
+  { re: /\btrade\s+total\b/i, reason: "banned label: trade total" },
+  { re: /\bsub\s*-?\s*total\b/i, reason: "banned label: subtotal" },
+  { re: /\bitem\s+total\b/i, reason: "banned label: item total" },
+  { re: /\bgroup\s+total\b/i, reason: "banned label: group total" },
+  { re: /\bstage\s+total\b/i, reason: "banned label: stage total" },
+  { re: /\bbuilding\s+total\b/i, reason: "banned label: building total" },
+  { re: /\bfloor\s+total\b/i, reason: "banned label: floor total" },
+  { re: /\blevel\s+total\b/i, reason: "banned label: level total" },
+  { re: /\barea\s+total\b/i, reason: "banned label: area total" },
+  { re: /\bzone\s+total\b/i, reason: "banned label: zone total" },
+  { re: /\bpenetration\s+(?:works\s+)?total\b/i, reason: "banned label: penetration works total" },
+  { re: /\bfire\s+(?:rating|stopping|collar|door|damper)[^\n]{0,40}total\b/i, reason: "banned label: fire-rating sectional total" },
+];
+
+/**
+ * Allow list: only labels matching one of these precise categories may be
+ * treated as a grand-total candidate. Each entry defines a capture regex and
+ * a category name recorded for audit traceability.
+ */
+const GRAND_TOTAL_ALLOW_CATEGORIES: Array<{ category: string; re: RegExp }> = [
+  { category: "total_excl_gst", re: /\b(total\s*\(\s*excl?\.?\s*gst\s*\))[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi },
+  { category: "total_excl_gst", re: /\b(total\s+excluding\s+gst)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi },
+  { category: "total_excl_gst", re: /\b(total\s+ex\.?\s+gst)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi },
+  { category: "grand_total", re: /\b(grand\s+total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi },
+  { category: "quote_total", re: /\b(quote\s+total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi },
+  { category: "contract_sum", re: /\b(contract\s+sum)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi },
+  { category: "tender_total", re: /\b(tender\s+total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi },
+  { category: "lump_sum", re: /\b(?:fixed\s+)?(lump\s+sum)(?:\s+(?:total|price|amount))?[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi },
+];
+
+/** Pull the ~120 characters of context immediately preceding a match to look
+ * for ban-list qualifiers (e.g. "Penetration Works " before "Total"). */
+function getPrecedingContext(rawText: string, position: number, window = 120): string {
+  return rawText.slice(Math.max(0, position - window), position);
+}
+
+/** Classify a raw label match against the ban / allow lists. */
+function classifyGrandLabel(
+  rawText: string,
+  label: string,
+  position: number,
+  category: string,
+): { banned: boolean; reason: string | null } {
+  const preceding = getPrecedingContext(rawText, position);
+  const labelPlusPre = `${preceding} ${label}`;
+  for (const b of GRAND_TOTAL_BAN_PATTERNS) {
+    if (b.re.test(label) || b.re.test(labelPlusPre)) {
+      return { banned: true, reason: b.reason };
+    }
+  }
+  // Extra guard for lump_sum: must not sit immediately after a sectional word
+  // (e.g. "Package Lump Sum" should be rejected — already covered above for
+  // "Package Total" but lump-sum-specific variants are handled here).
+  if (category === "lump_sum") {
+    if (/\b(package|section|works|schedule|trade|stage|area|zone|floor|level|building|item|group|option(?:al)?)\s+(?:lump\s+sum|price)\b/i.test(labelPlusPre)) {
+      return { banned: true, reason: "banned label: sectional lump sum" };
+    }
+  }
+  return { banned: false, reason: null };
 }
 
 export interface LabelledTotals {
@@ -327,20 +402,10 @@ export function parseLabelledTotals(rawText: string): LabelledTotals {
   // rank them by semantic context. This replaces the previous "first hit inside
   // summary block" heuristic which could latch onto a package/breakdown total
   // that happened to appear before the authoritative figure.
-  const grandLikePatterns: RegExp[] = [
-    /\b(total\s*\(\s*excl?\.?\s*gst\s*\))[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
-    /\b(total\s*excluding\s*gst)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
-    /\b(grand\s*total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
-    /\b(quote\s*total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
-    /\b(contract\s*sum)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
-    /\b(total\s*(?:price|amount|contract|tender))[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
-    /\b(tender\s*total)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
-    /\b(fixed\s*lump\s*sum)[^\n$]*?\$?\s*([0-9][\d,]*(?:\.\d+)?)/gi,
-  ];
-
-  const rawCandidates: Array<{ label: string; value: number; position: number }> = [];
+  const rawCandidates: Array<{ label: string; value: number; position: number; category: string }> = [];
   const seenPositions = new Set<string>();
-  for (const p of grandLikePatterns) {
+  for (const entry of GRAND_TOTAL_ALLOW_CATEGORIES) {
+    const p = entry.re;
     const re = new RegExp(p.source, p.flags.includes("g") ? p.flags : p.flags + "g");
     let m: RegExpExecArray | null;
     while ((m = re.exec(rawText)) !== null) {
@@ -349,21 +414,27 @@ export function parseLabelledTotals(rawText: string): LabelledTotals {
       const key = `${m.index}:${value}`;
       if (seenPositions.has(key)) continue;
       seenPositions.add(key);
-      rawCandidates.push({ label: m[1], value, position: m.index });
+      rawCandidates.push({ label: m[1], value, position: m.index, category: entry.category });
     }
   }
 
   const scored: GrandTotalCandidate[] = rawCandidates.map((c) => {
     const s = scoreGrandCandidate(rawText, c, summaryBlockStart, summaryBlockEnd);
+    const classification = classifyGrandLabel(rawText, c.label, c.position, c.category);
     return {
       label: c.label,
       value: c.value,
       position: c.position,
       page: s.page,
       within_summary_block: s.withinSummary,
-      score: s.score,
-      reasons: s.reasons,
+      score: classification.banned ? -999 : s.score,
+      reasons: classification.banned
+        ? [...s.reasons, classification.reason ?? "banned"]
+        : s.reasons,
       deprioritised: s.deprioritised,
+      banned: classification.banned,
+      ban_reason: classification.reason,
+      allow_category: c.category,
       context_snippet: s.snippet,
     };
   });
@@ -388,6 +459,7 @@ export function parseLabelledTotals(rawText: string): LabelledTotals {
   //   - not be deprioritised unless it's the only candidate
   let chosen: GrandTotalCandidate | null = null;
   for (const c of scored) {
+    if (c.banned) continue;
     if (c.deprioritised) continue;
     if (c.within_summary_block || c.score >= 3) {
       chosen = c;
@@ -395,12 +467,14 @@ export function parseLabelledTotals(rawText: string): LabelledTotals {
     }
   }
   if (!chosen) {
-    // Take the top-scored non-negative candidate if any.
-    chosen = scored.find((c) => c.score > 0 && !c.deprioritised) ?? null;
+    chosen = scored.find((c) => !c.banned && c.score > 0 && !c.deprioritised) ?? null;
   }
-  if (!chosen && scored.length > 0) {
-    chosen = scored[0];
+  if (!chosen) {
+    // Fall back to any non-banned candidate regardless of deprioritisation.
+    chosen = scored.find((c) => !c.banned) ?? null;
   }
+  // Intentionally do NOT fall back to banned candidates — a sectional /
+  // package / works total must never be surfaced as the authoritative figure.
 
   if (chosen) {
     out.summary_total = chosen.value;
