@@ -9,6 +9,7 @@ import { runThreePassParser } from "../_shared/threePassParser.ts";
 import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
 import { arbitrate } from "../_shared/arbitration/arbitrationEngine.ts";
 import { runValueReview, type CandidateItem, type ValueReviewResult } from "../_shared/arbitration/gptValueReviewer.ts";
+import { resolveConsensusTotals, type ScopedRow } from "../_shared/arbitration/consensusTotals.ts";
 
 // =============================================================================
 // PROCESS PARSING JOB — DETERMINISTIC PRE-PASS + LLM EXTRACTION
@@ -1017,6 +1018,26 @@ Deno.serve(async (req: Request) => {
       if (gptValueReview.mark_for_review) gptQuoteNeedsManualReview = true;
     }
 
+    // ========================================================================
+    // CONSENSUS TOTALS — recompute authoritative main/optional/grand from
+    // classified rows + labelled document totals. Overrides row_sum display.
+    // ========================================================================
+    const consensusRows: ScopedRow[] = [
+      ...resolution.baseItems.map((i) => ({ total: i.total, scope: "Main" as const })),
+      ...resolution.optionalItems.map((i) => ({ total: i.total, scope: "Optional" as const })),
+      ...resolution.excludedItems.map((i) => ({ total: i.total, scope: "Excluded" as const })),
+    ];
+    const consensus = resolveConsensusTotals(consensusRows, rawText);
+    console.log(
+      `[Consensus Totals] source=${consensus.resolution_source} conf=${consensus.confidence} ` +
+      `main=${consensus.main_total} optional=${consensus.optional_total} grand=${consensus.grand_total} ` +
+      `summed_main=${consensus.summed_main} summed_optional=${consensus.summed_optional}`,
+    );
+
+    resolution.totals.grandTotal = consensus.grand_total;
+    resolution.totals.optionalTotal = consensus.optional_total;
+    resolution.totals.source = consensus.resolution_source;
+
     finalParserUsed = resolution.parserUsed;
     hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
     hasTotal = resolution.totals.grandTotal > 0;
@@ -1063,10 +1084,11 @@ Deno.serve(async (req: Request) => {
 
     await setStage(supabase, jobId, "Saving Results", 80);
 
-    const canonicalTotal = resolution.totals.grandTotal;
-    const canonicalOptionalTotal = resolution.totals.optionalTotal;
-    const resolutionConfidence = resolution.validation.risk === "OK" ? "HIGH"
-      : resolution.validation.risk === "MEDIUM" ? "MEDIUM" : "LOW";
+    const canonicalTotal = consensus.grand_total;
+    const canonicalOptionalTotal = consensus.optional_total;
+    const canonicalMainTotal = consensus.main_total;
+    const canonicalExcludedTotal = consensus.excluded_total;
+    const resolutionConfidence = consensus.confidence;
 
     let quoteData: { id: string };
 
@@ -1132,9 +1154,9 @@ Deno.serve(async (req: Request) => {
       raw_items_count: resolution.baseItems.length + resolution.optionalItems.length + resolution.excludedItems.length,
       inserted_items_count: mainQuoteItems.length,
       total_amount: canonicalTotal, total_price: canonicalTotal,
-      resolved_total: canonicalTotal, resolution_source: resolution.totals.source,
+      resolved_total: canonicalTotal, resolution_source: consensus.resolution_source,
       resolution_confidence: resolutionConfidence,
-      document_grand_total: resolution.totals.grandTotal > 0 ? resolution.totals.grandTotal : null,
+      document_grand_total: canonicalTotal > 0 ? canonicalTotal : null,
       document_sub_total: resolution.totals.subTotal,
       optional_scope_total: canonicalOptionalTotal > 0 ? canonicalOptionalTotal : null,
       original_line_items_total: resolution.totals.rowSum,
@@ -1201,9 +1223,31 @@ Deno.serve(async (req: Request) => {
       item_count_excluded: resolution.debug.itemCountExcluded,
       grand_total: canonicalTotal,
       optional_total: canonicalOptionalTotal,
+      main_total: canonicalMainTotal,
+      excluded_total: canonicalExcludedTotal,
       row_sum: resolution.totals.rowSum,
       validation_risk: resolution.validation.risk,
       parser_reasons: resolution.debug.parserReasons,
+      consensus_totals: {
+        main_total: consensus.main_total,
+        optional_total: consensus.optional_total,
+        excluded_total: consensus.excluded_total,
+        grand_total: consensus.grand_total,
+        resolution_source: consensus.resolution_source,
+        confidence: consensus.confidence,
+        summed_main: consensus.summed_main,
+        summed_optional: consensus.summed_optional,
+        summed_excluded: consensus.summed_excluded,
+        labelled: {
+          grand_total: consensus.labelled.grand_total,
+          main_total: consensus.labelled.main_total,
+          optional_total: consensus.labelled.optional_total,
+          excluded_total: consensus.labelled.excluded_total,
+          subtotal: consensus.labelled.subtotal,
+          labels_found: consensus.labelled.labels_found.slice(0, 20),
+        },
+        notes: consensus.notes,
+      },
     };
 
     await supabase.from("parsing_jobs").update({

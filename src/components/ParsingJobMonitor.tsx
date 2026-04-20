@@ -13,7 +13,29 @@ interface ParsingJobMetadata {
   warnings?: string[];
   grand_total?: number;
   optional_total?: number;
+  main_total?: number;
+  excluded_total?: number;
   row_sum?: number;
+  consensus_totals?: {
+    main_total?: number;
+    optional_total?: number;
+    excluded_total?: number;
+    grand_total?: number;
+    resolution_source?: string;
+    confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+    summed_main?: number;
+    summed_optional?: number;
+    summed_excluded?: number;
+    labelled?: {
+      grand_total?: number | null;
+      main_total?: number | null;
+      optional_total?: number | null;
+      excluded_total?: number | null;
+      subtotal?: number | null;
+      labels_found?: Array<{ label: string; value: number; kind: string }>;
+    };
+    notes?: string[];
+  } | null;
   item_count_base?: number;
   item_count_optional?: number;
   item_count_excluded?: number;
@@ -657,9 +679,42 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                           )}
                         </>
                       )}
-                      {meta.grand_total != null && (
-                        <><div className="text-slate-500">grand_total</div><div className="text-slate-200">${meta.grand_total.toLocaleString()}</div></>
-                      )}
+                      {(() => {
+                        const ct = meta.consensus_totals;
+                        const mainDisplay = ct?.main_total ?? meta.main_total ?? null;
+                        const optDisplay = ct?.optional_total ?? meta.optional_total ?? null;
+                        const grandDisplay = ct?.grand_total ?? meta.grand_total ?? null;
+                        return (
+                          <>
+                            {mainDisplay != null && (
+                              <><div className="text-slate-500">main_total</div><div className="text-emerald-300">${mainDisplay.toLocaleString()}</div></>
+                            )}
+                            {optDisplay != null && optDisplay > 0 && (
+                              <><div className="text-slate-500">optional_total</div><div className="text-blue-300">${optDisplay.toLocaleString()}</div></>
+                            )}
+                            {grandDisplay != null && (
+                              <><div className="text-slate-500">grand_total</div><div className="text-slate-200">${grandDisplay.toLocaleString()}</div></>
+                            )}
+                            {ct && (
+                              <>
+                                <div className="text-slate-500">resolution_source</div>
+                                <div className="text-slate-200">{ct.resolution_source ?? '—'}</div>
+                                <div className="text-slate-500">consensus_confidence</div>
+                                <div className={
+                                  ct.confidence === 'HIGH' ? 'text-emerald-300' :
+                                  ct.confidence === 'MEDIUM' ? 'text-yellow-300' : 'text-orange-300'
+                                }>{ct.confidence ?? '—'}</div>
+                                {ct.notes && ct.notes.length > 0 && (
+                                  <>
+                                    <div className="text-slate-500 col-span-2 pt-1 border-t border-slate-700 mt-1">consensus_notes</div>
+                                    <div className="col-span-2 text-slate-400">{ct.notes.join(' · ')}</div>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
                       {meta.warnings && meta.warnings.length > 0 && (
                         <>
                           <div className="text-slate-500 col-span-2 pt-1 border-t border-slate-700 mt-1">warnings</div>
