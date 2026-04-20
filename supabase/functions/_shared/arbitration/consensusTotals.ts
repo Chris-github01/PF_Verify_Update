@@ -190,38 +190,58 @@ export function resolveConsensusTotals(
   const hasLabelledSubtotal = labelled.subtotal !== null && labelled.subtotal > 0;
   const hasLabelledExcluded = labelled.excluded_total !== null && labelled.excluded_total > 0;
 
-  if (hasLabelledGrand && hasLabelledOptional) {
-    grand_total = round2(labelled.grand_total as number);
-    optional_total = round2(labelled.optional_total as number);
-    main_total = round2(grand_total - optional_total);
-    excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
-    resolution_source = "consensus[grand-optional]";
-    confidence = "HIGH";
-    notes.push(`main = labelled grand(${grand_total}) - labelled optional(${optional_total})`);
-  } else if (hasLabelledMain || hasLabelledSubtotal) {
+  // Strict precedence per product spec:
+  //   1. Explicit labelled totals (labelled main / subtotal)
+  //   2. Grand total minus optionals (both labelled)
+  //   3. Classified row sums (Main + Optional)
+  //   4. Raw row_sum fallback
+  const raw_row_sum = round2(summed_main + summed_optional + summed_excluded);
+
+  if (hasLabelledMain || hasLabelledSubtotal) {
+    // Priority 1: explicit labelled main total
     main_total = round2((hasLabelledMain ? labelled.main_total : labelled.subtotal) as number);
     optional_total = hasLabelledOptional ? round2(labelled.optional_total as number) : summed_optional;
     excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
     grand_total = hasLabelledGrand ? round2(labelled.grand_total as number) : round2(main_total + optional_total);
     resolution_source = "consensus[labelled-main]";
     confidence = "HIGH";
-    notes.push(`main = labelled ${hasLabelledMain ? "main_total" : "subtotal"}(${main_total})`);
+    notes.push(`P1: main = labelled ${hasLabelledMain ? "main_total" : "subtotal"}(${main_total})`);
+  } else if (hasLabelledGrand && hasLabelledOptional) {
+    // Priority 2: grand - optional
+    grand_total = round2(labelled.grand_total as number);
+    optional_total = round2(labelled.optional_total as number);
+    main_total = round2(Math.max(0, grand_total - optional_total));
+    excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
+    resolution_source = "consensus[grand-optional]";
+    confidence = "HIGH";
+    notes.push(`P2: main = labelled grand(${grand_total}) - labelled optional(${optional_total})`);
   } else if (hasLabelledGrand) {
+    // Priority 2 (partial): labelled grand only
     grand_total = round2(labelled.grand_total as number);
     optional_total = summed_optional;
     excluded_total = hasLabelledExcluded ? round2(labelled.excluded_total as number) : summed_excluded;
-    main_total = summed_optional > 0 ? round2(grand_total - summed_optional) : round2(grand_total);
+    main_total = summed_optional > 0 ? round2(Math.max(0, grand_total - summed_optional)) : round2(grand_total);
     resolution_source = "labelled_grand_total";
     confidence = "MEDIUM";
-    notes.push(`main inferred from labelled grand(${grand_total}) - summed optional(${summed_optional})`);
+    notes.push(`P2-partial: main = labelled grand(${grand_total}) - summed optional(${summed_optional})`);
   } else if (summed_main > 0 || summed_optional > 0) {
+    // Priority 3: classified row sums
     main_total = summed_main;
     optional_total = summed_optional;
     excluded_total = summed_excluded;
     grand_total = round2(summed_main + summed_optional);
     resolution_source = "consensus[main+optional]";
     confidence = summed_main > 0 ? "MEDIUM" : "LOW";
-    notes.push(`grand = summed main(${summed_main}) + summed optional(${summed_optional})`);
+    notes.push(`P3: grand = summed main(${summed_main}) + summed optional(${summed_optional})`);
+  } else if (raw_row_sum > 0) {
+    // Priority 4: raw row_sum fallback
+    main_total = raw_row_sum;
+    optional_total = 0;
+    excluded_total = summed_excluded;
+    grand_total = raw_row_sum;
+    resolution_source = "summed_rows_fallback";
+    confidence = "LOW";
+    notes.push(`P4: raw_row_sum(${raw_row_sum}) — no labels, no classification`);
   } else {
     main_total = 0;
     optional_total = 0;
@@ -229,7 +249,7 @@ export function resolveConsensusTotals(
     grand_total = 0;
     resolution_source = "summed_rows_fallback";
     confidence = "LOW";
-    notes.push("no labelled totals and no main/optional rows");
+    notes.push("no labelled totals and no priced rows — review required");
   }
 
   // Sanity: if labelled grand disagrees with main+optional by >2%, downgrade confidence

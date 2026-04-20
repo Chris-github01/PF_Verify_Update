@@ -1,7 +1,9 @@
 export type ConsensusSource =
-  | 'parser_consensus'
-  | 'labelled_total'
-  | 'row_sum'
+  | 'labelled_main'
+  | 'grand_minus_optional'
+  | 'labelled_grand_only'
+  | 'classified_row_sum'
+  | 'raw_row_sum'
   | 'needs_review';
 
 export type ConsensusConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -22,6 +24,7 @@ interface QuoteShape {
   document_total?: number | null;
   document_grand_total?: number | null;
   document_sub_total?: number | null;
+  labelled_main_total?: number | null;
   resolved_total?: number | null;
   resolution_source?: string | null;
   resolution_confidence?: string | null;
@@ -43,10 +46,14 @@ interface ItemShape {
 const OPTIONAL_SCOPE = 'optional';
 const LS_UNITS = new Set(['LS', 'LUMP SUM', 'L.S.', 'SUM', 'LUMPSUM']);
 
-function num(v: unknown): number {
-  if (v === null || v === undefined) return 0;
+function num(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
   const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) ? n : 0;
+  return Number.isFinite(n) ? n : null;
+}
+function pos(v: unknown): number {
+  const n = num(v);
+  return n !== null && n > 0 ? n : 0;
 }
 
 function isOptionalItem(item: ItemShape): boolean {
@@ -55,77 +62,136 @@ function isOptionalItem(item: ItemShape): boolean {
   if (item.is_excluded) return true;
   return false;
 }
-
-function normaliseConfidence(raw: string | null | undefined): ConsensusConfidence {
-  const v = (raw || '').toUpperCase();
-  if (v === 'HIGH') return 'HIGH';
-  if (v === 'MEDIUM') return 'MEDIUM';
-  if (v === 'LOW') return 'LOW';
-  return 'MEDIUM';
+function isClassified(item: ItemShape): boolean {
+  return Boolean(item.scope_category);
 }
 
 /**
- * Build a consensus totals object from a quote row and (optionally) its items.
+ * Build a consensus totals object using the strict documented precedence:
  *
- * Priority:
- *  1. Parser consensus (resolved_total + resolution_confidence set by edge function).
- *  2. Labelled total (document_grand_total / document_total / quoted_total).
- *  3. Row sum from items (MAIN scope only).
- *  4. Needs review fallback.
+ *   1. Explicit labelled totals in quote
+ *        - quote.labelled_main_total, or
+ *        - quote.main_scope_total when it came from a labelled source, or
+ *        - quote.document_sub_total
+ *      -> main_total = labelled main; grand = main + optional (labelled or summed)
  *
- * This function is READ-ONLY. It never writes back to the database.
+ *   2. Grand total minus optionals
+ *      - quote.document_grand_total (or document_total / quoted_total) is present,
+ *        and a labelled optional total exists (optional_scope_total)
+ *      -> main_total = grand - optional
+ *
+ *   3. Classified row sums
+ *      - items carry scope_category ("Main" | "Optional" | "Excluded")
+ *      -> main = sum(main rows); optional = sum(optional rows); grand = main + optional
+ *
+ *   4. Raw row_sum fallback
+ *      - no classification, no labels -> main = sum(all total_price); optional = 0
+ *
+ *   Fallback: needs_review with zeros.
+ *
+ * This function is READ-ONLY. It never writes back.
  */
 export function buildConsensusTotals(
   quote: QuoteShape,
   items: ItemShape[] = [],
 ): ConsensusTotals {
-  const mainItems = items.filter((i) => !isOptionalItem(i));
-  const optionalItems = items.filter((i) => isOptionalItem(i));
+  const classifiedItems = items.filter(isClassified);
+  const mainRows = classifiedItems.filter((i) => !isOptionalItem(i));
+  const optionalRows = classifiedItems.filter(isOptionalItem);
+  const summedMain = mainRows.reduce((s, i) => s + pos(i.total_price), 0);
+  const summedOptional = optionalRows.reduce((s, i) => s + pos(i.total_price), 0);
+  const rawSum = items.reduce((s, i) => s + pos(i.total_price), 0);
 
-  const rowMain = mainItems.reduce((s, i) => s + num(i.total_price), 0);
-  const rowOptional = optionalItems.reduce((s, i) => s + num(i.total_price), 0);
+  const labelledMain =
+    pos(quote.labelled_main_total) ||
+    (quote.resolution_source === 'consensus[labelled-main]' ? pos(quote.main_scope_total) : 0) ||
+    pos(quote.document_sub_total);
 
-  const resolved = num(quote.resolved_total);
-  const labelled =
-    num(quote.document_grand_total) ||
-    num(quote.document_total) ||
-    num(quote.quoted_total);
-  const optionalScope = num(quote.optional_scope_total);
-  const mainScope = num(quote.main_scope_total);
+  const labelledGrand =
+    pos(quote.document_grand_total) ||
+    pos(quote.document_total) ||
+    pos(quote.quoted_total);
 
-  if (resolved > 0) {
-    const confidence = normaliseConfidence(quote.resolution_confidence);
+  const labelledOptional = pos(quote.optional_scope_total);
+
+  // ---------------------------------------------------------------
+  // Priority 1: Explicit labelled main total
+  // ---------------------------------------------------------------
+  if (labelledMain > 0) {
+    const optional = labelledOptional || summedOptional;
+    const grand = labelledGrand > 0 ? labelledGrand : labelledMain + optional;
     return {
-      main_total: mainScope > 0 ? mainScope : resolved - optionalScope,
-      optional_total: optionalScope || rowOptional,
-      grand_total: resolved,
-      source: 'parser_consensus',
-      confidence,
-      requires_review: confidence === 'LOW' || Boolean(quote.requires_review),
+      main_total: round2(labelledMain),
+      optional_total: round2(optional),
+      grand_total: round2(grand),
+      source: 'labelled_main',
+      confidence: 'HIGH',
+      requires_review: false,
+      notes: 'Priority 1: labelled main total used directly.',
     };
   }
 
-  if (labelled > 0) {
+  // ---------------------------------------------------------------
+  // Priority 2: Grand total minus labelled optionals
+  // ---------------------------------------------------------------
+  if (labelledGrand > 0 && labelledOptional > 0) {
+    const main = Math.max(0, labelledGrand - labelledOptional);
     return {
-      main_total: mainScope > 0 ? mainScope : labelled - optionalScope,
-      optional_total: optionalScope || rowOptional,
-      grand_total: labelled,
-      source: 'labelled_total',
+      main_total: round2(main),
+      optional_total: round2(labelledOptional),
+      grand_total: round2(labelledGrand),
+      source: 'grand_minus_optional',
+      confidence: 'HIGH',
+      requires_review: false,
+      notes: 'Priority 2: main = labelled grand − labelled optional.',
+    };
+  }
+
+  // Sub-case of priority 2: labelled grand present but no labelled optional.
+  // We still prefer the labelled grand over row sums, but confidence is MEDIUM
+  // and main is inferred from summed optional (which may be 0).
+  if (labelledGrand > 0) {
+    const optional = summedOptional;
+    const main = Math.max(0, labelledGrand - optional);
+    return {
+      main_total: round2(main),
+      optional_total: round2(optional),
+      grand_total: round2(labelledGrand),
+      source: 'labelled_grand_only',
       confidence: 'MEDIUM',
-      requires_review: true,
-      notes: 'Using labelled total; parser did not produce a consensus.',
+      requires_review: false,
+      notes: 'Priority 2 (partial): labelled grand − summed optional.',
     };
   }
 
-  if (rowMain > 0) {
+  // ---------------------------------------------------------------
+  // Priority 3: Classified row sums
+  // ---------------------------------------------------------------
+  if (classifiedItems.length > 0 && (summedMain > 0 || summedOptional > 0)) {
+    const grand = summedMain + summedOptional;
     return {
-      main_total: rowMain,
-      optional_total: rowOptional,
-      grand_total: rowMain,
-      source: 'row_sum',
+      main_total: round2(summedMain),
+      optional_total: round2(summedOptional),
+      grand_total: round2(grand),
+      source: 'classified_row_sum',
+      confidence: summedMain > 0 ? 'MEDIUM' : 'LOW',
+      requires_review: true,
+      notes: 'Priority 3: summed classified Main/Optional rows.',
+    };
+  }
+
+  // ---------------------------------------------------------------
+  // Priority 4: Raw row_sum fallback
+  // ---------------------------------------------------------------
+  if (rawSum > 0) {
+    return {
+      main_total: round2(rawSum),
+      optional_total: 0,
+      grand_total: round2(rawSum),
+      source: 'raw_row_sum',
       confidence: 'LOW',
       requires_review: true,
-      notes: 'Total derived from line-item sum. Review before awarding.',
+      notes: 'Priority 4: raw sum of all row totals — no classification/labels.',
     };
   }
 
@@ -136,7 +202,7 @@ export function buildConsensusTotals(
     source: 'needs_review',
     confidence: 'LOW',
     requires_review: true,
-    notes: 'No total available. Manual review required.',
+    notes: 'No usable totals. Manual review required.',
   };
 }
 
@@ -147,11 +213,14 @@ export function isLumpSumItem(item: ItemShape): boolean {
 
 /**
  * Non-destructive display filter. Does NOT delete rows.
- * Returns the subset of items that should be displayed in the Review table
- * while preserving the original array for audit.
  */
 export function filterItemsForDisplay(items: ItemShape[]): ItemShape[] {
   const itemised = items.filter((i) => !isLumpSumItem(i));
   if (itemised.length > 0) return itemised;
   return items;
+}
+
+function round2(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
 }
