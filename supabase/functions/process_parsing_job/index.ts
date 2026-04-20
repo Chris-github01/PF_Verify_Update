@@ -922,6 +922,9 @@ Deno.serve(async (req: Request) => {
       return acc;
     }, 0);
 
+    console.log(
+      `[GPT Value Review] entering reviewer: items=${deterministicCandidateItems.length} confidence=${arbitration.confidence.overall_confidence.toFixed(3)} parserUsed=${resolution.parserUsed} openAiKey=${Deno.env.get("OPENAI_API_KEY") ? "present" : "MISSING"}`,
+    );
     try {
       gptValueReview = await runValueReview(
         {
@@ -947,6 +950,9 @@ Deno.serve(async (req: Request) => {
             (resolution.totals.grandTotal ?? 0) > 0,
         },
         { openAiKey: Deno.env.get("OPENAI_API_KEY") ?? "" },
+      );
+      console.log(
+        `[GPT Value Review] exit: used=${gptValueReview.used} fallback=${gptValueReview.fallback_to_deterministic} skipped=${gptValueReview.skipped_reason ?? "n/a"} error=${gptValueReview.error ?? "n/a"} triggers_fired=${gptValueReview.trigger_reasons.length} elapsed_ms=${gptValueReview.elapsed_ms ?? 0}`,
       );
     } catch (e) {
       console.error("[GPT Value Review] unexpected error:", e);
@@ -1177,6 +1183,7 @@ Deno.serve(async (req: Request) => {
         error: gptValueReview.error ?? null,
         error_detail: gptValueReview.error_detail ?? null,
         http_status: gptValueReview.http_status ?? null,
+        raw_response_preview: gptValueReview.raw_response ?? null,
       },
       needs_manual_review: gptQuoteNeedsManualReview,
       llm_chunks_started: llmChunksStarted,

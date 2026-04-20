@@ -24,6 +24,22 @@ interface ParsingJobMetadata {
   grand_total_found?: number;
   will_skip_llm?: boolean;
   prior_llm_fail_reason?: string;
+  gpt_value_review?: {
+    used?: boolean;
+    skipped_reason?: string | null;
+    trigger_reasons?: string[];
+    trigger_debug?: Array<{ id: string; name: string; threshold: string; measured: string | number | boolean | null; fired: boolean }>;
+    fallback_to_deterministic?: boolean;
+    mark_for_review?: boolean;
+    document_confidence?: number | null;
+    items_returned?: number;
+    elapsed_ms?: number | null;
+    cost_estimate_usd?: number | null;
+    error?: string | null;
+    error_detail?: string | null;
+    http_status?: number | null;
+    raw_response_preview?: string | null;
+  } | null;
 }
 
 interface TraceEntry {
@@ -144,11 +160,59 @@ function TraceReportPanel({ trace, job }: { trace: TraceJson; job: ParsingJob })
             <div className="text-slate-500">primary_parser</div>
             <div className="text-slate-200">{job.primary_parser ?? trace.parser_attempt_order?.[0]?.parser ?? '—'}</div>
             <div className="text-slate-500">final_parser_used</div>
-            <div className="text-slate-200">{trace.final_parser_used ?? job.final_parser_used ?? '—'}</div>
+            <div className="text-slate-200">
+              {(() => {
+                const meta = job.metadata ?? null;
+                const gpt = meta?.gpt_value_review;
+                const base = trace.final_parser_used ?? job.final_parser_used ?? '—';
+                if (gpt?.used && !gpt.fallback_to_deterministic) {
+                  return base.includes('gpt_value_review') ? base : `${base}+gpt_value_review`;
+                }
+                return base;
+              })()}
+            </div>
             <div className="text-slate-500">fallback_triggered</div>
             <div className={trace.fallback_triggered ? 'text-orange-400' : 'text-slate-400'}>
               {trace.fallback_triggered ? 'Yes' : 'No'}
             </div>
+            {job.metadata?.gpt_value_review && (() => {
+              const gpt = job.metadata!.gpt_value_review!;
+              let label = '';
+              let color = 'text-slate-300';
+              if (gpt.used && !gpt.fallback_to_deterministic) {
+                label = `applied (conf=${gpt.document_confidence?.toFixed(2) ?? 'n/a'}, items=${gpt.items_returned ?? 0}, ${gpt.elapsed_ms}ms)`;
+                color = 'text-green-400';
+              } else if (gpt.used && gpt.fallback_to_deterministic) {
+                label = `fallback: ${gpt.error ?? 'output worse than deterministic'}`;
+                color = 'text-orange-400';
+              } else if (gpt.skipped_reason) {
+                label = `skipped: ${gpt.skipped_reason}`;
+                color = 'text-slate-400';
+              } else {
+                label = 'not run';
+                color = 'text-slate-500';
+              }
+              return (
+                <>
+                  <div className="text-slate-500">gpt_value_review</div>
+                  <div className={color}>{label}</div>
+                  {gpt.trigger_reasons && gpt.trigger_reasons.length > 0 && (
+                    <>
+                      <div className="text-slate-500">gpt_triggers</div>
+                      <div className="text-slate-300 break-all">
+                        {gpt.trigger_reasons.join(' | ')}
+                      </div>
+                    </>
+                  )}
+                  {gpt.error_detail && (
+                    <>
+                      <div className="text-slate-500">gpt_error_detail</div>
+                      <div className="text-red-400 break-all">{gpt.error_detail}</div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
             {trace.llm_chunks_started != null && (
               <>
                 <div className="text-slate-500">llm_chunks</div>

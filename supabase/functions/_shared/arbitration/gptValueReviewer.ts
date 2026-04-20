@@ -229,11 +229,16 @@ function truncateCandidateItems(items: CandidateItem[]): CandidateItem[] {
   return items.slice(0, MAX_CANDIDATE_ITEMS);
 }
 
-function validateGptJson(obj: unknown): ValueReviewOutput | null {
-  if (!obj || typeof obj !== "object") return null;
+function validateGptJson(obj: unknown): { ok: ValueReviewOutput } | { reason: string } {
+  if (!obj || typeof obj !== "object") return { reason: `root not object (typeof=${typeof obj})` };
   const o = obj as Record<string, unknown>;
-  if (!Array.isArray(o.items)) return null;
-  if (!o.final_totals || typeof o.final_totals !== "object") return null;
+  if (!Array.isArray(o.items)) {
+    const keys = Object.keys(o).slice(0, 20).join(",");
+    return { reason: `items not array (typeof=${typeof o.items}); top-level keys=[${keys}]` };
+  }
+  if (!o.final_totals || typeof o.final_totals !== "object") {
+    return { reason: `final_totals missing or not object (typeof=${typeof o.final_totals})` };
+  }
   const items = (o.items as unknown[])
     .map((raw) => {
       if (!raw || typeof raw !== "object") return null;
@@ -261,7 +266,11 @@ function validateGptJson(obj: unknown): ValueReviewOutput | null {
   };
   const document_confidence = typeof o.document_confidence === "number" ? o.document_confidence : 0.7;
   const warnings = Array.isArray(o.warnings) ? (o.warnings as unknown[]).filter((w) => typeof w === "string").map((w) => w as string) : [];
-  return { items, final_totals, document_confidence, warnings };
+  if (items.length === 0) {
+    const rawItemCount = (o.items as unknown[]).length;
+    return { reason: `all ${rawItemCount} items rejected (missing description or non-object entries)` };
+  }
+  return { ok: { items, final_totals, document_confidence, warnings } };
 }
 
 /**
@@ -394,21 +403,25 @@ export async function runValueReview(
       };
     }
 
-    const validated = validateGptJson(parsed);
-    if (!validated) {
-      console.error("[GPT Value Review] schema validation failed for response:", raw.slice(0, 400));
+    const validation = validateGptJson(parsed);
+    if ("reason" in validation) {
+      console.error(
+        `[GPT Value Review] schema validation failed: ${validation.reason} | raw_preview=${raw.slice(0, 300)}`,
+      );
       return {
         used: true,
         trigger_reasons: decision.reasons,
         trigger_debug: decision.debug,
-        raw_response: raw.slice(0, 1000),
+        raw_response: raw.slice(0, 2000),
         error: "GPT JSON failed schema validation",
+        error_detail: validation.reason,
         fallback_to_deterministic: true,
         mark_for_review: true,
         elapsed_ms: Date.now() - started,
         cost_estimate_usd: estimateCostUsd(userMessage.length, raw.length),
       };
     }
+    const validated = validation.ok;
 
     const evaluation = evaluateGptOutput(input.candidateItems, validated);
     const warnings = [...validated.warnings];
