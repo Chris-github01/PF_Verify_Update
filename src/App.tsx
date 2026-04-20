@@ -97,6 +97,7 @@ import { AdminProvider, useAdmin } from './lib/adminContext';
 import { TradeProvider, useTrade } from './lib/tradeContext';
 import { toastStore } from './lib/toastStore';
 import { getUserPreferences, updateLastProject } from './lib/userPreferences';
+import { DEMO_STABLE_BUILD, isEssentialTab } from './config/demoMode';
 import type { Session } from '@supabase/supabase-js';
 
 interface ProjectInfo {
@@ -642,6 +643,23 @@ function AppContent() {
   };
 
   const renderContent = () => {
+    // Wednesday Stable Build — redirect non-essential tabs to the dashboard
+    // so a mis-clicked sidebar item can't trigger a lazy-load crash or 504.
+    if (DEMO_STABLE_BUILD && !isEssentialTab(activeTab)) {
+      return <NewProjectDashboard
+        projectId={projectId}
+        projectName={projectInfo?.name}
+        allProjects={allProjects}
+        onProjectSelect={handleProjectSelect}
+        onCreateProject={handleCreateProject}
+        onNavigateToQuotes={() => {
+          if (handleNavigationGuard('quotes')) setActiveTab('quotes');
+        }}
+        onNavigateToMatrix={() => setActiveTab('dashboard')}
+        onNavigateToReports={() => setActiveTab('dashboard')}
+        dashboardMode={dashboardMode}
+      />;
+    }
     switch (activeTab) {
       case 'dashboard':
         if (isSubContractor) {
@@ -1052,12 +1070,26 @@ function AppContent() {
     }
   };
 
+  // Wednesday Stable Build — redirect disabled top-level routes to the root.
+  if (DEMO_STABLE_BUILD && typeof window !== 'undefined') {
+    const path = window.location.pathname;
+    const blocked =
+      path.startsWith('/shadow') ||
+      path.startsWith('/admin') ||
+      path === '/parser-test' ||
+      path === '/video';
+    if (blocked) {
+      window.history.replaceState({}, '', '/');
+    }
+  }
+  const shadowRoutesEnabled = !DEMO_STABLE_BUILD;
+
   // Shadow Admin routes — completely isolated from the main app loading cycle.
   // Must be checked BEFORE authLoading/orgLoading gates so org context never interferes.
-  const shadowPath = window.location.pathname;
+  const shadowPath = shadowRoutesEnabled ? window.location.pathname : '/';
   const isShadowRoute = shadowPath.startsWith('/shadow');
 
-  if (isShadowRoute) {
+  if (isShadowRoute && shadowRoutesEnabled) {
     if (authLoading) {
       return (
         <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -1111,14 +1143,14 @@ function AppContent() {
     return <DemoLogin />;
   }
 
-  if (window.location.pathname === '/parser-test') {
+  if (!DEMO_STABLE_BUILD && window.location.pathname === '/parser-test') {
     return <ParserTest />;
   }
 
-  if (window.location.pathname === '/video') {
+  if (!DEMO_STABLE_BUILD && window.location.pathname === '/video') {
     return <VideoPage />;
   }
-  if (shadowPath === '/shadow' || shadowPath === '/shadow/') {
+  if (shadowRoutesEnabled && (shadowPath === '/shadow' || shadowPath === '/shadow/')) {
     return <ShadowHome />;
   }
   if (shadowPath === '/shadow/modules') {
@@ -1318,7 +1350,7 @@ function AppContent() {
     return <Login />;
   }
 
-  if (window.location.pathname.startsWith('/admin')) {
+  if (!DEMO_STABLE_BUILD && window.location.pathname.startsWith('/admin')) {
     // Wait for admin check to complete before denying access
     if (orgLoading || adminLoading) {
       return (
@@ -1359,6 +1391,17 @@ function AppContent() {
   }
 
   if (!selectedMode) {
+    if (DEMO_STABLE_BUILD) {
+      setSelectedMode('app');
+      return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Preparing your workspace...</p>
+          </div>
+        </div>
+      );
+    }
     return <ModeSelector onSelectMode={setSelectedMode} isMasterAdmin={effectiveIsMasterAdmin} adminLoading={orgLoading || adminLoading} />;
   }
 
@@ -1540,21 +1583,25 @@ function AppContent() {
 
       <ToastContainer />
 
-      <button
-        onClick={() => setIsCopilotOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center z-40 hover:scale-110"
-        title="Ask AI Copilot"
-      >
-        <Sparkles size={24} />
-      </button>
+      {!DEMO_STABLE_BUILD && (
+        <>
+          <button
+            onClick={() => setIsCopilotOpen(true)}
+            className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center z-40 hover:scale-110"
+            title="Ask AI Copilot"
+          >
+            <Sparkles size={24} />
+          </button>
 
-      <CopilotDrawer
-        isOpen={isCopilotOpen}
-        onClose={() => setIsCopilotOpen(false)}
-        currentProjectId={projectId || undefined}
-        allProjects={allProjects.map(p => ({ id: p.id, name: p.name }))}
-        onNavigate={handleCopilotNavigate}
-      />
+          <CopilotDrawer
+            isOpen={isCopilotOpen}
+            onClose={() => setIsCopilotOpen(false)}
+            currentProjectId={projectId || undefined}
+            allProjects={allProjects.map(p => ({ id: p.id, name: p.name }))}
+            onNavigate={handleCopilotNavigate}
+          />
+        </>
+      )}
     </>
   );
 }

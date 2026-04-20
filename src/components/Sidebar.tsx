@@ -32,6 +32,7 @@ import { useAdmin } from '../lib/adminContext';
 import { useTrade } from '../lib/tradeContext';
 import type { Trade } from '../lib/userPreferences';
 import { supabase } from '../lib/supabase';
+import { DEMO_STABLE_BUILD, isEssentialTab } from '../config/demoMode';
 
 export type SidebarTab =
   | 'dashboard'
@@ -153,7 +154,19 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
   const { hasPermission, isSubContractor, currentOrganisation } = useOrganisation();
   const { isMasterAdmin } = useAdmin();
 
-  const menuStructure = isSubContractor ? subContractorMenu : mainContractorMenu;
+  const rawMenuStructure = isSubContractor ? subContractorMenu : mainContractorMenu;
+  const menuStructure = DEMO_STABLE_BUILD
+    ? (isSubContractor
+        ? []
+        : rawMenuStructure
+            .map((section) => ({
+              ...section,
+              items: section.items.filter((item) => isEssentialTab(item.id)),
+            }))
+            .filter((section) => section.items.length > 0))
+    : rawMenuStructure;
+  const showAdminSection = !DEMO_STABLE_BUILD && isMasterAdmin;
+  const showAdminConsoleButtons = !DEMO_STABLE_BUILD && isMasterAdmin;
 
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', collapsed.toString());
@@ -372,7 +385,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
         ))}
 
         {/* Admin Section */}
-        {isMasterAdmin && (
+        {showAdminSection && (
           <div>
             {!collapsed && (
               <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 px-3 mb-2 mt-6 pt-6 border-t border-slate-800/60 font-semibold">
@@ -418,7 +431,7 @@ export default function Sidebar({ activeTab, onTabChange, projectId, dashboardMo
       </nav>
 
       {/* Admin Console + Shadow Dashboard Buttons */}
-      {isMasterAdmin && (
+      {showAdminConsoleButtons && (
         <div className="px-3 pb-3 border-t border-slate-800/80 pt-3 space-y-1.5">
           <button
             onClick={() => window.location.href = '/admin'}
