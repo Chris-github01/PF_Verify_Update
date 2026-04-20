@@ -41,6 +41,16 @@ export interface ValueReviewInput {
   candidateConfidence: number;
   duplicatesRemovedCount?: number;
   arithmeticMismatchCount?: number;
+  /** true when final total came from row_sum while no labelled total was found */
+  rowSumChosenWithoutLabelledTotal?: boolean;
+}
+
+export interface TriggerDebugEntry {
+  id: "A" | "B" | "C" | "D" | "E" | "F" | "G";
+  name: string;
+  threshold: string;
+  measured: string | number | boolean | null;
+  fired: boolean;
 }
 
 export interface ValueReviewItem {
@@ -72,14 +82,15 @@ export interface ValueReviewResult {
   used: boolean;
   skipped_reason?: string;
   trigger_reasons: string[];
+  trigger_debug: TriggerDebugEntry[];
   raw_response?: string;
   parsed?: ValueReviewOutput;
   elapsed_ms?: number;
   cost_estimate_usd?: number;
   error?: string;
-  /** true when GPT output was worse than deterministic — caller should fallback */
+  error_detail?: string;
+  http_status?: number;
   fallback_to_deterministic: boolean;
-  /** true when final confidence < 0.65 — caller should mark for review */
   mark_for_review: boolean;
 }
 
@@ -103,42 +114,100 @@ const MAX_CANDIDATE_ITEMS = 400;
 /**
  * Decide whether GPT value review should run based on deterministic output.
  */
-export function shouldRunValueReview(input: ValueReviewInput): { run: boolean; reasons: string[] } {
-  const reasons: string[] = [];
+const SCOPE_HINT_REGEX = /\b(optional|add[\s-]?alternate|excluded|exclusion|variation|provisional[\s-]?sum|extra|extras|add[\s-]?on)\b/i;
+
+export function shouldRunValueReview(
+  input: ValueReviewInput,
+): { run: boolean; reasons: string[]; debug: TriggerDebugEntry[] } {
   const items = input.candidateItems;
   const totals = input.candidateTotals;
+  const debug: TriggerDebugEntry[] = [];
 
-  if (input.candidateConfidence < 0.82) reasons.push(`confidence<0.82 (${input.candidateConfidence.toFixed(2)})`);
+  // A: >25% rows qty=1
+  const qtyOneCount = items.filter((it) => it.qty === 1).length;
+  const qtyOneRatio = items.length > 0 ? qtyOneCount / items.length : 0;
+  debug.push({
+    id: "A",
+    name: ">25% rows qty=1",
+    threshold: ">0.25",
+    measured: `${qtyOneCount}/${items.length}=${(qtyOneRatio * 100).toFixed(1)}%`,
+    fired: qtyOneRatio > 0.25,
+  });
 
-  const labelledTotal = totals.grand_total ?? totals.subtotal;
-  if (labelledTotal && totals.row_sum && labelledTotal > 0) {
-    const diffRatio = Math.abs(labelledTotal - totals.row_sum) / labelledTotal;
-    if (diffRatio > 0.03) reasons.push(`row_sum vs labelled divergence=${(diffRatio * 100).toFixed(1)}%`);
-  }
+  // B: >10% rows rate == total
+  const rateEqTotalCount = items.filter(
+    (it) =>
+      it.rate !== null &&
+      it.total !== null &&
+      it.rate > 0 &&
+      Math.abs((it.rate ?? 0) - (it.total ?? 0)) < 0.01,
+  ).length;
+  const rateEqTotalRatio = items.length > 0 ? rateEqTotalCount / items.length : 0;
+  debug.push({
+    id: "B",
+    name: ">10% rows rate==total",
+    threshold: ">0.10",
+    measured: `${rateEqTotalCount}/${items.length}=${(rateEqTotalRatio * 100).toFixed(1)}%`,
+    fired: rateEqTotalRatio > 0.10,
+  });
 
-  if (items.length > 0) {
-    const suspicious = items.filter(
-      (it) =>
-        (it.qty === 1 || it.qty === null) &&
-        it.rate !== null &&
-        it.total !== null &&
-        Math.abs((it.rate ?? 0) - (it.total ?? 0)) < 0.01,
-    ).length;
-    if (suspicious / items.length > 0.15) {
-      reasons.push(`>${(suspicious / items.length * 100).toFixed(0)}% rows have qty=1 with rate=total`);
-    }
-  }
+  // C: any row OR raw text contains scope hint words
+  const hintInItems = items.some((it) => SCOPE_HINT_REGEX.test(it.description || ""));
+  const hintInText = SCOPE_HINT_REGEX.test(input.documentText || "");
+  debug.push({
+    id: "C",
+    name: "scope hint (Optional|Excluded|Variation|Extra)",
+    threshold: "presence",
+    measured: `itemMatch=${hintInItems},textMatch=${hintInText}`,
+    fired: hintInItems || hintInText,
+  });
 
-  const optionalItems = items.filter((it) => it.scope === "Optional").length;
-  if (optionalItems > 0 && !totals.optional_total) {
-    reasons.push("optional items detected but optional total missing");
-  }
+  // D: duplicate removals > 5
+  const dupRemoved = input.duplicatesRemovedCount ?? 0;
+  debug.push({
+    id: "D",
+    name: "duplicate removals >5",
+    threshold: ">5",
+    measured: dupRemoved,
+    fired: dupRemoved > 5,
+  });
 
-  if ((input.duplicatesRemovedCount ?? 0) > 10) reasons.push(`duplicate removals=${input.duplicatesRemovedCount}`);
-  if (items.length > 20) reasons.push(`row_count=${items.length}>20`);
-  if ((input.arithmeticMismatchCount ?? 0) > 0) reasons.push(`arithmetic mismatches=${input.arithmeticMismatchCount}`);
+  // E: items > 25
+  debug.push({
+    id: "E",
+    name: "items>25",
+    threshold: ">25",
+    measured: items.length,
+    fired: items.length > 25,
+  });
 
-  return { run: reasons.length > 0, reasons };
+  // F: row_sum chosen as final total while labelled totals missing
+  const labelledMissing =
+    (totals.grand_total === null || totals.grand_total === 0) &&
+    (totals.subtotal === null || totals.subtotal === 0);
+  const rowSumChosen =
+    input.rowSumChosenWithoutLabelledTotal === true ||
+    (labelledMissing && (totals.row_sum ?? 0) > 0) ||
+    (typeof totals.source === "string" && /row[_ -]?sum/i.test(totals.source));
+  debug.push({
+    id: "F",
+    name: "row_sum chosen while labelled totals missing",
+    threshold: "true",
+    measured: `labelledMissing=${labelledMissing},rowSumChosen=${rowSumChosen},source=${totals.source ?? "null"}`,
+    fired: rowSumChosen && labelledMissing,
+  });
+
+  // G: confidence <= 0.80
+  debug.push({
+    id: "G",
+    name: "confidence<=0.80",
+    threshold: "<=0.80",
+    measured: input.candidateConfidence.toFixed(3),
+    fired: input.candidateConfidence <= 0.80,
+  });
+
+  const reasons = debug.filter((d) => d.fired).map((d) => `${d.id}:${d.name} [${d.measured}]`);
+  return { run: reasons.length > 0, reasons, debug };
 }
 
 /** Estimate GPT-4o-mini cost: ~$0.15/M input tokens, ~$0.60/M output tokens. */
@@ -238,10 +307,24 @@ export async function runValueReview(
 ): Promise<ValueReviewResult> {
   const decision = shouldRunValueReview(input);
   if (!opts.forceRun && !decision.run) {
-    return { used: false, skipped_reason: "no trigger met", trigger_reasons: [], fallback_to_deterministic: false, mark_for_review: false };
+    return {
+      used: false,
+      skipped_reason: "no trigger met",
+      trigger_reasons: [],
+      trigger_debug: decision.debug,
+      fallback_to_deterministic: false,
+      mark_for_review: false,
+    };
   }
   if (!opts.openAiKey) {
-    return { used: false, skipped_reason: "OPENAI_API_KEY missing", trigger_reasons: decision.reasons, fallback_to_deterministic: false, mark_for_review: false };
+    return {
+      used: false,
+      skipped_reason: "OPENAI_API_KEY missing",
+      trigger_reasons: decision.reasons,
+      trigger_debug: decision.debug,
+      fallback_to_deterministic: false,
+      mark_for_review: false,
+    };
   }
 
   const userPayload = {
@@ -275,13 +358,18 @@ export async function runValueReview(
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
+      console.error(`[GPT Value Review] HTTP ${res.status} — ${errText.slice(0, 500)}`);
       return {
         used: false,
         trigger_reasons: decision.reasons,
+        trigger_debug: decision.debug,
         skipped_reason: `HTTP ${res.status}`,
-        error: errText.slice(0, 300),
+        http_status: res.status,
+        error: `OpenAI HTTP ${res.status}`,
+        error_detail: errText.slice(0, 600),
         fallback_to_deterministic: true,
         mark_for_review: false,
+        elapsed_ms: Date.now() - started,
       };
     }
 
@@ -290,12 +378,15 @@ export async function runValueReview(
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
-    } catch {
+    } catch (je) {
+      console.error("[GPT Value Review] JSON parse failed:", je);
       return {
         used: true,
         trigger_reasons: decision.reasons,
+        trigger_debug: decision.debug,
         raw_response: raw.slice(0, 1000),
         error: "Invalid JSON from GPT",
+        error_detail: je instanceof Error ? je.message.slice(0, 400) : String(je).slice(0, 400),
         fallback_to_deterministic: true,
         mark_for_review: true,
         elapsed_ms: Date.now() - started,
@@ -305,9 +396,11 @@ export async function runValueReview(
 
     const validated = validateGptJson(parsed);
     if (!validated) {
+      console.error("[GPT Value Review] schema validation failed for response:", raw.slice(0, 400));
       return {
         used: true,
         trigger_reasons: decision.reasons,
+        trigger_debug: decision.debug,
         raw_response: raw.slice(0, 1000),
         error: "GPT JSON failed schema validation",
         fallback_to_deterministic: true,
@@ -327,6 +420,7 @@ export async function runValueReview(
     return {
       used: true,
       trigger_reasons: decision.reasons,
+      trigger_debug: decision.debug,
       raw_response: raw.slice(0, 1000),
       parsed: validated,
       fallback_to_deterministic: evaluation.fallback,
@@ -335,11 +429,14 @@ export async function runValueReview(
       cost_estimate_usd: estimateCostUsd(userMessage.length, raw.length),
     };
   } catch (err) {
+    console.error("[GPT Value Review] network/exception:", err);
     return {
       used: false,
       trigger_reasons: decision.reasons,
+      trigger_debug: decision.debug,
       skipped_reason: "network/exception",
       error: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300),
+      error_detail: err instanceof Error && err.stack ? err.stack.slice(0, 800) : undefined,
       fallback_to_deterministic: true,
       mark_for_review: false,
       elapsed_ms: Date.now() - started,

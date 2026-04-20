@@ -896,6 +896,7 @@ Deno.serve(async (req: Request) => {
     let gptValueReview: ValueReviewResult = {
       used: false,
       trigger_reasons: [],
+      trigger_debug: [],
       fallback_to_deterministic: false,
       mark_for_review: false,
     };
@@ -936,8 +937,14 @@ Deno.serve(async (req: Request) => {
           },
           warnings: arbitration.warnings,
           candidateConfidence: arbitration.confidence.overall_confidence,
-          duplicatesRemovedCount: Math.max(0, allFlatItems.length - arbitration.items.length),
+          duplicatesRemovedCount: Math.max(
+            (resolution as unknown as { duplicatesRemoved?: number }).duplicatesRemoved ?? 0,
+            allFlatItems.length - arbitration.items.length,
+          ),
           arithmeticMismatchCount,
+          rowSumChosenWithoutLabelledTotal:
+            (!arbitration.resolved_total_label || arbitration.resolved_total_label === "row_sum") &&
+            (resolution.totals.grandTotal ?? 0) > 0,
         },
         { openAiKey: Deno.env.get("OPENAI_API_KEY") ?? "" },
       );
@@ -946,6 +953,7 @@ Deno.serve(async (req: Request) => {
       gptValueReview = {
         used: false,
         trigger_reasons: [],
+        trigger_debug: [],
         fallback_to_deterministic: false,
         mark_for_review: false,
         error: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300),
@@ -1158,6 +1166,7 @@ Deno.serve(async (req: Request) => {
         used: gptValueReview.used,
         skipped_reason: gptValueReview.skipped_reason ?? null,
         trigger_reasons: gptValueReview.trigger_reasons,
+        trigger_debug: gptValueReview.trigger_debug,
         fallback_to_deterministic: gptValueReview.fallback_to_deterministic,
         mark_for_review: gptValueReview.mark_for_review,
         document_confidence: gptValueReview.parsed?.document_confidence ?? null,
@@ -1166,6 +1175,8 @@ Deno.serve(async (req: Request) => {
         elapsed_ms: gptValueReview.elapsed_ms ?? null,
         cost_estimate_usd: gptValueReview.cost_estimate_usd ?? null,
         error: gptValueReview.error ?? null,
+        error_detail: gptValueReview.error_detail ?? null,
+        http_status: gptValueReview.http_status ?? null,
       },
       needs_manual_review: gptQuoteNeedsManualReview,
       llm_chunks_started: llmChunksStarted,
