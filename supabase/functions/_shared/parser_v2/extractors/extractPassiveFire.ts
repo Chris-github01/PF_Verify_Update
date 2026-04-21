@@ -156,6 +156,22 @@ function countGlobal(text: string, re: RegExp): number {
   return matches ? matches.length : 0;
 }
 
+const SECTION_SUMMARY_RE =
+  /^\s*(?:building|block|level|basement|tower|stage|section|area|zone|floor|apartment|unit|lot|wing)\s*[\dA-Za-z]{0,3}\b[^\n]{0,40}(?:sub[-\s]?total|total)\b/i;
+const SCHEDULE_SUBTOTAL_RE =
+  /^\s*(?:sub[-\s]?total|total(?:\s+(?:excl|incl|ex|inc|including|excluding))?\s*(?:gst|g\.s\.t)?|grand\s+total|schedule\s+total|quote\s+total|contract\s+total|tender\s+total|carried\s+forward|c\/f|b\/f)\b\s*[:\-]?/i;
+const MARKUP_SUMMARY_RE =
+  /^\s*(?:p\s*&\s*g|preliminaries|overhead(?:s)?\s*&?\s*(?:profit|margin)?|margin|contingency|ps3\s*&\s*qa|qa\s*&\s*ps3)\s*(?:total|sub[-\s]?total)?\s*[:\-]?\s*$/i;
+
+function isSummaryRow(it: ParsedLineItemV2): boolean {
+  const d = it.description.trim();
+  if (!d) return true;
+  if (SECTION_SUMMARY_RE.test(d)) return true;
+  if (SCHEDULE_SUBTOTAL_RE.test(d)) return true;
+  if (MARKUP_SUMMARY_RE.test(d)) return true;
+  return false;
+}
+
 function postProcess(
   items: ParsedLineItemV2[],
   prescan: PassiveFirePrescan,
@@ -166,6 +182,7 @@ function postProcess(
 
   return items
     .filter((it) => it.description && it.description.length >= 3)
+    .filter((it) => !isSummaryRow(it))
     .map((it) => {
       const sub_scope = harmoniseSubScope(it);
       const frr = it.frr ?? extractFRRFromDescription(it.description) ?? frrFallback;
