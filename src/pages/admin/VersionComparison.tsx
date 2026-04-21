@@ -20,19 +20,16 @@ type ReviewStatus = 'any' | 'required' | 'clean';
 interface ComparisonRow {
   id: string;
   created_at: string;
-  supplier_name: string;
+  quote_id: string | null;
+  supplier: string;
   trade: string;
-  quote_type: string;
   v1_total: number;
   v2_total: number;
   actual_total: number | null;
   v1_runtime_ms: number;
   v2_runtime_ms: number;
-  v1_requires_review: boolean;
-  v2_requires_review: boolean;
+  requires_review: boolean;
   winner: Winner;
-  variance_pct: number;
-  failure_cause: string | null;
 }
 
 const EMPTY_FILTER = '__all__';
@@ -59,7 +56,7 @@ export default function VersionComparison() {
     const { data, error: err } = await supabase
       .from('parser_version_comparisons')
       .select(
-        'id, created_at, supplier_name, trade, quote_type, v1_total, v2_total, actual_total, v1_runtime_ms, v2_runtime_ms, v1_requires_review, v2_requires_review, winner, variance_pct, failure_cause',
+        'id, created_at, quote_id, supplier, trade, v1_total, v2_total, actual_total, v1_runtime_ms, v2_runtime_ms, requires_review, winner',
       )
       .gte('created_at', since)
       .order('created_at', { ascending: false })
@@ -79,18 +76,17 @@ export default function VersionComparison() {
     [rows],
   );
   const suppliers = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.supplier_name).filter(Boolean))).sort(),
+    () => Array.from(new Set(rows.map((r) => r.supplier).filter(Boolean))).sort(),
     [rows],
   );
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
       if (tradeFilter !== EMPTY_FILTER && r.trade !== tradeFilter) return false;
-      if (supplierFilter !== EMPTY_FILTER && r.supplier_name !== supplierFilter) return false;
+      if (supplierFilter !== EMPTY_FILTER && r.supplier !== supplierFilter) return false;
       if (winnerFilter !== 'all' && r.winner !== winnerFilter) return false;
-      const needsReview = r.v1_requires_review || r.v2_requires_review;
-      if (reviewFilter === 'required' && !needsReview) return false;
-      if (reviewFilter === 'clean' && needsReview) return false;
+      if (reviewFilter === 'required' && !r.requires_review) return false;
+      if (reviewFilter === 'clean' && r.requires_review) return false;
       return true;
     });
   }, [rows, tradeFilter, supplierFilter, winnerFilter, reviewFilter]);
@@ -98,6 +94,11 @@ export default function VersionComparison() {
   const kpis = useMemo(() => computeKPIs(filteredRows), [filteredRows]);
   const failureCauses = useMemo(() => computeFailureCauses(filteredRows), [filteredRows]);
   const readiness = useMemo(() => computeReadiness(rows), [rows]);
+
+  const enriched = useMemo(
+    () => filteredRows.map((r) => ({ ...r, variance_pct: deriveVariance(r) })),
+    [filteredRows],
+  );
 
   return (
     <div className="p-6 max-w-screen-2xl mx-auto space-y-6">
@@ -137,7 +138,7 @@ export default function VersionComparison() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2">
-          <ComparisonTable rows={filteredRows} loading={loading} error={error} />
+          <ComparisonTable rows={enriched} loading={loading} error={error} />
         </div>
         <div className="space-y-6">
           <FailureCausesPanel causes={failureCauses} />
@@ -175,7 +176,7 @@ function computeKPIs(rows: ComparisonRow[]): Kpis {
   const avgV1 = compared === 0 ? 0 : rows.reduce((a, r) => a + r.v1_runtime_ms, 0) / compared;
   const avgV2 = compared === 0 ? 0 : rows.reduce((a, r) => a + r.v2_runtime_ms, 0) / compared;
 
-  const needsReview = rows.filter((r) => r.v2_requires_review).length;
+  const needsReview = rows.filter((r) => r.requires_review).length;
   const v2ReviewRate = compared === 0 ? 0 : (needsReview / compared) * 100;
 
   return { compared, v2Better, equal, v1Better, v2Accuracy, avgV1, avgV2, v2ReviewRate };
@@ -189,14 +190,31 @@ interface FailureCause {
 function computeFailureCauses(rows: ComparisonRow[]): FailureCause[] {
   const counts = new Map<string, number>();
   for (const r of rows) {
-    if (r.failure_cause) {
-      counts.set(r.failure_cause, (counts.get(r.failure_cause) ?? 0) + 1);
-    }
+    const cause = deriveFailureCause(r);
+    if (!cause) continue;
+    counts.set(cause, (counts.get(cause) ?? 0) + 1);
   }
   return [...counts.entries()]
     .map(([cause, count]) => ({ cause, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
+}
+
+function deriveFailureCause(r: ComparisonRow): string | null {
+  if (r.actual_total != null && r.actual_total > 0) {
+    const v2Diff = Math.abs(r.v2_total - r.actual_total) / r.actual_total;
+    if (v2Diff > 0.1) return 'V2 total >10% off actual';
+    if (v2Diff > 0.01) return 'V2 total 1–10% off actual';
+  }
+  if (r.requires_review) return 'Flagged for manual review';
+  if (r.winner === 'v1') return 'V1 outperformed V2';
+  return null;
+}
+
+function deriveVariance(r: ComparisonRow): number {
+  const ref = r.actual_total != null && r.actual_total > 0 ? r.actual_total : r.v1_total;
+  if (!ref) return 0;
+  return ((r.v2_total - ref) / ref) * 100;
 }
 
 interface Readiness {
@@ -222,7 +240,7 @@ function computeReadiness(rows: ComparisonRow[]): Readiness {
     return diff / (r.actual_total as number) <= 0.01;
   }).length;
   const accuracy = withActual.length === 0 ? 0 : (hits / withActual.length) * 100;
-  const reviewsRequired = last.filter((r) => r.v2_requires_review).length;
+  const reviewsRequired = last.filter((r) => r.requires_review).length;
 
   return {
     eligible: last.length >= minSample,
@@ -391,7 +409,7 @@ function ComparisonTable({
   loading,
   error,
 }: {
-  rows: ComparisonRow[];
+  rows: (ComparisonRow & { variance_pct: number })[];
   loading: boolean;
   error: string | null;
 }) {
@@ -428,11 +446,12 @@ function ComparisonTable({
                 <th className="text-left px-4 py-2.5 font-medium">Date</th>
                 <th className="text-left px-4 py-2.5 font-medium">Supplier</th>
                 <th className="text-left px-4 py-2.5 font-medium">Trade</th>
-                <th className="text-left px-4 py-2.5 font-medium">Quote Type</th>
                 <th className="text-right px-4 py-2.5 font-medium">V1 Total</th>
                 <th className="text-right px-4 py-2.5 font-medium">V2 Total</th>
                 <th className="text-right px-4 py-2.5 font-medium">Actual</th>
                 <th className="text-right px-4 py-2.5 font-medium">Variance</th>
+                <th className="text-right px-4 py-2.5 font-medium">V1 Runtime</th>
+                <th className="text-right px-4 py-2.5 font-medium">V2 Runtime</th>
                 <th className="text-left px-4 py-2.5 font-medium">Winner</th>
                 <th className="text-left px-4 py-2.5 font-medium">Review</th>
               </tr>
@@ -441,24 +460,20 @@ function ComparisonTable({
               {rows.map((r) => (
                 <tr key={r.id} className="border-t border-slate-800/60 hover:bg-slate-900/60 transition">
                   <td className="px-4 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(r.created_at)}</td>
-                  <td className="px-4 py-2.5 text-slate-200">{r.supplier_name || '—'}</td>
+                  <td className="px-4 py-2.5 text-slate-200">{r.supplier || '—'}</td>
                   <td className="px-4 py-2.5 text-slate-300">{r.trade || '—'}</td>
-                  <td className="px-4 py-2.5 text-slate-400">{r.quote_type || '—'}</td>
                   <td className="px-4 py-2.5 text-right text-slate-200 tabular-nums">{fmtMoney(r.v1_total)}</td>
                   <td className="px-4 py-2.5 text-right text-slate-200 tabular-nums">{fmtMoney(r.v2_total)}</td>
                   <td className="px-4 py-2.5 text-right text-slate-400 tabular-nums">
                     {r.actual_total != null ? fmtMoney(r.actual_total) : '—'}
                   </td>
                   <td className={`px-4 py-2.5 text-right tabular-nums ${varianceTone(r.variance_pct)}`}>
-                    {r.variance_pct != null ? `${Number(r.variance_pct).toFixed(2)}%` : '—'}
+                    {`${r.variance_pct.toFixed(2)}%`}
                   </td>
+                  <td className="px-4 py-2.5 text-right text-slate-400 tabular-nums">{fmtMs(r.v1_runtime_ms)}</td>
+                  <td className="px-4 py-2.5 text-right text-slate-400 tabular-nums">{fmtMs(r.v2_runtime_ms)}</td>
                   <td className="px-4 py-2.5"><WinnerPill winner={r.winner} /></td>
-                  <td className="px-4 py-2.5">
-                    <ReviewPill
-                      v1={r.v1_requires_review}
-                      v2={r.v2_requires_review}
-                    />
-                  </td>
+                  <td className="px-4 py-2.5"><ReviewPill requires={r.requires_review} /></td>
                 </tr>
               ))}
             </tbody>
@@ -483,20 +498,17 @@ function WinnerPill({ winner }: { winner: Winner }) {
   );
 }
 
-function ReviewPill({ v1, v2 }: { v1: boolean; v2: boolean }) {
-  if (!v1 && !v2) {
+function ReviewPill({ requires }: { requires: boolean }) {
+  if (!requires) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
         Clean
       </span>
     );
   }
-  const parts: string[] = [];
-  if (v1) parts.push('V1');
-  if (v2) parts.push('V2');
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border bg-amber-500/10 text-amber-300 border-amber-500/30">
-      Review · {parts.join(' + ')}
+      Review Required
     </span>
   );
 }
