@@ -9,6 +9,7 @@ export type LineMathResult = {
   ok: boolean;
   checked: number;
   mismatches: number;
+  mismatch_rate: number;
   anomalies: string[];
 };
 
@@ -30,10 +31,12 @@ export function validateLineMath(items: ParsedLineItemV2[]): LineMathResult {
     }
   }
 
+  const mismatch_rate = checked === 0 ? 0 : mismatches / checked;
   return {
-    ok: checked === 0 || mismatches / Math.max(1, checked) < 0.1,
+    ok: checked === 0 || mismatch_rate < 0.1,
     checked,
     mismatches,
+    mismatch_rate,
     anomalies: anomalies.slice(0, 20),
   };
 }
