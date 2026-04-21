@@ -19,9 +19,34 @@ import VersionComparison from './admin/VersionComparison';
 
 type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault' | 'platform-admins' | 'system-config' | 'executive-dashboard' | 'audit-ledger' | 'future-builds-roadmap' | 'parser-validation' | 'version-comparison';
 
+function viewFromPath(path: string): AdminView {
+  if (path === '/admin/dashboard') return 'super-dashboard';
+  if (path === '/admin/clients/new') return 'create-client';
+  if (path === '/admin/pdfs') return 'pdf-vault';
+  if (path === '/admin/platform-admins') return 'platform-admins';
+  if (path === '/admin/system-config') return 'system-config';
+  if (path === '/admin/executive-dashboard') return 'executive-dashboard';
+  if (path === '/admin/audit-ledger') return 'audit-ledger';
+  if (path === '/admin/future-builds-roadmap') return 'future-builds-roadmap';
+  if (path === '/admin/parser-validation') return 'parser-validation';
+  if (path === '/admin/version-comparison') return 'version-comparison';
+  if (path === '/admin/organisations') return 'organisations';
+  if (path === '/admin/organisations/new') return 'create-organisation';
+  if (path.startsWith('/admin/organisations/')) return 'organisation-detail';
+  return 'dashboard';
+}
+
 export default function AdminApp() {
-  const [activeView, setActiveView] = useState<AdminView>('dashboard');
-  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<AdminView>(() =>
+    viewFromPath(typeof window !== 'undefined' ? window.location.pathname : '/admin'),
+  );
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(() => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    if (path.startsWith('/admin/organisations/') && path !== '/admin/organisations/new') {
+      return path.split('/').pop() ?? null;
+    }
+    return null;
+  });
   const [userEmail, setUserEmail] = useState<string>('');
   const [isSuperAdminUser, setIsSuperAdminUser] = useState(false);
 

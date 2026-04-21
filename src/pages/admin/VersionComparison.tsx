@@ -34,6 +34,38 @@ interface ComparisonRow {
 
 const EMPTY_FILTER = '__all__';
 
+function toNum(v: unknown): number {
+  if (v == null) return 0;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toNullableNum(v: unknown): number | null {
+  if (v == null) return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeRow(raw: Record<string, unknown>): ComparisonRow {
+  const winnerRaw = typeof raw.winner === 'string' ? raw.winner.toLowerCase() : 'equal';
+  const winner: Winner =
+    winnerRaw === 'v1' || winnerRaw === 'v2' ? (winnerRaw as Winner) : 'equal';
+  return {
+    id: String(raw.id ?? ''),
+    created_at: String(raw.created_at ?? new Date().toISOString()),
+    quote_id: (raw.quote_id as string | null) ?? null,
+    supplier: typeof raw.supplier === 'string' ? raw.supplier : '',
+    trade: typeof raw.trade === 'string' ? raw.trade : '',
+    v1_total: toNum(raw.v1_total),
+    v2_total: toNum(raw.v2_total),
+    actual_total: toNullableNum(raw.actual_total),
+    v1_runtime_ms: toNum(raw.v1_runtime_ms),
+    v2_runtime_ms: toNum(raw.v2_runtime_ms),
+    requires_review: !!raw.requires_review,
+    winner,
+  };
+}
+
 export default function VersionComparison() {
   const [rows, setRows] = useState<ComparisonRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,23 +84,29 @@ export default function VersionComparison() {
   const loadComparisons = async () => {
     setLoading(true);
     setError(null);
-    const since = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000).toISOString();
-    const { data, error: err } = await supabase
-      .from('parser_version_comparisons')
-      .select(
-        'id, created_at, quote_id, supplier, trade, v1_total, v2_total, actual_total, v1_runtime_ms, v2_runtime_ms, requires_review, winner',
-      )
-      .gte('created_at', since)
-      .order('created_at', { ascending: false })
-      .limit(500);
+    try {
+      const since = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error: err } = await supabase
+        .from('parser_version_comparisons')
+        .select(
+          'id, created_at, quote_id, supplier, trade, v1_total, v2_total, actual_total, v1_runtime_ms, v2_runtime_ms, requires_review, winner',
+        )
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(500);
 
-    if (err) {
-      setError(err.message);
+      if (err) {
+        setError(err.message);
+        setRows([]);
+      } else {
+        setRows((data ?? []).map(normalizeRow));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
       setRows([]);
-    } else {
-      setRows((data ?? []) as ComparisonRow[]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const trades = useMemo(
@@ -605,7 +643,8 @@ function runtimeDelta(v1: number, v2: number): string {
   return `${sign}${delta.toFixed(1)}% vs V1`;
 }
 
-function fmtMoney(n: number): string {
+function fmtMoney(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '—';
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
