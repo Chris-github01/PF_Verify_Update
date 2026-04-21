@@ -226,19 +226,34 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   });
   durations.validation = Date.now() - validationStart;
 
+  const ERROR_ANOMALIES = new Set([
+    "classify_trade_failed",
+    "classify_quote_type_failed",
+    "classify_supplier_failed",
+    "extractor_threw",
+    "primary_extractor_zero_rows",
+    "passive_fire_intent_failed",
+    "labelled_grand_subtotal_optional_mismatch",
+    "no_totals_available",
+  ]);
+  const combinedAnomalies = [
+    ...anomalies,
+    ...lineMath.anomalies,
+    ...totals.anomalies,
+    ...missing.anomalies,
+  ];
+  const hasErrorAnomaly = combinedAnomalies.some((a) => ERROR_ANOMALIES.has(a));
+
   const requires_review =
     confidence.level === "LOW" ||
     !totals.ok ||
     missing.missing.length > 0 ||
     items.length === 0 ||
-    anomalies.length > 0;
+    hasErrorAnomaly ||
+    (totals.variants_materially_different &&
+      totals.reconciliation_confidence === "LOW");
 
-  const mergedAnomalies = dedupeStrings([
-    ...anomalies,
-    ...lineMath.anomalies,
-    ...totals.anomalies,
-    ...missing.anomalies,
-  ]);
+  const mergedAnomalies = dedupeStrings(combinedAnomalies);
 
   const quote = mapToQuotesTable({
     projectId: input.projectId,
@@ -249,6 +264,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     totals,
     confidence: confidence.level,
     requires_review,
+    items,
   });
   const dbItems = mapToQuoteItems({ items });
 
