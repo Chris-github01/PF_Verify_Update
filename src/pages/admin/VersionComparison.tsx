@@ -850,6 +850,3 @@ function varianceTone(v: number | null): string {
   if (abs <= 5) return 'text-amber-300';
   return 'text-rose-300';
 }
-
-
-export default VersionComparison
