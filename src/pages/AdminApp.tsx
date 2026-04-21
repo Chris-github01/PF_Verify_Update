@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck, Settings, ShieldAlert, Flame, BarChart3, Database, Map, FlaskConical } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, Users, FileText, ShieldCheck, Settings, ShieldAlert, Flame, BarChart3, Database, Map, FlaskConical, GitCompare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { isSuperAdmin } from '../lib/admin/superAdminGuard';
 import AdminDashboard from './admin/AdminDashboard';
@@ -15,8 +15,9 @@ import ExecutiveDashboard from './admin/ExecutiveDashboard';
 import AuditLedger from './admin/AuditLedger';
 import FutureBuildsRoadmap from './admin/FutureBuildsRoadmap';
 import ParserValidationReport from './admin/ParserValidationReport';
+import VersionComparison from './admin/VersionComparison';
 
-type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault' | 'platform-admins' | 'system-config' | 'executive-dashboard' | 'audit-ledger' | 'future-builds-roadmap' | 'parser-validation';
+type AdminView = 'dashboard' | 'organisations' | 'organisation-detail' | 'create-organisation' | 'super-dashboard' | 'create-client' | 'pdf-vault' | 'platform-admins' | 'system-config' | 'executive-dashboard' | 'audit-ledger' | 'future-builds-roadmap' | 'parser-validation' | 'version-comparison';
 
 export default function AdminApp() {
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
@@ -60,6 +61,8 @@ export default function AdminApp() {
       setActiveView('future-builds-roadmap');
     } else if (path === '/admin/parser-validation') {
       setActiveView('parser-validation');
+    } else if (path === '/admin/version-comparison') {
+      setActiveView('version-comparison');
     } else if (path === '/admin/organisations') {
       setActiveView('organisations');
     } else if (path === '/admin/organisations/new') {
@@ -98,6 +101,8 @@ export default function AdminApp() {
         return <FutureBuildsRoadmap />;
       case 'parser-validation':
         return <ParserValidationReport />;
+      case 'version-comparison':
+        return <VersionComparison />;
       case 'dashboard':
         return <AdminDashboard />;
       case 'organisations':
@@ -355,6 +360,27 @@ export default function AdminApp() {
                 <span className="flex-1 text-left">Parser Validation</span>
                 {activeView === 'parser-validation' && (
                   <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                )}
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => (window.location.href = '/admin/version-comparison')}
+                className={`
+                  group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-all
+                  ${
+                    activeView === 'version-comparison'
+                      ? 'bg-slate-800/80 text-slate-50 shadow-[0_0_0_1px_rgba(148,163,184,0.3)]'
+                      : 'text-slate-400 hover:text-slate-50 hover:bg-slate-900/60'
+                  }
+                `}
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900/60 group-hover:bg-slate-900 flex-shrink-0">
+                  <GitCompare size={16} />
+                </span>
+                <span className="flex-1 text-left">Version Comparison</span>
+                {activeView === 'version-comparison' && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)]" />
                 )}
               </button>
             </li>
