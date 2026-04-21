@@ -1,18 +1,31 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
   ChevronsRight,
   Clock,
+  Database,
   Filter,
   GitCompare,
+  Loader2,
   Rocket,
   Timer,
   TrendingUp,
   Trophy,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import VaultBulkRunModal from './VaultBulkRunModal';
+import {
+  BulkRunRow,
+  cancelBulkRun,
+  completeBulkRun,
+  createBulkRun,
+  dedupeVaultPdfs,
+  fetchBulkRun,
+  fetchVaultPdfs,
+  orchestrateBulkRun,
+} from './vaultBulkRunner';
 
 type Winner = 'v1' | 'v2' | 'equal';
 type ReviewStatus = 'any' | 'required' | 'clean';
@@ -77,9 +90,103 @@ export default function VersionComparison() {
   const [reviewFilter, setReviewFilter] = useState<ReviewStatus>('any');
   const [rangeDays, setRangeDays] = useState<number>(30);
 
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [vaultPhase, setVaultPhase] = useState<'discovering' | 'running' | 'done' | 'error'>('discovering');
+  const [vaultDiscovery, setVaultDiscovery] = useState<{ found: number; duplicates: number; queued: number } | null>(null);
+  const [vaultRun, setVaultRun] = useState<BulkRunRow | null>(null);
+  const [vaultError, setVaultError] = useState<string | null>(null);
+  const [vaultStarting, setVaultStarting] = useState(false);
+  const [lastSummary, setLastSummary] = useState<BulkRunRow | null>(null);
+  const cancelRef = useRef(false);
+  const pollRef = useRef<number | null>(null);
+
   useEffect(() => {
     void loadComparisons();
   }, [rangeDays]);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+    };
+  }, []);
+
+  const startVaultRun = async () => {
+    if (vaultStarting) return;
+    setVaultStarting(true);
+    setVaultError(null);
+    setVaultPhase('discovering');
+    setVaultDiscovery(null);
+    setVaultRun(null);
+    setVaultOpen(true);
+    cancelRef.current = false;
+
+    try {
+      const pdfs = await fetchVaultPdfs();
+      const { unique, duplicates } = dedupeVaultPdfs(pdfs);
+      setVaultDiscovery({ found: pdfs.length, duplicates, queued: unique.length });
+
+      if (unique.length === 0) {
+        setVaultPhase('error');
+        setVaultError('No unique PDFs found in the vault.');
+        setVaultStarting(false);
+        return;
+      }
+
+      const runId = await createBulkRun({
+        totalFiles: pdfs.length,
+        duplicates,
+        queued: unique.length,
+      });
+
+      setVaultPhase('running');
+      pollRef.current = window.setInterval(async () => {
+        try {
+          const r = await fetchBulkRun(runId);
+          if (r) setVaultRun(r);
+        } catch {
+          // swallow transient errors
+        }
+      }, 1500);
+
+      await orchestrateBulkRun(runId, unique, {
+        concurrency: 5,
+        isCancelled: () => cancelRef.current,
+      });
+
+      if (cancelRef.current) {
+        await cancelBulkRun(runId);
+      } else {
+        await completeBulkRun(runId);
+      }
+
+      const finalRow = await fetchBulkRun(runId);
+      if (pollRef.current) {
+        window.clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      setVaultRun(finalRow);
+      setLastSummary(finalRow);
+      setVaultPhase('done');
+      void loadComparisons();
+    } catch (e) {
+      setVaultError(e instanceof Error ? e.message : String(e));
+      setVaultPhase('error');
+      if (pollRef.current) {
+        window.clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    } finally {
+      setVaultStarting(false);
+    }
+  };
+
+  const cancelVaultRun = () => {
+    cancelRef.current = true;
+  };
+
+  const closeVaultModal = () => {
+    setVaultOpen(false);
+  };
 
   const loadComparisons = async () => {
     setLoading(true);
@@ -154,8 +261,24 @@ export default function VersionComparison() {
             </div>
           </div>
         </div>
-        <ReadinessBadge readiness={readiness} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={startVaultRun}
+            disabled={vaultStarting || vaultOpen}
+            className="relative inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-gradient-to-br from-sky-500/20 to-cyan-500/10 px-4 py-2 text-sm font-medium text-sky-100 hover:from-sky-500/30 hover:to-cyan-500/20 hover:border-sky-400/60 transition shadow-lg shadow-sky-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {vaultStarting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Database className="w-4 h-4" />
+            )}
+            Parse From PDF Vault
+          </button>
+          <ReadinessBadge readiness={readiness} />
+        </div>
       </header>
+
+      {lastSummary && <RunSummaryCard run={lastSummary} onDismiss={() => setLastSummary(null)} />}
 
       <KpiGrid kpis={kpis} />
 
@@ -182,6 +305,73 @@ export default function VersionComparison() {
           <FailureCausesPanel causes={failureCauses} />
           <ReadinessPanel readiness={readiness} />
         </div>
+      </div>
+
+      {vaultOpen && (
+        <VaultBulkRunModal
+          run={vaultRun}
+          discovery={vaultDiscovery}
+          phase={vaultPhase}
+          errorMessage={vaultError}
+          onCancel={cancelVaultRun}
+          onClose={closeVaultModal}
+        />
+      )}
+    </div>
+  );
+}
+
+function RunSummaryCard({ run, onDismiss }: { run: BulkRunRow; onDismiss: () => void }) {
+  const processed = run.processed_count ?? 0;
+  const queued = run.queued_unique ?? 0;
+  const duration = run.completed_at
+    ? Math.round((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000)
+    : null;
+  const tones: { label: string; value: string; tone: string }[] = [
+    { label: 'Vault PDFs Found', value: (run.total_files ?? 0).toLocaleString(), tone: 'slate' },
+    { label: 'Duplicates Skipped', value: (run.duplicates_skipped ?? 0).toLocaleString(), tone: 'amber' },
+    { label: 'Unique Processed', value: `${processed}/${queued}`, tone: 'sky' },
+    { label: 'V2 Better', value: (run.v2_better_count ?? 0).toLocaleString(), tone: 'emerald' },
+    { label: 'Equal', value: (run.equal_count ?? 0).toLocaleString(), tone: 'slate' },
+    { label: 'V1 Better', value: (run.v1_better_count ?? 0).toLocaleString(), tone: 'rose' },
+    { label: 'Avg V1 Runtime', value: fmtMs(run.avg_v1_runtime_ms ?? 0), tone: 'amber' },
+    { label: 'Avg V2 Runtime', value: fmtMs(run.avg_v2_runtime_ms ?? 0), tone: 'amber' },
+  ];
+  const toneMap: Record<string, string> = {
+    slate: 'text-slate-200',
+    amber: 'text-amber-300',
+    sky: 'text-sky-300',
+    emerald: 'text-emerald-300',
+    rose: 'text-rose-300',
+  };
+  return (
+    <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 via-slate-900/60 to-slate-900/60 p-5">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-sky-500 to-cyan-500 flex items-center justify-center">
+            <Database className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-50">Latest Vault Run</h3>
+            <p className="text-xs text-slate-400">
+              Completed {duration != null ? `in ${duration}s` : ''} • Status: {run.status}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onDismiss}
+          className="text-xs text-slate-400 hover:text-slate-200 transition"
+        >
+          Dismiss
+        </button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+        {tones.map((t) => (
+          <div key={t.label} className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400">{t.label}</div>
+            <div className={`text-lg font-semibold mt-0.5 tabular-nums ${toneMap[t.tone]}`}>{t.value}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -660,3 +850,6 @@ function varianceTone(v: number | null): string {
   if (abs <= 5) return 'text-amber-300';
   return 'text-rose-300';
 }
+
+
+export default VersionComparison
