@@ -76,6 +76,110 @@ interface ParsingJob {
   trace_json?: TraceJson | null;
   llm_attempted?: boolean | null;
   llm_fail_reason?: string | null;
+  parser_v2_output?: {
+    failed?: boolean;
+    stage?: string;
+    message?: string;
+    details?: Record<string, unknown> | null;
+    timestamp?: string;
+    anomalies?: string[];
+    classification?: Record<string, unknown> | null;
+    extractor_used?: string | null;
+    passive_fire_final?: {
+      confidence?: number;
+      review_status?: string;
+      comparison_safe?: boolean;
+      quote_type?: string;
+      root_cause?: string;
+      review_reason?: string | null;
+      quote_total_ex_gst?: number | null;
+    } | null;
+  } | null;
+}
+
+function ParserV2ReportPanel({ v2 }: { v2: NonNullable<ParsingJob['parser_v2_output']> }) {
+  const [open, setOpen] = useState(true);
+  const failed = v2.failed === true;
+  const pf = v2.passive_fire_final ?? null;
+
+  return (
+    <div className="mt-2 ml-7">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+      >
+        <Activity size={12} />
+        Parser V2 Report
+        <span className={failed ? 'text-red-400' : 'text-green-400'}>
+          [{failed ? 'FAILED' : 'OK'}]
+        </span>
+        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {open && (
+        <div className="mt-1.5 font-mono text-xs bg-slate-900/60 border border-slate-700 rounded px-3 py-2 space-y-1.5">
+          {failed ? (
+            <>
+              <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">
+                <div className="text-slate-500">stage</div>
+                <div className="text-red-400">{v2.stage ?? 'unknown'}</div>
+                <div className="text-slate-500">message</div>
+                <div className="text-slate-200 break-all leading-relaxed">{v2.message ?? '—'}</div>
+                {v2.extractor_used && (
+                  <>
+                    <div className="text-slate-500">extractor_used</div>
+                    <div className="text-slate-300">{v2.extractor_used}</div>
+                  </>
+                )}
+                {v2.timestamp && (
+                  <>
+                    <div className="text-slate-500">timestamp</div>
+                    <div className="text-slate-400">{new Date(v2.timestamp).toLocaleString()}</div>
+                  </>
+                )}
+              </div>
+              {v2.anomalies && v2.anomalies.length > 0 && (
+                <div className="pt-1.5 border-t border-slate-700/60">
+                  <div className="text-slate-500 mb-1">anomalies</div>
+                  <ul className="space-y-0.5">
+                    {v2.anomalies.map((a, i) => (
+                      <li key={i} className="text-orange-300">- {a}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {v2.details && Object.keys(v2.details).length > 0 && (
+                <div className="pt-1.5 border-t border-slate-700/60">
+                  <div className="text-slate-500 mb-1">details</div>
+                  <pre className="text-slate-300 whitespace-pre-wrap break-all leading-relaxed">
+                    {JSON.stringify(v2.details, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </>
+          ) : pf ? (
+            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">
+              <div className="text-slate-500">confidence</div>
+              <div className="text-green-400">{pf.confidence != null ? (pf.confidence * 100).toFixed(0) + '%' : '—'}</div>
+              <div className="text-slate-500">review_status</div>
+              <div className="text-slate-200">{pf.review_status ?? '—'}</div>
+              <div className="text-slate-500">comparison_safe</div>
+              <div className={pf.comparison_safe ? 'text-green-400' : 'text-orange-400'}>
+                {pf.comparison_safe ? 'Yes' : 'No'}
+              </div>
+              <div className="text-slate-500">quote_type</div>
+              <div className="text-slate-200">{pf.quote_type ?? '—'}</div>
+              <div className="text-slate-500">total_ex_gst</div>
+              <div className="text-slate-200">
+                {pf.quote_total_ex_gst != null ? `$${pf.quote_total_ex_gst.toLocaleString()}` : '—'}
+              </div>
+            </div>
+          ) : (
+            <div className="text-slate-500">No V2 output recorded.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface ParsingJobMonitorProps {
@@ -605,6 +709,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                     </div>
                   )}
                   {trace && <TraceReportPanel trace={trace} job={job} />}
+                  {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}
                 </div>
               );
             })}
@@ -641,6 +746,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                           </div>
                           <div className="text-xs text-slate-400">File: {job.filename}</div>
                           {trace && <TraceReportPanel trace={trace} job={job} />}
+                          {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
@@ -719,6 +825,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                             </div>
                           )}
                           {trace && <TraceReportPanel trace={trace} job={job} />}
+                          {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
