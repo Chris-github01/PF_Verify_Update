@@ -39,6 +39,14 @@ import {
   sanitizePassiveFireText,
   type PassiveFireSanitizerResult,
 } from "./classifiers/sanitizePassiveFireText.ts";
+import {
+  validatePassiveFireParse,
+  type PassiveFireValidationResult,
+} from "./validation/validatePassiveFireParse.ts";
+import {
+  composePassiveFireFinalRecord,
+  type PassiveFireFinalRecord,
+} from "./composePassiveFireFinalRecord.ts";
 
 import { extractPassiveFire } from "./extractors/extractPassiveFire.ts";
 import { extractElectrical } from "./extractors/extractElectrical.ts";
@@ -114,6 +122,8 @@ export type ParserV2Output = {
   passive_fire_structure: PassiveFireStructure | null;
   passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null;
   passive_fire_sanitizer: PassiveFireSanitizerResult | null;
+  passive_fire_validation: PassiveFireValidationResult | null;
+  passive_fire_final: PassiveFireFinalRecord | null;
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
     items: ReturnType<typeof mapToQuoteItems>;
@@ -301,6 +311,25 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     durations.pf_intent = Date.now() - intentStart;
   }
 
+  let passive_fire_validation: PassiveFireValidationResult | null = null;
+  if (trade.trade === "passive_fire") {
+    const pfValStart = Date.now();
+    try {
+      passive_fire_validation = await validatePassiveFireParse({
+        structure: passive_fire_structure,
+        authoritative: passive_fire_authoritative_total,
+        sanitizer: passive_fire_sanitizer,
+        items,
+        supplier: supplier.supplierName,
+        openAIKey: input.openAIKey,
+      });
+    } catch (err) {
+      console.error("[parser_v2] passive fire validation failed", err);
+      anomalies.push("pf_validation_failed");
+    }
+    durations.pf_validation = Date.now() - pfValStart;
+  }
+
   const validationStart = Date.now();
   const lineMath = validateLineMath(items);
   const totals = validateTotals(items, input.rawText);
@@ -339,9 +368,24 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     items.length === 0 ||
     hasErrorAnomaly ||
     (totals.variants_materially_different &&
-      totals.reconciliation_confidence === "LOW");
+      totals.reconciliation_confidence === "LOW") ||
+    (passive_fire_validation?.requires_review ?? false);
 
   const mergedAnomalies = dedupeStrings(combinedAnomalies);
+
+  const passive_fire_final: PassiveFireFinalRecord | null =
+    trade.trade === "passive_fire"
+      ? composePassiveFireFinalRecord({
+          supplier: supplier.supplierName,
+          items,
+          structure: passive_fire_structure,
+          authoritative: passive_fire_authoritative_total,
+          sanitizer: passive_fire_sanitizer,
+          validation: passive_fire_validation,
+          pageCount: input.pages?.length ?? null,
+          declaredQuoteType: quoteType.quoteType,
+        })
+      : null;
 
   const quote = mapToQuotesTable({
     projectId: input.projectId,
@@ -385,6 +429,8 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     passive_fire_structure,
     passive_fire_authoritative_total,
     passive_fire_sanitizer,
+    passive_fire_validation,
+    passive_fire_final,
     dbPayload: { quote, items: dbItems },
   };
 }
