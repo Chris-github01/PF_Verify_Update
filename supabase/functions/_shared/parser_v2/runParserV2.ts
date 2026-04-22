@@ -2,13 +2,16 @@
  * Parser V2 — LLM-first orchestrator (production).
  *
  * Pipeline:
- *   1. classifyTrade       → primary trade (PF-first rules)
- *   2. classifyQuoteType   → itemized | lump_sum | hybrid
- *   3. classifySupplier    → supplier identity
- *   4. extractByTrade      → trade-specific gpt-4.1 extractor
- *   5. passive-fire intent → sub_scope refinement when trade=passive_fire
- *   6. validation          → line math + totals + missing rows + confidence
- *   7. mappers             → DB shape identical to legacy parser
+ *   1. classifyTrade             → primary trade (PF-first rules)
+ *   2. classifyQuoteType         → itemized | lump_sum | hybrid
+ *   3. classifySupplier          → supplier identity
+ *   4. classifyPassiveFireStructure (PF only, pre-extraction)
+ *                                → authoritative total page, section roles,
+ *                                  numeric red-flags (phone/FRR/references)
+ *   5. extractByTrade            → trade-specific gpt-4.1 extractor
+ *   6. passive-fire intent       → sub_scope refinement when trade=passive_fire
+ *   7. validation                → line math + totals + missing rows + confidence
+ *   8. mappers                   → DB shape identical to legacy parser
  *
  * The orchestrator records a telemetry row to parser_v2_runs when a
  * SUPABASE service client is available; failures to record never
@@ -19,6 +22,10 @@ import { classifyTrade, type TradeClassification } from "./classifiers/classifyT
 import { classifyQuoteType, type QuoteTypeClassification } from "./classifiers/classifyQuoteType.ts";
 import { classifySupplier, type SupplierClassification } from "./classifiers/classifySupplier.ts";
 import { classifyPassiveFireIntent } from "./classifiers/classifyPassiveFireIntent.ts";
+import {
+  classifyPassiveFireStructure,
+  type PassiveFireStructure,
+} from "./classifiers/classifyPassiveFireStructure.ts";
 
 import { extractPassiveFire } from "./extractors/extractPassiveFire.ts";
 import { extractElectrical } from "./extractors/extractElectrical.ts";
@@ -91,6 +98,7 @@ export type ParserV2Output = {
     total_duration_ms: number;
     extractor_used: string;
   };
+  passive_fire_structure: PassiveFireStructure | null;
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
     items: ReturnType<typeof mapToQuoteItems>;
@@ -158,6 +166,24 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   if (tradeResult.status === "rejected") anomalies.push("classify_trade_failed");
   if (quoteTypeResult.status === "rejected") anomalies.push("classify_quote_type_failed");
   if (supplierResult.status === "rejected") anomalies.push("classify_supplier_failed");
+
+  let passive_fire_structure: PassiveFireStructure | null = null;
+  if (trade.trade === "passive_fire") {
+    const structStart = Date.now();
+    try {
+      passive_fire_structure = await classifyPassiveFireStructure({
+        rawText: input.rawText,
+        pages: input.pages,
+        fileName: input.fileName,
+        supplier: supplier.supplierName,
+        openAIKey: input.openAIKey,
+      });
+    } catch (err) {
+      console.error("[parser_v2] passive fire structure analysis failed", err);
+      anomalies.push("pf_structure_analysis_failed");
+    }
+    durations.pf_structure = Date.now() - structStart;
+  }
 
   const extractor = EXTRACTOR_BY_TRADE[trade.trade] ?? extractFallback;
   const extractorName = EXTRACTOR_BY_TRADE[trade.trade] ? trade.trade : "fallback";
@@ -294,6 +320,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       total_duration_ms,
       extractor_used: extractorName,
     },
+    passive_fire_structure,
     dbPayload: { quote, items: dbItems },
   };
 }
