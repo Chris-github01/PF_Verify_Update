@@ -43,7 +43,6 @@ interface ComparisonRow {
   v2_runtime_ms: number;
   requires_review: boolean;
   winner: Winner;
-  source: 'live_import' | 'vault_batch' | 'unknown';
 }
 
 const EMPTY_FILTER = '__all__';
@@ -64,9 +63,6 @@ function normalizeRow(raw: Record<string, unknown>): ComparisonRow {
   const winnerRaw = typeof raw.winner === 'string' ? raw.winner.toLowerCase() : 'equal';
   const winner: Winner =
     winnerRaw === 'v1' || winnerRaw === 'v2' ? (winnerRaw as Winner) : 'equal';
-  const rawSource = typeof raw.source === 'string' ? raw.source : null;
-  const source: ComparisonRow['source'] =
-    rawSource === 'live_import' || rawSource === 'vault_batch' ? rawSource : 'unknown';
   return {
     id: String(raw.id ?? ''),
     created_at: String(raw.created_at ?? new Date().toISOString()),
@@ -80,7 +76,6 @@ function normalizeRow(raw: Record<string, unknown>): ComparisonRow {
     v2_runtime_ms: toNum(raw.v2_runtime_ms),
     requires_review: !!raw.requires_review,
     winner,
-    source,
   };
 }
 
@@ -107,13 +102,6 @@ export default function VersionComparison() {
 
   useEffect(() => {
     void loadComparisons();
-  }, [rangeDays]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      void loadComparisons();
-    }, 15000);
-    return () => window.clearInterval(id);
   }, [rangeDays]);
 
   useEffect(() => {
@@ -208,7 +196,7 @@ export default function VersionComparison() {
       const { data, error: err } = await supabase
         .from('parser_version_comparisons')
         .select(
-          'id, created_at, quote_id, supplier, trade, v1_total, v2_total, actual_total, v1_runtime_ms, v2_runtime_ms, requires_review, winner, source',
+          'id, created_at, quote_id, supplier, trade, v1_total, v2_total, actual_total, v1_runtime_ms, v2_runtime_ms, requires_review, winner',
         )
         .gte('created_at', since)
         .order('created_at', { ascending: false })
@@ -274,13 +262,6 @@ export default function VersionComparison() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 shadow-[0_0_16px_rgba(16,185,129,0.18)]">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-            </span>
-            Live Shadow Mode Active
-          </div>
           <button
             onClick={startVaultRun}
             disabled={vaultStarting || vaultOpen}
@@ -691,7 +672,6 @@ function ComparisonTable({
             <thead className="bg-slate-950/60 text-[11px] uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="text-left px-4 py-2.5 font-medium">Date</th>
-                <th className="text-left px-4 py-2.5 font-medium">Source</th>
                 <th className="text-left px-4 py-2.5 font-medium">Supplier</th>
                 <th className="text-left px-4 py-2.5 font-medium">Trade</th>
                 <th className="text-right px-4 py-2.5 font-medium">V1 Total</th>
@@ -708,7 +688,6 @@ function ComparisonTable({
               {rows.map((r) => (
                 <tr key={r.id} className="border-t border-slate-800/60 hover:bg-slate-900/60 transition">
                   <td className="px-4 py-2.5 text-slate-400 whitespace-nowrap">{fmtDate(r.created_at)}</td>
-                  <td className="px-4 py-2.5"><SourcePill source={r.source} /></td>
                   <td className="px-4 py-2.5 text-slate-200">{r.supplier || '—'}</td>
                   <td className="px-4 py-2.5 text-slate-300">{r.trade || '—'}</td>
                   <td className="px-4 py-2.5 text-right text-slate-200 tabular-nums">{fmtMoney(r.v1_total)}</td>
@@ -743,28 +722,6 @@ function WinnerPill({ winner }: { winner: Winner }) {
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${map[winner]}`}>
       {label[winner]}
-    </span>
-  );
-}
-
-function SourcePill({ source }: { source: ComparisonRow['source'] }) {
-  if (source === 'live_import') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Live Import
-      </span>
-    );
-  }
-  if (source === 'vault_batch') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border bg-sky-500/10 text-sky-300 border-sky-500/30">
-        <span className="h-1.5 w-1.5 rounded-full bg-sky-400" /> Vault Batch
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border bg-slate-500/10 text-slate-300 border-slate-500/30">
-      —
     </span>
   );
 }
