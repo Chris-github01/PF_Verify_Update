@@ -14,8 +14,10 @@
  */
 
 import { PASSIVE_FIRE_PROMPT } from "../prompts/passiveFirePrompt.ts";
+import { PASSIVE_FIRE_LINE_ITEM_PROMPT } from "../prompts/passiveFireLineItemPrompt.ts";
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
-import { runExtractorLLM } from "./_extractorRuntime.ts";
+import type { PassiveFireStructure } from "../classifiers/classifyPassiveFireStructure.ts";
+import { runExtractorLLM, normaliseRow } from "./_extractorRuntime.ts";
 
 type PassiveFirePrescan = {
   frr_ratings_found: string[];
@@ -100,11 +102,16 @@ export async function extractPassiveFire(ctx: {
   quoteType: string;
   supplier: string;
   openAIKey: string;
+  structure?: PassiveFireStructure | null;
 }): Promise<ParsedLineItemV2[]> {
   const prescan = prescanPassiveFire(ctx.rawText);
+  const structure = ctx.structure ?? null;
+  const useStructureAwarePrompt = structure !== null;
 
   const rawItems = await runExtractorLLM({
-    systemPrompt: PASSIVE_FIRE_PROMPT,
+    systemPrompt: useStructureAwarePrompt
+      ? PASSIVE_FIRE_LINE_ITEM_PROMPT
+      : PASSIVE_FIRE_PROMPT,
     trade: "passive_fire",
     rawText: ctx.rawText,
     pages: ctx.pages,
@@ -116,10 +123,67 @@ export async function extractPassiveFire(ctx: {
         "Passive fire scope. Cross-trade references to plumbing/electrical/HVAC services are still passive-fire work — sub_scope must reflect the PF taxonomy.",
       frr_required: true,
       prescan,
+      financial_map: structure,
     },
+    rowMapper: useStructureAwarePrompt ? mapLineItemRow : undefined,
   });
 
   return postProcess(rawItems, prescan);
+}
+
+function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 {
+  const base = normaliseRow(
+    {
+      item_number: r.item_number ?? null,
+      description: r.description,
+      quantity: r.quantity,
+      unit: r.unit,
+      unit_price: r.unit_price,
+      total_price: r.total_price,
+      scope_category: r.scope_category,
+      trade,
+      sub_scope: r.passive_fire_system ?? null,
+      frr: r.frr,
+      source: "llm",
+      confidence: r.confidence,
+    },
+    trade,
+  );
+
+  const block = toStringOrNull(r.building_or_block);
+  const page = toStringOrNull(r.source_page);
+  const section = toStringOrNull(r.source_section);
+  const rowRole = toStringOrNull(r.row_role);
+  const serviceTrade = toStringOrNull(r.service_trade);
+
+  const contextParts: string[] = [];
+  if (block) contextParts.push(`[${block}]`);
+  if (section) contextParts.push(`(${section})`);
+  const prefix = contextParts.join(" ");
+  const description = prefix
+    ? `${prefix} ${base.description}`.trim()
+    : base.description;
+
+  return {
+    ...base,
+    description,
+    sub_scope:
+      base.sub_scope ||
+      rowRole ||
+      (serviceTrade && serviceTrade !== "unknown" && serviceTrade !== "mixed"
+        ? `service_penetration_${serviceTrade}`
+        : null) ||
+      null,
+    // carry source page/section into a discoverable place without breaking the
+    // DB schema — we tag into sub_scope when there is still space, otherwise
+    // discard. The primary audit trail is the ignored_rows + prescan logs.
+  };
+}
+
+function toStringOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s.length === 0 ? null : s;
 }
 
 function prescanPassiveFire(text: string): PassiveFirePrescan {

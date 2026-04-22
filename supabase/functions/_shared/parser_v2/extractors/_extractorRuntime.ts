@@ -25,6 +25,7 @@ export type ExtractorContext = {
   supplier: string;
   openAIKey: string;
   extraUserContext?: Record<string, unknown>;
+  rowMapper?: (raw: Record<string, unknown>, trade: string) => ParsedLineItemV2;
 };
 
 export type ExtractorResult = {
@@ -69,7 +70,8 @@ export async function runExtractorLLMWithTelemetry(
     });
     if (rows != null) {
       succeeded++;
-      for (const r of rows) all.push(normaliseRow(r, ctx.trade));
+      const mapper = ctx.rowMapper ?? normaliseRow;
+      for (const r of rows) all.push(mapper(r as Record<string, unknown>, ctx.trade));
     }
   }
 
@@ -134,7 +136,7 @@ async function callOpenAIWithRetry(args: {
   return null;
 }
 
-function normaliseRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 {
+export function normaliseRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 {
   return {
     item_number: r.item_number == null ? null : String(r.item_number),
     description: String(r.description ?? "").trim(),
