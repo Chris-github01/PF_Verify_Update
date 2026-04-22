@@ -7,7 +7,6 @@ import { classifyDocument } from "../_shared/documentClassifier.ts";
 import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
 import { runThreePassParser } from "../_shared/threePassParser.ts";
 import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
-import { runParserV2 } from "../_shared/parser_v2/runParserV2.ts";
 
 // =============================================================================
 // PROCESS PARSING JOB — DETERMINISTIC PRE-PASS + LLM EXTRACTION
@@ -941,98 +940,7 @@ Deno.serve(async (req: Request) => {
       document_sub_total: resolution.totals.subTotal,
       optional_scope_total: canonicalOptionalTotal > 0 ? canonicalOptionalTotal : null,
       original_line_items_total: resolution.totals.rowSum,
-      parser_primary: "v1",
-      parser_v1_total: canonicalTotal,
     }).eq("id", quoteData.id);
-
-    // =========================================================================
-    // PARSER V2 — LLM-FIRST PROMOTION (passive_fire only, inline)
-    // Promote V2 as primary when health gate passes:
-    //   confidence >= 0.75 AND quote_total_ex_gst != null AND review_status != manual_review_required
-    // Otherwise V1 remains primary; V2 diagnostics still persisted for debug.
-    // =========================================================================
-    let parserV2Output: Awaited<ReturnType<typeof runParserV2>> | null = null;
-    let parserPrimary: "v1" | "v2" = "v1";
-    let parserFallbackReason: string | null = null;
-
-    if (trade === "passive_fire") {
-      const v2Start = Date.now();
-      await setStage(supabase, jobId, "Running Parser V2 (promotion gate)", 85);
-      try {
-        const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
-        if (!openAiKey) throw new Error("OPENAI_API_KEY not configured");
-        parserV2Output = await runParserV2({
-          rawText,
-          pages: allPages,
-          fileName: typedJob.filename,
-          supplierHint: typedJob.supplier_name,
-          tradeHint: trade,
-          projectId: typedJob.project_id,
-          organisationId: typedJob.organisation_id,
-          quoteId: quoteData.id,
-          openAIKey: openAiKey,
-        });
-        console.log(`[V2] done in ${Date.now() - v2Start}ms confidence=${parserV2Output.totals.confidence} review=${parserV2Output.requires_review}`);
-      } catch (v2Err) {
-        const msg = v2Err instanceof Error ? v2Err.message : String(v2Err);
-        console.error(`[V2] failed:`, msg);
-        parserFallbackReason = `v2_exception:${msg.slice(0, 120)}`;
-      }
-
-      const finalRecord = parserV2Output?.passive_fire_final ?? null;
-      const v2Confidence = finalRecord?.confidence ?? null;
-      const v2TotalEx = finalRecord?.quote_total_ex_gst ?? null;
-      const v2TotalInc = finalRecord?.quote_total_inc_gst ?? null;
-      const v2Optional = finalRecord?.optional_total ?? null;
-      const v2ReviewStatus = finalRecord?.review_status ?? null;
-      const v2ComparisonSafe = finalRecord?.comparison_safe ?? null;
-      const v2QuoteType = finalRecord?.quote_type ?? null;
-
-      const healthy =
-        parserV2Output != null &&
-        finalRecord != null &&
-        v2Confidence != null &&
-        v2Confidence >= 0.75 &&
-        v2TotalEx != null &&
-        v2TotalEx > 0 &&
-        v2ReviewStatus !== "manual_review_required";
-
-      if (healthy) {
-        parserPrimary = "v2";
-        parserFallbackReason = null;
-        console.log(`[V2] PROMOTED — confidence=${v2Confidence} total_ex=${v2TotalEx}`);
-      } else if (!parserFallbackReason) {
-        if (!parserV2Output) parserFallbackReason = "v2_null_output";
-        else if (!finalRecord) parserFallbackReason = "v2_no_final_record";
-        else if (v2Confidence == null || v2Confidence < 0.75) parserFallbackReason = `low_confidence:${v2Confidence ?? "null"}`;
-        else if (v2TotalEx == null) parserFallbackReason = "null_total_ex_gst";
-        else if (v2ReviewStatus === "manual_review_required") parserFallbackReason = "manual_review_required";
-        else parserFallbackReason = "health_gate_failed";
-      }
-
-      const quoteUpdate: Record<string, unknown> = {
-        parser_primary: parserPrimary,
-        parser_fallback_reason: parserFallbackReason,
-        parser_v1_total: canonicalTotal,
-        parser_v2_confidence: v2Confidence,
-        parser_v2_review_status: v2ReviewStatus,
-        parser_v2_comparison_safe: v2ComparisonSafe,
-        parser_v2_quote_type: v2QuoteType,
-        parser_v2_total_ex_gst: v2TotalEx,
-        parser_v2_total_inc_gst: v2TotalInc,
-        parser_v2_optional_total: v2Optional,
-        passive_fire_final: finalRecord,
-      };
-
-      if (parserPrimary === "v2" && v2TotalEx != null) {
-        quoteUpdate.total_amount = v2TotalEx;
-        quoteUpdate.total_price = v2TotalEx;
-        quoteUpdate.resolved_total = v2TotalEx;
-        quoteUpdate.resolution_source = "parser_v2_authoritative";
-      }
-
-      await supabase.from("quotes").update(quoteUpdate).eq("id", quoteData.id);
-    }
 
     const parseMetadata = {
       parser_strategy: parserStrategy,
@@ -1074,40 +982,18 @@ Deno.serve(async (req: Request) => {
       parser_reasons: resolution.debug.parserReasons,
     };
 
-    const v2PersistOutput = parserV2Output
-      ? {
-          confidence: parserV2Output.passive_fire_final?.confidence ?? null,
-          review_status: parserV2Output.passive_fire_final?.review_status ?? null,
-          comparison_safe: parserV2Output.passive_fire_final?.comparison_safe ?? null,
-          quote_type: parserV2Output.passive_fire_final?.quote_type ?? null,
-          requires_review: parserV2Output.requires_review,
-          quote_total_ex_gst: parserV2Output.passive_fire_final?.quote_total_ex_gst ?? null,
-          quote_total_inc_gst: parserV2Output.passive_fire_final?.quote_total_inc_gst ?? null,
-          optional_total: parserV2Output.passive_fire_final?.optional_total ?? null,
-          root_cause: parserV2Output.passive_fire_final?.root_cause ?? null,
-          review_reason: parserV2Output.passive_fire_final?.review_reason ?? null,
-          main_total: parserV2Output.totals.main_total,
-          grand_total: parserV2Output.totals.grand_total,
-          resolution_source: parserV2Output.totals.resolution_source,
-          anomalies: parserV2Output.validation.anomalies,
-          extractor_used: parserV2Output.telemetry.extractor_used,
-          total_duration_ms: parserV2Output.telemetry.total_duration_ms,
-        }
-      : null;
-
     await supabase.from("parsing_jobs").update({
       status: "completed",
       progress: 100,
       current_stage: "Completed",
       quote_id: quoteData.id,
       result_data: parseMetadata,
-      metadata: { ...parseMetadata, parser_primary: parserPrimary, parser_fallback_reason: parserFallbackReason },
-      parser_v2_output: v2PersistOutput,
+      metadata: parseMetadata,
       llm_attempted: llmAttempted,
       llm_success: llmSuccess,
       llm_fail_reason: llmFailReason,
       llm_chunks_completed: llmChunksCompleted,
-      final_parser_used: parserPrimary === "v2" ? "parser_v2(gpt-4.1)" : finalParserUsed,
+      final_parser_used: finalParserUsed,
       trace_json: traceReport,
       last_error: null,
       last_error_code: null,
