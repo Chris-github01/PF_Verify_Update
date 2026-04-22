@@ -5,9 +5,6 @@
  *   1. classifyTrade             → primary trade (PF-first rules)
  *   2. classifyQuoteType         → itemized | lump_sum | hybrid
  *   3. classifySupplier          → supplier identity
- *   3b. sanitizePassiveFireText   (PF only, pre-structure)
- *                                → strips OCR noise (phone/date/FRR/
- *                                  refs) before any financial parsing
  *   4. classifyPassiveFireStructure (PF only, pre-extraction)
  *                                → authoritative total page, section roles,
  *                                  numeric red-flags (phone/FRR/references)
@@ -35,10 +32,6 @@ import {
   selectPassiveFireAuthoritativeTotal,
   type PassiveFireAuthoritativeTotal,
 } from "./classifiers/selectPassiveFireAuthoritativeTotal.ts";
-import {
-  sanitizePassiveFireText,
-  type PassiveFireSanitizerResult,
-} from "./classifiers/sanitizePassiveFireText.ts";
 
 import { extractPassiveFire } from "./extractors/extractPassiveFire.ts";
 import { extractElectrical } from "./extractors/extractElectrical.ts";
@@ -113,7 +106,6 @@ export type ParserV2Output = {
   };
   passive_fire_structure: PassiveFireStructure | null;
   passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null;
-  passive_fire_sanitizer: PassiveFireSanitizerResult | null;
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
     items: ReturnType<typeof mapToQuoteItems>;
@@ -183,39 +175,13 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   if (quoteTypeResult.status === "rejected") anomalies.push("classify_quote_type_failed");
   if (supplierResult.status === "rejected") anomalies.push("classify_supplier_failed");
 
-  let passive_fire_sanitizer: PassiveFireSanitizerResult | null = null;
-  let effectiveRawText = input.rawText;
-  let effectivePages = input.pages;
-  if (trade.trade === "passive_fire") {
-    const sanitizeStart = Date.now();
-    try {
-      passive_fire_sanitizer = await sanitizePassiveFireText({
-        rawText: input.rawText,
-        pages: input.pages,
-        supplier: supplier.supplierName,
-        fileName: input.fileName,
-        openAIKey: input.openAIKey,
-      });
-      if (passive_fire_sanitizer.clean_pages.length > 0) {
-        effectivePages = passive_fire_sanitizer.clean_pages;
-      }
-      if (passive_fire_sanitizer.clean_text && passive_fire_sanitizer.clean_text.trim().length > 0) {
-        effectiveRawText = passive_fire_sanitizer.clean_text;
-      }
-    } catch (err) {
-      console.error("[parser_v2] passive fire sanitizer failed", err);
-      anomalies.push("pf_sanitizer_failed");
-    }
-    durations.pf_sanitize = Date.now() - sanitizeStart;
-  }
-
   let passive_fire_structure: PassiveFireStructure | null = null;
   if (trade.trade === "passive_fire") {
     const structStart = Date.now();
     try {
       passive_fire_structure = await classifyPassiveFireStructure({
-        rawText: effectiveRawText,
-        pages: effectivePages,
+        rawText: input.rawText,
+        pages: input.pages,
         fileName: input.fileName,
         supplier: supplier.supplierName,
         openAIKey: input.openAIKey,
@@ -234,8 +200,8 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   let items: ParsedLineItemV2[] = [];
   try {
     items = await extractor({
-      rawText: effectiveRawText,
-      pages: effectivePages,
+      rawText: input.rawText,
+      pages: input.pages,
       quoteType: quoteType.quoteType,
       supplier: supplier.supplierName,
       openAIKey: input.openAIKey,
@@ -274,8 +240,8 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_authoritative_total = await selectPassiveFireAuthoritativeTotal({
         structure: passive_fire_structure,
         items,
-        rawText: effectiveRawText,
-        pages: effectivePages,
+        rawText: input.rawText,
+        pages: input.pages,
         supplier: supplier.supplierName,
         openAIKey: input.openAIKey,
       });
@@ -384,7 +350,6 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     },
     passive_fire_structure,
     passive_fire_authoritative_total,
-    passive_fire_sanitizer,
     dbPayload: { quote, items: dbItems },
   };
 }
