@@ -10,13 +10,14 @@ const corsHeaders = {
 type Winner = "v1" | "v2" | "equal";
 
 interface RequestBody {
-  run_id: string;
+  run_id?: string | null;
   file_url: string;
   filename: string;
   supplier: string;
   trade: string;
   quote_id?: string | null;
   actual_total?: number | null;
+  source?: string | null;
 }
 
 interface ParserResult {
@@ -38,14 +39,37 @@ Deno.serve(async (req: Request) => {
     );
 
     const body = (await req.json()) as RequestBody;
-    if (!body.run_id || !body.file_url) {
-      return json({ error: "run_id and file_url are required" }, 400);
+    if (!body.file_url) {
+      return json({ error: "file_url is required" }, 400);
     }
 
-    await supabase
-      .from("parser_bulk_runs")
-      .update({ current_file: body.filename ?? body.file_url })
-      .eq("id", body.run_id);
+    const runId = body.run_id ?? null;
+    const source = body.source ?? (runId ? "vault_bulk" : "auto_on_import");
+    console.log(
+      `[bulk_compare_vault_pdf] start source=${source} quote_id=${body.quote_id ?? "n/a"} file=${body.filename}`,
+    );
+
+    if (body.quote_id) {
+      const { data: existing } = await supabase
+        .from("parser_version_comparisons")
+        .select("id")
+        .eq("quote_id", body.quote_id)
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        console.log(
+          `[bulk_compare_vault_pdf] skip duplicate quote_id=${body.quote_id} existing=${existing.id}`,
+        );
+        return json({ success: true, skipped: "duplicate", existing_id: existing.id });
+      }
+    }
+
+    if (runId) {
+      await supabase
+        .from("parser_bulk_runs")
+        .update({ current_file: body.filename ?? body.file_url })
+        .eq("id", runId);
+    }
 
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("quotes")
@@ -91,8 +115,8 @@ Deno.serve(async (req: Request) => {
         variance_pct: variance,
         failure_cause,
         metadata: {
-          source: "vault_bulk",
-          run_id: body.run_id,
+          source,
+          run_id: runId,
           filename: body.filename,
           v1_notes: v1.notes,
           v2_notes: v2.notes,
@@ -104,7 +128,12 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, reason: "insert_failed", detail: insertError.message }, 200);
     }
 
-    await bumpRunCounters(supabase, body.run_id, winner, v1.runtime_ms, v2.runtime_ms);
+    if (runId) {
+      await bumpRunCounters(supabase, runId, winner, v1.runtime_ms, v2.runtime_ms);
+    }
+    console.log(
+      `[bulk_compare_vault_pdf] done source=${source} quote_id=${body.quote_id ?? "n/a"} winner=${winner} v1=${v1.total} v2=${v2.total}`,
+    );
 
     return json({
       success: true,
@@ -132,6 +161,10 @@ async function recordFailure(
   body: RequestBody,
   reason: string,
 ) {
+  console.log(
+    `[bulk_compare_vault_pdf] failure quote_id=${body.quote_id ?? "n/a"} file=${body.filename} reason=${reason}`,
+  );
+  if (!body.run_id) return;
   await supabase.rpc("increment_bulk_run_failure", { p_run_id: body.run_id }).then(
     () => undefined,
     () => undefined,
