@@ -111,6 +111,7 @@ type ExtractorFn = (ctx: {
   quoteType: string;
   supplier: string;
   openAIKey: string;
+  structure?: PassiveFireStructure | null;
 }) => Promise<ParsedLineItemV2[]>;
 
 const EXTRACTOR_BY_TRADE: Record<string, ExtractorFn> = {
@@ -197,6 +198,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       quoteType: quoteType.quoteType,
       supplier: supplier.supplierName,
       openAIKey: input.openAIKey,
+      structure: passive_fire_structure,
     });
   } catch (err) {
     console.error("[parser_v2] extractor threw, falling back", err);
