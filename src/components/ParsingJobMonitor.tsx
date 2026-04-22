@@ -24,6 +24,21 @@ interface ParsingJobMetadata {
   grand_total_found?: number;
   will_skip_llm?: boolean;
   prior_llm_fail_reason?: string;
+  parser_primary?: string;
+  parser_fallback_reason?: string;
+}
+
+interface ParserV2Output {
+  confidence?: number;
+  review_status?: string;
+  comparison_safe?: boolean;
+  quote_type?: string;
+  requires_review?: boolean;
+  quote_total_ex_gst?: number;
+  quote_total_inc_gst?: number;
+  optional_total?: number;
+  root_cause?: string;
+  review_reason?: string;
 }
 
 interface TraceEntry {
@@ -76,6 +91,7 @@ interface ParsingJob {
   trace_json?: TraceJson | null;
   llm_attempted?: boolean | null;
   llm_fail_reason?: string | null;
+  parser_v2_output?: ParserV2Output | null;
 }
 
 interface ParsingJobMonitorProps {
@@ -140,6 +156,52 @@ function TraceReportPanel({ trace, job }: { trace: TraceJson; job: ParsingJob })
       </button>
       {open && (
         <div className="mt-1.5 font-mono text-xs bg-slate-900/60 border border-slate-700 rounded px-3 py-2 space-y-1.5">
+          {(job.metadata?.parser_primary === 'v2' || job.parser_v2_output) && (
+            <div className="pb-1.5 mb-1 border-b border-slate-700/60">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">PARSER V2</span>
+                {job.metadata?.parser_fallback_reason && (
+                  <span className="text-[10px] text-amber-400">fallback: {job.metadata.parser_fallback_reason}</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                {job.parser_v2_output?.confidence != null && (
+                  <>
+                    <div className="text-slate-500">confidence</div>
+                    <div className={Number(job.parser_v2_output.confidence) >= 0.75 ? 'text-emerald-400' : 'text-amber-400'}>
+                      {Math.round(Number(job.parser_v2_output.confidence) * 100)}%
+                    </div>
+                  </>
+                )}
+                {job.parser_v2_output?.review_status && (
+                  <>
+                    <div className="text-slate-500">review_status</div>
+                    <div className="text-slate-200">{job.parser_v2_output.review_status}</div>
+                  </>
+                )}
+                {job.parser_v2_output?.comparison_safe != null && (
+                  <>
+                    <div className="text-slate-500">comparison_safe</div>
+                    <div className={job.parser_v2_output.comparison_safe ? 'text-emerald-400' : 'text-amber-400'}>
+                      {job.parser_v2_output.comparison_safe ? 'Yes' : 'No'}
+                    </div>
+                  </>
+                )}
+                {job.parser_v2_output?.quote_type && (
+                  <>
+                    <div className="text-slate-500">quote_type</div>
+                    <div className="text-slate-200">{job.parser_v2_output.quote_type}</div>
+                  </>
+                )}
+                {job.parser_v2_output?.quote_total_ex_gst != null && (
+                  <>
+                    <div className="text-slate-500">total_ex_gst</div>
+                    <div className="text-slate-200">${Number(job.parser_v2_output.quote_total_ex_gst).toLocaleString('en-NZ', { minimumFractionDigits: 2 })}</div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
             <div className="text-slate-500">primary_parser</div>
             <div className="text-slate-200">{job.primary_parser ?? trace.parser_attempt_order?.[0]?.parser ?? '—'}</div>

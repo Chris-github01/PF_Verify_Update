@@ -39,6 +39,17 @@ interface QuoteResolutionMeta {
   parsing_version: string | null;
   document_total: number | null;
   items_total: number | null;
+  parser_primary?: string | null;
+  parser_fallback_reason?: string | null;
+  parser_v1_total?: number | null;
+  parser_v2_confidence?: number | null;
+  parser_v2_review_status?: string | null;
+  parser_v2_comparison_safe?: boolean | null;
+  parser_v2_quote_type?: string | null;
+  parser_v2_total_ex_gst?: number | null;
+  parser_v2_total_inc_gst?: number | null;
+  parser_v2_optional_total?: number | null;
+  passive_fire_final?: Record<string, unknown> | null;
 }
 
 interface DebugResponse {
@@ -148,6 +159,103 @@ function MetricCard({ label, value, sub, colorClass }: { label: string; value: s
   );
 }
 
+function PassiveFireV2Panel({ final }: { final: Record<string, unknown> }) {
+  const [tab, setTab] = useState<'final' | 'financial' | 'selector' | 'validator' | 'raw'>('final');
+  const get = (k: string): unknown => final[k];
+  const money = (n: unknown) =>
+    typeof n === 'number' ? `$${n.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+  const pct = (n: unknown) => (typeof n === 'number' ? `${Math.round(n * 100)}%` : '—');
+  const analytics = (get('analytics') ?? {}) as Record<string, unknown>;
+  const legacy = (get('legacy_fields') ?? {}) as Record<string, unknown>;
+
+  const tabs: { key: typeof tab; label: string }[] = [
+    { key: 'final', label: 'Final Output' },
+    { key: 'financial', label: 'Financial Map' },
+    { key: 'selector', label: 'Selector Logic' },
+    { key: 'validator', label: 'Validator' },
+    { key: 'raw', label: 'Raw' },
+  ];
+
+  const rowStyle = 'flex items-center justify-between py-1.5 border-b border-slate-800 last:border-0';
+
+  return (
+    <div className="bg-slate-800 border border-emerald-500/30 rounded-lg overflow-hidden">
+      <div className="px-4 py-2 border-b border-slate-700 bg-emerald-500/5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">PARSER V2</span>
+          <span className="text-sm font-semibold text-slate-200">Passive Fire Final Record</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${tab === t.key ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'text-slate-400 hover:text-slate-200 border border-transparent'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="p-4 text-xs">
+        {tab === 'final' && (
+          <div className="grid grid-cols-2 gap-x-6">
+            <div>
+              <div className={rowStyle}><span className="text-slate-500">Supplier</span><span className="text-slate-200">{String(get('supplier') ?? '—')}</span></div>
+              <div className={rowStyle}><span className="text-slate-500">Quote Type</span><span className="text-slate-200">{String(get('quote_type') ?? '—')}</span></div>
+              <div className={rowStyle}><span className="text-slate-500">Document Type</span><span className="text-slate-200">{String(get('document_type') ?? '—')}</span></div>
+              <div className={rowStyle}><span className="text-slate-500">Currency</span><span className="text-slate-200">{String(get('currency') ?? '—')}</span></div>
+              <div className={rowStyle}><span className="text-slate-500">GST Basis</span><span className="text-slate-200">{String(get('gst_basis') ?? '—')}</span></div>
+            </div>
+            <div>
+              <div className={rowStyle}><span className="text-slate-500">Total ex GST</span><span className="text-emerald-300 font-semibold">{money(get('quote_total_ex_gst'))}</span></div>
+              <div className={rowStyle}><span className="text-slate-500">Total inc GST</span><span className="text-slate-200">{money(get('quote_total_inc_gst'))}</span></div>
+              <div className={rowStyle}><span className="text-slate-500">Line Items</span><span className="text-slate-200">{String(get('line_items_count') ?? '—')} ({String(get('main_items_count') ?? 0)} main)</span></div>
+              <div className={rowStyle}><span className="text-slate-500">Confidence</span><span className="text-slate-200">{pct(get('confidence'))}</span></div>
+              <div className={rowStyle}><span className="text-slate-500">Comparison Safe</span><span className={get('comparison_safe') ? 'text-emerald-400' : 'text-amber-400'}>{get('comparison_safe') ? 'Yes' : 'No'}</span></div>
+            </div>
+          </div>
+        )}
+        {tab === 'financial' && (
+          <div className="space-y-1">
+            <div className={rowStyle}><span className="text-slate-500">Main Total (ex GST)</span><span className="text-emerald-300 font-semibold">{money(get('quote_total_ex_gst'))}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Main Total (inc GST)</span><span className="text-slate-200">{money(get('quote_total_inc_gst'))}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Optional Total</span><span className="text-blue-300">{money(get('optional_total'))}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">PS3 / QA</span><span className="text-slate-200">{money(get('ps3_qa_total'))}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Site Setup</span><span className="text-slate-200">{money(get('site_setup_total'))}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Subtotal (legacy)</span><span className="text-slate-200">{money(legacy.subtotal)}</span></div>
+          </div>
+        )}
+        {tab === 'selector' && (
+          <div className="space-y-1">
+            <div className={rowStyle}><span className="text-slate-500">Summary Page Present</span><span className={get('summary_page_present') ? 'text-emerald-400' : 'text-slate-500'}>{get('summary_page_present') ? 'Yes' : 'No'}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Roll-up Match</span><span className={get('rollup_match') ? 'text-emerald-400' : 'text-amber-400'}>{get('rollup_match') ? 'Yes' : 'No'}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Line-Item Alignment</span><span className={get('line_item_alignment') ? 'text-emerald-400' : 'text-amber-400'}>{get('line_item_alignment') ? 'Yes' : 'No'}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Sanitizer Success</span><span className={get('sanitizer_success') ? 'text-emerald-400' : 'text-amber-400'}>{get('sanitizer_success') ? 'Yes' : 'No'}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Recommended Action</span><span className="text-slate-200">{String(get('recommended_action') ?? '—')}</span></div>
+          </div>
+        )}
+        {tab === 'validator' && (
+          <div className="space-y-1">
+            <div className={rowStyle}><span className="text-slate-500">Review Status</span><span className="text-slate-200">{String(get('review_status') ?? '—')}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Requires Review</span><span className={get('requires_review') ? 'text-amber-400' : 'text-emerald-400'}>{get('requires_review') ? 'Yes' : 'No'}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Root Cause</span><span className="text-slate-200">{String(get('root_cause') ?? '—')}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Review Reason</span><span className="text-slate-200">{String(get('review_reason') ?? '—')}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Confidence</span><span className="text-slate-200">{pct(get('confidence'))}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Ignored Rows</span><span className="text-slate-200">{String(get('ignored_rows_count') ?? 0)}</span></div>
+            <div className={rowStyle}><span className="text-slate-500">Dominant Brand</span><span className="text-slate-200">{String(analytics.dominant_system_brand ?? '—')}</span></div>
+          </div>
+        )}
+        {tab === 'raw' && (
+          <pre className="bg-slate-950 border border-slate-700 rounded p-3 overflow-auto max-h-80 text-[11px] text-slate-300 font-mono">
+            {JSON.stringify(final, null, 2)}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DebugView({ debugData, rawJson, showRaw, onToggleRaw, resolutionMeta }: {
   debugData: DebugResponse;
   rawJson: string;
@@ -204,6 +312,10 @@ function DebugView({ debugData, rawJson, showRaw, onToggleRaw, resolutionMeta }:
         <div className="bg-slate-950 border border-slate-700 rounded-lg p-4 overflow-auto max-h-64">
           <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono">{rawJson}</pre>
         </div>
+      )}
+
+      {resolutionMeta?.passive_fire_final && (
+        <PassiveFireV2Panel final={resolutionMeta.passive_fire_final} />
       )}
 
       {isV3 && cls && (
@@ -546,7 +658,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
             .limit(2000),
           supabase
             .from('quotes')
-            .select('resolved_total, resolution_source, resolution_confidence, document_grand_total, document_sub_total, optional_scope_total, original_line_items_total, reconciliation_applied, has_adjustment_item, parsing_version, document_total, items_total')
+            .select('resolved_total, resolution_source, resolution_confidence, document_grand_total, document_sub_total, optional_scope_total, original_line_items_total, reconciliation_applied, has_adjustment_item, parsing_version, document_total, items_total, parser_primary, parser_fallback_reason, parser_v1_total, parser_v2_confidence, parser_v2_review_status, parser_v2_comparison_safe, parser_v2_quote_type, parser_v2_total_ex_gst, parser_v2_total_inc_gst, parser_v2_optional_total, passive_fire_final')
             .eq('id', quoteId)
             .maybeSingle(),
         ]);
@@ -981,7 +1093,7 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
             <div className="px-6 py-3 flex items-center gap-4 flex-wrap">
               <div className="text-sm"><span className="text-slate-400">Items:</span> <span className="font-semibold text-slate-100">{items.length}</span></div>
               <div className="text-sm"><span className="text-slate-400">Priced:</span> <span className="font-semibold text-emerald-400">{pricedCount}</span></div>
-              <div className="text-sm"><span className="text-slate-400">Main Scope:</span> <span className="font-semibold text-slate-100">${totalValue.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+              <div className="text-sm"><span className="text-slate-400">Main Scope:</span> <span className="font-semibold text-slate-100">${(resolutionMeta?.parser_primary === 'v2' && resolutionMeta?.parser_v2_total_ex_gst != null ? Number(resolutionMeta.parser_v2_total_ex_gst) : totalValue).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
               {optionalValue > 0 && (
                 <div className="text-sm"><span className="text-slate-400">Optional:</span> <span className="font-semibold text-blue-300">${optionalValue.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
               )}
@@ -991,7 +1103,33 @@ function ParseResultsModal({ quoteId, quoteName, fileUrl, tradeType, onClose }: 
               {flaggedItems.length > 0 && (
                 <div className="text-sm"><span className="text-slate-400">Flagged:</span> <span className="font-semibold text-amber-400">{flaggedItems.length}</span></div>
               )}
-              {resolutionMeta?.resolution_confidence && (
+              {resolutionMeta?.parser_primary === 'v2' && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <ShieldCheck size={13} className="text-emerald-400" />
+                  <span className="px-2 py-0.5 rounded text-xs font-semibold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                    Parser V2
+                  </span>
+                  {resolutionMeta.parser_v2_confidence != null && (
+                    <span className="text-xs text-slate-400">
+                      {Math.round(Number(resolutionMeta.parser_v2_confidence) * 100)}% conf
+                    </span>
+                  )}
+                  {resolutionMeta.parser_v2_review_status && (
+                    <span className={`px-1.5 py-0.5 rounded text-xs border ${
+                      resolutionMeta.parser_v2_review_status === 'auto_trust' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' :
+                      resolutionMeta.parser_v2_review_status === 'trusted_with_monitoring' ? 'bg-blue-500/15 text-blue-300 border-blue-500/30' :
+                      resolutionMeta.parser_v2_review_status === 'manual_review_recommended' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
+                      'bg-red-500/15 text-red-300 border-red-500/30'
+                    }`}>
+                      {resolutionMeta.parser_v2_review_status.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                  {resolutionMeta.parser_v2_quote_type && (
+                    <span className="text-xs text-slate-500">{resolutionMeta.parser_v2_quote_type}</span>
+                  )}
+                </div>
+              )}
+              {resolutionMeta?.parser_primary !== 'v2' && resolutionMeta?.resolution_confidence && (
                 <div className="flex items-center gap-1.5 ml-2">
                   <ShieldCheck size={13} className="text-slate-500" />
                   <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${confBadgeColor(resolutionMeta.resolution_confidence)}`}>
@@ -1297,6 +1435,13 @@ interface Quote {
   quoted_total?: number;
   main_scope_total?: number;
   main_scope_count?: number;
+  parser_primary?: string | null;
+  parser_v2_confidence?: number | null;
+  parser_v2_review_status?: string | null;
+  parser_v2_comparison_safe?: boolean | null;
+  parser_v2_quote_type?: string | null;
+  parser_v2_total_ex_gst?: number | null;
+  parser_v2_optional_total?: number | null;
 }
 
 interface QuoteSelectProps {
@@ -1386,13 +1531,21 @@ export default function QuoteSelect({
         let main_scope_total: number;
         let main_scope_count: number;
 
+        const parserPrimary = (quote as any).parser_primary as string | undefined;
+        const v2Total = Number((quote as any).parser_v2_total_ex_gst ?? 0);
+        const hasV2Primary = parserPrimary === 'v2' && v2Total > 0;
+
         // Use the resolved total from the quote record when available (HIGH/MEDIUM confidence).
         // Only fall back to summing items when no authoritative total was resolved.
         const resolvedQuoteTotal = Number((quote as any).resolved_total ?? quote.total_amount ?? 0);
         const resolutionConfidence = (quote as any).resolution_confidence as string | undefined;
         const hasAuthoritativeTotal = resolvedQuoteTotal > 0 && resolutionConfidence !== 'LOW' && resolutionConfidence != null;
 
-        if (hasAuthoritativeTotal) {
+        if (hasV2Primary) {
+          main_scope_total = v2Total;
+          const mainItems = rawItems.filter(item => (item as any).scope_category !== 'Optional');
+          main_scope_count = mainItems.filter(item => Number(item.total_price ?? 0) > 0).length || (quote.inserted_items_count ?? quote.items_count ?? 0);
+        } else if (hasAuthoritativeTotal) {
           main_scope_total = resolvedQuoteTotal;
           const mainItems = rawItems.filter(item => (item as any).scope_category !== 'Optional');
           main_scope_count = mainItems.filter(item => Number(item.total_price ?? 0) > 0).length || (quote.inserted_items_count ?? quote.items_count ?? 0);
