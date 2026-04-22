@@ -129,7 +129,8 @@ export function composePassiveFireFinalRecord(ctx: {
     validation?.confidence ?? authoritative?.confidence ?? 0,
   );
   const requiresReview =
-    (validation?.requires_review ?? authoritative?.requires_review ?? false) ||
+    validation?.requires_review ??
+    (authoritative?.requires_review ?? false) ||
     selectedTotal == null ||
     confidence < 0.75;
 

@@ -7,7 +7,6 @@ import { classifyDocument } from "../_shared/documentClassifier.ts";
 import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
 import { runThreePassParser } from "../_shared/threePassParser.ts";
 import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
-import { runParserV2, type ParserV2Output } from "../_shared/parser_v2/runParserV2.ts";
 
 // =============================================================================
 // PROCESS PARSING JOB — DETERMINISTIC PRE-PASS + LLM EXTRACTION
@@ -864,97 +863,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ------------------------------------------------------------------
-    // Parser V2 — primary parser for passive_fire imports.
-    // Runs after V1 completes; promoted when healthy, else V1 remains.
-    // ------------------------------------------------------------------
-    const v1GrandTotal = resolution.totals.grandTotal;
-    const v1OptionalTotal = resolution.totals.optionalTotal;
-
-    let parserV2Output: ParserV2Output | null = null;
-    let parserV2Error: string | null = null;
-    let parserPrimary: "v2" | "v1" | "v1_fallback" = "v1";
-    let parserFallbackReason: string | null = null;
-    const V2_CONFIDENCE_THRESHOLD = 0.75;
-
-    if (trade === "passive_fire") {
-      await setStage(supabase, jobId, "Running Parser V2", 70);
-      const v2Start = Date.now();
-      try {
-        const openAiKeyForV2 = Deno.env.get("OPENAI_API_KEY") ?? "";
-        if (!openAiKeyForV2) throw new Error("OPENAI_API_KEY missing");
-        parserV2Output = await runParserV2({
-          rawText,
-          pages: allPages,
-          fileName: typedJob.filename,
-          supplierHint: typedJob.supplier_name,
-          tradeHint: trade,
-          projectId: typedJob.project_id,
-          organisationId: typedJob.organisation_id,
-          quoteId: typedJob.quote_id,
-          openAIKey: openAiKeyForV2,
-        });
-        console.log(`[PARSER_V2] ok duration=${Date.now() - v2Start}ms confidence=${parserV2Output.passive_fire_final?.confidence ?? "null"} total=${parserV2Output.passive_fire_final?.quote_total_ex_gst ?? "null"}`);
-      } catch (err) {
-        parserV2Error = err instanceof Error ? err.message : String(err);
-        console.error("[PARSER_V2] failed", parserV2Error);
-      }
-
-      const finalRecord = parserV2Output?.passive_fire_final ?? null;
-      const v2Total = finalRecord?.quote_total_ex_gst ?? null;
-      const v2Confidence = finalRecord?.confidence ?? 0;
-      const v2RequiresReview = !!finalRecord?.requires_review;
-      const v2ReviewStatus = finalRecord?.review_status ?? null;
-
-      const v2Healthy =
-        !parserV2Error &&
-        finalRecord != null &&
-        v2Total != null &&
-        v2Confidence >= V2_CONFIDENCE_THRESHOLD &&
-        v2ReviewStatus !== "manual_review_required" &&
-        !(v2RequiresReview && v2Confidence < V2_CONFIDENCE_THRESHOLD);
-
-      if (v2Healthy) {
-        parserPrimary = "v2";
-      } else {
-        parserPrimary = "v1_fallback";
-        parserFallbackReason = parserV2Error
-          ? `v2_error:${parserV2Error.slice(0, 120)}`
-          : finalRecord == null
-          ? "v2_no_final_record"
-          : v2Total == null
-          ? "v2_null_total"
-          : v2Confidence < V2_CONFIDENCE_THRESHOLD
-          ? `v2_low_confidence:${v2Confidence.toFixed(2)}`
-          : v2ReviewStatus === "manual_review_required"
-          ? "v2_manual_review_required"
-          : "v2_unhealthy";
-      }
-    }
-
     await setStage(supabase, jobId, "Saving Results", 80);
 
-    const v2FinalRecord = parserV2Output?.passive_fire_final ?? null;
-    const canonicalTotal =
-      parserPrimary === "v2" && v2FinalRecord?.quote_total_ex_gst != null
-        ? v2FinalRecord.quote_total_ex_gst
-        : v1GrandTotal;
-    const canonicalOptionalTotal =
-      parserPrimary === "v2" && v2FinalRecord?.optional_total != null
-        ? v2FinalRecord.optional_total
-        : v1OptionalTotal;
-    const resolutionConfidence =
-      parserPrimary === "v2" && v2FinalRecord
-        ? v2FinalRecord.confidence >= 0.9
-          ? "HIGH"
-          : v2FinalRecord.confidence >= 0.75
-          ? "MEDIUM"
-          : "LOW"
-        : resolution.validation.risk === "OK"
-        ? "HIGH"
-        : resolution.validation.risk === "MEDIUM"
-        ? "MEDIUM"
-        : "LOW";
+    const canonicalTotal = resolution.totals.grandTotal;
+    const canonicalOptionalTotal = resolution.totals.optionalTotal;
+    const resolutionConfidence = resolution.validation.risk === "OK" ? "HIGH"
+      : resolution.validation.risk === "MEDIUM" ? "MEDIUM" : "LOW";
 
     let quoteData: { id: string };
 
@@ -1020,24 +934,12 @@ Deno.serve(async (req: Request) => {
       raw_items_count: resolution.baseItems.length + resolution.optionalItems.length + resolution.excludedItems.length,
       inserted_items_count: mainQuoteItems.length,
       total_amount: canonicalTotal, total_price: canonicalTotal,
-      resolved_total: canonicalTotal,
-      resolution_source: parserPrimary === "v2" ? "parser_v2" : resolution.totals.source,
+      resolved_total: canonicalTotal, resolution_source: resolution.totals.source,
       resolution_confidence: resolutionConfidence,
       document_grand_total: resolution.totals.grandTotal > 0 ? resolution.totals.grandTotal : null,
       document_sub_total: resolution.totals.subTotal,
       optional_scope_total: canonicalOptionalTotal > 0 ? canonicalOptionalTotal : null,
       original_line_items_total: resolution.totals.rowSum,
-      parser_primary: parserPrimary,
-      parser_fallback_reason: parserFallbackReason,
-      parser_v1_total: v1GrandTotal,
-      passive_fire_final: v2FinalRecord ?? null,
-      parser_v2_confidence: v2FinalRecord?.confidence ?? null,
-      parser_v2_review_status: v2FinalRecord?.review_status ?? null,
-      parser_v2_comparison_safe: v2FinalRecord?.comparison_safe ?? null,
-      parser_v2_quote_type: v2FinalRecord?.quote_type ?? null,
-      parser_v2_total_ex_gst: v2FinalRecord?.quote_total_ex_gst ?? null,
-      parser_v2_total_inc_gst: v2FinalRecord?.quote_total_inc_gst ?? null,
-      parser_v2_optional_total: v2FinalRecord?.optional_total ?? null,
     }).eq("id", quoteData.id);
 
     const parseMetadata = {
@@ -1086,23 +988,13 @@ Deno.serve(async (req: Request) => {
       current_stage: "Completed",
       quote_id: quoteData.id,
       result_data: parseMetadata,
-      metadata: {
-        ...parseMetadata,
-        parser_primary: parserPrimary,
-        parser_fallback_reason: parserFallbackReason,
-        parser_v2_error: parserV2Error,
-      },
+      metadata: parseMetadata,
       llm_attempted: llmAttempted,
       llm_success: llmSuccess,
       llm_fail_reason: llmFailReason,
       llm_chunks_completed: llmChunksCompleted,
-      final_parser_used: parserPrimary === "v2" ? "parser_v2" : finalParserUsed,
-      trace_json: {
-        ...traceReport,
-        parser_primary: parserPrimary,
-        parser_fallback_reason: parserFallbackReason,
-      },
-      parser_v2_output: parserV2Output ?? null,
+      final_parser_used: finalParserUsed,
+      trace_json: traceReport,
       last_error: null,
       last_error_code: null,
       completed_at: new Date().toISOString(),
