@@ -9,9 +9,11 @@
  *                                → authoritative total page, section roles,
  *                                  numeric red-flags (phone/FRR/references)
  *   5. extractByTrade            → trade-specific gpt-4.1 extractor
- *   6. passive-fire intent       → sub_scope refinement when trade=passive_fire
- *   7. validation                → line math + totals + missing rows + confidence
- *   8. mappers                   → DB shape identical to legacy parser
+ *   6. selectPassiveFireAuthoritativeTotal (PF only)
+ *                                → picks single main-scope total excl GST
+ *   7. passive-fire intent       → sub_scope refinement when trade=passive_fire
+ *   8. validation                → line math + totals + missing rows + confidence
+ *   9. mappers                   → DB shape identical to legacy parser
  *
  * The orchestrator records a telemetry row to parser_v2_runs when a
  * SUPABASE service client is available; failures to record never
@@ -26,6 +28,10 @@ import {
   classifyPassiveFireStructure,
   type PassiveFireStructure,
 } from "./classifiers/classifyPassiveFireStructure.ts";
+import {
+  selectPassiveFireAuthoritativeTotal,
+  type PassiveFireAuthoritativeTotal,
+} from "./classifiers/selectPassiveFireAuthoritativeTotal.ts";
 
 import { extractPassiveFire } from "./extractors/extractPassiveFire.ts";
 import { extractElectrical } from "./extractors/extractElectrical.ts";
@@ -99,6 +105,7 @@ export type ParserV2Output = {
     extractor_used: string;
   };
   passive_fire_structure: PassiveFireStructure | null;
+  passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null;
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
     items: ReturnType<typeof mapToQuoteItems>;
@@ -226,6 +233,25 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     durations.fallback_extraction = Date.now() - fbStart;
   }
 
+  let passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null = null;
+  if (trade.trade === "passive_fire" && items.length > 0) {
+    const selectorStart = Date.now();
+    try {
+      passive_fire_authoritative_total = await selectPassiveFireAuthoritativeTotal({
+        structure: passive_fire_structure,
+        items,
+        rawText: input.rawText,
+        pages: input.pages,
+        supplier: supplier.supplierName,
+        openAIKey: input.openAIKey,
+      });
+    } catch (err) {
+      console.error("[parser_v2] passive fire authoritative total selection failed", err);
+      anomalies.push("pf_authoritative_total_failed");
+    }
+    durations.pf_authoritative_total = Date.now() - selectorStart;
+  }
+
   if (trade.trade === "passive_fire" && items.length > 0) {
     const intentStart = Date.now();
     try {
@@ -323,6 +349,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       extractor_used: extractorName,
     },
     passive_fire_structure,
+    passive_fire_authoritative_total,
     dbPayload: { quote, items: dbItems },
   };
 }
