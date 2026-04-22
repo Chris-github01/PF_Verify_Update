@@ -1,17 +1,24 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { runParserV2, type ParserV2Output } from "../_shared/parser_v2/runParserV2.ts";
+import { cleanText, extractFRRFromDescription, isTotalRow, isArithmeticTotalRow } from "../_shared/itemNormalizer.ts";
+import { runParserV3 } from "../_shared/parserRouterV3.ts";
+import { runResolutionLayer } from "../_shared/parseResolutionLayerV3.ts";
+import { classifyDocument } from "../_shared/documentClassifier.ts";
+import { extractDocumentTotals } from "../_shared/documentTotalExtractor.ts";
+import { runThreePassParser } from "../_shared/threePassParser.ts";
+import type { ParsedLineItem, RawParserOutput } from "../_shared/parseResolutionLayerV3.ts";
+import { runParserV2 } from "../_shared/parser_v2/runParserV2.ts";
 
 // =============================================================================
-// PROCESS PARSING JOB — PARSER V2 ONLY (no V1 fallback).
+// PROCESS PARSING JOB — DETERMINISTIC PRE-PASS + LLM EXTRACTION
 //
-// Flow:
-//   1. Download file + extract text (PDF via pdfjs, XLSX via xlsx)
-//   2. Run Parser V2 (LLM-first orchestrator)
-//   3. On success → persist items + totals + passive_fire_final
-//   4. On failure → persist full failure report onto quote.passive_fire_final
-//      and parsing_jobs.parser_v2_output so UI can display the reason.
-//      Parser V1 is NEVER invoked.
+// Runtime flow:
+//   STEP 1: Deterministic pre-pass (<500ms) — section map, totals, document type
+//   STEP 2: LLM row extraction only (Pass 2 chunked) — NO structural LLM pass
+//   STEP 3: Arithmetic reconciliation (Pass 3, pure computation)
+//
+// Old 3-attempt LLM Pass 1 loop (fast-pass1/60%/5k) is REMOVED.
+// Fallback: regex_recovery if threePass returns 0 items or confidence < 0.55
 // =============================================================================
 
 const corsHeaders = {
@@ -20,7 +27,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const BUILD_VERSION = "2026-04-22-v2-only";
+const BUILD_VERSION = "2026-04-19-stable-prod";
+const THREE_PASS_VERSION = "v3-det-prepass";
+
+// LLM budget for Pass 2 row extraction only (no structural Pass 1 LLM)
+const LLM_EXTRACTION_TIMEOUT_MS = 90_000;
+
+// =============================================================================
+// PRODUCTION MODE SWITCH
+//
+// PRODUCTION_MODE=stable   (DEFAULT — live imports)
+//   - parserRouterV3 is the primary row extractor
+//   - parseResolutionLayerV3 handles totals
+//   - LLM runs ONLY as a lightweight post-pass (categorise, scope cleanup, FRR)
+//   - threePassParser is DISABLED for live imports
+//
+// PRODUCTION_MODE=experimental
+//   - Re-enables the three-pass LLM primary path (the previous live behaviour)
+//   - Enable by setting edge function secret: PRODUCTION_MODE=experimental
+// =============================================================================
+const PRODUCTION_MODE = (Deno.env.get("PRODUCTION_MODE") ?? "stable").toLowerCase();
+const STABLE_MODE = PRODUCTION_MODE !== "experimental";
 
 interface ParsingJob {
   id: string;
@@ -34,6 +61,71 @@ interface ParsingJob {
   trade: string | null;
   metadata: Record<string, unknown> | null;
   attempt_count: number | null;
+  llm_fail_reason: string | null;
+  llm_attempted: boolean | null;
+}
+
+interface ParserAttemptEntry {
+  parser: string;
+  started_at: string;
+  ended_at: string;
+  duration_ms: number;
+  status: "success" | "failed" | "timeout" | "skipped";
+  reason: string;
+}
+
+type LlmFailReason =
+  | "timeout"
+  | "json_parse"
+  | "token_limit"
+  | "api_error"
+  | "empty_response"
+  | "network_error"
+  | "rate_limit"
+  | "chunk_failed"
+  | "cancelled"
+  | "unknown_error";
+
+function classifyLlmFailure(err: unknown, responseStatus?: number): LlmFailReason {
+  const msg = err instanceof Error ? err.message : String(err);
+  const msgLow = msg.toLowerCase();
+
+  if (err instanceof Error && err.name === "AbortError") return "timeout";
+  if (msgLow.includes("timeout") || msgLow.includes("timed out")) return "timeout";
+  if (msgLow.includes("429") || msgLow.includes("rate limit") || msgLow.includes("rate_limit")) return "rate_limit";
+  if (msgLow.includes("json") || msgLow.includes("parse") || msgLow.includes("syntax")) return "json_parse";
+  if (msgLow.includes("token") || msgLow.includes("context_length") || msgLow.includes("max_tokens")) return "token_limit";
+  if (msgLow.includes("empty") || msgLow.includes("no content")) return "empty_response";
+  if (msgLow.includes("chunk") || msgLow.includes("partial")) return "chunk_failed";
+  if (msgLow.includes("cancel")) return "cancelled";
+  if (responseStatus && responseStatus >= 500) return "api_error";
+  if (responseStatus && responseStatus === 429) return "rate_limit";
+  if (msgLow.includes("fetch") || msgLow.includes("network") || msgLow.includes("econnrefused")) return "network_error";
+  return "unknown_error";
+}
+
+function repairJson(raw: string): string {
+  let s = raw.trim();
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+
+  const firstBrace = s.indexOf("{");
+  const firstBracket = s.indexOf("[");
+  let start = -1;
+  if (firstBrace === -1 && firstBracket === -1) return s;
+  if (firstBrace === -1) start = firstBracket;
+  else if (firstBracket === -1) start = firstBrace;
+  else start = Math.min(firstBrace, firstBracket);
+
+  const opener = s[start];
+  const closer = opener === "{" ? "}" : "]";
+  const lastClose = s.lastIndexOf(closer);
+  if (lastClose > start) {
+    s = s.slice(start, lastClose + 1);
+  } else {
+    s = s.slice(start) + closer;
+  }
+  s = s.replace(/,(\s*[}\]])/g, "$1");
+  return s;
 }
 
 async function setStage(
@@ -51,35 +143,286 @@ async function setStage(
   console.log(`[STAGE] ${stage}${progress !== undefined ? ` (${progress}%)` : ""}`);
 }
 
-type V2FailureStage =
-  | "download"
-  | "text_extraction"
-  | "parser_v2_exception"
-  | "parser_v2_no_items"
-  | "parser_v2_no_total"
-  | "openai_key_missing";
-
-interface V2FailureReport {
-  failed: true;
-  stage: V2FailureStage;
-  message: string;
-  details?: Record<string, unknown>;
-  timestamp: string;
+interface ThreePassCallResult {
+  items: any[];
+  confidence: number;
+  totals: { grandTotal?: number; subtotal?: number };
+  warnings: string[];
+  success: boolean;
+  failReason: LlmFailReason | null;
+  failMessage: string;
+  chunksStarted: number;
+  chunksCompleted: number;
+  prepassDurationMs: number;
+  prepassSections: number;
+  prepassDocType: string;
 }
 
-function buildFailureReport(
-  stage: V2FailureStage,
-  message: string,
-  details?: Record<string, unknown>,
-): V2FailureReport {
+async function runDeterministicPlusTwoPass(
+  supabase: ReturnType<typeof createClient>,
+  jobId: string,
+  rawText: string,
+  supplierName: string,
+): Promise<{ result: ThreePassCallResult; traceEntries: ParserAttemptEntry[] }> {
+  const traceEntries: ParserAttemptEntry[] = [];
+  const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+
+  // STEP 1: Deterministic pre-pass
+  const prepassStart = Date.now();
+  await setStage(supabase, jobId, "Running Deterministic Pre-Pass", 35);
+  console.log("[DET] Starting deterministic pre-pass");
+
+  let threePassOutput;
+  let prepassDurationMs = 0;
+  let prepassSections = 0;
+  let prepassDocType = "unknown";
+
+  try {
+    threePassOutput = await runThreePassParser({
+      rawText,
+      supplierName,
+      apiKey: openAiKey,
+      model: "gpt-4o-mini",
+      onChunkComplete: async (completed: number) => {
+        await setStage(supabase, jobId, `LLM Extraction — chunk ${completed} completed`, 45 + Math.min(completed * 5, 40));
+      },
+    });
+
+    prepassDurationMs = threePassOutput.debug?.pass1_duration_ms ?? (Date.now() - prepassStart);
+    prepassSections = threePassOutput.sections.length;
+    prepassDocType = threePassOutput.items.length > 0 ? "itemized_schedule" : "unknown";
+
+    traceEntries.push({
+      parser: "deterministic_prepass",
+      started_at: new Date(prepassStart).toISOString(),
+      ended_at: new Date(prepassStart + prepassDurationMs).toISOString(),
+      duration_ms: prepassDurationMs,
+      status: "success",
+      reason: `${prepassSections} sections detected, doc_type=${prepassDocType}, duration=${prepassDurationMs}ms`,
+    });
+
+    const llmStart = prepassStart + prepassDurationMs;
+    const llmDuration = Date.now() - llmStart;
+    const chunksStarted = threePassOutput.debug?.pass2_chunks_started ?? 0;
+    const chunksCompleted = threePassOutput.debug?.pass2_chunks_completed ?? 0;
+
+    for (let c = 0; c < chunksCompleted; c++) {
+      traceEntries.push({
+        parser: `llm_extraction chunk ${c + 1}`,
+        started_at: new Date(llmStart + (c * (llmDuration / Math.max(chunksCompleted, 1)))).toISOString(),
+        ended_at: new Date(llmStart + ((c + 1) * (llmDuration / Math.max(chunksCompleted, 1)))).toISOString(),
+        duration_ms: Math.round(llmDuration / Math.max(chunksCompleted, 1)),
+        status: "success",
+        reason: `chunk ${c + 1}/${chunksStarted} extracted`,
+      });
+    }
+
+    console.log(`[DET] Pre-pass done: sections=${prepassSections} items=${threePassOutput.items.length} confidence=${threePassOutput.confidence}`);
+
+    return {
+      result: {
+        items: threePassOutput.items,
+        confidence: threePassOutput.confidence,
+        totals: {
+          grandTotal: threePassOutput.totals.stated_grand_total ?? threePassOutput.totals.included_items_total,
+          subtotal: threePassOutput.totals.stated_subtotal ?? undefined,
+        },
+        warnings: threePassOutput.warnings,
+        success: threePassOutput.items.length > 0,
+        failReason: threePassOutput.items.length === 0 ? "empty_response" : null,
+        failMessage: threePassOutput.items.length === 0 ? "Three-pass parser returned 0 items" : "",
+        chunksStarted: threePassOutput.debug?.pass2_chunks_started ?? 0,
+        chunksCompleted: threePassOutput.debug?.pass2_chunks_completed ?? 0,
+        prepassDurationMs,
+        prepassSections,
+        prepassDocType,
+      },
+      traceEntries,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const reason = classifyLlmFailure(err);
+    prepassDurationMs = Date.now() - prepassStart;
+
+    traceEntries.push({
+      parser: "deterministic_prepass",
+      started_at: new Date(prepassStart).toISOString(),
+      ended_at: new Date().toISOString(),
+      duration_ms: prepassDurationMs,
+      status: "failed",
+      reason: msg.slice(0, 300),
+    });
+
+    console.error("[DET] Three-pass parser threw:", msg);
+
+    return {
+      result: {
+        items: [], confidence: 0, totals: {}, warnings: [`Three-pass failed: ${msg}`],
+        success: false, failReason: reason, failMessage: msg,
+        chunksStarted: 0, chunksCompleted: 0,
+        prepassDurationMs, prepassSections: 0, prepassDocType: "unknown",
+      },
+      traceEntries,
+    };
+  }
+}
+
+function adaptLlmItem(item: any, index: number, parserUsed: string): ParsedLineItem {
+  const desc = cleanText(String(item.description ?? "")) || `Item ${index + 1}`;
+  const qty = Number(item.qty ?? item.quantity ?? 1);
+  const rate = Number(item.rate ?? item.unit_price ?? 0);
+  const total = Number(item.total ?? item.total_price ?? 0);
+  const isOptional =
+    /optional|option\b|\(opt\)/i.test(desc) ||
+    String(item.section ?? "").toLowerCase().includes("optional") ||
+    item.is_optional === true;
+
   return {
-    failed: true,
-    stage,
-    message: message.slice(0, 500),
-    details,
-    timestamp: new Date().toISOString(),
+    lineId: String(index + 1),
+    section: cleanText(String(item.section ?? "")),
+    description: desc,
+    qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+    unit: cleanText(String(item.unit ?? "ea")) || "ea",
+    rate: Number.isFinite(rate) ? rate : 0,
+    total: Number.isFinite(total) ? total : 0,
+    scopeCategory: isOptional ? "optional" : "base",
+    pageNum: 0,
+    confidence: Number(item.confidence ?? 0.85),
+    source: parserUsed,
   };
 }
+
+function dedupKey(item: ParsedLineItem): string {
+  return [
+    item.description.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 80),
+    item.qty.toFixed(3), item.rate.toFixed(2), item.total.toFixed(2),
+  ].join("|");
+}
+
+function mergeItems(llmItems: ParsedLineItem[], regexItems: ParsedLineItem[]): ParsedLineItem[] {
+  const seen = new Set<string>(llmItems.map(dedupKey));
+  const additions: ParsedLineItem[] = [];
+  for (const item of regexItems) {
+    const key = dedupKey(item);
+    if (!seen.has(key)) {
+      seen.add(key);
+      additions.push({ ...item, source: item.source + "(regex_gap_fill)" });
+    }
+  }
+  if (additions.length > 0) console.log(`[MERGE] gap-fill added ${additions.length} items`);
+  return [...llmItems, ...additions];
+}
+
+// ---------------------------------------------------------------------------
+// STABLE MODE — LLM enhancement pass
+// Operates ONLY on already-extracted regex items. Enhances:
+//   - scope_category (base | optional) cleanup when ambiguous
+//   - category tagging (plumbing, fire, joinery, etc.)
+//   - FRR normalisation (e.g. "90 / 90 / -" -> "90/90/-")
+// Never adds or removes rows. Never touches qty / rate / total.
+// If the LLM call fails, the caller swallows the error and ships regex output.
+// ---------------------------------------------------------------------------
+async function runLlmEnhancementPass(
+  apiKey: string,
+  baseItems: ParsedLineItem[],
+  optionalItems: ParsedLineItem[],
+): Promise<{ baseItems: ParsedLineItem[]; optionalItems: ParsedLineItem[]; touched: number } | null> {
+  if (!apiKey) return null;
+  const all = [...baseItems, ...optionalItems];
+  if (all.length === 0) return null;
+
+  // Hard cap so the enhancement pass is fast and cheap.
+  const MAX_ITEMS = 250;
+  const sample = all.slice(0, MAX_ITEMS);
+
+  const payload = sample.map((it, i) => ({
+    i,
+    description: it.description.slice(0, 240),
+    current_scope: it.scopeCategory,
+    frr: extractFRRFromDescription(it.description) || null,
+  }));
+
+  const system = `You enhance already-extracted construction quote line items.
+You MUST NOT add, remove, or re-order items.
+You MUST NOT modify quantity, unit price, or total.
+For each item, return the same index and:
+  - scope: "base" or "optional"
+  - category: short tag ("plumbing","fire_stopping","joinery","hvac","electrical","general", etc.)
+  - frr: normalised fire-resistance rating as "N/N/N" or null
+Return JSON: {"items":[{"i":0,"scope":"base","category":"fire_stopping","frr":"90/90/90"}]}.`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        response_format: { type: "json_object" },
+        max_completion_tokens: 4096,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: JSON.stringify(payload) },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) throw new Error(`OpenAI enhance ${res.status}`);
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content ?? "{}";
+    const parsed = JSON.parse(repairJson(content));
+    const updates: Array<{ i: number; scope?: string; category?: string; frr?: string | null }> = parsed?.items ?? [];
+
+    let touched = 0;
+    const enhanced = [...baseItems, ...optionalItems];
+    for (const u of updates) {
+      const target = enhanced[u.i];
+      if (!target) continue;
+      let changed = false;
+      if (u.scope === "base" || u.scope === "optional") {
+        if (target.scopeCategory !== u.scope) {
+          target.scopeCategory = u.scope;
+          changed = true;
+        }
+      }
+      if (u.category) {
+        (target as any).category = u.category;
+        changed = true;
+      }
+      if (u.frr) {
+        (target as any).frrNormalised = u.frr;
+        changed = true;
+      }
+      if (changed) touched++;
+    }
+
+    // Re-split by scope after enhancement (LLM may have moved items between base/optional)
+    const newBase = enhanced.filter((it) => it.scopeCategory === "base");
+    const newOptional = enhanced.filter((it) => it.scopeCategory === "optional");
+    return { baseItems: newBase, optionalItems: newOptional, touched };
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+function filterLlmSummaryRows(items: any[]): { kept: any[]; removed: number } {
+  let removed = 0;
+  const labelFiltered = items.filter((item) => { if (isTotalRow(item)) { removed++; return false; } return true; });
+  const mathFiltered = labelFiltered.filter((item) => { if (isArithmeticTotalRow(item, labelFiltered)) { removed++; return false; } return true; });
+  return { kept: mathFiltered, removed };
+}
+
+// ---------------------------------------------------------------------------
+// Main handler
+// ---------------------------------------------------------------------------
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -95,493 +438,767 @@ Deno.serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "Missing authorization header" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const body = await req.json();
     jobId = body.jobId;
+
     if (!jobId) {
-      return new Response(
-        JSON.stringify({ error: "Missing jobId" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "Missing jobId" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { data: job, error: jobError } = await supabase
-      .from("parsing_jobs")
-      .select("*")
-      .eq("id", jobId)
-      .single();
+    const { data: job, error: jobError } = await supabase.from("parsing_jobs").select("*").eq("id", jobId).single();
     if (jobError || !job) throw new Error("Job not found");
 
     const typedJob = job as unknown as ParsingJob;
     const trade = typedJob.trade || "passive_fire";
-    const currentAttemptCount = (typedJob.attempt_count ?? 0) + 1;
 
-    console.log(`[PIPELINE_START_V2_ONLY] job=${jobId} file=${typedJob.filename} trade=${trade} attempt=${currentAttemptCount}`);
+    const currentAttemptCount = (typedJob.attempt_count ?? 0) + 1;
+    const priorLlmFailed = typedJob.llm_attempted === true && typedJob.llm_fail_reason != null;
+
+    console.log(`[PIPELINE_START] job_id=${jobId} file=${typedJob.filename} trade=${trade} attempt=${currentAttemptCount} priorLlmFailed=${priorLlmFailed}`);
 
     await supabase.from("parsing_jobs").update({
       status: "processing",
       progress: 10,
       attempt_count: currentAttemptCount,
-      current_stage: "Initializing (V2-only)",
+      current_stage: "Initializing",
       updated_at: new Date().toISOString(),
     }).eq("id", jobId);
 
-    // -------- STEP 1: download file --------
+    // Step 1: Download file
     await setStage(supabase, jobId, "Downloading file", 15);
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from("quotes")
-      .download(typedJob.file_url);
-
-    if (downloadError || !fileData) {
-      const report = buildFailureReport(
-        "download",
-        `Failed to download file: ${downloadError?.message ?? "unknown"}`,
-        { file_url: typedJob.file_url },
-      );
-      await persistFailure(supabase, typedJob, jobId, report);
-      return new Response(
-        JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const { data: fileData, error: downloadError } = await supabase.storage.from("quotes").download(typedJob.file_url);
+    if (downloadError || !fileData) throw new Error("Failed to download file from storage");
 
     const fileBuffer = await fileData.arrayBuffer();
     const fileName = typedJob.filename.toLowerCase();
 
-    // -------- STEP 2: extract text --------
-    await setStage(supabase, jobId, "Extracting document text", 25);
+    // Step 2: Extract text
+    await setStage(supabase, jobId, "Extracting document text", 20);
+
     let allPages: { pageNum: number; text: string }[] = [];
-    let fileExtension: "pdf" | "xlsx" | "xls" | null = null;
+    let spreadsheetRows: (string | number | null | undefined)[][] | undefined;
+    let fileExtension: string | undefined;
 
-    try {
-      if (fileName.endsWith(".pdf")) {
-        fileExtension = "pdf";
-        const pdfjsLib = await import("npm:pdfjs-dist@4.0.379");
-        const loadingTask = pdfjsLib.getDocument({
-          data: new Uint8Array(fileBuffer),
-          useWorkerFetch: false,
-          isEvalSupported: false,
-          useSystemFonts: true,
+    if (fileName.endsWith(".pdf")) {
+      fileExtension = "pdf";
+      const pdfjsLib = await import("npm:pdfjs-dist@4.0.379");
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(fileBuffer), useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true,
+      });
+      const pdfDocument = await loadingTask.promise;
+      for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+        const page = await pdfDocument.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        let lastY = -1;
+        let pageText = "";
+        textContent.items.forEach((item: any) => {
+          const currentY = item.transform[5];
+          if (lastY !== -1 && Math.abs(currentY - lastY) > 5) pageText += "\n";
+          else if (pageText.length > 0) pageText += " ";
+          pageText += item.str;
+          lastY = currentY;
         });
-        const pdfDocument = await loadingTask.promise;
-        for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-          const page = await pdfDocument.getPage(pageNum);
-          const textContent = await page.getTextContent();
-          let lastY = -1;
-          let pageText = "";
-          textContent.items.forEach((item: any) => {
-            const currentY = item.transform[5];
-            if (lastY !== -1 && Math.abs(currentY - lastY) > 5) pageText += "\n";
-            else if (pageText.length > 0) pageText += " ";
-            pageText += item.str;
-            lastY = currentY;
-          });
-          if (pageText.trim()) allPages.push({ pageNum, text: pageText });
-        }
-      } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-        fileExtension = fileName.endsWith(".xls") ? "xls" : "xlsx";
-        const XLSX = await import("npm:xlsx@0.18.5");
-        const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as (string | number | null | undefined)[][];
-        allPages = [{
-          pageNum: 1,
-          text: rows.map((r) => r.map((c) => String(c || "").trim()).join("\t")).filter(Boolean).join("\n"),
-        }];
-      } else {
-        throw new Error(`Unsupported file type: ${fileName}`);
+        if (pageText.trim()) allPages.push({ pageNum, text: pageText });
       }
-    } catch (extractErr) {
-      const msg = extractErr instanceof Error ? extractErr.message : String(extractErr);
-      const report = buildFailureReport("text_extraction", msg, { fileName });
-      await persistFailure(supabase, typedJob, jobId, report);
-      return new Response(
-        JSON.stringify({ success: false, jobId, error: msg, stage: report.stage }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+      fileExtension = fileName.endsWith(".xls") ? "xls" : "xlsx";
+      const XLSX = await import("npm:xlsx@0.18.5");
+      const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as (string | number | null | undefined)[][];
+      spreadsheetRows = rows;
+      allPages = [{ pageNum: 1, text: rows.map((r) => r.map((c) => String(c || "").trim()).join("\t")).filter(Boolean).join("\n") }];
+    } else {
+      throw new Error(`Unsupported file type: ${fileName}`);
     }
 
-    if (allPages.length === 0) {
-      const report = buildFailureReport("text_extraction", "No text could be extracted from the file");
-      await persistFailure(supabase, typedJob, jobId, report);
-      return new Response(
-        JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    if (allPages.length === 0) throw new Error("No text could be extracted from the file");
 
     const rawText = allPages.map((p) => p.text).join("\n\n");
     console.log(`[EXTRACT] pages=${allPages.length} chars=${rawText.length} type=${fileExtension}`);
 
-    // -------- STEP 3: run Parser V2 --------
-    await setStage(supabase, jobId, "Running Parser V2", 45);
+    // Step 3: Classify
+    await setStage(supabase, jobId, "Classifying document", 30);
+    const classification = classifyDocument(rawText, allPages, fileExtension);
+    const isSpreadsheet = classification.commercialFamily === "spreadsheet_quote";
+    console.log(`[CLASSIFY] class=${classification.documentClass} spreadsheet=${isSpreadsheet}`);
 
-    const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
-    if (!openAiKey) {
-      const report = buildFailureReport("openai_key_missing", "OPENAI_API_KEY is not configured");
-      await persistFailure(supabase, typedJob, jobId, report);
-      return new Response(
-        JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    // =========================================================================
+    // PARSER STRATEGY
+    // Loop-breaker: attempt_count >= 3 OR (LLM already failed AND attempt >= 2)
+    //   → skip LLM, go straight to regex
+    // =========================================================================
 
-    let v2: ParserV2Output;
-    const v2Start = Date.now();
-    try {
-      v2 = await runParserV2({
-        rawText,
-        pages: allPages,
-        fileName: typedJob.filename,
-        supplierHint: typedJob.supplier_name,
-        tradeHint: trade,
-        projectId: typedJob.project_id,
-        organisationId: typedJob.organisation_id,
-        quoteId: typedJob.quote_id ?? undefined,
-        openAIKey: openAiKey,
+    const parserTrace: ParserAttemptEntry[] = [];
+    let parserStrategy: "llm_primary" | "regex_only" | "regex_primary_llm_enhance" =
+      isSpreadsheet ? "regex_only"
+        : STABLE_MODE ? "regex_primary_llm_enhance"
+        : "llm_primary";
+
+    console.log(`[MODE] PRODUCTION_MODE=${PRODUCTION_MODE} stable=${STABLE_MODE} strategy=${parserStrategy}`);
+
+    let llmAttempted = false;
+    let llmSuccess: boolean | null = null;
+    let llmFailReason: LlmFailReason | null = null;
+    let llmFailMessage = "";
+    let llmChunksStarted: number | null = null;
+    let llmChunksCompleted: number | null = null;
+    let llmConfidence = 0;
+    // llmAttemptsMade removed — no retry loop with det pre-pass
+    let llmWarnings: string[] = [];
+    let llmRawItems: any[] = [];
+    let llmGrandTotal = 0;
+    let regexRecoveryUsed = false;
+    let regexResult: ReturnType<typeof runParserV3> | null = null;
+    let prepassDurationMs = 0;
+    let prepassSections = 0;
+    let prepassDocType = "unknown";
+
+    const skipLlmDueToLoop = !isSpreadsheet && (
+      currentAttemptCount >= 3 ||
+      (priorLlmFailed && currentAttemptCount >= 2)
+    );
+
+    // STABLE MODE: regex_primary path — parserRouterV3 runs first, LLM is optional enhancement only.
+    // This completely bypasses threePassParser for PDFs.
+    const runStableRegexPrimary = STABLE_MODE && !isSpreadsheet;
+
+    if (isSpreadsheet) {
+      await setStage(supabase, jobId, "Running Regex Parser", 50);
+      const t0 = Date.now();
+      regexResult = runParserV3({ pages: allPages, rawText, fileExtension, spreadsheetRows });
+      const dur = Date.now() - t0;
+      parserTrace.push({
+        parser: "regex_recovery",
+        started_at: new Date(Date.now() - dur).toISOString(),
+        ended_at: new Date().toISOString(),
+        duration_ms: dur,
+        status: "success",
+        reason: `Spreadsheet — ${regexResult.resolution.baseItems.length} base items`,
       });
-    } catch (v2Err) {
-      const msg = v2Err instanceof Error ? v2Err.message : String(v2Err);
-      const stack = v2Err instanceof Error ? v2Err.stack?.slice(0, 1500) : undefined;
-      console.error("[V2] threw:", msg);
-      const report = buildFailureReport("parser_v2_exception", msg, {
-        stack,
-        duration_ms: Date.now() - v2Start,
+      await setStage(supabase, jobId, "Finalizing Totals", 75);
+
+    } else if (runStableRegexPrimary) {
+      // =====================================================================
+      // STABLE PRODUCTION PATH
+      // parserRouterV3 -> items
+      // parseResolutionLayerV3 -> totals
+      // LLM (optional, best-effort) -> categorise + scope cleanup + FRR enhancement
+      // threePassParser is NOT called in this path.
+      // =====================================================================
+      await setStage(supabase, jobId, "Running Stable Parser (regex primary)", 45);
+      const t0 = Date.now();
+      regexResult = runParserV3({ pages: allPages, rawText, fileExtension });
+      const dur = Date.now() - t0;
+      regexRecoveryUsed = false;
+
+      parserTrace.push({
+        parser: "regex_primary_v3",
+        started_at: new Date(Date.now() - dur).toISOString(),
+        ended_at: new Date().toISOString(),
+        duration_ms: dur,
+        status: "success",
+        reason: `STABLE_MODE — ${regexResult.resolution.baseItems.length} base items`,
       });
-      await persistFailure(supabase, typedJob, jobId, report);
-      return new Response(
-        JSON.stringify({ success: false, jobId, error: msg, stage: report.stage }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
 
-    const v2DurationMs = Date.now() - v2Start;
-    console.log(`[V2] done in ${v2DurationMs}ms items=${v2.items.length} total=${v2.totals.grand_total} confidence=${v2.totals.confidence}`);
+      // Best-effort LLM enhancement (NON-BLOCKING). If it fails, we still ship the stable result.
+      try {
+        await setStage(supabase, jobId, "Enhancing items (categorise + FRR)", 65);
+        const enhanceStart = Date.now();
+        const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+        const enhanced = await runLlmEnhancementPass(
+          openAiKey,
+          regexResult.resolution.baseItems,
+          regexResult.resolution.optionalItems,
+        );
+        if (enhanced) {
+          regexResult.resolution.baseItems = enhanced.baseItems;
+          regexResult.resolution.optionalItems = enhanced.optionalItems;
+          parserTrace.push({
+            parser: "llm_enhancement",
+            started_at: new Date(enhanceStart).toISOString(),
+            ended_at: new Date().toISOString(),
+            duration_ms: Date.now() - enhanceStart,
+            status: "success",
+            reason: `Enhanced ${enhanced.touched} items (scope/FRR/category)`,
+          });
+          llmAttempted = true;
+          llmSuccess = true;
+        }
+      } catch (enhanceErr) {
+        const msg = enhanceErr instanceof Error ? enhanceErr.message : String(enhanceErr);
+        console.warn(`[ENHANCE] LLM enhancement failed (non-fatal): ${msg}`);
+        parserTrace.push({
+          parser: "llm_enhancement",
+          started_at: new Date().toISOString(),
+          ended_at: new Date().toISOString(),
+          duration_ms: 0,
+          status: "failed",
+          reason: msg.slice(0, 200),
+        });
+        llmAttempted = true;
+        llmSuccess = false;
+        llmFailReason = classifyLlmFailure(enhanceErr);
+        llmFailMessage = msg;
+      }
 
-    // -------- STEP 4: persist V2 output --------
-    await setStage(supabase, jobId, "Saving Parser V2 output", 80);
+      await setStage(supabase, jobId, "Finalizing Totals", 75);
 
-    const finalRecord = v2.passive_fire_final;
-    const mainTotal = finalRecord?.quote_total_ex_gst ?? v2.totals.main_total ?? v2.totals.grand_total;
-    const grandTotal = v2.totals.grand_total ?? mainTotal;
-    const optionalTotal = finalRecord?.optional_total ?? v2.totals.optional_total ?? 0;
+    } else if (skipLlmDueToLoop) {
+      console.warn(`[LOOP_BREAKER] attempt=${currentAttemptCount} priorLlmFailed=${priorLlmFailed} — skipping LLM`);
+      parserTrace.push({
+        parser: "deterministic_prepass",
+        started_at: new Date().toISOString(),
+        ended_at: new Date().toISOString(),
+        duration_ms: 0,
+        status: "skipped",
+        reason: `Loop breaker (attempt_count=${currentAttemptCount}, priorLlmFailed=${priorLlmFailed})`,
+      });
 
-    // Guard: V2 produced nothing usable — still record as failed report
-    if (v2.items.length === 0 && (!grandTotal || grandTotal <= 0)) {
-      const report = buildFailureReport(
-        "parser_v2_no_items",
-        "Parser V2 returned zero items and no total",
-        {
-          anomalies: v2.validation.anomalies,
-          extractor_used: v2.telemetry.extractor_used,
-          requires_review: v2.requires_review,
-          duration_ms: v2DurationMs,
-          classification: v2.classification,
-          passive_fire_validation: v2.passive_fire_validation,
-        },
-      );
-      await persistFailure(supabase, typedJob, jobId, report, v2);
-      return new Response(
-        JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+      await setStage(supabase, jobId, "Running Regex Recovery (LLM skipped)", 50);
+      await supabase.from("parsing_jobs").update({ fallback_parser: "regex_recovery" }).eq("id", jobId);
 
-    // Upsert quote
-    let quoteId: string;
-    if (typedJob.quote_id) {
-      await supabase.from("quotes").update({
-        status: "pending",
-        total_amount: mainTotal,
-        total_price: mainTotal,
+      const t0 = Date.now();
+      regexResult = runParserV3({ pages: allPages, rawText, fileExtension });
+      const dur = Date.now() - t0;
+      regexRecoveryUsed = true;
+
+      parserTrace.push({
+        parser: "regex_recovery",
+        started_at: new Date(Date.now() - dur).toISOString(),
+        ended_at: new Date().toISOString(),
+        duration_ms: dur,
+        status: "success",
+        reason: `${regexResult.resolution.baseItems.length} base items`,
+      });
+      await setStage(supabase, jobId, "Finalizing Totals", 75);
+
+    } else {
+      // PDF — deterministic pre-pass + LLM row extraction (NO structural LLM Pass 1)
+      llmAttempted = true;
+      await supabase.from("parsing_jobs").update({
+        primary_parser: "three_pass_llm",
         updated_at: new Date().toISOString(),
-      }).eq("id", typedJob.quote_id);
-      quoteId = typedJob.quote_id;
+      }).eq("id", jobId);
+
+      const { result: threePassResult, traceEntries } = await runDeterministicPlusTwoPass(
+        supabase, jobId, rawText, typedJob.supplier_name,
+      );
+
+      parserTrace.push(...traceEntries);
+      prepassDurationMs = threePassResult.prepassDurationMs;
+      prepassSections = threePassResult.prepassSections;
+      prepassDocType = threePassResult.prepassDocType;
+      llmChunksStarted = threePassResult.chunksStarted;
+      llmChunksCompleted = threePassResult.chunksCompleted;
+      llmFailReason = threePassResult.failReason;
+      llmFailMessage = threePassResult.failMessage;
+
+      if (threePassResult.items.length > 0) {
+        llmSuccess = true;
+        llmConfidence = threePassResult.confidence;
+        llmWarnings = threePassResult.warnings;
+        llmGrandTotal = threePassResult.totals.grandTotal ?? 0;
+        const { kept: filteredItems, removed } = filterLlmSummaryRows(threePassResult.items);
+        llmRawItems = filteredItems;
+        if (removed > 0) console.log(`[DET] Removed ${removed} summary rows post-filter`);
+      } else {
+        llmSuccess = false;
+      }
+
+      // Persist audit state
+      await supabase.from("parsing_jobs").update({
+        llm_attempted: llmAttempted,
+        llm_success: llmSuccess,
+        llm_fail_reason: llmFailReason,
+        llm_chunks_completed: llmChunksCompleted,
+        last_error: llmSuccess ? null : llmFailMessage.slice(0, 500),
+        last_error_code: llmSuccess ? null : (llmFailReason ?? null),
+        updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
+
+      // Evaluate if regex recovery needed
+      const docTotals = extractDocumentTotals(rawText);
+      const documentTotal = docTotals.grandTotal ?? 0;
+      const threePassItemsSum = llmRawItems.reduce((s: number, i: any) => s + Number(i.total ?? 0), 0);
+      const mismatchRatio = documentTotal > 0 && threePassItemsSum > 0
+        ? Math.abs(documentTotal - threePassItemsSum) / documentTotal
+        : 0;
+
+      const needsRegexRecovery = llmRawItems.length === 0 || llmConfidence < 0.55 || (documentTotal > 0 && mismatchRatio > 0.20);
+
+      if (needsRegexRecovery) {
+        regexRecoveryUsed = true;
+        const reasons: string[] = [];
+        if (llmRawItems.length === 0) reasons.push("zero_items");
+        if (llmConfidence < 0.55) reasons.push(`low_confidence(${llmConfidence.toFixed(2)})`);
+        if (documentTotal > 0 && mismatchRatio > 0.20) reasons.push(`totals_mismatch(${(mismatchRatio * 100).toFixed(1)}%)`);
+
+        await setStage(supabase, jobId, "Three-Pass Low Confidence — Switching to Fallback", 65);
+        await supabase.from("parsing_jobs").update({ fallback_parser: "regex_recovery" }).eq("id", jobId);
+
+        const t0 = Date.now();
+        regexResult = runParserV3({ pages: allPages, rawText, fileExtension });
+        const dur = Date.now() - t0;
+
+        parserTrace.push({
+          parser: "regex_recovery",
+          started_at: new Date(Date.now() - dur).toISOString(),
+          ended_at: new Date().toISOString(),
+          duration_ms: dur,
+          status: "success",
+          reason: `${reasons.join(",")} — ${regexResult.resolution.baseItems.length} base items`,
+        });
+      }
+
+      await setStage(supabase, jobId, "Finalizing Totals", 75);
+    }
+
+    // =========================================================================
+    // BUILD FINAL RESOLUTION OUTPUT
+    // =========================================================================
+
+    let finalResolution: ReturnType<typeof runParserV3>["resolution"];
+    const finalClassification = regexResult?.classification ?? classification;
+
+    if ((isSpreadsheet || runStableRegexPrimary) && regexResult) {
+      // Spreadsheet OR stable-mode PDF path — resolution already produced by parserRouterV3
+      finalResolution = regexResult.resolution;
+
+    } else if (!regexRecoveryUsed) {
+      const llmAdapted: ParsedLineItem[] = llmRawItems.map((item, i) => adaptLlmItem(item, i, "llm_primary(gpt-4o)"));
+      const docTotals = extractDocumentTotals(rawText);
+      const grandTotal = llmGrandTotal > 0 ? llmGrandTotal : docTotals.grandTotal ?? llmAdapted.reduce((s, i) => s + i.total, 0);
+      const baseRowSum = llmAdapted.filter(i => i.scopeCategory === "base").reduce((s, i) => s + i.total, 0);
+      const totalSource = llmGrandTotal > 0 ? "summary_page" : (grandTotal > baseRowSum ? "document_grand_total" : "row_sum");
+
+      finalResolution = runResolutionLayer({
+        parserUsed: "llm_primary(gpt-4o)",
+        allItems: llmAdapted,
+        totals: { grandTotal, optionalTotal: docTotals.optionalTotal ?? 0, subTotal: docTotals.subTotal, rowSum: baseRowSum, source: totalSource },
+        summaryDetected: llmGrandTotal > 0,
+        optionalScopeDetected: llmAdapted.some(i => i.scopeCategory === "optional"),
+        parserReasons: [`llm confidence=${llmConfidence.toFixed(2)}`, `attempts=1`, ...llmWarnings.slice(0, 4)],
+        rawSummary: null,
+      } as RawParserOutput, classification);
+
+    } else {
+      const regexResolution = regexResult!.resolution;
+      const regexItems = [...regexResolution.baseItems, ...regexResolution.optionalItems];
+      const llmAdapted: ParsedLineItem[] = llmRawItems.map((item, i) => adaptLlmItem(item, i, "llm_primary(gpt-4o)"));
+      const mergedItems = mergeItems(llmAdapted, regexItems);
+      const docTotals = extractDocumentTotals(rawText);
+
+      const regexHasSummaryTotal = regexResolution.totals.source === "summary_page"
+        && regexResolution.validation.summaryTotal != null
+        && regexResolution.validation.summaryTotal > 0;
+
+      const grandTotal = regexResolution.totals.grandTotal > 0 ? regexResolution.totals.grandTotal
+        : llmGrandTotal > 0 ? llmGrandTotal
+        : docTotals.grandTotal ?? mergedItems.reduce((s, i) => s + i.total, 0);
+
+      const baseRowSum = mergedItems.filter(i => i.scopeCategory === "base").reduce((s, i) => s + i.total, 0);
+
+      finalResolution = runResolutionLayer({
+        parserUsed: llmRawItems.length > 0 ? "llm_primary+regex_recovery(gpt-4o)" : "regex_recovery(v3)",
+        allItems: mergedItems,
+        totals: {
+          grandTotal,
+          optionalTotal: regexResolution.totals.optionalTotal > 0 ? regexResolution.totals.optionalTotal : docTotals.optionalTotal ?? 0,
+          subTotal: regexResolution.totals.subTotal ?? docTotals.subTotal,
+          rowSum: baseRowSum,
+          source: regexHasSummaryTotal ? "summary_page" : "row_sum",
+        },
+        summaryDetected: regexHasSummaryTotal,
+        optionalScopeDetected: mergedItems.some(i => i.scopeCategory === "optional"),
+        parserReasons: [`llm_fail=${llmFailReason ?? "none"}`, `regex_recovery=true`, ...regexResolution.debug.parserReasons.slice(0, 4)],
+        rawSummary: null,
+      } as RawParserOutput, finalClassification);
+    }
+
+    const { resolution } = { resolution: finalResolution };
+    const finalParserUsed = resolution.parserUsed;
+    const hasItems = resolution.baseItems.length > 0 || resolution.optionalItems.length > 0;
+    const hasTotal = resolution.totals.grandTotal > 0;
+
+    const traceReport = {
+      build_version: BUILD_VERSION,
+      production_mode: PRODUCTION_MODE,
+      stable_mode: STABLE_MODE,
+      three_pass_version: THREE_PASS_VERSION,
+      primary_parser: runStableRegexPrimary ? "regex_primary_v3" : "three_pass_llm",
+      prepass: prepassDurationMs > 0 ? "deterministic OK" : "skipped",
+      prepass_duration_ms: prepassDurationMs,
+      prepass_sections_detected: prepassSections,
+      prepass_doc_type: prepassDocType,
+      llm_chunks: `${llmChunksCompleted ?? 0} / ${llmChunksStarted ?? 0} completed`,
+      fallback_triggered: regexRecoveryUsed,
+      final_parser_used: finalParserUsed,
+      attempt_order: parserTrace,
+    };
+
+    // Fail-fast — nothing usable
+    if (!hasItems && !hasTotal) {
+      const failureReason = "Both parsers returned no items and no total";
+      await supabase.from("parsing_jobs").update({
+        status: "failed",
+        current_stage: "Failed — No Items Extracted",
+        error_message: failureReason,
+        last_error: failureReason,
+        last_error_code: "no_items_no_total",
+        final_parser_used: finalParserUsed,
+        trace_json: traceReport,
+        llm_attempted: llmAttempted,
+        llm_success: llmSuccess,
+        llm_fail_reason: llmFailReason,
+        llm_chunks_completed: llmChunksCompleted,
+        metadata: { failure_reason: failureReason, failure_code: "no_items_no_total", parser_strategy: parserStrategy },
+        updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
+
+      return new Response(JSON.stringify({ success: false, jobId, error: "parsing_failed", trace: traceReport }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    await setStage(supabase, jobId, "Saving Results", 80);
+
+    const canonicalTotal = resolution.totals.grandTotal;
+    const canonicalOptionalTotal = resolution.totals.optionalTotal;
+    const resolutionConfidence = resolution.validation.risk === "OK" ? "HIGH"
+      : resolution.validation.risk === "MEDIUM" ? "MEDIUM" : "LOW";
+
+    let quoteData: { id: string };
+
+    if (typedJob.quote_id) {
+      const { data: updatedQuote, error: updateError } = await supabase.from("quotes").update({
+        status: "pending", total_amount: canonicalTotal, total_price: canonicalTotal, updated_at: new Date().toISOString(),
+      }).eq("id", typedJob.quote_id).select().single();
+      if (updateError || !updatedQuote) throw new Error(`Failed to update quote: ${updateError?.message}`);
+      quoteData = updatedQuote;
     } else {
       const dashboardMode = (typedJob.metadata as any)?.dashboard_mode || "original";
       let revisionNumber = 1;
       if (dashboardMode === "revisions") {
-        const { data: latestQuote } = await supabase.from("quotes")
-          .select("revision_number")
-          .eq("project_id", typedJob.project_id)
-          .eq("supplier_name", typedJob.supplier_name)
-          .order("revision_number", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data: latestQuote } = await supabase.from("quotes").select("revision_number")
+          .eq("project_id", typedJob.project_id).eq("supplier_name", typedJob.supplier_name)
+          .order("revision_number", { ascending: false }).limit(1).maybeSingle();
         revisionNumber = latestQuote?.revision_number ? latestQuote.revision_number + 1 : 2;
       }
-      const { data: newQuote, error: createErr } = await supabase.from("quotes").insert({
-        project_id: typedJob.project_id,
-        supplier_name: typedJob.supplier_name,
-        organisation_id: typedJob.organisation_id,
-        status: "pending",
-        total_amount: mainTotal,
-        total_price: mainTotal,
-        created_by: typedJob.user_id,
-        revision_number: revisionNumber,
-        trade,
-      }).select("id").single();
-      if (createErr || !newQuote) throw new Error(`Failed to create quote: ${createErr?.message}`);
-      quoteId = newQuote.id;
+      const { data: newQuote, error: quoteError } = await supabase.from("quotes").insert({
+        project_id: typedJob.project_id, supplier_name: typedJob.supplier_name,
+        organisation_id: typedJob.organisation_id, status: "pending",
+        total_amount: canonicalTotal, total_price: canonicalTotal,
+        created_by: typedJob.user_id, revision_number: revisionNumber,
+        trade: typedJob.trade || "passive_fire",
+      }).select().single();
+      if (quoteError || !newQuote) throw new Error(`Failed to create quote: ${quoteError?.message}`);
+      quoteData = newQuote;
     }
 
-    // Replace items
-    await supabase.from("quote_items").delete().eq("quote_id", quoteId);
+    if (typedJob.quote_id) await supabase.from("quote_items").delete().eq("quote_id", quoteData.id);
 
-    const mainItems = v2.items.filter((it) => it.scope_category === "main");
-    const optionalItems = v2.items.filter((it) => it.scope_category === "optional");
-    const excludedItems = v2.items.filter((it) => it.scope_category === "excluded");
-
-    const rows = v2.items.map((it, idx) => ({
-      quote_id: quoteId,
-      item_number: it.item_number ?? String(idx + 1),
-      description: it.description || "No description",
-      quantity: it.quantity ?? 0,
-      unit: it.unit ?? "ea",
-      unit_price: it.unit_price ?? 0,
-      total_price: it.total_price ?? 0,
-      system_id: it.sub_scope ?? "",
-      raw_text: it.description ?? "",
-      confidence: it.confidence ?? 0.85,
-      source: `parser_v2:${it.source}`,
+    const mapItem = (item: ParsedLineItem, scopeCategory: "Main" | "Optional") => ({
+      quote_id: quoteData.id,
+      item_number: item.lineId || "",
+      description: cleanText(item.description) || "No description",
+      quantity: item.qty || 0,
+      unit: item.unit || "ea",
+      unit_price: item.rate || 0,
+      total_price: item.total || 0,
+      system_id: item.section || "",
+      raw_text: cleanText(item.description) || "",
+      confidence: item.confidence || 0.85,
+      source: item.source || resolution.parserUsed,
       validation_flags: [],
-      frr: it.frr ?? null,
-      scope_category:
-        it.scope_category === "main"
-          ? "Main"
-          : it.scope_category === "optional"
-            ? "Optional"
-            : "Excluded",
-    }));
+      frr: extractFRRFromDescription(cleanText(item.description) || "") || null,
+      scope_category: scopeCategory,
+    });
 
-    if (rows.length > 0) {
-      const { error: insErr } = await supabase.from("quote_items").insert(rows);
-      if (insErr) throw new Error(`Failed to insert quote items: ${insErr.message}`);
+    const mainQuoteItems = resolution.baseItems.map((item) => mapItem(item, "Main"));
+    const optionalQuoteItems = resolution.optionalItems.map((item) => mapItem(item, "Optional"));
+    const allQuoteItems = [...mainQuoteItems, ...optionalQuoteItems];
+
+    if (allQuoteItems.length > 0) {
+      const { error: itemsError } = await supabase.from("quote_items").insert(allQuoteItems);
+      if (itemsError) {
+        await supabase.from("quotes").delete().eq("id", quoteData.id);
+        throw new Error(`Failed to insert quote items: ${itemsError.message}`);
+      }
     }
-
-    const resolutionConfidence = v2.totals.confidence; // HIGH | MEDIUM | LOW
 
     await supabase.from("quotes").update({
-      items_count: mainItems.length,
-      raw_items_count: v2.items.length,
-      inserted_items_count: mainItems.length,
-      total_amount: mainTotal,
-      total_price: mainTotal,
-      resolved_total: mainTotal,
-      resolution_source: v2.totals.resolution_source || "parser_v2",
+      items_count: mainQuoteItems.length,
+      raw_items_count: resolution.baseItems.length + resolution.optionalItems.length + resolution.excludedItems.length,
+      inserted_items_count: mainQuoteItems.length,
+      total_amount: canonicalTotal, total_price: canonicalTotal,
+      resolved_total: canonicalTotal, resolution_source: resolution.totals.source,
       resolution_confidence: resolutionConfidence,
-      document_grand_total: grandTotal > 0 ? grandTotal : null,
-      document_sub_total: mainTotal > 0 ? mainTotal : null,
-      optional_scope_total: optionalTotal > 0 ? optionalTotal : null,
-      original_line_items_total: mainItems.reduce((s, i) => s + (i.total_price ?? 0), 0),
-      parser_primary: "v2",
-      parser_fallback_reason: null,
-      parser_v1_total: null,
-      parser_v2_confidence: finalRecord?.confidence ?? null,
-      parser_v2_review_status: finalRecord?.review_status ?? null,
-      parser_v2_comparison_safe: finalRecord?.comparison_safe ?? null,
-      parser_v2_quote_type: finalRecord?.quote_type ?? null,
-      parser_v2_total_ex_gst: finalRecord?.quote_total_ex_gst ?? null,
-      parser_v2_total_inc_gst: finalRecord?.quote_total_inc_gst ?? null,
-      parser_v2_optional_total: finalRecord?.optional_total ?? null,
-      passive_fire_final: finalRecord,
-    }).eq("id", quoteId);
+      document_grand_total: resolution.totals.grandTotal > 0 ? resolution.totals.grandTotal : null,
+      document_sub_total: resolution.totals.subTotal,
+      optional_scope_total: canonicalOptionalTotal > 0 ? canonicalOptionalTotal : null,
+      original_line_items_total: resolution.totals.rowSum,
+      parser_primary: "v1",
+      parser_v1_total: canonicalTotal,
+    }).eq("id", quoteData.id);
+
+    // =========================================================================
+    // PARSER V2 — LLM-FIRST PROMOTION (passive_fire only, inline)
+    // Promote V2 as primary when health gate passes:
+    //   confidence >= 0.75 AND quote_total_ex_gst != null AND review_status != manual_review_required
+    // Otherwise V1 remains primary; V2 diagnostics still persisted for debug.
+    // =========================================================================
+    let parserV2Output: Awaited<ReturnType<typeof runParserV2>> | null = null;
+    let parserPrimary: "v1" | "v2" = "v1";
+    let parserFallbackReason: string | null = null;
+
+    if (trade === "passive_fire") {
+      const v2Start = Date.now();
+      await setStage(supabase, jobId, "Running Parser V2 (promotion gate)", 85);
+      try {
+        const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+        if (!openAiKey) throw new Error("OPENAI_API_KEY not configured");
+        parserV2Output = await runParserV2({
+          rawText,
+          pages: allPages,
+          fileName: typedJob.filename,
+          supplierHint: typedJob.supplier_name,
+          tradeHint: trade,
+          projectId: typedJob.project_id,
+          organisationId: typedJob.organisation_id,
+          quoteId: quoteData.id,
+          openAIKey: openAiKey,
+        });
+        console.log(`[V2] done in ${Date.now() - v2Start}ms confidence=${parserV2Output.totals.confidence} review=${parserV2Output.requires_review}`);
+      } catch (v2Err) {
+        const msg = v2Err instanceof Error ? v2Err.message : String(v2Err);
+        console.error(`[V2] failed:`, msg);
+        parserFallbackReason = `v2_exception:${msg.slice(0, 120)}`;
+      }
+
+      const finalRecord = parserV2Output?.passive_fire_final ?? null;
+      const v2Confidence = finalRecord?.confidence ?? null;
+      const v2TotalEx = finalRecord?.quote_total_ex_gst ?? null;
+      const v2TotalInc = finalRecord?.quote_total_inc_gst ?? null;
+      const v2Optional = finalRecord?.optional_total ?? null;
+      const v2ReviewStatus = finalRecord?.review_status ?? null;
+      const v2ComparisonSafe = finalRecord?.comparison_safe ?? null;
+      const v2QuoteType = finalRecord?.quote_type ?? null;
+
+      const healthy =
+        parserV2Output != null &&
+        finalRecord != null &&
+        v2Confidence != null &&
+        v2Confidence >= 0.75 &&
+        v2TotalEx != null &&
+        v2TotalEx > 0 &&
+        v2ReviewStatus !== "manual_review_required";
+
+      if (healthy) {
+        parserPrimary = "v2";
+        parserFallbackReason = null;
+        console.log(`[V2] PROMOTED — confidence=${v2Confidence} total_ex=${v2TotalEx}`);
+      } else if (!parserFallbackReason) {
+        if (!parserV2Output) parserFallbackReason = "v2_null_output";
+        else if (!finalRecord) parserFallbackReason = "v2_no_final_record";
+        else if (v2Confidence == null || v2Confidence < 0.75) parserFallbackReason = `low_confidence:${v2Confidence ?? "null"}`;
+        else if (v2TotalEx == null) parserFallbackReason = "null_total_ex_gst";
+        else if (v2ReviewStatus === "manual_review_required") parserFallbackReason = "manual_review_required";
+        else parserFallbackReason = "health_gate_failed";
+      }
+
+      const quoteUpdate: Record<string, unknown> = {
+        parser_primary: parserPrimary,
+        parser_fallback_reason: parserFallbackReason,
+        parser_v1_total: canonicalTotal,
+        parser_v2_confidence: v2Confidence,
+        parser_v2_review_status: v2ReviewStatus,
+        parser_v2_comparison_safe: v2ComparisonSafe,
+        parser_v2_quote_type: v2QuoteType,
+        parser_v2_total_ex_gst: v2TotalEx,
+        parser_v2_total_inc_gst: v2TotalInc,
+        parser_v2_optional_total: v2Optional,
+        passive_fire_final: finalRecord,
+      };
+
+      if (parserPrimary === "v2" && v2TotalEx != null) {
+        quoteUpdate.total_amount = v2TotalEx;
+        quoteUpdate.total_price = v2TotalEx;
+        quoteUpdate.resolved_total = v2TotalEx;
+        quoteUpdate.resolution_source = "parser_v2_authoritative";
+      }
+
+      await supabase.from("quotes").update(quoteUpdate).eq("id", quoteData.id);
+    }
 
     const parseMetadata = {
-      parser_strategy: "parser_v2_only",
-      parser_version: "v2",
+      parser_strategy: parserStrategy,
+      parser_version: "v3-det-prepass",
       entry_point: "process_parsing_job",
-      build_version: BUILD_VERSION,
-      parser_used: "parser_v2(gpt-4.1)",
-      parser_primary: "v2",
-      parser_fallback_reason: null,
-      trade,
-      extractor_used: v2.telemetry.extractor_used,
-      v2_duration_ms: v2DurationMs,
-      classification: v2.classification,
-      totals_ok: v2.validation.totals_ok,
-      line_math_ok: v2.validation.line_math_ok,
-      missing_rows: v2.validation.missing_rows,
-      anomalies: v2.validation.anomalies,
-      requires_review: v2.requires_review,
-      grand_total: grandTotal,
-      main_total: mainTotal,
-      optional_total: optionalTotal,
-      excluded_count: excludedItems.length,
-      item_count: v2.items.length,
+      document_class: classification.documentClass,
+      commercial_family: classification.commercialFamily,
+      parser_used: finalParserUsed,
+      primary_parser: runStableRegexPrimary ? "regex_primary_v3" : "three_pass_llm",
+      production_mode: PRODUCTION_MODE,
+      stable_mode: STABLE_MODE,
+      prepass: prepassDurationMs > 0 ? "deterministic OK" : "skipped",
+      prepass_duration_ms: prepassDurationMs,
+      prepass_sections_detected: prepassSections,
+      prepass_doc_type: prepassDocType,
+      llm_chunks: `${llmChunksCompleted ?? 0} / ${llmChunksStarted ?? 0} completed`,
+      fallback_triggered: regexRecoveryUsed,
+      llm_attempted: llmAttempted,
+      llm_success: llmSuccess,
+      llm_fail_reason: llmFailReason,
+      llm_fail_message: llmFailMessage.slice(0, 300),
+      llm_chunks_started: llmChunksStarted,
+      llm_chunks_completed: llmChunksCompleted,
+      llm_confidence: llmConfidence,
+      regex_recovery_used: regexRecoveryUsed,
+      total_source: resolution.totals.source,
+      confidence: classification.confidence,
+      warnings: [...resolution.validation.warnings, ...llmWarnings.slice(0, 5)],
+      classifier_reasons: classification.reasons,
+      summary_detected: resolution.debug.summaryDetected,
+      optional_scope_detected: resolution.debug.optionalScopeDetected,
+      item_count_base: resolution.debug.itemCountBase,
+      item_count_optional: resolution.debug.itemCountOptional,
+      item_count_excluded: resolution.debug.itemCountExcluded,
+      grand_total: canonicalTotal,
+      optional_total: canonicalOptionalTotal,
+      row_sum: resolution.totals.rowSum,
+      validation_risk: resolution.validation.risk,
+      parser_reasons: resolution.debug.parserReasons,
     };
 
-    const v2PersistOutput = {
-      failed: false,
-      confidence: finalRecord?.confidence ?? null,
-      review_status: finalRecord?.review_status ?? null,
-      comparison_safe: finalRecord?.comparison_safe ?? null,
-      quote_type: finalRecord?.quote_type ?? null,
-      requires_review: v2.requires_review,
-      quote_total_ex_gst: finalRecord?.quote_total_ex_gst ?? null,
-      quote_total_inc_gst: finalRecord?.quote_total_inc_gst ?? null,
-      optional_total: finalRecord?.optional_total ?? null,
-      root_cause: finalRecord?.root_cause ?? null,
-      review_reason: finalRecord?.review_reason ?? null,
-      main_total: v2.totals.main_total,
-      grand_total: v2.totals.grand_total,
-      resolution_source: v2.totals.resolution_source,
-      anomalies: v2.validation.anomalies,
-      extractor_used: v2.telemetry.extractor_used,
-      total_duration_ms: v2.telemetry.total_duration_ms,
-      classification: v2.classification,
-      items_count: v2.items.length,
-    };
+    const v2PersistOutput = parserV2Output
+      ? {
+          confidence: parserV2Output.passive_fire_final?.confidence ?? null,
+          review_status: parserV2Output.passive_fire_final?.review_status ?? null,
+          comparison_safe: parserV2Output.passive_fire_final?.comparison_safe ?? null,
+          quote_type: parserV2Output.passive_fire_final?.quote_type ?? null,
+          requires_review: parserV2Output.requires_review,
+          quote_total_ex_gst: parserV2Output.passive_fire_final?.quote_total_ex_gst ?? null,
+          quote_total_inc_gst: parserV2Output.passive_fire_final?.quote_total_inc_gst ?? null,
+          optional_total: parserV2Output.passive_fire_final?.optional_total ?? null,
+          root_cause: parserV2Output.passive_fire_final?.root_cause ?? null,
+          review_reason: parserV2Output.passive_fire_final?.review_reason ?? null,
+          main_total: parserV2Output.totals.main_total,
+          grand_total: parserV2Output.totals.grand_total,
+          resolution_source: parserV2Output.totals.resolution_source,
+          anomalies: parserV2Output.validation.anomalies,
+          extractor_used: parserV2Output.telemetry.extractor_used,
+          total_duration_ms: parserV2Output.telemetry.total_duration_ms,
+        }
+      : null;
 
     await supabase.from("parsing_jobs").update({
       status: "completed",
       progress: 100,
       current_stage: "Completed",
-      quote_id: quoteId,
+      quote_id: quoteData.id,
       result_data: parseMetadata,
-      metadata: parseMetadata,
+      metadata: { ...parseMetadata, parser_primary: parserPrimary, parser_fallback_reason: parserFallbackReason },
       parser_v2_output: v2PersistOutput,
-      final_parser_used: "parser_v2(gpt-4.1)",
+      llm_attempted: llmAttempted,
+      llm_success: llmSuccess,
+      llm_fail_reason: llmFailReason,
+      llm_chunks_completed: llmChunksCompleted,
+      final_parser_used: parserPrimary === "v2" ? "parser_v2(gpt-4.1)" : finalParserUsed,
+      trace_json: traceReport,
       last_error: null,
       last_error_code: null,
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", jobId);
 
-    console.log(`[PIPELINE_END] V2 success job=${jobId} quote=${quoteId} items=${v2.items.length} total=${mainTotal}`);
+    console.log(`[PIPELINE_END] status=success job_id=${jobId} items=${allQuoteItems.length} llm_success=${llmSuccess} fallback=${regexRecoveryUsed}`);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        jobId,
-        quoteId,
-        itemCount: v2.items.length,
-        parserUsed: "parser_v2(gpt-4.1)",
-        grandTotal,
-        mainTotal,
-        confidence: finalRecord?.confidence ?? null,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    const comparisonTask = triggerVersionComparison({
+      supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
+      serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      quote_id: quoteData.id,
+      file_url: typedJob.file_url,
+      filename: typedJob.filename ?? typedJob.file_url,
+      supplier: typedJob.supplier_name ?? "Unknown",
+      trade: typedJob.trade || "passive_fire",
+      actual_total: canonicalTotal,
+    });
+    try {
+      (globalThis as unknown as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } })
+        .EdgeRuntime?.waitUntil(comparisonTask);
+    } catch (_) {
+      void comparisonTask;
+    }
+
+    return new Response(JSON.stringify({
+      success: true, jobId, quoteId: quoteData.id, itemCount: allQuoteItems.length,
+      parserUsed: finalParserUsed, llmSuccess, llmFailReason, regexRecoveryUsed,
+      grandTotal: canonicalTotal, trace: traceReport,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
     console.error("[PIPELINE] Fatal error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
+
     if (jobId) {
       try {
-        await supabase.from("parsing_jobs").update({
+        const supabase2 = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        await supabase2.from("parsing_jobs").update({
           status: "failed",
           current_stage: "Failed — Fatal Error",
           error_message: msg,
           last_error: msg,
           last_error_code: "fatal_error",
-          parser_v2_output: buildFailureReport("parser_v2_exception", msg),
           updated_at: new Date().toISOString(),
         }).eq("id", jobId);
-      } catch (_) { /* ignore */ }
+      } catch (_) {}
     }
-    return new Response(
-      JSON.stringify({ error: msg }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+
+    return new Response(JSON.stringify({ error: msg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
 
-// ---------------------------------------------------------------------------
-// Failure persistence — never silently falls back to V1.
-// Writes the failure report to:
-//   - parsing_jobs.parser_v2_output  (full structured report for the UI)
-//   - parsing_jobs.metadata          (summary for dashboards)
-//   - quotes.passive_fire_final      (so Parser Report under the quote shows it)
-//   - quotes.parser_primary = 'v2_failed'
-// ---------------------------------------------------------------------------
-async function persistFailure(
-  supabase: ReturnType<typeof createClient>,
-  typedJob: ParsingJob,
-  jobId: string,
-  report: V2FailureReport,
-  v2: ParserV2Output | null = null,
-): Promise<void> {
-  const trade = typedJob.trade || "passive_fire";
-
-  // Ensure a quote exists so the UI can display the Parser Report
-  let quoteId = typedJob.quote_id;
-  if (!quoteId) {
-    try {
-      const { data: newQuote } = await supabase.from("quotes").insert({
-        project_id: typedJob.project_id,
-        supplier_name: typedJob.supplier_name,
-        organisation_id: typedJob.organisation_id,
-        status: "failed",
-        total_amount: 0,
-        total_price: 0,
-        created_by: typedJob.user_id,
-        revision_number: 1,
-        trade,
-      }).select("id").single();
-      quoteId = newQuote?.id ?? null;
-    } catch (err) {
-      console.error("[FAIL] failed to create placeholder quote", err);
-    }
+async function triggerVersionComparison(args: {
+  supabaseUrl: string;
+  serviceKey: string;
+  quote_id: string;
+  file_url: string;
+  filename: string;
+  supplier: string;
+  trade: string;
+  actual_total: number | null;
+}): Promise<void> {
+  if (!args.supabaseUrl || !args.serviceKey || !args.file_url) {
+    console.log("[auto_version_comparison] skipped missing_env_or_file_url");
+    return;
   }
-
-  const failurePassiveFireFinal = {
-    failed: true,
-    stage: report.stage,
-    message: report.message,
-    details: report.details ?? null,
-    timestamp: report.timestamp,
-    extractor_used: v2?.telemetry.extractor_used ?? null,
-    classification: v2?.classification ?? null,
-    anomalies: v2?.validation.anomalies ?? [],
-  };
-
-  if (quoteId) {
-    await supabase.from("quotes").update({
-      parser_primary: "v2_failed",
-      parser_fallback_reason: `${report.stage}: ${report.message}`.slice(0, 500),
-      parser_v2_confidence: null,
-      parser_v2_review_status: "manual_review_required",
-      parser_v2_comparison_safe: false,
-      parser_v2_quote_type: v2?.classification.quoteType.quoteType ?? null,
-      parser_v2_total_ex_gst: null,
-      parser_v2_total_inc_gst: null,
-      parser_v2_optional_total: null,
-      passive_fire_final: failurePassiveFireFinal,
-      resolution_source: "parser_v2_failed",
-      resolution_confidence: "LOW",
-      updated_at: new Date().toISOString(),
-    }).eq("id", quoteId);
+  try {
+    const res = await fetch(`${args.supabaseUrl}/functions/v1/bulk_compare_vault_pdf`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${args.serviceKey}`,
+        apikey: args.serviceKey,
+      },
+      body: JSON.stringify({
+        file_url: args.file_url,
+        filename: args.filename,
+        supplier: args.supplier,
+        trade: args.trade,
+        quote_id: args.quote_id,
+        actual_total: args.actual_total,
+        source: "auto_on_import",
+      }),
+    });
+    const text = await res.text();
+    console.log(
+      `[auto_version_comparison] quote_id=${args.quote_id} status=${res.status} body=${text.slice(0, 300)}`,
+    );
+  } catch (err) {
+    console.error("[auto_version_comparison] error", err);
   }
-
-  const metadata = {
-    parser_strategy: "parser_v2_only",
-    parser_version: "v2",
-    parser_primary: "v2_failed",
-    parser_fallback_reason: `${report.stage}: ${report.message}`.slice(0, 500),
-    build_version: BUILD_VERSION,
-    trade,
-    v2_failure: failurePassiveFireFinal,
-  };
-
-  await supabase.from("parsing_jobs").update({
-    status: "failed",
-    progress: 100,
-    current_stage: `Failed — ${report.stage}`,
-    quote_id: quoteId,
-    metadata,
-    result_data: metadata,
-    parser_v2_output: failurePassiveFireFinal,
-    final_parser_used: "parser_v2_failed",
-    error_message: report.message,
-    last_error: report.message,
-    last_error_code: report.stage,
-    completed_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq("id", jobId);
 }
