@@ -233,8 +233,9 @@ Deno.serve(async (req: Request) => {
 
     let v2: ParserV2Output;
     const v2Start = Date.now();
+    const V2_TIMEOUT_MS = 110_000;
     try {
-      v2 = await runParserV2({
+      const v2Promise = runParserV2({
         rawText,
         pages: allPages,
         fileName: typedJob.filename,
@@ -245,6 +246,13 @@ Deno.serve(async (req: Request) => {
         quoteId: typedJob.quote_id ?? undefined,
         openAIKey: openAiKey,
       });
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(
+          () => reject(new Error(`parser_v2_timeout: exceeded ${V2_TIMEOUT_MS}ms`)),
+          V2_TIMEOUT_MS,
+        );
+      });
+      v2 = await Promise.race([v2Promise, timeoutPromise]);
     } catch (v2Err) {
       const msg = v2Err instanceof Error ? v2Err.message : String(v2Err);
       const stack = v2Err instanceof Error ? v2Err.stack?.slice(0, 1500) : undefined;
