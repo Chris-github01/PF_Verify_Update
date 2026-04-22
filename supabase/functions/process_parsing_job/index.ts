@@ -1003,23 +1003,6 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[PIPELINE_END] status=success job_id=${jobId} items=${allQuoteItems.length} llm_success=${llmSuccess} fallback=${regexRecoveryUsed}`);
 
-    const comparisonTask = triggerVersionComparison({
-      supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
-      serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      quote_id: quoteData.id,
-      file_url: typedJob.file_url,
-      filename: typedJob.filename ?? typedJob.file_url,
-      supplier: typedJob.supplier_name ?? "Unknown",
-      trade: typedJob.trade || "passive_fire",
-      actual_total: canonicalTotal,
-    });
-    try {
-      (globalThis as unknown as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } })
-        .EdgeRuntime?.waitUntil(comparisonTask);
-    } catch (_) {
-      void comparisonTask;
-    }
-
     return new Response(JSON.stringify({
       success: true, jobId, quoteId: quoteData.id, itemCount: allQuoteItems.length,
       parserUsed: finalParserUsed, llmSuccess, llmFailReason, regexRecoveryUsed,
@@ -1047,44 +1030,3 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: msg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
-
-async function triggerVersionComparison(args: {
-  supabaseUrl: string;
-  serviceKey: string;
-  quote_id: string;
-  file_url: string;
-  filename: string;
-  supplier: string;
-  trade: string;
-  actual_total: number | null;
-}): Promise<void> {
-  if (!args.supabaseUrl || !args.serviceKey || !args.file_url) {
-    console.log("[auto_version_comparison] skipped missing_env_or_file_url");
-    return;
-  }
-  try {
-    const res = await fetch(`${args.supabaseUrl}/functions/v1/bulk_compare_vault_pdf`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${args.serviceKey}`,
-        apikey: args.serviceKey,
-      },
-      body: JSON.stringify({
-        file_url: args.file_url,
-        filename: args.filename,
-        supplier: args.supplier,
-        trade: args.trade,
-        quote_id: args.quote_id,
-        actual_total: args.actual_total,
-        source: "auto_on_import",
-      }),
-    });
-    const text = await res.text();
-    console.log(
-      `[auto_version_comparison] quote_id=${args.quote_id} status=${res.status} body=${text.slice(0, 300)}`,
-    );
-  } catch (err) {
-    console.error("[auto_version_comparison] error", err);
-  }
-}
