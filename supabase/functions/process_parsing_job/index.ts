@@ -1003,6 +1003,36 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[PIPELINE_END] status=success job_id=${jobId} items=${allQuoteItems.length} llm_success=${llmSuccess} fallback=${regexRecoveryUsed}`);
 
+    try {
+      const shadowUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/bulk_compare_vault_pdf`;
+      const shadowPayload = {
+        run_id: null,
+        source: "live_import",
+        file_url: typedJob.file_url,
+        filename: typedJob.filename,
+        supplier: typedJob.supplier_name,
+        trade: typedJob.trade ?? "unknown",
+        quote_id: quoteData.id,
+        quote_type: classification?.commercialFamily ?? null,
+        actual_total: canonicalTotal ?? null,
+      };
+      const shadowFetch = fetch(shadowUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify(shadowPayload),
+      }).catch((e) => console.warn("[SHADOW] dispatch failed", e));
+      // @ts-ignore EdgeRuntime is provided by Supabase runtime
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(shadowFetch);
+      }
+    } catch (shadowErr) {
+      console.warn("[SHADOW] dispatch error", shadowErr);
+    }
+
     return new Response(JSON.stringify({
       success: true, jobId, quoteId: quoteData.id, itemCount: allQuoteItems.length,
       parserUsed: finalParserUsed, llmSuccess, llmFailReason, regexRecoveryUsed,

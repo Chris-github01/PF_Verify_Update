@@ -10,13 +10,15 @@ const corsHeaders = {
 type Winner = "v1" | "v2" | "equal";
 
 interface RequestBody {
-  run_id: string;
+  run_id: string | null;
   file_url: string;
   filename: string;
   supplier: string;
   trade: string;
   quote_id?: string | null;
   actual_total?: number | null;
+  source?: "vault_batch" | "live_import";
+  quote_type?: string | null;
 }
 
 interface ParserResult {
@@ -38,21 +40,25 @@ Deno.serve(async (req: Request) => {
     );
 
     const body = (await req.json()) as RequestBody;
-    if (!body.run_id || !body.file_url) {
-      return json({ error: "run_id and file_url are required" }, 400);
+    if (!body.file_url) {
+      return json({ error: "file_url is required" }, 400);
     }
+    const source = body.source ?? (body.run_id ? "vault_batch" : "live_import");
+    const isBatch = source === "vault_batch" && body.run_id;
 
-    await supabase
-      .from("parser_bulk_runs")
-      .update({ current_file: body.filename ?? body.file_url })
-      .eq("id", body.run_id);
+    if (isBatch) {
+      await supabase
+        .from("parser_bulk_runs")
+        .update({ current_file: body.filename ?? body.file_url })
+        .eq("id", body.run_id!);
+    }
 
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("quotes")
       .download(body.file_url);
 
     if (downloadError || !fileData) {
-      await recordFailure(supabase, body, "download_failed");
+      if (isBatch) await recordFailure(supabase, body, "download_failed");
       return json({ success: false, reason: "download_failed" }, 200);
     }
 
@@ -60,7 +66,7 @@ Deno.serve(async (req: Request) => {
     const rawText = await extractPdfText(arrayBuffer, body.filename);
 
     if (!rawText || rawText.length < 20) {
-      await recordFailure(supabase, body, "empty_text");
+      if (isBatch) await recordFailure(supabase, body, "empty_text");
       return json({ success: false, reason: "empty_text" }, 200);
     }
 
@@ -79,6 +85,7 @@ Deno.serve(async (req: Request) => {
         quote_id: body.quote_id ?? null,
         supplier: body.supplier ?? "Unknown",
         trade: body.trade ?? "unknown",
+        quote_type: body.quote_type ?? null,
         v1_total: v1.total,
         v2_total: v2.total,
         actual_total: reference,
@@ -90,8 +97,9 @@ Deno.serve(async (req: Request) => {
         winner,
         variance_pct: variance,
         failure_cause,
+        source,
         metadata: {
-          source: "vault_bulk",
+          source,
           run_id: body.run_id,
           filename: body.filename,
           v1_notes: v1.notes,
@@ -100,11 +108,13 @@ Deno.serve(async (req: Request) => {
       });
 
     if (insertError) {
-      await recordFailure(supabase, body, `insert_failed:${insertError.message}`);
+      if (isBatch) await recordFailure(supabase, body, `insert_failed:${insertError.message}`);
       return json({ success: false, reason: "insert_failed", detail: insertError.message }, 200);
     }
 
-    await bumpRunCounters(supabase, body.run_id, winner, v1.runtime_ms, v2.runtime_ms);
+    if (isBatch) {
+      await bumpRunCounters(supabase, body.run_id!, winner, v1.runtime_ms, v2.runtime_ms);
+    }
 
     return json({
       success: true,
