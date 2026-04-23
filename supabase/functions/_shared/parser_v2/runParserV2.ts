@@ -44,6 +44,10 @@ import {
   type RenderLayoutResult,
 } from "./classifiers/extractRenderLayout.ts";
 import {
+  buildRenderHelperBundle,
+  type RenderHelperBundle,
+} from "./classifiers/buildRenderHelperRows.ts";
+import {
   validatePassiveFireParse,
   type PassiveFireValidationResult,
 } from "./validation/validatePassiveFireParse.ts";
@@ -406,26 +410,17 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     const extractor = EXTRACTOR_BY_TRADE[trade.trade] ?? extractFallback;
     const extractorName = EXTRACTOR_BY_TRADE[trade.trade] ? trade.trade : "fallback";
 
-    const renderHintsForExtractor = render_layout?.enabled
-      ? {
-          rows_detected_total: render_layout.rows_detected_total,
-          tables_detected: render_layout.tables_detected,
-          sections_detected: render_layout.sections_detected,
-          totals_detected: render_layout.totals_detected,
-          tables: render_layout.tables.map((t) => ({
-            page: t.page,
-            section: t.section,
-            rows_detected: t.rows_detected,
-            columns: t.columns,
-            rows: t.rows.slice(0, 50),
-          })),
-          totals_blocks: render_layout.totals_blocks,
-          section_headers: render_layout.section_headers,
-          repeated_schedules: render_layout.repeated_schedules,
-          note:
-            "These are layout hints only. Use them to cross-check table structure, row counts, and totals. Never invent rows not present in the document text.",
-        }
+    const renderHelperBundle: RenderHelperBundle | null = render_layout?.enabled
+      ? buildRenderHelperBundle(render_layout)
       : null;
+    const renderHintsForExtractor = renderHelperBundle;
+    if (renderHelperBundle) {
+      console.log(
+        `[render_helper] structured_tables=${renderHelperBundle.tables.length} ` +
+        `structured_rows=${renderHelperBundle.tables.reduce((s, t) => s + t.rows.length, 0)} ` +
+        `totals_blocks=${renderHelperBundle.totals_blocks.length}`,
+      );
+    }
 
     const extractorInputSources: ExtractorInputSources = {
       native_text: (effectiveRawText?.length ?? 0) > 0,
