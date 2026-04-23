@@ -9,11 +9,12 @@
  */
 
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
-import { markRequestSent, markResponseReceived } from "../telemetrySink.ts";
+import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
 const EXTRACTOR_MODEL = "gpt-4.1";
 const CHUNK_CHAR_BUDGET = 18000;
 const MAX_CHUNKS = 8;
+const CHUNK_CONCURRENCY = 4;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_RETRIES = 3;
 
@@ -49,7 +50,7 @@ export async function runExtractorLLMWithTelemetry(
   const all: ParsedLineItemV2[] = [];
   let succeeded = 0;
 
-  for (let i = 0; i < chunks.length; i++) {
+  const runChunk = async (i: number): Promise<unknown[] | null> => {
     const chunk = chunks[i];
     const userPayload = {
       trade: ctx.trade,
@@ -61,18 +62,26 @@ export async function runExtractorLLMWithTelemetry(
       document_chunk: chunk.text,
       context: ctx.extraUserContext ?? {},
     };
-
-    const rows = await callOpenAIWithRetry({
+    return await callOpenAIWithRetry({
       openAIKey: ctx.openAIKey,
       systemPrompt: ctx.systemPrompt,
       userPayload,
       trade: ctx.trade,
       chunkIndex: i,
     });
-    if (rows != null) {
-      succeeded++;
-      const mapper = ctx.rowMapper ?? normaliseRow;
-      for (const r of rows) all.push(mapper(r as Record<string, unknown>, ctx.trade));
+  };
+
+  const mapper = ctx.rowMapper ?? normaliseRow;
+  for (let start = 0; start < chunks.length; start += CHUNK_CONCURRENCY) {
+    const batch = chunks
+      .slice(start, start + CHUNK_CONCURRENCY)
+      .map((_, offset) => runChunk(start + offset));
+    const results = await Promise.all(batch);
+    for (const rows of results) {
+      if (rows != null) {
+        succeeded++;
+        for (const r of rows) all.push(mapper(r as Record<string, unknown>, ctx.trade));
+      }
     }
   }
 
@@ -97,7 +106,11 @@ async function callOpenAIWithRetry(args: {
   const userJson = JSON.stringify(args.userPayload);
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      markRequestSent(Math.round((args.systemPrompt.length + userJson.length) / 4));
+      markRequestSent(
+        Math.round((args.systemPrompt.length + userJson.length) / 4),
+        EXTRACTOR_MODEL,
+      );
+      const reqStart = Date.now();
       const res = await fetch(OPENAI_URL, {
         method: "POST",
         headers: {
@@ -122,6 +135,7 @@ async function callOpenAIWithRetry(args: {
         throw new Error(`fatal HTTP ${res.status}: ${bodyTxt.slice(0, 200)}`);
       }
       const json = await res.json();
+      markLlmCallDuration(Date.now() - reqStart, EXTRACTOR_MODEL);
       markResponseReceived(json?.usage);
       const content = json?.choices?.[0]?.message?.content;
       if (!content) return [];

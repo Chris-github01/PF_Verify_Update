@@ -11,7 +11,7 @@
  */
 
 import { PASSIVE_FIRE_TOTAL_SELECTOR_PROMPT } from "../prompts/passiveFireTotalSelectorPrompt.ts";
-import { markRequestSent, markResponseReceived } from "../telemetrySink.ts";
+import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
 import type { PassiveFireStructure } from "./classifyPassiveFireStructure.ts";
 
@@ -70,7 +70,11 @@ export async function selectPassiveFireAuthoritativeTotal(ctx: {
   };
 
   const userJson = JSON.stringify(payload);
-  markRequestSent(Math.round((PASSIVE_FIRE_TOTAL_SELECTOR_PROMPT.length + userJson.length) / 4));
+  markRequestSent(
+    Math.round((PASSIVE_FIRE_TOTAL_SELECTOR_PROMPT.length + userJson.length) / 4),
+    SELECTOR_MODEL,
+  );
+  const reqStart = Date.now();
   const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -96,6 +100,7 @@ export async function selectPassiveFireAuthoritativeTotal(ctx: {
   }
 
   const json = await res.json();
+  markLlmCallDuration(Date.now() - reqStart, SELECTOR_MODEL);
   markResponseReceived(json?.usage);
   const content = json?.choices?.[0]?.message?.content;
   if (!content) throw new Error("selectPassiveFireAuthoritativeTotal empty response");

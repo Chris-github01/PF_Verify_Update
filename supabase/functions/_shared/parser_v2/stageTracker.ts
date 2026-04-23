@@ -25,6 +25,9 @@ export interface StageRecord {
   error_message: string | null;
   tokens_in: number | null;
   tokens_out: number | null;
+  model: string | null;
+  request_count: number;
+  request_durations_ms: number[];
 }
 
 export interface StageCompletion {
@@ -88,11 +91,28 @@ export class StageTracker {
         error_message: null,
         tokens_in: null,
         tokens_out: null,
+        model: null,
+        request_count: 0,
+        request_durations_ms: [],
       };
       this.stages.push(record);
       this.byName.set(name, record);
     }
     this.currentStageName = name;
+    this.emit();
+  }
+
+  recordLlmCall(
+    name: string,
+    patch: { model?: string | null; duration_ms?: number | null },
+  ): void {
+    const record = this.byName.get(name);
+    if (!record) return;
+    if (patch.model) record.model = patch.model;
+    if (patch.duration_ms != null && Number.isFinite(patch.duration_ms)) {
+      record.request_count += 1;
+      record.request_durations_ms.push(Math.round(patch.duration_ms));
+    }
     this.emit();
   }
 
@@ -136,6 +156,9 @@ export class StageTracker {
         error_message: reason ?? null,
         tokens_in: null,
         tokens_out: null,
+        model: null,
+        request_count: 0,
+        request_durations_ms: [],
       };
       this.stages.push(record);
       this.byName.set(name, record);

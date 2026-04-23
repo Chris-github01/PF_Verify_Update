@@ -14,7 +14,7 @@
  */
 
 import { PASSIVE_FIRE_SANITIZER_PROMPT } from "../prompts/passiveFireSanitizerPrompt.ts";
-import { markRequestSent, markResponseReceived } from "../telemetrySink.ts";
+import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
 export type PassiveFireRemovedToken = {
   value: string;
@@ -54,7 +54,7 @@ export type PassiveFireSanitizerResult = {
 };
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const SANITIZER_MODEL = "gpt-4.1";
+const SANITIZER_MODEL = "gpt-4.1-mini";
 const PAGE_CHAR_BUDGET = 18000;
 const MAX_PAGES = 12;
 
@@ -144,7 +144,11 @@ async function sanitizePage(ctx: {
     text,
   };
 
-  markRequestSent(Math.round((PASSIVE_FIRE_SANITIZER_PROMPT.length + text.length) / 4));
+  markRequestSent(
+    Math.round((PASSIVE_FIRE_SANITIZER_PROMPT.length + text.length) / 4),
+    SANITIZER_MODEL,
+  );
+  const reqStart = Date.now();
   const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -171,6 +175,7 @@ async function sanitizePage(ctx: {
   }
 
   const json = await res.json();
+  markLlmCallDuration(Date.now() - reqStart, SANITIZER_MODEL);
   markResponseReceived(json?.usage);
   const content = json?.choices?.[0]?.message?.content;
   if (!content) return emptyResult(text);

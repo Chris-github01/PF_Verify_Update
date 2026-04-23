@@ -34,7 +34,7 @@ export function getActiveTracker(): StageTracker | null {
  * sink emit a "request in flight" snapshot so the DB shows the stage
  * as running even if the outer request is then killed by a timeout.
  */
-export function markRequestSent(approxTokensIn?: number): void {
+export function markRequestSent(approxTokensIn?: number, model?: string): void {
   const tracker = ACTIVE_TRACKER;
   if (!tracker) return;
   const name = tracker.getCurrentStage();
@@ -42,9 +42,20 @@ export function markRequestSent(approxTokensIn?: number): void {
   if (approxTokensIn != null && Number.isFinite(approxTokensIn)) {
     tracker.setTokens(name, { tokens_in: Math.round(approxTokensIn) });
   } else {
-    // touch via no-op setTokens so the sink still fires
     tracker.setTokens(name, {});
   }
+  if (model) tracker.recordLlmCall(name, { model });
+}
+
+export function markLlmCallDuration(durationMs: number, model?: string): void {
+  const tracker = ACTIVE_TRACKER;
+  if (!tracker) return;
+  const name = tracker.getCurrentStage();
+  if (!name) return;
+  tracker.recordLlmCall(name, {
+    duration_ms: durationMs,
+    model: model ?? null,
+  });
 }
 
 /**
@@ -69,3 +80,6 @@ export function markResponseReceived(usage?: {
   }
   tracker.setTokens(name, patch);
 }
+
+
+export { markLlmCallDuration, markRequestSent, markResponseReceived }
