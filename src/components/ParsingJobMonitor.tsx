@@ -99,9 +99,15 @@ interface ParsingJob {
     anomalies?: string[];
     classification?: Record<string, unknown> | null;
     extractor_used?: string | null;
+    build_id?: string | null;
+    file_versions?: Record<string, string> | null;
     chosen_path?: string | null;
+    extractor_items_count?: number | null;
+    fallback_items_count?: number | null;
     raw_rows?: number | null;
     normalized_rows?: number | null;
+    rows_after_mapping?: number | null;
+    rows_inserted?: number | null;
     saved_rows?: number | null;
     rows_insert_attempted?: number | null;
     rows_insert_successful?: number | null;
@@ -240,22 +246,44 @@ function ParserV2ReportPanel({ v2 }: { v2: NonNullable<ParsingJob['parser_v2_out
       </button>
       {open && (
         <div className="mt-1.5 font-mono text-xs bg-slate-900/60 border border-slate-700 rounded px-3 py-2 space-y-1.5">
-          {(v2.raw_rows != null || v2.normalized_rows != null || v2.saved_rows != null || v2.chosen_path) && (
-            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 pb-1.5 border-b border-slate-700/60">
-              <div className="text-slate-500">chosen_path</div>
-              <div className="text-slate-200">{v2.chosen_path ?? '—'}</div>
-              <div className="text-slate-500">raw_rows</div>
-              <div className={(v2.raw_rows ?? 0) > 0 ? 'text-green-400' : 'text-slate-300'}>
-                {v2.raw_rows ?? 0}
-              </div>
-              <div className="text-slate-500">normalized_rows</div>
-              <div className={(v2.normalized_rows ?? 0) > 0 ? 'text-green-400' : 'text-orange-400'}>
-                {v2.normalized_rows ?? 0}
-              </div>
-              <div className="text-slate-500">saved_rows</div>
-              <div className={(v2.saved_rows ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}>
-                {v2.saved_rows ?? 0}
-              </div>
+          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 pb-1.5 border-b border-slate-700/60">
+            <div className="text-slate-500">BUILD_ID</div>
+            <div className={v2.build_id ? 'text-cyan-300 break-all' : 'text-red-400'}>
+              {v2.build_id ?? 'STALE RUNTIME — no BUILD_ID'}
+            </div>
+            <div className="text-slate-500">chosen_path</div>
+            <div className="text-slate-200">{v2.chosen_path ?? '—'}</div>
+            <div className="text-slate-500">extractor_items_count</div>
+            <div className={(v2.extractor_items_count ?? 0) > 0 ? 'text-green-400' : 'text-orange-400'}>
+              {v2.extractor_items_count ?? 0}
+            </div>
+            <div className="text-slate-500">fallback_items_count</div>
+            <div className={(v2.fallback_items_count ?? 0) > 0 ? 'text-green-400' : 'text-slate-400'}>
+              {v2.fallback_items_count ?? 0}
+            </div>
+            <div className="text-slate-500">raw_rows</div>
+            <div className={(v2.raw_rows ?? 0) > 0 ? 'text-green-400' : 'text-slate-300'}>
+              {v2.raw_rows ?? 0}
+            </div>
+            <div className="text-slate-500">normalized_rows</div>
+            <div className={(v2.normalized_rows ?? 0) > 0 ? 'text-green-400' : 'text-orange-400'}>
+              {v2.normalized_rows ?? 0}
+            </div>
+            <div className="text-slate-500">rows_after_mapping</div>
+            <div className={(v2.rows_after_mapping ?? 0) > 0 ? 'text-green-400' : 'text-orange-400'}>
+              {v2.rows_after_mapping ?? 0}
+            </div>
+            <div className="text-slate-500">rows_inserted</div>
+            <div className={(v2.rows_inserted ?? v2.saved_rows ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}>
+              {v2.rows_inserted ?? v2.saved_rows ?? 0}
+            </div>
+          </div>
+          {v2.file_versions && (
+            <div className="pb-1.5 border-b border-slate-700/60">
+              <div className="text-slate-500 mb-0.5">file_versions</div>
+              <pre className="text-slate-300 text-[10px] leading-tight whitespace-pre-wrap break-all">
+                {JSON.stringify(v2.file_versions, null, 2)}
+              </pre>
             </div>
           )}
           {failed ? (

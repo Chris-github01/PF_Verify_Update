@@ -27,6 +27,20 @@ const corsHeaders = {
 
 const BUILD_VERSION = "2026-04-23-slow-finalize";
 
+// Unique per-deploy marker. If this value stops changing after a deploy, the
+// runtime is stale. Computed at module load so it survives across requests in
+// the same container instance but changes between deploys.
+const BUILD_ID = `ppj-${new Date().toISOString().replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 8)}`;
+const FILE_VERSIONS = {
+  process_parsing_job: "v4-hard-assertions-2026-04-23",
+  run_parser_v2: "v3-chosen-path-2026-04-23",
+  map_to_quote_items: "v2-loose-aliases-2026-04-23",
+  map_to_quotes_table: "v2-items-with-zero-totals-2026-04-23",
+} as const;
+console.log(
+  `[process_parsing_job] MODULE_LOAD BUILD_ID=${BUILD_ID} versions=${JSON.stringify(FILE_VERSIONS)}`,
+);
+
 // Required inner stages that must all have passed for a run to be considered
 // semantically successful even if the outer watchdog already fired. If these
 // are all green, the job is committed as success (or success_slow_finalize).
@@ -92,7 +106,11 @@ type V2FailureStage =
   | "parser_v2_exception"
   | "parser_v2_no_items"
   | "parser_v2_no_total"
-  | "openai_key_missing";
+  | "openai_key_missing"
+  // Hard-assertion error codes — emitted only when the boundary fires.
+  | "TRUE_ZERO_EXTRACTION"
+  | "MAPPING_DROPPED_ROWS"
+  | "DB_INSERT_FAILED";
 
 interface V2FailureReport {
   failed: true;
@@ -489,22 +507,40 @@ Deno.serve(async (req: Request) => {
       const earlyDebug = (v2 as unknown as { debug?: Record<string, unknown> }).debug ?? null;
       const earlyExtraction = earlyDebug?.extraction as Record<string, unknown> | undefined;
       const earlyFallback = earlyDebug?.fallback_extraction as Record<string, unknown> | null | undefined;
+      const extractor_items_count = (earlyDebug?.extractor_items_count as number | undefined) ?? 0;
+      const fallback_items_count = (earlyDebug?.fallback_items_count as number | undefined) ?? 0;
       const rawRowsSeen =
         ((earlyExtraction?.rows_received as number | undefined) ?? 0) +
         ((earlyFallback?.rows_received as number | undefined) ?? 0);
       const normalizedRowsSeen =
         ((earlyExtraction?.rows_after_normalize as number | undefined) ?? 0) +
         ((earlyFallback?.rows_after_normalize as number | undefined) ?? 0);
-      const stageCode =
-        rawRowsSeen > 0 ? "parser_mapping_dropped_rows" : "parser_v2_no_items";
-      const msg =
-        rawRowsSeen > 0
-          ? `parser_mapping_dropped_rows: extractor returned ${rawRowsSeen} raw rows but normalization kept ${normalizedRowsSeen}`
-          : "Parser V2 returned zero line items after extraction";
+
+      // Hard assertion taxonomy:
+      //   - extractor_items_count > 0 && rows_after_mapping == 0 ⇒ MAPPING_DROPPED_ROWS
+      //   - extractor_items_count == 0 (and no raw rows seen)     ⇒ TRUE_ZERO_EXTRACTION
+      //   - otherwise (raw rows seen but normalization collapsed) ⇒ MAPPING_DROPPED_ROWS
+      const effective_extractor_count = extractor_items_count + fallback_items_count;
+      let stageCode: V2FailureStage;
+      let msg: string;
+      if (effective_extractor_count > 0 || rawRowsSeen > 0) {
+        stageCode = "MAPPING_DROPPED_ROWS";
+        msg =
+          `MAPPING_DROPPED_ROWS: extractor produced ${effective_extractor_count} items / ${rawRowsSeen} raw rows ` +
+          `but normalization kept ${normalizedRowsSeen} and mapping produced 0`;
+      } else {
+        stageCode = "TRUE_ZERO_EXTRACTION";
+        msg = `TRUE_ZERO_EXTRACTION: extractor returned 0 items and 0 raw rows (extractor_used=${v2.telemetry.extractor_used})`;
+      }
+      console.error(
+        `[process_parsing_job] ${stageCode} BUILD_ID=${BUILD_ID} extractor_items_count=${extractor_items_count} fallback_items_count=${fallback_items_count} raw_rows=${rawRowsSeen} normalized_rows=${normalizedRowsSeen} rows_after_mapping=0 chosen_path=${earlyDebug?.chosen_path ?? 'n/a'}`,
+      );
       const report = buildFailureReport(
         stageCode,
         msg,
         {
+          build_id: BUILD_ID,
+          file_versions: FILE_VERSIONS,
           anomalies: v2.validation.anomalies,
           extractor_used: v2.telemetry.extractor_used,
           requires_review: v2.requires_review,
@@ -512,8 +548,12 @@ Deno.serve(async (req: Request) => {
           classification: v2.classification,
           passive_fire_validation: v2.passive_fire_validation,
           chosen_path: earlyDebug?.chosen_path ?? null,
+          extractor_items_count,
+          fallback_items_count,
           raw_rows: rawRowsSeen,
           normalized_rows: normalizedRowsSeen,
+          rows_after_mapping: 0,
+          rows_inserted: 0,
           saved_rows: 0,
           extraction_debug: earlyExtraction ?? null,
           fallback_extraction_debug: earlyFallback ?? null,
@@ -522,7 +562,7 @@ Deno.serve(async (req: Request) => {
       const combined = [...outerTracker.snapshot(), ...(v2.telemetry.stages ?? [])];
       await persistFailure(supabase, typedJob, jobId, report, v2, combined);
       return new Response(
-        JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
+        JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage, build_id: BUILD_ID }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -603,17 +643,17 @@ Deno.serve(async (req: Request) => {
         .select("id");
       if (insErr) {
         console.error(
-          `[process_parsing_job] database_insert_failed quote=${quoteId} rows_insert_attempted=${rows_insert_attempted} rows_insert_successful=0 error=${insErr.message}`,
+          `[process_parsing_job] DB_INSERT_FAILED BUILD_ID=${BUILD_ID} quote=${quoteId} rows_insert_attempted=${rows_insert_attempted} rows_insert_successful=0 error=${insErr.message}`,
         );
-        throw new Error(`database_insert_failed: ${insErr.message}`);
+        throw new Error(`DB_INSERT_FAILED: ${insErr.message}`);
       }
       rows_insert_successful = insData?.length ?? 0;
       if (rows_insert_attempted > 0 && rows_insert_successful === 0) {
         console.error(
-          `[process_parsing_job] database_insert_failed quote=${quoteId} rows_insert_attempted=${rows_insert_attempted} rows_insert_successful=0`,
+          `[process_parsing_job] DB_INSERT_FAILED BUILD_ID=${BUILD_ID} quote=${quoteId} rows_insert_attempted=${rows_insert_attempted} rows_insert_successful=0`,
         );
         throw new Error(
-          `database_insert_failed: attempted ${rows_insert_attempted} but 0 rows were inserted`,
+          `DB_INSERT_FAILED: attempted ${rows_insert_attempted} but 0 rows were inserted`,
         );
       }
     }
@@ -678,8 +718,16 @@ Deno.serve(async (req: Request) => {
     const v2Debug = (v2 as unknown as { debug?: Record<string, unknown> }).debug ?? null;
     const extractionDbg = v2Debug?.extraction as Record<string, unknown> | undefined;
     const fallbackDbg = v2Debug?.fallback_extraction as Record<string, unknown> | null | undefined;
+    const extractor_items_count_success = (v2Debug?.extractor_items_count as number | undefined) ?? 0;
+    const fallback_items_count_success = (v2Debug?.fallback_items_count as number | undefined) ?? 0;
     const v2PersistOutput = {
       failed: false,
+      build_id: BUILD_ID,
+      file_versions: FILE_VERSIONS,
+      extractor_items_count: extractor_items_count_success,
+      fallback_items_count: fallback_items_count_success,
+      rows_after_mapping: (v2Debug?.rows_after_mapping as number | undefined) ?? v2.items.length,
+      rows_inserted: rows_insert_successful,
       confidence: finalRecord?.confidence ?? null,
       review_status: finalRecord?.review_status ?? null,
       comparison_safe: finalRecord?.comparison_safe ?? null,
@@ -885,6 +933,8 @@ async function persistFailure(
 
   const failurePassiveFireFinal = {
     failed: true,
+    build_id: BUILD_ID,
+    file_versions: FILE_VERSIONS,
     stage: report.stage,
     message: report.message,
     details: report.details ?? null,
@@ -918,8 +968,45 @@ async function persistFailure(
   // passive-fire artefacts). Previously only a thin failure summary was
   // written, which is why the Parser V2 Report panel showed
   // "No V2 output recorded" for failed runs.
+  const v2Debug = v2 ? (v2 as unknown as { debug?: Record<string, unknown> }).debug ?? null : null;
+  const extractionDbg = v2Debug?.extraction as Record<string, unknown> | undefined;
+  const fallbackDbg = v2Debug?.fallback_extraction as Record<string, unknown> | null | undefined;
+  const reportDetails = (report.details ?? {}) as Record<string, unknown>;
+
   const v2FullOutput = v2
     ? {
+        failed: true,
+        build_id: BUILD_ID,
+        file_versions: FILE_VERSIONS,
+        stage: report.stage,
+        message: report.message,
+        details: report.details ?? null,
+        timestamp: report.timestamp,
+        anomalies: v2.validation.anomalies ?? [],
+        extractor_used: v2.telemetry.extractor_used ?? null,
+        // Counts surfaced for UI — mirror the success-path shape so the
+        // ParserV2ReportPanel can render them for failures as well.
+        chosen_path: (v2Debug?.chosen_path as string | undefined) ?? (reportDetails.chosen_path as string | undefined) ?? null,
+        extractor_items_count:
+          (v2Debug?.extractor_items_count as number | undefined) ??
+          (reportDetails.extractor_items_count as number | undefined) ?? 0,
+        fallback_items_count:
+          (v2Debug?.fallback_items_count as number | undefined) ??
+          (reportDetails.fallback_items_count as number | undefined) ?? 0,
+        raw_rows:
+          (extractionDbg?.rows_received as number | undefined) ??
+          (fallbackDbg?.rows_received as number | undefined) ??
+          (reportDetails.raw_rows as number | undefined) ?? 0,
+        normalized_rows:
+          (extractionDbg?.rows_after_normalize as number | undefined) ??
+          (fallbackDbg?.rows_after_normalize as number | undefined) ??
+          (reportDetails.normalized_rows as number | undefined) ?? 0,
+        rows_after_mapping:
+          (v2Debug?.rows_after_mapping as number | undefined) ??
+          (reportDetails.rows_after_mapping as number | undefined) ?? 0,
+        rows_inserted: (reportDetails.rows_inserted as number | undefined) ?? 0,
+        saved_rows: (reportDetails.saved_rows as number | undefined) ?? 0,
+        items_count: v2.items.length,
         classification: v2.classification,
         items: v2.items,
         totals: v2.totals,
@@ -934,7 +1021,15 @@ async function persistFailure(
         multipath: (v2 as any).multipath ?? null,
         extraction_diagnostics: (v2 as any).extraction_diagnostics ?? null,
       }
-    : null;
+    : {
+        failed: true,
+        build_id: BUILD_ID,
+        file_versions: FILE_VERSIONS,
+        stage: report.stage,
+        message: report.message,
+        details: report.details ?? null,
+        timestamp: report.timestamp,
+      };
 
   const metadata = {
     parser_strategy: "parser_v2_only",

@@ -72,6 +72,9 @@ import { runPathB, type PathBResult } from "./multipath/pathB_commercialTotals.t
 import { runPathC, type PathCResult } from "./multipath/pathC_deterministicStructure.ts";
 import { decide, type MultiPathDecision } from "./multipath/decisionEngine.ts";
 
+export const RUN_PARSER_V2_VERSION = "v3-chosen-path-2026-04-23";
+console.log(`[runParserV2] MODULE_LOAD version=${RUN_PARSER_V2_VERSION}`);
+
 export type ParserV2Input = {
   rawText: string;
   pages: { pageNum: number; text: string }[];

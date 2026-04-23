@@ -13,6 +13,9 @@
 
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
 
+export const MAP_TO_QUOTE_ITEMS_VERSION = "v2-loose-aliases-2026-04-23";
+console.log(`[mapToQuoteItems] MODULE_LOAD version=${MAP_TO_QUOTE_ITEMS_VERSION}`);
+
 export type QuoteItemsRow = {
   item_number: string | null;
   description: string;
