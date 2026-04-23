@@ -439,7 +439,10 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
               jobsRef.current = next;
               return next;
             });
-            if (updated.status === 'completed' && updated.quote_id) {
+            if (
+              (updated.status === 'completed' || updated.status === 'success_slow_finalize') &&
+              updated.quote_id
+            ) {
               onJobCompleted?.(updated.id, updated.quote_id);
             }
           } else if (payload.eventType === 'DELETE') {
@@ -490,7 +493,11 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
             }
           }
 
-          if (job.status === 'completed' || job.progress === 100) {
+          if (
+            job.status === 'completed' ||
+            job.status === 'success_slow_finalize' ||
+            job.progress === 100
+          ) {
             Array.from(autoRetriedJobs.current).forEach(key => {
               if (key.startsWith(job.id)) autoRetriedJobs.current.delete(key);
             });
@@ -621,7 +628,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
     jobs.forEach(job => {
       if (job.status === 'pending' || job.status === 'processing') {
         active.push(job);
-      } else if (job.status === 'completed') {
+      } else if (job.status === 'completed' || job.status === 'success_slow_finalize') {
         const itemCount = getItemCount(job);
         const hasFailedChunks = job.error_message?.includes('chunks failed') || false;
         if (itemCount === 0) failed.push(job);
