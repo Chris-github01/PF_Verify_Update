@@ -174,14 +174,20 @@ export type ParserV2Output = {
     } | null;
     render: {
       render_enabled: boolean;
+      render_pages: number;
       render_rows_detected: number;
       render_tables_detected: number;
       render_totals_detected: number;
       render_sections_detected: number;
+      extracted_text_chars: number;
+      items_count_from_render: number;
+      http_status: number | null;
+      endpoint: string | null;
       layout_extraction_mismatch: boolean;
       reason: string | null;
       duration_ms: number;
       raw_response_summary: string | null;
+      json_payload_preview: string | null;
     };
   };
   render_layout: RenderLayoutResult | null;
@@ -791,10 +797,15 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           : null,
         render: {
           render_enabled: render_layout?.enabled ?? false,
+          render_pages: render_layout?.render_pages ?? 0,
           render_rows_detected: render_layout?.rows_detected_total ?? 0,
           render_tables_detected: render_layout?.tables_detected ?? 0,
           render_totals_detected: render_layout?.totals_detected ?? 0,
           render_sections_detected: render_layout?.sections_detected ?? 0,
+          extracted_text_chars: render_layout?.extracted_text_chars ?? 0,
+          items_count_from_render: render_layout?.items_count_from_render ?? 0,
+          http_status: render_layout?.http_status ?? null,
+          endpoint: render_layout?.endpoint ?? null,
           layout_extraction_mismatch:
             (render_layout?.enabled ?? false) &&
             (render_layout?.rows_detected_total ?? 0) > 20 &&
@@ -802,6 +813,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           reason: render_layout?.reason ?? null,
           duration_ms: render_layout?.duration_ms ?? 0,
           raw_response_summary: render_layout?.raw_response_summary ?? null,
+          json_payload_preview: render_layout?.json_payload_preview ?? null,
         },
       },
       render_layout,

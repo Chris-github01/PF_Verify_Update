@@ -26,6 +26,11 @@ export type RenderLayoutResult = {
   tables_detected: number;
   totals_detected: number;
   sections_detected: number;
+  render_pages: number;
+  extracted_text_chars: number;
+  items_count_from_render: number;
+  http_status: number | null;
+  endpoint: string | null;
   tables: RenderTableHint[];
   totals_blocks: Array<{ page: number; text: string; amount: number | null }>;
   section_headers: Array<{ page: number; text: string }>;
@@ -33,6 +38,7 @@ export type RenderLayoutResult = {
   repeated_schedules: Array<{ section: string; occurrences: number }>;
   duration_ms: number;
   raw_response_summary: string | null;
+  json_payload_preview: string | null;
 };
 
 export type ExtractRenderLayoutInput = {
@@ -46,8 +52,13 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_TABLES = 50;
 const MAX_ROWS_PER_TABLE = 200;
 const MAX_RAW_SUMMARY_CHARS = 1500;
+const MAX_JSON_PAYLOAD_PREVIEW_CHARS = 6000;
 
-function disabledResult(reason: string, duration_ms = 0): RenderLayoutResult {
+function disabledResult(
+  reason: string,
+  duration_ms = 0,
+  extras?: Partial<RenderLayoutResult>,
+): RenderLayoutResult {
   return {
     enabled: false,
     reason,
@@ -55,6 +66,11 @@ function disabledResult(reason: string, duration_ms = 0): RenderLayoutResult {
     tables_detected: 0,
     totals_detected: 0,
     sections_detected: 0,
+    render_pages: 0,
+    extracted_text_chars: 0,
+    items_count_from_render: 0,
+    http_status: null,
+    endpoint: null,
     tables: [],
     totals_blocks: [],
     section_headers: [],
@@ -62,6 +78,8 @@ function disabledResult(reason: string, duration_ms = 0): RenderLayoutResult {
     repeated_schedules: [],
     duration_ms,
     raw_response_summary: null,
+    json_payload_preview: null,
+    ...extras,
   };
 }
 
@@ -116,14 +134,23 @@ export async function extractRenderLayout(
   const started = Date.now();
 
   if (!input.pdfBytes || input.pdfBytes.byteLength === 0) {
+    console.log("[render_layout] skip reason=no_pdf_bytes");
     return disabledResult("no_pdf_bytes");
   }
 
   const baseUrl = getBaseUrl();
-  if (!baseUrl) return disabledResult("no_base_url");
+  if (!baseUrl) {
+    console.log("[render_layout] skip reason=no_base_url");
+    return disabledResult("no_base_url");
+  }
 
   const apiKey = getApiKey();
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const endpoint = `${baseUrl}/parse/pdfplumber`;
+  console.log(
+    `[render_layout] calling endpoint=${endpoint} apiKey=${apiKey ? "present" : "absent"} ` +
+    `pdf_bytes=${input.pdfBytes.byteLength} filename=${input.fileName}`,
+  );
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -136,7 +163,7 @@ export async function extractRenderLayout(
     const headers: Record<string, string> = {};
     if (apiKey) headers["X-API-Key"] = apiKey;
 
-    const res = await fetch(`${baseUrl}/parse/pdfplumber`, {
+    const res = await fetch(endpoint, {
       method: "POST",
       headers,
       body: formData,
@@ -145,15 +172,40 @@ export async function extractRenderLayout(
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      console.warn(
+        `[render_layout] http_error status=${res.status} body=${text.slice(0, 200)}`,
+      );
       return disabledResult(
         `http_${res.status}:${text.slice(0, 200)}`,
         Date.now() - started,
+        { http_status: res.status, endpoint },
       );
     }
 
-    const data = await res.json().catch(() => null);
+    const rawBodyText = await res.text();
+    console.log(
+      `[render_layout] http_ok status=${res.status} body_chars=${rawBodyText.length}`,
+    );
+
+    let data: unknown;
+    try {
+      data = JSON.parse(rawBodyText);
+    } catch (parseErr) {
+      console.warn(
+        `[render_layout] json_parse_failed body_preview=${rawBodyText.slice(0, 200)}`,
+      );
+      return disabledResult("invalid_json", Date.now() - started, {
+        http_status: res.status,
+        endpoint,
+        json_payload_preview: rawBodyText.slice(0, MAX_JSON_PAYLOAD_PREVIEW_CHARS),
+      });
+    }
     if (!data || typeof data !== "object") {
-      return disabledResult("invalid_json", Date.now() - started);
+      return disabledResult("invalid_json", Date.now() - started, {
+        http_status: res.status,
+        endpoint,
+        json_payload_preview: rawBodyText.slice(0, MAX_JSON_PAYLOAD_PREVIEW_CHARS),
+      });
     }
 
     const rawTables: unknown[] = Array.isArray((data as { raw_tables?: unknown }).raw_tables)
@@ -217,21 +269,44 @@ export async function extractRenderLayout(
       return acc;
     }, [] as RenderLayoutResult["page_zones"]);
 
+    const metadata = (data as { metadata?: { num_pages?: unknown; tables_found?: unknown } }).metadata ?? {};
+    const render_pages = typeof metadata.num_pages === "number" ? metadata.num_pages : 0;
+    const extracted_text_chars = typeof textForTotals === "string" ? textForTotals.length : 0;
+    const items_count_from_render = Array.isArray((data as { items?: unknown }).items)
+      ? ((data as { items: unknown[] }).items.length)
+      : 0;
+
     const raw_response_summary = (() => {
       try {
         const pruned = {
           parser_name: (data as { parser_name?: unknown }).parser_name ?? null,
-          num_pages: (data as { metadata?: { num_pages?: unknown } }).metadata?.num_pages ?? null,
-          tables_found: (data as { metadata?: { tables_found?: unknown } }).metadata?.tables_found ?? null,
-          items_count: Array.isArray((data as { items?: unknown }).items)
-            ? ((data as { items: unknown[] }).items.length)
-            : null,
+          num_pages: render_pages,
+          tables_found: metadata.tables_found ?? null,
+          items_count: items_count_from_render,
+          text_chars: extracted_text_chars,
+          tables_mapped: tables.length,
+          rows_detected_total: rowsDetectedTotal,
         };
         return JSON.stringify(pruned).slice(0, MAX_RAW_SUMMARY_CHARS);
       } catch {
         return null;
       }
     })();
+
+    const json_payload_preview = (() => {
+      try {
+        return JSON.stringify(data).slice(0, MAX_JSON_PAYLOAD_PREVIEW_CHARS);
+      } catch {
+        return rawBodyText.slice(0, MAX_JSON_PAYLOAD_PREVIEW_CHARS);
+      }
+    })();
+
+    console.log(
+      `[render_layout] result enabled=true render_pages=${render_pages} ` +
+      `tables_mapped=${tables.length} rows_detected_total=${rowsDetectedTotal} ` +
+      `totals_blocks=${totals_blocks.length} sections=${section_headers.length} ` +
+      `text_chars=${extracted_text_chars} items_from_render=${items_count_from_render}`,
+    );
 
     return {
       enabled: true,
@@ -240,6 +315,11 @@ export async function extractRenderLayout(
       tables_detected: tables.length,
       totals_detected: totals_blocks.length,
       sections_detected: section_headers.length,
+      render_pages,
+      extracted_text_chars,
+      items_count_from_render,
+      http_status: res.status,
+      endpoint,
       tables,
       totals_blocks,
       section_headers,
@@ -247,12 +327,14 @@ export async function extractRenderLayout(
       repeated_schedules,
       duration_ms: Date.now() - started,
       raw_response_summary,
+      json_payload_preview,
     };
   } catch (err) {
     const reason = err instanceof Error
       ? (err.name === "AbortError" ? "timeout" : err.message.slice(0, 200))
       : "unknown_error";
-    return disabledResult(reason, Date.now() - started);
+    console.warn(`[render_layout] threw reason=${reason}`);
+    return disabledResult(reason, Date.now() - started, { endpoint });
   } finally {
     clearTimeout(timer);
   }
