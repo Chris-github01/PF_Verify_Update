@@ -481,14 +481,32 @@ Deno.serve(async (req: Request) => {
     await setStage(supabase, jobId, "Saving Parser V2 output", 80);
 
     const finalRecord = v2.passive_fire_final;
-    const mainTotal = finalRecord?.quote_total_ex_gst ?? v2.totals.main_total ?? v2.totals.grand_total;
-    const grandTotal = v2.totals.grand_total ?? mainTotal;
+    const rawMainTotal = finalRecord?.quote_total_ex_gst ?? v2.totals.main_total ?? v2.totals.grand_total;
+    const rawGrandTotal = v2.totals.grand_total ?? rawMainTotal;
     const optionalTotal = finalRecord?.optional_total ?? v2.totals.optional_total ?? 0;
 
-    if (v2.items.length === 0) {
+    // Multi-path recovery: zero rows does NOT equal zero value.
+    // If Path B (labelled totals) or Path C (deterministic structure)
+    // produced a trustworthy total, commit it as the quote value.
+    const multipath = (v2 as any).multipath;
+    const recoveredTotal = multipath?.decision?.selected_total ?? null;
+    const mainTotal =
+      rawMainTotal && rawMainTotal > 0 ? rawMainTotal : recoveredTotal ?? 0;
+    const grandTotal =
+      rawGrandTotal && rawGrandTotal > 0
+        ? rawGrandTotal
+        : multipath?.decision?.selected_total_inc_gst ?? recoveredTotal ?? 0;
+    const effectiveMainTotal = mainTotal;
+    const effectiveGrandTotal = grandTotal;
+
+    // Only fail when ALL THREE paths returned nothing usable.
+    if (
+      v2.items.length === 0 &&
+      (!effectiveGrandTotal || effectiveGrandTotal <= 0)
+    ) {
       const report = buildFailureReport(
         "parser_v2_no_items",
-        "Parser V2 returned zero line items after extraction",
+        "All three extraction paths failed to recover a quote total",
         {
           anomalies: v2.validation.anomalies,
           extractor_used: v2.telemetry.extractor_used,
@@ -496,6 +514,15 @@ Deno.serve(async (req: Request) => {
           duration_ms: v2DurationMs,
           classification: v2.classification,
           passive_fire_validation: v2.passive_fire_validation,
+          multipath_decision: multipath?.decision ?? null,
+          path_b_candidates: multipath?.pathB?.candidates ?? [],
+          path_c_best: multipath?.pathC
+            ? {
+                best_total: multipath.pathC.best_total,
+                best_source: multipath.pathC.best_source,
+                confidence: multipath.pathC.confidence,
+              }
+            : null,
         },
       );
       const combined = [...outerTracker.snapshot(), ...(v2.telemetry.stages ?? [])];
@@ -687,6 +714,21 @@ Deno.serve(async (req: Request) => {
         total_runtime_ms: totalRuntimeMs,
         timeout_fired_at: timeoutFiredAt,
         needs_async_processing: needsAsyncProcessing,
+        multipath: multipath
+          ? {
+              decision: multipath.decision,
+              path_b_candidates: multipath.pathB?.candidates?.slice(0, 10) ?? [],
+              path_c: multipath.pathC
+                ? {
+                    best_total: multipath.pathC.best_total,
+                    best_source: multipath.pathC.best_source,
+                    confidence: multipath.pathC.confidence,
+                    gst_relations: multipath.pathC.gst_relations?.slice(0, 5) ?? [],
+                    rollups: multipath.pathC.rollups?.slice(0, 5) ?? [],
+                  }
+                : null,
+            }
+          : null,
       },
       metadata: parseMetadata,
       parser_v2_output: v2PersistOutput,

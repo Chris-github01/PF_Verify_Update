@@ -74,32 +74,13 @@ export function runPathC(ctx: {
   let best_source: PathCResult["best_source"] = null;
   let confidence = 0;
 
-  // Cross-corroborate GST relations with rollups: a GST total that also
-  // appears as a rollup total is far more likely to be the grand total.
-  const rollupTotals = new Set(rollups.map((r) => r.total.toFixed(2)));
-  const corroboratedGst = gstRelations.map((r) => ({
-    ...r,
-    confidence: rollupTotals.has(r.total.toFixed(2)) ? Math.min(1, r.confidence + 0.06) : r.confidence,
-    corroborated: rollupTotals.has(r.total.toFixed(2)),
-  }));
-
-  if (corroboratedGst.length > 0) {
-    // Rank by: corroborated first, then confidence, then total size
-    // (larger totals are more likely to be the actual grand total).
-    const top = corroboratedGst.sort((a, b) => {
-      if (a.corroborated !== b.corroborated) return a.corroborated ? -1 : 1;
-      if (Math.abs(a.confidence - b.confidence) > 0.001) return b.confidence - a.confidence;
-      return b.total - a.total;
-    })[0];
+  if (gstRelations.length > 0) {
+    const top = gstRelations.sort((a, b) => b.confidence - a.confidence)[0];
     best_total = top.total;
     best_source = "gst_relation";
     confidence = top.confidence;
   } else if (rollups.length > 0) {
-    // Prefer larger rollups when confidences tie — grand totals dominate.
-    const top = rollups.sort((a, b) => {
-      if (Math.abs(a.confidence - b.confidence) > 0.001) return b.confidence - a.confidence;
-      return b.total - a.total;
-    })[0];
+    const top = rollups.sort((a, b) => b.confidence - a.confidence)[0];
     best_total = top.total;
     best_source = "rollup";
     confidence = top.confidence;
