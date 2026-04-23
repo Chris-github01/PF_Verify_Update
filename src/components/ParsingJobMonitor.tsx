@@ -43,6 +43,19 @@ interface TraceJson {
   llm_chunks_completed?: number;
 }
 
+type PipelineStageStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped';
+
+interface PipelineStage {
+  name: string;
+  status: PipelineStageStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_ms: number | null;
+  error_message: string | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+}
+
 interface ParsingJob {
   id: string;
   supplier_name: string;
@@ -76,6 +89,7 @@ interface ParsingJob {
   trace_json?: TraceJson | null;
   llm_attempted?: boolean | null;
   llm_fail_reason?: string | null;
+  pipeline_stages?: PipelineStage[] | null;
   parser_v2_output?: {
     failed?: boolean;
     stage?: string;
@@ -95,6 +109,106 @@ interface ParsingJob {
       quote_total_ex_gst?: number | null;
     } | null;
   } | null;
+}
+
+const STAGE_DISPLAY_NAMES: Record<string, string> = {
+  download: 'Download File',
+  text_extraction: 'Extract Text',
+  parser_v2: 'Parser V2',
+  preflight: 'Preflight Check',
+  classification: 'Classify Document',
+  pf_sanitize: 'Sanitize (Passive Fire)',
+  pf_structure: 'Structure (Passive Fire)',
+  extraction: 'Extract Line Items',
+  fallback_extraction: 'Fallback Extraction',
+  pf_authoritative_total: 'Select Authoritative Total',
+  pf_intent: 'Intent Detection',
+  pf_validation: 'Passive Fire Validation',
+  validation: 'Validate Totals',
+  mappers: 'Map to Database',
+};
+
+function formatStageName(name: string): string {
+  return STAGE_DISPLAY_NAMES[name] ?? name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function PipelineStagesPanel({ stages, defaultOpen = true }: { stages: PipelineStage[]; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (!stages || stages.length === 0) return null;
+
+  const passed = stages.filter((s) => s.status === 'passed').length;
+  const failedCount = stages.filter((s) => s.status === 'failed').length;
+  const firstFailure = stages.find((s) => s.status === 'failed') ?? null;
+
+  const iconFor = (status: PipelineStageStatus) => {
+    if (status === 'passed') return <CheckCircle size={12} className="text-green-400" />;
+    if (status === 'failed') return <XCircle size={12} className="text-red-400" />;
+    if (status === 'running') return <Loader2 size={12} className="text-blue-400 animate-spin" />;
+    if (status === 'skipped') return <Clock size={12} className="text-slate-500" />;
+    return <Clock size={12} className="text-slate-500" />;
+  };
+
+  const statusColor = (status: PipelineStageStatus) => {
+    if (status === 'passed') return 'text-green-400';
+    if (status === 'failed') return 'text-red-400';
+    if (status === 'running') return 'text-blue-400';
+    if (status === 'skipped') return 'text-slate-500';
+    return 'text-slate-500';
+  };
+
+  const statusLabel = (status: PipelineStageStatus) => status.toUpperCase();
+
+  return (
+    <div className="mt-2 ml-7">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+      >
+        <Activity size={12} />
+        Pipeline Stages
+        <span className="text-slate-500">
+          [<span className="text-green-400">{passed} passed</span>
+          {failedCount > 0 && <>, <span className="text-red-400">{failedCount} failed</span></>}
+          , {stages.length} total]
+        </span>
+        {firstFailure && (
+          <span className="text-red-400">— failed at {formatStageName(firstFailure.name)}</span>
+        )}
+        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {open && (
+        <div className="mt-1.5 font-mono text-xs bg-slate-900/60 border border-slate-700 rounded px-3 py-2">
+          <div className="space-y-1">
+            {stages.map((stage, i) => (
+              <div key={`${stage.name}-${i}`} className="flex flex-col">
+                <div className="flex items-start gap-2">
+                  <span className="text-slate-500 w-5 flex-shrink-0 text-right">{i + 1}.</span>
+                  <span className="flex-shrink-0 mt-0.5">{iconFor(stage.status)}</span>
+                  <span className="text-slate-200 flex-1 break-all">{formatStageName(stage.name)}</span>
+                  <span className={`${statusColor(stage.status)} flex-shrink-0 text-[10px] font-semibold`}>
+                    {statusLabel(stage.status)}
+                  </span>
+                  <span className="text-slate-500 flex-shrink-0 w-16 text-right">
+                    {stage.duration_ms != null ? `${stage.duration_ms}ms` : '—'}
+                  </span>
+                </div>
+                {(stage.tokens_in != null || stage.tokens_out != null) && (
+                  <div className="ml-11 text-[10px] text-slate-500">
+                    tokens: in {stage.tokens_in ?? 0} / out {stage.tokens_out ?? 0}
+                  </div>
+                )}
+                {stage.error_message && (
+                  <div className="ml-11 mt-0.5 text-[11px] text-red-300 break-all leading-relaxed">
+                    {stage.error_message}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ParserV2ReportPanel({ v2 }: { v2: NonNullable<ParsingJob['parser_v2_output']> }) {
@@ -708,6 +822,9 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                       )}
                     </div>
                   )}
+                  {job.pipeline_stages && job.pipeline_stages.length > 0 && (
+                    <PipelineStagesPanel stages={job.pipeline_stages} defaultOpen={false} />
+                  )}
                   {trace && <TraceReportPanel trace={trace} job={job} />}
                   {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}
                 </div>
@@ -745,6 +862,9 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                             {itemCount} items extracted, {failedChunks} chunks failed
                           </div>
                           <div className="text-xs text-slate-400">File: {job.filename}</div>
+                          {job.pipeline_stages && job.pipeline_stages.length > 0 && (
+                            <PipelineStagesPanel stages={job.pipeline_stages} defaultOpen={false} />
+                          )}
                           {trace && <TraceReportPanel trace={trace} job={job} />}
                           {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}
                         </div>
@@ -823,6 +943,9 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                                 </div>
                               )}
                             </div>
+                          )}
+                          {job.pipeline_stages && job.pipeline_stages.length > 0 && (
+                            <PipelineStagesPanel stages={job.pipeline_stages} defaultOpen />
                           )}
                           {trace && <TraceReportPanel trace={trace} job={job} />}
                           {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}

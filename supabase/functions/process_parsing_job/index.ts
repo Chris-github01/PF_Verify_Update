@@ -1,6 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { runParserV2, type ParserV2Output } from "../_shared/parser_v2/runParserV2.ts";
+import {
+  StageTracker,
+  ParserV2StageError,
+  type StageRecord,
+} from "../_shared/parser_v2/stageTracker.ts";
 
 // =============================================================================
 // PROCESS PARSING JOB — PARSER V2 ONLY (no V1 fallback).
@@ -91,6 +96,7 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   let jobId: string | null = null;
+  const outerTracker = new StageTracker();
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -133,28 +139,32 @@ Deno.serve(async (req: Request) => {
 
     // -------- STEP 1: download file --------
     await setStage(supabase, jobId, "Downloading file", 15);
+    outerTracker.start("download");
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("quotes")
       .download(typedJob.file_url);
 
     if (downloadError || !fileData) {
+      outerTracker.fail("download", downloadError ?? new Error("unknown download error"));
       const report = buildFailureReport(
         "download",
         `Failed to download file: ${downloadError?.message ?? "unknown"}`,
         { file_url: typedJob.file_url },
       );
-      await persistFailure(supabase, typedJob, jobId, report);
+      await persistFailure(supabase, typedJob, jobId, report, null, outerTracker.snapshot());
       return new Response(
         JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+    outerTracker.succeed("download");
 
     const fileBuffer = await fileData.arrayBuffer();
     const fileName = typedJob.filename.toLowerCase();
 
     // -------- STEP 2: extract text --------
     await setStage(supabase, jobId, "Extracting document text", 25);
+    outerTracker.start("text_extraction");
     let allPages: { pageNum: number; text: string }[] = [];
     let fileExtension: "pdf" | "xlsx" | "xls" | null = null;
 
@@ -198,8 +208,9 @@ Deno.serve(async (req: Request) => {
       }
     } catch (extractErr) {
       const msg = extractErr instanceof Error ? extractErr.message : String(extractErr);
+      outerTracker.fail("text_extraction", extractErr);
       const report = buildFailureReport("text_extraction", msg, { fileName });
-      await persistFailure(supabase, typedJob, jobId, report);
+      await persistFailure(supabase, typedJob, jobId, report, null, outerTracker.snapshot());
       return new Response(
         JSON.stringify({ success: false, jobId, error: msg, stage: report.stage }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -207,13 +218,15 @@ Deno.serve(async (req: Request) => {
     }
 
     if (allPages.length === 0) {
+      outerTracker.fail("text_extraction", new Error("no text extracted"));
       const report = buildFailureReport("text_extraction", "No text could be extracted from the file");
-      await persistFailure(supabase, typedJob, jobId, report);
+      await persistFailure(supabase, typedJob, jobId, report, null, outerTracker.snapshot());
       return new Response(
         JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+    outerTracker.succeed("text_extraction");
 
     const rawText = allPages.map((p) => p.text).join("\n\n");
     console.log(`[EXTRACT] pages=${allPages.length} chars=${rawText.length} type=${fileExtension}`);
@@ -223,8 +236,9 @@ Deno.serve(async (req: Request) => {
 
     const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
     if (!openAiKey) {
+      outerTracker.skip("parser_v2", "OPENAI_API_KEY missing");
       const report = buildFailureReport("openai_key_missing", "OPENAI_API_KEY is not configured");
-      await persistFailure(supabase, typedJob, jobId, report);
+      await persistFailure(supabase, typedJob, jobId, report, null, outerTracker.snapshot());
       return new Response(
         JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -234,6 +248,7 @@ Deno.serve(async (req: Request) => {
     let v2: ParserV2Output;
     const v2Start = Date.now();
     const V2_TIMEOUT_MS = 110_000;
+    outerTracker.start("parser_v2");
     try {
       const v2Promise = runParserV2({
         rawText,
@@ -253,15 +268,21 @@ Deno.serve(async (req: Request) => {
         );
       });
       v2 = await Promise.race([v2Promise, timeoutPromise]);
+      outerTracker.succeed("parser_v2");
     } catch (v2Err) {
       const msg = v2Err instanceof Error ? v2Err.message : String(v2Err);
       const stack = v2Err instanceof Error ? v2Err.stack?.slice(0, 1500) : undefined;
       console.error("[V2] threw:", msg);
+      outerTracker.fail("parser_v2", v2Err);
+      const innerStages = v2Err instanceof ParserV2StageError ? v2Err.stages : [];
+      const failedInnerStage = v2Err instanceof ParserV2StageError ? v2Err.failedStage : null;
       const report = buildFailureReport("parser_v2_exception", msg, {
         stack,
         duration_ms: Date.now() - v2Start,
+        failed_inner_stage: failedInnerStage,
       });
-      await persistFailure(supabase, typedJob, jobId, report);
+      const combined = [...outerTracker.snapshot(), ...innerStages];
+      await persistFailure(supabase, typedJob, jobId, report, null, combined);
       return new Response(
         JSON.stringify({ success: false, jobId, error: msg, stage: report.stage }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -293,7 +314,8 @@ Deno.serve(async (req: Request) => {
           passive_fire_validation: v2.passive_fire_validation,
         },
       );
-      await persistFailure(supabase, typedJob, jobId, report, v2);
+      const combined = [...outerTracker.snapshot(), ...(v2.telemetry.stages ?? [])];
+      await persistFailure(supabase, typedJob, jobId, report, v2, combined);
       return new Response(
         JSON.stringify({ success: false, jobId, error: report.message, stage: report.stage }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -448,6 +470,11 @@ Deno.serve(async (req: Request) => {
       items_count: v2.items.length,
     };
 
+    const combinedStages = [
+      ...outerTracker.snapshot(),
+      ...(v2.telemetry.stages ?? []),
+    ];
+
     await supabase.from("parsing_jobs").update({
       status: "completed",
       progress: 100,
@@ -456,6 +483,7 @@ Deno.serve(async (req: Request) => {
       result_data: parseMetadata,
       metadata: parseMetadata,
       parser_v2_output: v2PersistOutput,
+      pipeline_stages: combinedStages,
       final_parser_used: "parser_v2(gpt-4.1)",
       last_error: null,
       last_error_code: null,
@@ -482,6 +510,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("[PIPELINE] Fatal error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
+    outerTracker.failAllInFlight(error);
     if (jobId) {
       try {
         await supabase.from("parsing_jobs").update({
@@ -491,6 +520,7 @@ Deno.serve(async (req: Request) => {
           last_error: msg,
           last_error_code: "fatal_error",
           parser_v2_output: buildFailureReport("parser_v2_exception", msg),
+          pipeline_stages: outerTracker.snapshot(),
           updated_at: new Date().toISOString(),
         }).eq("id", jobId);
       } catch (_) { /* ignore */ }
@@ -516,6 +546,7 @@ async function persistFailure(
   jobId: string,
   report: V2FailureReport,
   v2: ParserV2Output | null = null,
+  stages: StageRecord[] = [],
 ): Promise<void> {
   const trade = typedJob.trade || "passive_fire";
 
@@ -588,6 +619,7 @@ async function persistFailure(
     metadata,
     result_data: metadata,
     parser_v2_output: failurePassiveFireFinal,
+    pipeline_stages: stages,
     final_parser_used: "parser_v2_failed",
     error_message: report.message,
     last_error: report.message,
