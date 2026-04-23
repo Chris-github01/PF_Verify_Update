@@ -64,8 +64,6 @@ import { scoreConfidence } from "./validation/scoreConfidence.ts";
 import { mapToQuotesTable } from "./mappers/mapToQuotesTable.ts";
 import { mapToQuoteItems } from "./mappers/mapToQuoteItems.ts";
 
-import { StageTracker, ParserV2StageError, type StageRecord } from "./stageTracker.ts";
-
 export type ParserV2Input = {
   rawText: string;
   pages: { pageNum: number; text: string }[];
@@ -120,7 +118,6 @@ export type ParserV2Output = {
     stage_durations_ms: Record<string, number>;
     total_duration_ms: number;
     extractor_used: string;
-    stages: StageRecord[];
   };
   passive_fire_structure: PassiveFireStructure | null;
   passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null;
@@ -155,289 +152,196 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   const runStart = Date.now();
   const durations: Record<string, number> = {};
   const anomalies: string[] = [];
-  const tracker = new StageTracker();
 
-  try {
-    if (!input.openAIKey) {
-      tracker.start("preflight");
-      tracker.fail("preflight", new Error("parser_v2: openAIKey is required"));
-      throw new ParserV2StageError(
-        "parser_v2: openAIKey is required",
-        "preflight",
-        tracker.snapshot(),
-      );
-    }
-    if (!input.rawText?.trim()) {
-      tracker.start("preflight");
-      tracker.fail("preflight", new Error("parser_v2: rawText is empty"));
-      throw new ParserV2StageError(
-        "parser_v2: rawText is empty",
-        "preflight",
-        tracker.snapshot(),
-      );
-    }
+  if (!input.openAIKey) throw new Error("parser_v2: openAIKey is required");
+  if (!input.rawText?.trim()) throw new Error("parser_v2: rawText is empty");
 
-    const classificationContext = {
-      rawText: input.rawText,
-      fileName: input.fileName,
-      supplierHint: input.supplierHint,
-      tradeHint: input.tradeHint,
-      openAIKey: input.openAIKey,
-    };
+  const classificationContext = {
+    rawText: input.rawText,
+    fileName: input.fileName,
+    supplierHint: input.supplierHint,
+    tradeHint: input.tradeHint,
+    openAIKey: input.openAIKey,
+  };
 
-    tracker.start("classification");
-    const classifyStart = Date.now();
-    const [tradeResult, quoteTypeResult, supplierResult] = await Promise.allSettled([
-      classifyTrade(classificationContext),
-      classifyQuoteType(classificationContext),
-      classifySupplier(classificationContext),
-    ]);
-    durations.classification = Date.now() - classifyStart;
-    const classifierErrors = [tradeResult, quoteTypeResult, supplierResult]
-      .filter((r) => r.status === "rejected")
-      .map((r) => (r as PromiseRejectedResult).reason);
-    if (classifierErrors.length === 3) {
-      tracker.fail("classification", classifierErrors[0]);
-    } else {
-      tracker.succeed("classification");
-    }
+  const classifyStart = Date.now();
+  const [tradeResult, quoteTypeResult, supplierResult] = await Promise.allSettled([
+    classifyTrade(classificationContext),
+    classifyQuoteType(classificationContext),
+    classifySupplier(classificationContext),
+  ]);
+  durations.classification = Date.now() - classifyStart;
 
-    const trade = unwrap(tradeResult, {
-      trade: "unknown" as const,
-      confidence: 0,
-      rationale: "classifier_failed",
-      secondary_trades: [],
-    });
-    const quoteType = unwrap(quoteTypeResult, {
-      quoteType: "unknown" as const,
-      confidence: 0,
-      signals: [],
-    });
-    const supplier = unwrap(supplierResult, {
-      supplierName: input.supplierHint ?? "Unknown Supplier",
-      confidence: 0,
-      source: "fallback" as const,
-    });
+  const trade = unwrap(tradeResult, {
+    trade: "unknown" as const,
+    confidence: 0,
+    rationale: "classifier_failed",
+    secondary_trades: [],
+  });
+  const quoteType = unwrap(quoteTypeResult, {
+    quoteType: "unknown" as const,
+    confidence: 0,
+    signals: [],
+  });
+  const supplier = unwrap(supplierResult, {
+    supplierName: input.supplierHint ?? "Unknown Supplier",
+    confidence: 0,
+    source: "fallback" as const,
+  });
 
-    if (tradeResult.status === "rejected") anomalies.push("classify_trade_failed");
-    if (quoteTypeResult.status === "rejected") anomalies.push("classify_quote_type_failed");
-    if (supplierResult.status === "rejected") anomalies.push("classify_supplier_failed");
+  if (tradeResult.status === "rejected") anomalies.push("classify_trade_failed");
+  if (quoteTypeResult.status === "rejected") anomalies.push("classify_quote_type_failed");
+  if (supplierResult.status === "rejected") anomalies.push("classify_supplier_failed");
 
-    let passive_fire_sanitizer: PassiveFireSanitizerResult | null = null;
-    let effectiveRawText = input.rawText;
-    let effectivePages = input.pages;
-    if (trade.trade === "passive_fire") {
-      tracker.start("pf_sanitize");
-      const sanitizeStart = Date.now();
-      try {
-        passive_fire_sanitizer = await sanitizePassiveFireText({
-          rawText: input.rawText,
-          pages: input.pages,
-          supplier: supplier.supplierName,
-          fileName: input.fileName,
-          openAIKey: input.openAIKey,
-        });
-        if (passive_fire_sanitizer.clean_pages.length > 0) {
-          effectivePages = passive_fire_sanitizer.clean_pages;
-        }
-        if (passive_fire_sanitizer.clean_text && passive_fire_sanitizer.clean_text.trim().length > 0) {
-          effectiveRawText = passive_fire_sanitizer.clean_text;
-        }
-        tracker.succeed("pf_sanitize");
-      } catch (err) {
-        console.error("[parser_v2] passive fire sanitizer failed", err);
-        anomalies.push("pf_sanitizer_failed");
-        tracker.fail("pf_sanitize", err);
-      }
-      durations.pf_sanitize = Date.now() - sanitizeStart;
-    } else {
-      tracker.skip("pf_sanitize", "trade is not passive_fire");
-    }
-
-    let passive_fire_structure: PassiveFireStructure | null = null;
-    if (trade.trade === "passive_fire") {
-      tracker.start("pf_structure");
-      const structStart = Date.now();
-      try {
-        passive_fire_structure = await classifyPassiveFireStructure({
-          rawText: effectiveRawText,
-          pages: effectivePages,
-          fileName: input.fileName,
-          supplier: supplier.supplierName,
-          openAIKey: input.openAIKey,
-        });
-        tracker.succeed("pf_structure");
-      } catch (err) {
-        console.error("[parser_v2] passive fire structure analysis failed", err);
-        anomalies.push("pf_structure_analysis_failed");
-        tracker.fail("pf_structure", err);
-      }
-      durations.pf_structure = Date.now() - structStart;
-    } else {
-      tracker.skip("pf_structure", "trade is not passive_fire");
-    }
-
-    const extractor = EXTRACTOR_BY_TRADE[trade.trade] ?? extractFallback;
-    const extractorName = EXTRACTOR_BY_TRADE[trade.trade] ? trade.trade : "fallback";
-
-    tracker.start("extraction");
-    const extractStart = Date.now();
-    let items: ParsedLineItemV2[] = [];
-    let extractionFailed = false;
+  let passive_fire_sanitizer: PassiveFireSanitizerResult | null = null;
+  let effectiveRawText = input.rawText;
+  let effectivePages = input.pages;
+  if (trade.trade === "passive_fire") {
+    const sanitizeStart = Date.now();
     try {
-      items = await extractor({
+      passive_fire_sanitizer = await sanitizePassiveFireText({
+        rawText: input.rawText,
+        pages: input.pages,
+        supplier: supplier.supplierName,
+        fileName: input.fileName,
+        openAIKey: input.openAIKey,
+      });
+      if (passive_fire_sanitizer.clean_pages.length > 0) {
+        effectivePages = passive_fire_sanitizer.clean_pages;
+      }
+      if (passive_fire_sanitizer.clean_text && passive_fire_sanitizer.clean_text.trim().length > 0) {
+        effectiveRawText = passive_fire_sanitizer.clean_text;
+      }
+    } catch (err) {
+      console.error("[parser_v2] passive fire sanitizer failed", err);
+      anomalies.push("pf_sanitizer_failed");
+    }
+    durations.pf_sanitize = Date.now() - sanitizeStart;
+  }
+
+  let passive_fire_structure: PassiveFireStructure | null = null;
+  if (trade.trade === "passive_fire") {
+    const structStart = Date.now();
+    try {
+      passive_fire_structure = await classifyPassiveFireStructure({
         rawText: effectiveRawText,
         pages: effectivePages,
-        quoteType: quoteType.quoteType,
+        fileName: input.fileName,
         supplier: supplier.supplierName,
         openAIKey: input.openAIKey,
-        structure: passive_fire_structure,
       });
     } catch (err) {
-      console.error("[parser_v2] extractor threw, falling back", err);
-      anomalies.push("extractor_threw");
-      extractionFailed = true;
-      tracker.fail("extraction", err);
-      try {
-        items = await extractFallback({
-          rawText: input.rawText,
-          pages: input.pages,
-          quoteType: quoteType.quoteType,
-          supplier: supplier.supplierName,
-          openAIKey: input.openAIKey,
-        });
-      } catch (fallbackErr) {
-        throw new ParserV2StageError(
-          formatMessage(fallbackErr),
-          "extraction",
-          tracker.snapshot(),
-        );
-      }
+      console.error("[parser_v2] passive fire structure analysis failed", err);
+      anomalies.push("pf_structure_analysis_failed");
     }
-    if (!extractionFailed) tracker.succeed("extraction");
-    durations.extraction = Date.now() - extractStart;
+    durations.pf_structure = Date.now() - structStart;
+  }
 
-    if (items.length === 0 && extractor !== extractFallback) {
-      anomalies.push("primary_extractor_zero_rows");
-      tracker.start("fallback_extraction");
-      const fbStart = Date.now();
-      try {
-        items = await extractFallback({
-          rawText: input.rawText,
-          pages: input.pages,
-          quoteType: quoteType.quoteType,
-          supplier: supplier.supplierName,
-          openAIKey: input.openAIKey,
-        });
-        tracker.succeed("fallback_extraction");
-      } catch (err) {
-        tracker.fail("fallback_extraction", err);
-        throw new ParserV2StageError(
-          formatMessage(err),
-          "fallback_extraction",
-          tracker.snapshot(),
-        );
-      }
-      durations.fallback_extraction = Date.now() - fbStart;
-    }
+  const extractor = EXTRACTOR_BY_TRADE[trade.trade] ?? extractFallback;
+  const extractorName = EXTRACTOR_BY_TRADE[trade.trade] ? trade.trade : "fallback";
 
-    let passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null = null;
-    if (trade.trade === "passive_fire" && items.length > 0) {
-      tracker.start("pf_authoritative_total");
-      const selectorStart = Date.now();
-      try {
-        passive_fire_authoritative_total = await selectPassiveFireAuthoritativeTotal({
-          structure: passive_fire_structure,
-          items,
-          rawText: effectiveRawText,
-          pages: effectivePages,
-          supplier: supplier.supplierName,
-          openAIKey: input.openAIKey,
-        });
-        tracker.succeed("pf_authoritative_total");
-      } catch (err) {
-        console.error("[parser_v2] passive fire authoritative total selection failed", err);
-        anomalies.push("pf_authoritative_total_failed");
-        tracker.fail("pf_authoritative_total", err);
-      }
-      durations.pf_authoritative_total = Date.now() - selectorStart;
-    } else {
-      tracker.skip(
-        "pf_authoritative_total",
-        trade.trade !== "passive_fire" ? "trade is not passive_fire" : "no items extracted",
-      );
-    }
+  const extractStart = Date.now();
+  let items: ParsedLineItemV2[] = [];
+  try {
+    items = await extractor({
+      rawText: effectiveRawText,
+      pages: effectivePages,
+      quoteType: quoteType.quoteType,
+      supplier: supplier.supplierName,
+      openAIKey: input.openAIKey,
+      structure: passive_fire_structure,
+    });
+  } catch (err) {
+    console.error("[parser_v2] extractor threw, falling back", err);
+    anomalies.push("extractor_threw");
+    items = await extractFallback({
+      rawText: input.rawText,
+      pages: input.pages,
+      quoteType: quoteType.quoteType,
+      supplier: supplier.supplierName,
+      openAIKey: input.openAIKey,
+    });
+  }
+  durations.extraction = Date.now() - extractStart;
 
-    if (trade.trade === "passive_fire" && items.length > 0) {
-      tracker.start("pf_intent");
-      const intentStart = Date.now();
-      try {
-        const intent = await classifyPassiveFireIntent({
-          items,
-          openAIKey: input.openAIKey,
-        });
-        items = intent.items;
-        tracker.succeed("pf_intent");
-      } catch (err) {
-        console.error("[parser_v2] passive fire intent failed, keeping raw items", err);
-        anomalies.push("passive_fire_intent_failed");
-        tracker.fail("pf_intent", err);
-      }
-      durations.pf_intent = Date.now() - intentStart;
-    } else {
-      tracker.skip(
-        "pf_intent",
-        trade.trade !== "passive_fire" ? "trade is not passive_fire" : "no items extracted",
-      );
-    }
+  if (items.length === 0 && extractor !== extractFallback) {
+    anomalies.push("primary_extractor_zero_rows");
+    const fbStart = Date.now();
+    items = await extractFallback({
+      rawText: input.rawText,
+      pages: input.pages,
+      quoteType: quoteType.quoteType,
+      supplier: supplier.supplierName,
+      openAIKey: input.openAIKey,
+    });
+    durations.fallback_extraction = Date.now() - fbStart;
+  }
 
-    let passive_fire_validation: PassiveFireValidationResult | null = null;
-    if (trade.trade === "passive_fire") {
-      tracker.start("pf_validation");
-      const pfValStart = Date.now();
-      try {
-        passive_fire_validation = await validatePassiveFireParse({
-          structure: passive_fire_structure,
-          authoritative: passive_fire_authoritative_total,
-          sanitizer: passive_fire_sanitizer,
-          items,
-          supplier: supplier.supplierName,
-          openAIKey: input.openAIKey,
-        });
-        tracker.succeed("pf_validation");
-      } catch (err) {
-        console.error("[parser_v2] passive fire validation failed", err);
-        anomalies.push("pf_validation_failed");
-        tracker.fail("pf_validation", err);
-      }
-      durations.pf_validation = Date.now() - pfValStart;
-    } else {
-      tracker.skip("pf_validation", "trade is not passive_fire");
-    }
-
-    tracker.start("validation");
-    const validationStart = Date.now();
-    let lineMath: ReturnType<typeof validateLineMath>;
-    let totals: ReturnType<typeof validateTotals>;
-    let missing: ReturnType<typeof detectMissingRows>;
-    let confidence: ReturnType<typeof scoreConfidence>;
+  let passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null = null;
+  if (trade.trade === "passive_fire" && items.length > 0) {
+    const selectorStart = Date.now();
     try {
-      lineMath = validateLineMath(items);
-      totals = validateTotals(items, input.rawText);
-      missing = detectMissingRows(items, input.rawText, quoteType.quoteType);
-      confidence = scoreConfidence({
+      passive_fire_authoritative_total = await selectPassiveFireAuthoritativeTotal({
+        structure: passive_fire_structure,
         items,
-        lineMathOk: lineMath.ok,
-        totalsOk: totals.ok,
-        missingRows: missing.missing,
-        quoteType: quoteType.quoteType,
+        rawText: effectiveRawText,
+        pages: effectivePages,
+        supplier: supplier.supplierName,
+        openAIKey: input.openAIKey,
       });
-      tracker.succeed("validation");
     } catch (err) {
-      tracker.fail("validation", err);
-      throw new ParserV2StageError(formatMessage(err), "validation", tracker.snapshot());
+      console.error("[parser_v2] passive fire authoritative total selection failed", err);
+      anomalies.push("pf_authoritative_total_failed");
     }
-    durations.validation = Date.now() - validationStart;
+    durations.pf_authoritative_total = Date.now() - selectorStart;
+  }
+
+  if (trade.trade === "passive_fire" && items.length > 0) {
+    const intentStart = Date.now();
+    try {
+      const intent = await classifyPassiveFireIntent({
+        items,
+        openAIKey: input.openAIKey,
+      });
+      items = intent.items;
+    } catch (err) {
+      console.error("[parser_v2] passive fire intent failed, keeping raw items", err);
+      anomalies.push("passive_fire_intent_failed");
+    }
+    durations.pf_intent = Date.now() - intentStart;
+  }
+
+  let passive_fire_validation: PassiveFireValidationResult | null = null;
+  if (trade.trade === "passive_fire") {
+    const pfValStart = Date.now();
+    try {
+      passive_fire_validation = await validatePassiveFireParse({
+        structure: passive_fire_structure,
+        authoritative: passive_fire_authoritative_total,
+        sanitizer: passive_fire_sanitizer,
+        items,
+        supplier: supplier.supplierName,
+        openAIKey: input.openAIKey,
+      });
+    } catch (err) {
+      console.error("[parser_v2] passive fire validation failed", err);
+      anomalies.push("pf_validation_failed");
+    }
+    durations.pf_validation = Date.now() - pfValStart;
+  }
+
+  const validationStart = Date.now();
+  const lineMath = validateLineMath(items);
+  const totals = validateTotals(items, input.rawText);
+  const missing = detectMissingRows(items, input.rawText, quoteType.quoteType);
+  const confidence = scoreConfidence({
+    items,
+    lineMathOk: lineMath.ok,
+    totalsOk: totals.ok,
+    missingRows: missing.missing,
+    quoteType: quoteType.quoteType,
+  });
+  durations.validation = Date.now() - validationStart;
 
   const ERROR_ANOMALIES = new Set([
     "classify_trade_failed",
@@ -469,92 +373,66 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
 
   const mergedAnomalies = dedupeStrings(combinedAnomalies);
 
-    tracker.start("mappers");
-    let passive_fire_final: PassiveFireFinalRecord | null;
-    let quote: ReturnType<typeof mapToQuotesTable>;
-    let dbItems: ReturnType<typeof mapToQuoteItems>;
-    try {
-      passive_fire_final =
-        trade.trade === "passive_fire"
-          ? composePassiveFireFinalRecord({
-              supplier: supplier.supplierName,
-              items,
-              structure: passive_fire_structure,
-              authoritative: passive_fire_authoritative_total,
-              sanitizer: passive_fire_sanitizer,
-              validation: passive_fire_validation,
-              pageCount: input.pages?.length ?? null,
-              declaredQuoteType: quoteType.quoteType,
-            })
-          : null;
+  const passive_fire_final: PassiveFireFinalRecord | null =
+    trade.trade === "passive_fire"
+      ? composePassiveFireFinalRecord({
+          supplier: supplier.supplierName,
+          items,
+          structure: passive_fire_structure,
+          authoritative: passive_fire_authoritative_total,
+          sanitizer: passive_fire_sanitizer,
+          validation: passive_fire_validation,
+          pageCount: input.pages?.length ?? null,
+          declaredQuoteType: quoteType.quoteType,
+        })
+      : null;
 
-      quote = mapToQuotesTable({
-        projectId: input.projectId,
-        organisationId: input.organisationId,
-        quoteId: input.quoteId,
-        supplier: supplier.supplierName,
-        trade: trade.trade,
-        totals,
-        confidence: confidence.level,
-        requires_review,
-        items,
-      });
-      dbItems = mapToQuoteItems({ items });
-      tracker.succeed("mappers");
-    } catch (err) {
-      tracker.fail("mappers", err);
-      throw new ParserV2StageError(formatMessage(err), "mappers", tracker.snapshot());
-    }
+  const quote = mapToQuotesTable({
+    projectId: input.projectId,
+    organisationId: input.organisationId,
+    quoteId: input.quoteId,
+    supplier: supplier.supplierName,
+    trade: trade.trade,
+    totals,
+    confidence: confidence.level,
+    requires_review,
+    items,
+  });
+  const dbItems = mapToQuoteItems({ items });
 
-    const total_duration_ms = Date.now() - runStart;
+  const total_duration_ms = Date.now() - runStart;
 
-    return {
-      classification: { trade, quoteType, supplier },
-      items,
-      totals: {
-        main_total: totals.main_total,
-        optional_total: totals.optional_total,
-        excluded_total: totals.excluded_total,
-        grand_total: totals.grand_total,
-        resolution_source: totals.resolution_source,
-        confidence: confidence.level,
-      },
-      validation: {
-        totals_ok: totals.ok,
-        line_math_ok: lineMath.ok,
-        line_math_mismatch_rate: lineMath.mismatch_rate,
-        missing_rows: missing.missing,
-        anomalies: mergedAnomalies,
-      },
-      requires_review,
-      telemetry: {
-        stage_durations_ms: durations,
-        total_duration_ms,
-        extractor_used: extractorName,
-        stages: tracker.snapshot(),
-      },
-      passive_fire_structure,
-      passive_fire_authoritative_total,
-      passive_fire_sanitizer,
-      passive_fire_validation,
-      passive_fire_final,
-      dbPayload: { quote, items: dbItems },
-    };
-  } catch (err) {
-    if (err instanceof ParserV2StageError) throw err;
-    tracker.failAllInFlight(err);
-    throw new ParserV2StageError(
-      formatMessage(err),
-      tracker.firstFailure()?.name ?? "unknown",
-      tracker.snapshot(),
-    );
-  }
-}
-
-function formatMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
-  try { return JSON.stringify(err); } catch { return "Unknown error"; }
+  return {
+    classification: { trade, quoteType, supplier },
+    items,
+    totals: {
+      main_total: totals.main_total,
+      optional_total: totals.optional_total,
+      excluded_total: totals.excluded_total,
+      grand_total: totals.grand_total,
+      resolution_source: totals.resolution_source,
+      confidence: confidence.level,
+    },
+    validation: {
+      totals_ok: totals.ok,
+      line_math_ok: lineMath.ok,
+      line_math_mismatch_rate: lineMath.mismatch_rate,
+      missing_rows: missing.missing,
+      anomalies: mergedAnomalies,
+    },
+    requires_review,
+    telemetry: {
+      stage_durations_ms: durations,
+      total_duration_ms,
+      extractor_used: extractorName,
+    },
+    passive_fire_structure,
+    passive_fire_authoritative_total,
+    passive_fire_sanitizer,
+    passive_fire_validation,
+    passive_fire_final,
+    dbPayload: { quote, items: dbItems },
+  };
 }
 
 function unwrap<T>(r: PromiseSettledResult<T>, fallback: T): T {
