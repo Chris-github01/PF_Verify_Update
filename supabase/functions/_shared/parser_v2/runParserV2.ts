@@ -55,6 +55,7 @@ import { extractHVAC } from "./extractors/extractHVAC.ts";
 import { extractActiveFire } from "./extractors/extractActiveFire.ts";
 import { extractCarpentry } from "./extractors/extractCarpentry.ts";
 import { extractFallback } from "./extractors/extractFallback.ts";
+import { takeLastExtractorDebug, type ExtractorChunkDebug } from "./extractors/_extractorRuntime.ts";
 
 import { validateTotals } from "./validation/validateTotals.ts";
 import { validateLineMath } from "./validation/validateLineMath.ts";
@@ -297,6 +298,8 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     const extractStart = Date.now();
     let items: ParsedLineItemV2[] = [];
     let extractionFailed = false;
+    let extractionDebug: ExtractorChunkDebug[] = [];
+    let fallbackDebug: ExtractorChunkDebug[] | null = null;
     try {
       items = await extractor({
         rawText: effectiveRawText,
@@ -306,10 +309,12 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         openAIKey: input.openAIKey,
         structure: passive_fire_structure,
       });
+      extractionDebug = takeLastExtractorDebug();
     } catch (err) {
       console.error("[parser_v2] extractor threw, falling back", err);
       anomalies.push("extractor_threw");
       extractionFailed = true;
+      extractionDebug = takeLastExtractorDebug();
       tracker.fail("extraction", err);
       try {
         items = await extractFallback({
@@ -319,7 +324,9 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
+        fallbackDebug = takeLastExtractorDebug();
       } catch (fallbackErr) {
+        fallbackDebug = takeLastExtractorDebug();
         throw new ParserV2StageError(
           formatMessage(fallbackErr),
           "extraction",
@@ -330,8 +337,14 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     if (!extractionFailed) tracker.succeed("extraction");
     durations.extraction = Date.now() - extractStart;
 
+    logExtractionDebug("extraction", extractorName, items.length, extractionDebug);
+
     if (items.length === 0 && extractor !== extractFallback) {
       anomalies.push("primary_extractor_zero_rows");
+      const rollup = summariseExtractionDebug(extractionDebug);
+      if (rollup.rows_received > 0 && rollup.rows_saved === 0) {
+        anomalies.push("mapping_rejected_all_rows");
+      }
       tracker.start("fallback_extraction");
       const fbStart = Date.now();
       try {
@@ -342,8 +355,10 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
+        fallbackDebug = takeLastExtractorDebug();
         tracker.succeed("fallback_extraction");
       } catch (err) {
+        fallbackDebug = takeLastExtractorDebug();
         tracker.fail("fallback_extraction", err);
         throw new ParserV2StageError(
           formatMessage(err),
@@ -352,6 +367,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         );
       }
       durations.fallback_extraction = Date.now() - fbStart;
+      logExtractionDebug("fallback_extraction", "fallback", items.length, fallbackDebug ?? []);
     }
 
     let passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null = null;
@@ -641,6 +657,19 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_final,
       multipath: multipathResult,
       dbPayload: { quote, items: dbItems },
+      debug: {
+        extraction: {
+          extractor: extractorName,
+          chunks: extractionDebug,
+          ...summariseExtractionDebug(extractionDebug),
+        },
+        fallback_extraction: fallbackDebug
+          ? {
+              chunks: fallbackDebug,
+              ...summariseExtractionDebug(fallbackDebug),
+            }
+          : null,
+      },
     };
   } catch (err) {
     if (err instanceof ParserV2StageError) {
@@ -672,4 +701,54 @@ function unwrap<T>(r: PromiseSettledResult<T>, fallback: T): T {
 
 function dedupeStrings(xs: string[]): string[] {
   return [...new Set(xs)];
+}
+
+function summariseExtractionDebug(chunks: ExtractorChunkDebug[]): {
+  rows_received: number;
+  rows_after_normalize: number;
+  rows_after_validation: number;
+  rows_saved: number;
+  empty_reasons: string[];
+  root_aliases_used: string[];
+  salvaged_chunks: number;
+  top_level_keys: string[];
+} {
+  const rows_received = chunks.reduce((s, c) => s + (c.rows_received ?? 0), 0);
+  const rows_after_normalize = chunks.reduce((s, c) => s + (c.rows_after_normalize ?? 0), 0);
+  const rows_after_validation = chunks.reduce((s, c) => s + (c.rows_after_validation ?? 0), 0);
+  return {
+    rows_received,
+    rows_after_normalize,
+    rows_after_validation,
+    rows_saved: rows_after_validation,
+    empty_reasons: dedupeStrings(
+      chunks.map((c) => c.empty_reason).filter((r): r is string => !!r),
+    ),
+    root_aliases_used: dedupeStrings(
+      chunks.map((c) => c.root_alias_used).filter((a): a is string => !!a),
+    ),
+    salvaged_chunks: chunks.filter((c) => c.salvaged).length,
+    top_level_keys: dedupeStrings(
+      chunks.flatMap((c) => c.top_level_keys ?? []),
+    ),
+  };
+}
+
+function logExtractionDebug(
+  label: string,
+  extractor: string,
+  itemsOut: number,
+  chunks: ExtractorChunkDebug[],
+): void {
+  const s = summariseExtractionDebug(chunks);
+  console.log(
+    `[${label}:${extractor}] items_out=${itemsOut} rows_received=${s.rows_received} rows_after_normalize=${s.rows_after_normalize} rows_saved=${s.rows_saved} empty_reasons=${JSON.stringify(s.empty_reasons)} root_aliases=${JSON.stringify(s.root_aliases_used)} top_level_keys=${JSON.stringify(s.top_level_keys)} salvaged_chunks=${s.salvaged_chunks}`,
+  );
+  for (const c of chunks) {
+    if (c.empty_reason || c.parse_error || c.schema_error) {
+      console.log(
+        `[${label}:${extractor}:chunk_${c.chunk_index}] page_range=${c.page_range} rows_received=${c.rows_received} rows_after_validation=${c.rows_after_validation} empty_reason=${c.empty_reason} parse_error=${c.parse_error} schema_error=${c.schema_error} root_alias=${c.root_alias_used} top_level_keys=${JSON.stringify(c.top_level_keys)} raw_response_text_first_400=${JSON.stringify((c.raw_response_text ?? "").slice(0, 400))}`,
+      );
+    }
+  }
 }

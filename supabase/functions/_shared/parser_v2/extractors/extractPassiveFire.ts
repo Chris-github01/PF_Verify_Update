@@ -131,7 +131,7 @@ export async function extractPassiveFire(ctx: {
   return postProcess(rawItems, prescan);
 }
 
-function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 {
+function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 | null {
   const base = normaliseRow(
     {
       item_number: r.item_number ?? null,
@@ -149,6 +149,7 @@ function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineIt
     },
     trade,
   );
+  if (!base) return null;
 
   const block = toStringOrNull(r.building_or_block);
   const page = toStringOrNull(r.source_page);
