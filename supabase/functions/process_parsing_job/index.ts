@@ -668,6 +668,13 @@ Deno.serve(async (req: Request) => {
       ? "Completed successfully (slow finalize)"
       : "Completed";
 
+    const needsAsyncProcessing = (totalRuntimeMs ?? 0) > 90_000;
+    if (needsAsyncProcessing) {
+      console.warn(
+        `[PIPELINE] job=${jobId} total_runtime_ms=${totalRuntimeMs} exceeded 90s — flagging needs_async_processing`,
+      );
+    }
+
     await supabase.from("parsing_jobs").update({
       status: terminalStatus,
       progress: 100,
@@ -680,6 +687,7 @@ Deno.serve(async (req: Request) => {
         finalize_ms: finalizeMs,
         total_runtime_ms: totalRuntimeMs,
         timeout_fired_at: timeoutFiredAt,
+        needs_async_processing: needsAsyncProcessing,
       },
       metadata: parseMetadata,
       parser_v2_output: v2PersistOutput,
@@ -694,6 +702,7 @@ Deno.serve(async (req: Request) => {
       pure_parsing_ms: v2DurationMs,
       finalize_ms: finalizeMs,
       total_runtime_ms: totalRuntimeMs,
+      needs_async_processing: needsAsyncProcessing,
       updated_at: successCommittedAt,
     }).eq("id", jobId);
 
@@ -874,7 +883,10 @@ async function persistFailure(
   if (timing.parserStartedAt) failurePatch.parser_started_at = timing.parserStartedAt;
   if (timing.timeoutFiredAt) failurePatch.timeout_fired_at = timing.timeoutFiredAt;
   if (timing.pureParsingMs != null) failurePatch.pure_parsing_ms = timing.pureParsingMs;
-  if (timing.totalRuntimeMs != null) failurePatch.total_runtime_ms = timing.totalRuntimeMs;
+  if (timing.totalRuntimeMs != null) {
+    failurePatch.total_runtime_ms = timing.totalRuntimeMs;
+    failurePatch.needs_async_processing = timing.totalRuntimeMs > 90_000;
+  }
 
   await supabase.from("parsing_jobs").update(failurePatch).eq("id", jobId);
 }
