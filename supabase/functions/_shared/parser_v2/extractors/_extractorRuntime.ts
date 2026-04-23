@@ -32,16 +32,39 @@ export type ExtractorContext = {
   rowMapper?: (raw: Record<string, unknown>, trade: string) => ParsedLineItemV2;
 };
 
+export type ExtractorChunkDebug = {
+  chunk_index: number;
+  page_range: string;
+  raw_response_text: string | null;
+  parsed_json: unknown | null;
+  parse_error: string | null;
+  schema_error: string | null;
+  rows_before_validation: number;
+  rows_after_validation: number;
+};
+
 export type ExtractorResult = {
   items: ParsedLineItemV2[];
   chunks_attempted: number;
   chunks_succeeded: number;
   raw_rows: number;
   dedup_removed: number;
+  debug: ExtractorChunkDebug[];
 };
+
+const MAX_RAW_RESPONSE_PERSIST = 4000;
+
+let LAST_EXTRACTOR_DEBUG: ExtractorChunkDebug[] = [];
+
+export function takeLastExtractorDebug(): ExtractorChunkDebug[] {
+  const d = LAST_EXTRACTOR_DEBUG;
+  LAST_EXTRACTOR_DEBUG = [];
+  return d;
+}
 
 export async function runExtractorLLM(ctx: ExtractorContext): Promise<ParsedLineItemV2[]> {
   const res = await runExtractorLLMWithTelemetry(ctx);
+  LAST_EXTRACTOR_DEBUG = res.debug;
   return res.items;
 }
 
@@ -51,12 +74,15 @@ export async function runExtractorLLMWithTelemetry(
   const chunks = buildChunks(ctx.pages, ctx.rawText).slice(0, MAX_CHUNKS);
   const all: ParsedLineItemV2[] = [];
   let succeeded = 0;
+  const debug: ExtractorChunkDebug[] = [];
   const stageStart = Date.now();
 
   const remainingBudget = () =>
     Math.max(0, EXTRACTION_STAGE_BUDGET_MS - (Date.now() - stageStart));
 
-  const runChunk = async (i: number): Promise<unknown[] | null> => {
+  const runChunk = async (
+    i: number,
+  ): Promise<{ rows: unknown[] | null; debug: ExtractorChunkDebug }> => {
     const chunk = chunks[i];
     const userPayload = {
       trade: ctx.trade,
@@ -71,9 +97,21 @@ export async function runExtractorLLMWithTelemetry(
     const budget = Math.min(PER_CHUNK_BUDGET_MS, remainingBudget());
     if (budget < 1000) {
       console.warn(`[extractor:${ctx.trade}] chunk ${i} skipped — no budget remaining`);
-      return null;
+      return {
+        rows: null,
+        debug: {
+          chunk_index: i,
+          page_range: chunk.pageRange,
+          raw_response_text: null,
+          parsed_json: null,
+          parse_error: "skipped_no_budget",
+          schema_error: null,
+          rows_before_validation: 0,
+          rows_after_validation: 0,
+        },
+      };
     }
-    return await raceOrNull(
+    const result = await raceOrNull(
       callOpenAIWithRetry({
         openAIKey: ctx.openAIKey,
         systemPrompt: ctx.systemPrompt,
@@ -84,6 +122,34 @@ export async function runExtractorLLMWithTelemetry(
       budget,
       `chunk ${i}`,
     );
+    if (result == null) {
+      return {
+        rows: null,
+        debug: {
+          chunk_index: i,
+          page_range: chunk.pageRange,
+          raw_response_text: null,
+          parsed_json: null,
+          parse_error: "chunk_timeout_or_failure",
+          schema_error: null,
+          rows_before_validation: 0,
+          rows_after_validation: 0,
+        },
+      };
+    }
+    return {
+      rows: result.rows,
+      debug: {
+        chunk_index: i,
+        page_range: chunk.pageRange,
+        raw_response_text: result.rawResponseText,
+        parsed_json: result.parsedJson,
+        parse_error: result.parseError,
+        schema_error: result.schemaError,
+        rows_before_validation: result.rows?.length ?? 0,
+        rows_after_validation: result.rows?.length ?? 0,
+      },
+    };
   };
 
   const mapper = ctx.rowMapper ?? normaliseRow;
@@ -98,10 +164,11 @@ export async function runExtractorLLMWithTelemetry(
       .slice(start, start + CHUNK_CONCURRENCY)
       .map((_, offset) => runChunk(start + offset));
     const results = await Promise.all(batch);
-    for (const rows of results) {
-      if (rows != null) {
+    for (const r of results) {
+      debug.push(r.debug);
+      if (r.rows != null) {
         succeeded++;
-        for (const r of rows) all.push(mapper(r as Record<string, unknown>, ctx.trade));
+        for (const row of r.rows) all.push(mapper(row as Record<string, unknown>, ctx.trade));
       }
     }
   }
@@ -120,8 +187,17 @@ export async function runExtractorLLMWithTelemetry(
     chunks_succeeded: succeeded,
     raw_rows: all.length,
     dedup_removed: all.length - deduped.length,
+    debug,
   };
 }
+
+type ChunkCallResult = {
+  rows: unknown[] | null;
+  rawResponseText: string | null;
+  parsedJson: unknown | null;
+  parseError: string | null;
+  schemaError: string | null;
+};
 
 async function callOpenAIWithRetry(args: {
   openAIKey: string;
@@ -129,7 +205,7 @@ async function callOpenAIWithRetry(args: {
   userPayload: Record<string, unknown>;
   trade: string;
   chunkIndex: number;
-}): Promise<unknown[] | null> {
+}): Promise<ChunkCallResult | null> {
   let lastErr: unknown = null;
   const userJson = JSON.stringify(args.userPayload);
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -166,9 +242,37 @@ async function callOpenAIWithRetry(args: {
       markLlmCallDuration(Date.now() - reqStart, EXTRACTOR_MODEL);
       markResponseReceived(json?.usage);
       const content = json?.choices?.[0]?.message?.content;
-      if (!content) return [];
-      const parsed = JSON.parse(content);
-      return Array.isArray(parsed.items) ? parsed.items : [];
+      if (!content) {
+        return {
+          rows: [],
+          rawResponseText: null,
+          parsedJson: null,
+          parseError: "empty_response_content",
+          schemaError: null,
+        };
+      }
+      const rawResponseText = typeof content === "string"
+        ? content.slice(0, MAX_RAW_RESPONSE_PERSIST)
+        : null;
+      try {
+        const parsed = JSON.parse(content);
+        const hasItemsArray = Array.isArray(parsed?.items);
+        return {
+          rows: hasItemsArray ? parsed.items : [],
+          rawResponseText,
+          parsedJson: parsed,
+          parseError: null,
+          schemaError: hasItemsArray ? null : "missing_items_array",
+        };
+      } catch (parseErr) {
+        return {
+          rows: [],
+          rawResponseText,
+          parsedJson: null,
+          parseError: (parseErr as Error)?.message ?? "json_parse_failed",
+          schemaError: null,
+        };
+      }
     } catch (err) {
       lastErr = err;
       const backoff = 400 * Math.pow(2, attempt);

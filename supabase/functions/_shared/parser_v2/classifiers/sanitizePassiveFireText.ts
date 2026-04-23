@@ -44,6 +44,18 @@ export type PassiveFireSuspiciousNumeric = {
   reason: string;
 };
 
+export type PassiveFireSanitizerDebug = {
+  input_chars: number;
+  output_chars: number;
+  retention_ratio: number;
+  fallback_to_raw_text: boolean;
+  reason: string | null;
+  raw_response_text: string | null;
+  parsed_json: unknown | null;
+  parse_error: string | null;
+  schema_error: string | null;
+};
+
 export type PassiveFireSanitizerResult = {
   clean_text: string;
   clean_pages: { pageNum: number; text: string }[];
@@ -51,6 +63,7 @@ export type PassiveFireSanitizerResult = {
   money_candidates: PassiveFireMoneyCandidate[];
   suspicious_numerics: PassiveFireSuspiciousNumeric[];
   risk_score: number;
+  sanitizer_debug: PassiveFireSanitizerDebug;
 };
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -59,6 +72,8 @@ const PAGE_CHAR_BUDGET = 18000;
 const MAX_PAGES = 12;
 const SANITIZER_BUDGET_MS = 15_000;
 const PER_PAGE_BUDGET_MS = 6_000;
+const MIN_RETENTION_RATIO = 0.25;
+const MAX_RAW_RESPONSE_PERSIST = 4000;
 
 const REMOVED_REASONS: PassiveFireRemovedToken["reason"][] = [
   "phone_number",
@@ -126,11 +141,42 @@ export async function sanitizePassiveFireText(ctx: {
     );
   }
 
-  const clean_pages = perPage.map((p) => ({
+  const raw_input_text = pages.map((p) => p.text).join("\n\n");
+  const input_chars = raw_input_text.length;
+
+  const sanitizer_clean_pages = perPage.map((p) => ({
     pageNum: p.pageNum,
-    text: p.result.clean_text || p.raw,
+    text: p.result.clean_text || "",
   }));
-  const clean_text = clean_pages.map((p) => p.text).join("\n\n");
+  const sanitizer_clean_text = sanitizer_clean_pages.map((p) => p.text).join("\n\n").trim();
+  const output_chars = sanitizer_clean_text.length;
+  const retention_ratio = input_chars > 0 ? output_chars / input_chars : 0;
+
+  // Fail-open: if sanitizer produced empty, malformed, or suspiciously
+  // shrunk output, discard its pages and use the original extracted text.
+  const allPagesParseFailed = perPage.every((p) => p.result.sanitizer_debug.parse_error != null);
+  let fallback_to_raw_text = false;
+  let reason: string | null = null;
+  if (output_chars === 0) {
+    fallback_to_raw_text = true;
+    reason = "empty_clean_text";
+  } else if (allPagesParseFailed) {
+    fallback_to_raw_text = true;
+    reason = "all_pages_malformed_json";
+  } else if (retention_ratio < MIN_RETENTION_RATIO) {
+    fallback_to_raw_text = true;
+    reason = `retention_below_threshold:${retention_ratio.toFixed(3)}<${MIN_RETENTION_RATIO}`;
+  }
+
+  const clean_pages = fallback_to_raw_text
+    ? pages.map((p) => ({ pageNum: p.pageNum, text: p.text }))
+    : sanitizer_clean_pages.map((p, i) => ({
+        pageNum: p.pageNum,
+        text: p.text || pages[i]?.text || "",
+      }));
+  const clean_text = fallback_to_raw_text
+    ? raw_input_text
+    : clean_pages.map((p) => p.text).join("\n\n");
 
   const removed_tokens: PassiveFireRemovedToken[] = [];
   const money_candidates: PassiveFireMoneyCandidate[] = [];
@@ -148,6 +194,33 @@ export async function sanitizePassiveFireText(ctx: {
     }
   }
 
+  const perPageDebugs = perPage.map((p) => p.result.sanitizer_debug);
+  const firstParseError = perPageDebugs.find((d) => d.parse_error)?.parse_error ?? null;
+  const firstSchemaError = perPageDebugs.find((d) => d.schema_error)?.schema_error ?? null;
+  const concatRaw = perPageDebugs
+    .map((d) => d.raw_response_text ?? "")
+    .filter(Boolean)
+    .join("\n---\n")
+    .slice(0, MAX_RAW_RESPONSE_PERSIST);
+
+  const sanitizer_debug: PassiveFireSanitizerDebug = {
+    input_chars,
+    output_chars,
+    retention_ratio,
+    fallback_to_raw_text,
+    reason,
+    raw_response_text: concatRaw || null,
+    parsed_json: perPageDebugs.map((d) => d.parsed_json).filter((j) => j != null),
+    parse_error: firstParseError,
+    schema_error: firstSchemaError,
+  };
+
+  if (fallback_to_raw_text) {
+    console.warn(
+      `[pf_sanitize] fail-open engaged (${reason}) — input=${input_chars} output=${output_chars} ratio=${retention_ratio.toFixed(3)}`,
+    );
+  }
+
   return {
     clean_text,
     clean_pages,
@@ -155,6 +228,7 @@ export async function sanitizePassiveFireText(ctx: {
     money_candidates,
     suspicious_numerics,
     risk_score: riskCount > 0 ? clamp01(riskSum / riskCount) : 0,
+    sanitizer_debug,
   };
 }
 
@@ -200,32 +274,47 @@ async function sanitizePage(ctx: {
     console.error(
       `[pf_sanitize] page ${ctx.pageNum} HTTP ${res.status}: ${body.slice(0, 200)}`,
     );
-    return emptyResult(text);
+    return emptyResult(text, {
+      raw_response_text: body.slice(0, MAX_RAW_RESPONSE_PERSIST),
+      parse_error: `http_${res.status}`,
+    });
   }
 
   const json = await res.json();
   markLlmCallDuration(Date.now() - reqStart, SANITIZER_MODEL);
   markResponseReceived(json?.usage);
   const content = json?.choices?.[0]?.message?.content;
-  if (!content) return emptyResult(text);
+  if (!content) {
+    return emptyResult(text, {
+      raw_response_text: null,
+      parse_error: "empty_response_content",
+    });
+  }
 
   try {
     const raw = JSON.parse(content) as Record<string, unknown>;
-    return normaliseResult(raw, text);
+    return normaliseResult(raw, text, content);
   } catch (err) {
     console.error(`[pf_sanitize] page ${ctx.pageNum} JSON parse failed`, err);
-    return emptyResult(text);
+    return emptyResult(text, {
+      raw_response_text: typeof content === "string"
+        ? content.slice(0, MAX_RAW_RESPONSE_PERSIST)
+        : null,
+      parse_error: (err as Error)?.message ?? "json_parse_failed",
+    });
   }
 }
 
 function normaliseResult(
   raw: Record<string, unknown>,
   fallbackText: string,
+  rawResponseText: string,
 ): PassiveFireSanitizerResult {
-  const clean_text =
-    typeof raw.clean_text === "string" && raw.clean_text.trim().length > 0
-      ? raw.clean_text
-      : fallbackText;
+  const hasCleanText = typeof raw.clean_text === "string" && raw.clean_text.trim().length > 0;
+  const clean_text = hasCleanText ? (raw.clean_text as string) : fallbackText;
+  const input_chars = fallbackText.length;
+  const output_chars = clean_text.length;
+  const schema_error = hasCleanText ? null : "missing_or_empty_clean_text";
   return {
     clean_text,
     clean_pages: [],
@@ -239,6 +328,17 @@ function normaliseResult(
       ? (raw.suspicious_numerics as unknown[]).map(normaliseSuspicious)
       : [],
     risk_score: clamp01(Number(raw.risk_score ?? 0)),
+    sanitizer_debug: {
+      input_chars,
+      output_chars,
+      retention_ratio: input_chars > 0 ? output_chars / input_chars : 0,
+      fallback_to_raw_text: false,
+      reason: null,
+      raw_response_text: rawResponseText.slice(0, MAX_RAW_RESPONSE_PERSIST),
+      parsed_json: raw,
+      parse_error: null,
+      schema_error,
+    },
   };
 }
 
@@ -272,7 +372,10 @@ function normaliseSuspicious(v: unknown): PassiveFireSuspiciousNumeric {
   };
 }
 
-function emptyResult(fallback: string): PassiveFireSanitizerResult {
+function emptyResult(
+  fallback: string,
+  debugOverrides?: Partial<PassiveFireSanitizerDebug>,
+): PassiveFireSanitizerResult {
   return {
     clean_text: fallback,
     clean_pages: [],
@@ -280,6 +383,18 @@ function emptyResult(fallback: string): PassiveFireSanitizerResult {
     money_candidates: [],
     suspicious_numerics: [],
     risk_score: 0,
+    sanitizer_debug: {
+      input_chars: fallback.length,
+      output_chars: fallback.length,
+      retention_ratio: 1,
+      fallback_to_raw_text: false,
+      reason: null,
+      raw_response_text: null,
+      parsed_json: null,
+      parse_error: null,
+      schema_error: null,
+      ...(debugOverrides ?? {}),
+    },
   };
 }
 
@@ -324,6 +439,7 @@ async function raceWithFallback<T>(
  * the LLM targets so downstream pricing logic never sees them as money.
  */
 export function regexSanitizePage(text: string): PassiveFireSanitizerResult {
+  const input_chars = text.length;
   const removed: PassiveFireRemovedToken[] = [];
   let cleaned = text;
 
@@ -433,5 +549,16 @@ export function regexSanitizePage(text: string): PassiveFireSanitizerResult {
     money_candidates,
     suspicious_numerics,
     risk_score,
+    sanitizer_debug: {
+      input_chars,
+      output_chars: cleaned.length,
+      retention_ratio: input_chars > 0 ? cleaned.length / input_chars : 0,
+      fallback_to_raw_text: false,
+      reason: "regex_sanitizer",
+      raw_response_text: null,
+      parsed_json: null,
+      parse_error: null,
+      schema_error: null,
+    },
   };
 }

@@ -48,6 +48,7 @@ import {
   type PassiveFireFinalRecord,
 } from "./composePassiveFireFinalRecord.ts";
 
+import { takeLastExtractorDebug, type ExtractorChunkDebug } from "./extractors/_extractorRuntime.ts";
 import { extractPassiveFire } from "./extractors/extractPassiveFire.ts";
 import { extractElectrical } from "./extractors/extractElectrical.ts";
 import { extractPlumbing } from "./extractors/extractPlumbing.ts";
@@ -137,6 +138,29 @@ export type ParserV2Output = {
     decision: MultiPathDecision;
     pathB: PathBResult;
     pathC: PathCResult;
+  };
+  debug: {
+    sanitize: {
+      raw_response_text: string | null;
+      parsed_json: unknown | null;
+      parse_error: string | null;
+      schema_error: string | null;
+      input_chars: number;
+      output_chars: number;
+      retention_ratio: number;
+      fallback_to_raw_text: boolean;
+      reason: string | null;
+    } | null;
+    extraction: {
+      chunks: ExtractorChunkDebug[];
+      rows_before_validation: number;
+      rows_after_validation: number;
+    };
+    fallback_extraction: {
+      chunks: ExtractorChunkDebug[];
+      rows_before_validation: number;
+      rows_after_validation: number;
+    } | null;
   };
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
@@ -256,7 +280,19 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         if (passive_fire_sanitizer.clean_text && passive_fire_sanitizer.clean_text.trim().length > 0) {
           effectiveRawText = passive_fire_sanitizer.clean_text;
         }
-        tracker.succeed("pf_sanitize");
+
+        const dbg = passive_fire_sanitizer.sanitizer_debug;
+        if (dbg.fallback_to_raw_text) {
+          // call succeeded but sanitizer produced nothing usable — mark
+          // empty; we've fallen back to raw text so pipeline continues.
+          anomalies.push(`pf_sanitizer_fail_open:${dbg.reason ?? "unknown"}`);
+          tracker.markEmpty(
+            "pf_sanitize",
+            `fail_open:${dbg.reason ?? "unknown"} ratio=${dbg.retention_ratio.toFixed(3)}`,
+          );
+        } else {
+          tracker.succeed("pf_sanitize");
+        }
       } catch (err) {
         console.error("[parser_v2] passive fire sanitizer failed", err);
         anomalies.push("pf_sanitizer_failed");
@@ -297,6 +333,9 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     const extractStart = Date.now();
     let items: ParsedLineItemV2[] = [];
     let extractionFailed = false;
+    let extractionDebug: ExtractorChunkDebug[] = [];
+    let fallbackDebug: ExtractorChunkDebug[] | null = null;
+    let usedFallbackOnThrow = false;
     try {
       items = await extractor({
         rawText: effectiveRawText,
@@ -306,12 +345,15 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         openAIKey: input.openAIKey,
         structure: passive_fire_structure,
       });
+      extractionDebug = takeLastExtractorDebug();
     } catch (err) {
       console.error("[parser_v2] extractor threw, falling back", err);
       anomalies.push("extractor_threw");
       extractionFailed = true;
+      extractionDebug = takeLastExtractorDebug();
       tracker.fail("extraction", err);
       try {
+        usedFallbackOnThrow = true;
         items = await extractFallback({
           rawText: input.rawText,
           pages: input.pages,
@@ -319,7 +361,9 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
+        fallbackDebug = takeLastExtractorDebug();
       } catch (fallbackErr) {
+        fallbackDebug = takeLastExtractorDebug();
         throw new ParserV2StageError(
           formatMessage(fallbackErr),
           "extraction",
@@ -327,10 +371,17 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         );
       }
     }
-    if (!extractionFailed) tracker.succeed("extraction");
+    if (!extractionFailed) {
+      if (items.length === 0) {
+        // LLM call succeeded but produced no usable rows — not PASSED.
+        tracker.markEmpty("extraction", "zero_rows_extracted");
+      } else {
+        tracker.succeed("extraction");
+      }
+    }
     durations.extraction = Date.now() - extractStart;
 
-    if (items.length === 0 && extractor !== extractFallback) {
+    if (items.length === 0 && extractor !== extractFallback && !usedFallbackOnThrow) {
       anomalies.push("primary_extractor_zero_rows");
       tracker.start("fallback_extraction");
       const fbStart = Date.now();
@@ -342,8 +393,14 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
-        tracker.succeed("fallback_extraction");
+        fallbackDebug = takeLastExtractorDebug();
+        if (items.length === 0) {
+          tracker.markEmpty("fallback_extraction", "zero_rows_extracted");
+        } else {
+          tracker.succeed("fallback_extraction");
+        }
       } catch (err) {
+        fallbackDebug = takeLastExtractorDebug();
         tracker.fail("fallback_extraction", err);
         throw new ParserV2StageError(
           formatMessage(err),
@@ -640,6 +697,33 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_validation,
       passive_fire_final,
       multipath: multipathResult,
+      debug: {
+        sanitize: passive_fire_sanitizer
+          ? {
+              raw_response_text: passive_fire_sanitizer.sanitizer_debug.raw_response_text,
+              parsed_json: passive_fire_sanitizer.sanitizer_debug.parsed_json,
+              parse_error: passive_fire_sanitizer.sanitizer_debug.parse_error,
+              schema_error: passive_fire_sanitizer.sanitizer_debug.schema_error,
+              input_chars: passive_fire_sanitizer.sanitizer_debug.input_chars,
+              output_chars: passive_fire_sanitizer.sanitizer_debug.output_chars,
+              retention_ratio: passive_fire_sanitizer.sanitizer_debug.retention_ratio,
+              fallback_to_raw_text: passive_fire_sanitizer.sanitizer_debug.fallback_to_raw_text,
+              reason: passive_fire_sanitizer.sanitizer_debug.reason,
+            }
+          : null,
+        extraction: {
+          chunks: extractionDebug,
+          rows_before_validation: extractionDebug.reduce((s, c) => s + c.rows_before_validation, 0),
+          rows_after_validation: extractionDebug.reduce((s, c) => s + c.rows_after_validation, 0),
+        },
+        fallback_extraction: fallbackDebug
+          ? {
+              chunks: fallbackDebug,
+              rows_before_validation: fallbackDebug.reduce((s, c) => s + c.rows_before_validation, 0),
+              rows_after_validation: fallbackDebug.reduce((s, c) => s + c.rows_after_validation, 0),
+            }
+          : null,
+      },
       dbPayload: { quote, items: dbItems },
     };
   } catch (err) {

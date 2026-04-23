@@ -14,7 +14,7 @@
  * safe to call from within try/catch blocks during a failing run.
  */
 
-export type StageStatus = "pending" | "running" | "passed" | "failed" | "skipped";
+export type StageStatus = "pending" | "running" | "passed" | "empty" | "failed" | "skipped";
 
 export interface StageRecord {
   name: string;
@@ -120,6 +120,21 @@ export class StageTracker {
     const record = this.byName.get(name);
     if (!record) return;
     this.finalise(record, "passed");
+    if (completion?.tokens_in != null) record.tokens_in = completion.tokens_in;
+    if (completion?.tokens_out != null) record.tokens_out = completion.tokens_out;
+    if (this.currentStageName === name) this.currentStageName = null;
+    this.emit();
+  }
+
+  /**
+   * Mark a stage as empty — the call succeeded (no exception/timeout) but
+   * returned no usable payload. Used for sanitizer that produced no clean
+   * text and for extractors that returned zero rows.
+   */
+  markEmpty(name: string, reason?: string, completion?: StageCompletion): void {
+    const record = this.byName.get(name) ?? this.ensureStarted(name);
+    this.finalise(record, "empty");
+    if (reason) record.error_message = reason;
     if (completion?.tokens_in != null) record.tokens_in = completion.tokens_in;
     if (completion?.tokens_out != null) record.tokens_out = completion.tokens_out;
     if (this.currentStageName === name) this.currentStageName = null;

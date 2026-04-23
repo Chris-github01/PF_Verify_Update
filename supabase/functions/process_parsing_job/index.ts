@@ -652,6 +652,7 @@ Deno.serve(async (req: Request) => {
       total_duration_ms: v2.telemetry.total_duration_ms,
       classification: v2.classification,
       items_count: v2.items.length,
+      debug: v2.debug,
     };
 
     const combinedStages = [
