@@ -65,6 +65,7 @@ import { mapToQuotesTable } from "./mappers/mapToQuotesTable.ts";
 import { mapToQuoteItems } from "./mappers/mapToQuoteItems.ts";
 
 import { StageTracker, ParserV2StageError, type StageRecord } from "./stageTracker.ts";
+import { installActiveTracker, clearActiveTracker } from "./telemetrySink.ts";
 
 export type ParserV2Input = {
   rawText: string;
@@ -76,6 +77,7 @@ export type ParserV2Input = {
   organisationId: string;
   quoteId?: string;
   openAIKey: string;
+  persistStages?: (stages: StageRecord[]) => void;
 };
 
 export type ParsedLineItemV2 = {
@@ -156,6 +158,8 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   const durations: Record<string, number> = {};
   const anomalies: string[] = [];
   const tracker = new StageTracker();
+  if (input.persistStages) tracker.setSink(input.persistStages);
+  installActiveTracker(tracker);
 
   try {
     if (!input.openAIKey) {
@@ -541,13 +545,20 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       dbPayload: { quote, items: dbItems },
     };
   } catch (err) {
-    if (err instanceof ParserV2StageError) throw err;
+    if (err instanceof ParserV2StageError) {
+      clearActiveTracker();
+      throw err;
+    }
     tracker.failAllInFlight(err);
-    throw new ParserV2StageError(
+    const staged = new ParserV2StageError(
       formatMessage(err),
       tracker.firstFailure()?.name ?? "unknown",
       tracker.snapshot(),
     );
+    clearActiveTracker();
+    throw staged;
+  } finally {
+    clearActiveTracker();
   }
 }
 
