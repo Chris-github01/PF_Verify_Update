@@ -478,6 +478,63 @@ export function normaliseRow(
   };
 }
 
+/**
+ * Relaxed variant of normaliseRow for trades where description-only lump sums
+ * (labour, preliminaries, prep, freight, P&G, margin, QA/PS3) are legitimate.
+ *
+ * Acceptance criteria — description + ANY of:
+ *   - numeric quantity OR unit_price OR total_price
+ *   - product code pattern (alphanum with digits, e.g. "CP 606", "FS-ONE MAX")
+ *   - currency-inline in description (e.g. "Supply & install fire collars — $4,250")
+ *   - description length >= 6 chars (lump-sum textual line)
+ */
+const PRODUCT_CODE_RE = /\b[A-Z]{2,}[\s\-]?\d{1,5}[A-Z]?\b|\b\d{2,}[A-Z]{2,}\b/;
+const CURRENCY_INLINE_RE = /(?:\$|NZD|AUD|USD|£|€)\s?\d[\d,]*(?:\.\d+)?/i;
+
+export function normaliseRowLoose(
+  r: Record<string, unknown>,
+  trade: string,
+): ParsedLineItemV2 | null {
+  const description = String(r.description ?? r.desc ?? r.name ?? r.item ?? "").trim();
+  const quantity = toNumberOrNull(r.quantity ?? r.qty ?? r.qnty);
+  const unit_price = toNumberOrNull(r.unit_price ?? r.rate ?? r.unitRate ?? r.unit_rate);
+  const total_price = toNumberOrNull(
+    r.total_price ?? r.total ?? r.amount ?? r.line_total ?? r.lineTotal ?? r.price,
+  );
+
+  if (!description) return null;
+
+  const hasNumeric = quantity != null || unit_price != null || total_price != null;
+  const hasProductCode = PRODUCT_CODE_RE.test(description);
+  const hasInlineCurrency = CURRENCY_INLINE_RE.test(description);
+  const isLongEnough = description.length >= 6;
+
+  if (!hasNumeric && !hasProductCode && !hasInlineCurrency && !isLongEnough) {
+    return null;
+  }
+
+  return {
+    item_number:
+      r.item_number == null && r.itemNumber == null && r.line_id == null
+        ? null
+        : String(r.item_number ?? r.itemNumber ?? r.line_id),
+    description,
+    quantity,
+    unit: r.unit == null && r.uom == null ? null : String(r.unit ?? r.uom),
+    unit_price,
+    total_price,
+    scope_category: normaliseScope(r.scope_category ?? r.scope ?? r.category),
+    trade: String(r.trade ?? trade),
+    sub_scope:
+      r.sub_scope == null && r.subScope == null
+        ? null
+        : String(r.sub_scope ?? r.subScope),
+    frr: r.frr == null ? null : String(r.frr),
+    source: "llm",
+    confidence: clamp01(Number(r.confidence ?? 0.55)),
+  };
+}
+
 function normaliseScope(v: unknown): "main" | "optional" | "excluded" {
   const s = String(v ?? "main").toLowerCase();
   if (s.startsWith("opt") || s.includes("provisional")) return "optional";

@@ -17,7 +17,11 @@ import { PASSIVE_FIRE_PROMPT } from "../prompts/passiveFirePrompt.ts";
 import { PASSIVE_FIRE_LINE_ITEM_PROMPT } from "../prompts/passiveFireLineItemPrompt.ts";
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
 import type { PassiveFireStructure } from "../classifiers/classifyPassiveFireStructure.ts";
-import { runExtractorLLM, normaliseRow } from "./_extractorRuntime.ts";
+import { runExtractorLLM, normaliseRow, normaliseRowLoose } from "./_extractorRuntime.ts";
+import { extractFallback } from "./extractFallback.ts";
+
+export const EXTRACT_PASSIVE_FIRE_VERSION = "v2-loose-rows-2026-04-23";
+console.log(`[extractPassiveFire] MODULE_LOAD version=${EXTRACT_PASSIVE_FIRE_VERSION}`);
 
 type PassiveFirePrescan = {
   frr_ratings_found: string[];
@@ -104,6 +108,7 @@ export async function extractPassiveFire(ctx: {
   openAIKey: string;
   structure?: PassiveFireStructure | null;
 }): Promise<ParsedLineItemV2[]> {
+  CANDIDATE_ROWS_SEEN = [];
   const prescan = prescanPassiveFire(ctx.rawText);
   const structure = ctx.structure ?? null;
   const useStructureAwarePrompt = structure !== null;
@@ -120,29 +125,113 @@ export async function extractPassiveFire(ctx: {
     openAIKey: ctx.openAIKey,
     extraUserContext: {
       focus:
-        "Passive fire scope. Cross-trade references to plumbing/electrical/HVAC services are still passive-fire work — sub_scope must reflect the PF taxonomy.",
+        "Passive fire scope. Cross-trade references to plumbing/electrical/HVAC services are still passive-fire work — sub_scope must reflect the PF taxonomy. Include lump-sum lines (labour, prep, freight, preliminaries, P&G, margin, PS3/QA) as main-scope rows. Do NOT require qty/rate — accept description + any price.",
       frr_required: true,
       prescan,
       financial_map: structure,
     },
-    rowMapper: useStructureAwarePrompt ? mapLineItemRow : undefined,
+    rowMapper: mapLineItemRow,
   });
 
-  return postProcess(rawItems, prescan);
+  console.log(
+    `[extractPassiveFire] llm_returned=${rawItems.length} supplier=${ctx.supplier}`,
+  );
+
+  const processed = postProcess(rawItems, prescan);
+  console.log(
+    `[extractPassiveFire] after_post_process=${processed.length} (filtered ${rawItems.length - processed.length})`,
+  );
+
+  if (processed.length === 0) {
+    console.error(
+      `[extractPassiveFire] ZERO_ROWS_AFTER_POSTPROCESS — dumping sanitized text (first 4000 chars) and invoking fallback`,
+    );
+    const sanitized = (ctx.rawText ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 4000);
+    console.error(`[extractPassiveFire] sanitized_text_dump: ${sanitized}`);
+    console.error(
+      `[extractPassiveFire] first_20_candidate_lines_in_raw: ${JSON.stringify(
+        captureCandidateLines(ctx.rawText ?? ""),
+      )}`,
+    );
+
+    try {
+      const fallbackItems = await extractFallback({
+        rawText: ctx.rawText,
+        pages: ctx.pages,
+        quoteType: ctx.quoteType,
+        supplier: ctx.supplier,
+        openAIKey: ctx.openAIKey,
+      });
+      console.warn(
+        `[extractPassiveFire] fallback_returned=${fallbackItems.length}`,
+      );
+      return fallbackItems.map((it) => ({
+        ...it,
+        trade: "passive_fire",
+        sub_scope: it.sub_scope || "other",
+        source: "llm_fallback",
+      }));
+    } catch (err) {
+      console.error(
+        `[extractPassiveFire] fallback_threw: ${(err as Error)?.message ?? err}`,
+      );
+      return [];
+    }
+  }
+
+  return processed;
 }
 
+const CURRENCY_LINE_RE = /(?:\$|NZD|AUD|USD|£|€)\s?\d[\d,]*(?:\.\d+)?/i;
+
+function captureCandidateLines(rawText: string): string[] {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && l.length < 400);
+  const candidates: string[] = [];
+  for (const l of lines) {
+    if (CURRENCY_LINE_RE.test(l) && /[A-Za-z]/.test(l)) {
+      candidates.push(l);
+      if (candidates.length >= 20) break;
+    }
+  }
+  return candidates;
+}
+
+let CANDIDATE_ROWS_SEEN: Record<string, unknown>[] = [];
+
 function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 | null {
-  const base = normaliseRow(
+  if (CANDIDATE_ROWS_SEEN.length < 20) {
+    CANDIDATE_ROWS_SEEN.push({
+      description: r.description ?? r.desc ?? r.name ?? null,
+      quantity: r.quantity ?? r.qty ?? null,
+      unit_price: r.unit_price ?? r.rate ?? null,
+      total_price: r.total_price ?? r.total ?? r.amount ?? null,
+      scope_category: r.scope_category ?? null,
+      sub_scope: r.passive_fire_system ?? r.sub_scope ?? null,
+    });
+    if (CANDIDATE_ROWS_SEEN.length === 20) {
+      console.log(
+        `[extractPassiveFire] first_20_candidate_rows_seen=${JSON.stringify(CANDIDATE_ROWS_SEEN)}`,
+      );
+    }
+  }
+
+  const base = normaliseRowLoose(
     {
       item_number: r.item_number ?? null,
-      description: r.description,
+      description: r.description ?? r.desc ?? r.name,
       quantity: r.quantity,
       unit: r.unit,
       unit_price: r.unit_price,
-      total_price: r.total_price,
+      total_price: r.total_price ?? r.total ?? r.amount,
       scope_category: r.scope_category,
       trade,
-      sub_scope: r.passive_fire_system ?? null,
+      sub_scope: r.passive_fire_system ?? r.sub_scope ?? null,
       frr: r.frr,
       source: "llm",
       confidence: r.confidence,
@@ -233,7 +322,9 @@ function isSummaryRow(it: ParsedLineItemV2): boolean {
   if (!d) return true;
   if (SECTION_SUMMARY_RE.test(d)) return true;
   if (SCHEDULE_SUBTOTAL_RE.test(d)) return true;
-  if (MARKUP_SUMMARY_RE.test(d)) return true;
+  // NOTE: MARKUP_SUMMARY_RE (p&g, preliminaries, margin, overheads, contingency,
+  // ps3/qa) is NO LONGER treated as a summary row — these are legitimate
+  // lump-sum line items for passive-fire quotes and must be preserved.
   return false;
 }
 
@@ -245,19 +336,25 @@ function postProcess(
     ? prescan.frr_ratings_found[0]
     : null;
 
-  return items
-    .filter((it) => it.description && it.description.length >= 3)
-    .filter((it) => !isSummaryRow(it))
-    .map((it) => {
-      const sub_scope = harmoniseSubScope(it);
-      const frr = it.frr ?? extractFRRFromDescription(it.description) ?? frrFallback;
-      return {
-        ...it,
-        trade: "passive_fire",
-        sub_scope,
-        frr,
-      };
-    });
+  const beforeDescFilter = items.length;
+  const afterDescFilter = items.filter((it) => it.description && it.description.length >= 3);
+  const afterSummaryFilter = afterDescFilter.filter((it) => !isSummaryRow(it));
+  console.log(
+    `[extractPassiveFire] postProcess before=${beforeDescFilter} ` +
+      `after_desc_filter=${afterDescFilter.length} ` +
+      `after_summary_filter=${afterSummaryFilter.length}`,
+  );
+
+  return afterSummaryFilter.map((it) => {
+    const sub_scope = harmoniseSubScope(it);
+    const frr = it.frr ?? extractFRRFromDescription(it.description) ?? frrFallback;
+    return {
+      ...it,
+      trade: "passive_fire",
+      sub_scope,
+      frr,
+    };
+  });
 }
 
 function harmoniseSubScope(it: ParsedLineItemV2): string {
