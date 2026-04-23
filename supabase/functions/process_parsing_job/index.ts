@@ -1,6 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { runParserV2, type ParserV2Output } from "../_shared/parser_v2/runParserV2.ts";
+import {
+  runParserV2,
+  getCurrentParserV2State,
+  type ParserV2Output,
+} from "../_shared/parser_v2/runParserV2.ts";
 import {
   StageTracker,
   ParserV2StageError,
@@ -274,8 +278,15 @@ Deno.serve(async (req: Request) => {
       const stack = v2Err instanceof Error ? v2Err.stack?.slice(0, 1500) : undefined;
       console.error("[V2] threw:", msg);
       outerTracker.fail("parser_v2", v2Err);
-      const innerStages = v2Err instanceof ParserV2StageError ? v2Err.stages : [];
-      const failedInnerStage = v2Err instanceof ParserV2StageError ? v2Err.failedStage : null;
+      const liveState = getCurrentParserV2State();
+      const innerStages =
+        v2Err instanceof ParserV2StageError && v2Err.stages.length > 0
+          ? v2Err.stages
+          : liveState.stages;
+      const failedInnerStage =
+        v2Err instanceof ParserV2StageError
+          ? v2Err.failedStage
+          : liveState.currentStage ?? "unknown";
       const report = buildFailureReport("parser_v2_exception", msg, {
         stack,
         duration_ms: Date.now() - v2Start,
