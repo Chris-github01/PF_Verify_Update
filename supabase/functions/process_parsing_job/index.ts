@@ -348,6 +348,7 @@ Deno.serve(async (req: Request) => {
       quoteId: typedJob.quote_id ?? undefined,
       openAIKey: openAiKey,
       persistStages,
+      pdfBytes: fileExtension === "pdf" ? new Uint8Array(fileBuffer) : null,
     }).then(
       (value) => {
         parserSettled = true;

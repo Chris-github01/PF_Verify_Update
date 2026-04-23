@@ -40,6 +40,10 @@ import {
   type PassiveFireSanitizerResult,
 } from "./classifiers/sanitizePassiveFireText.ts";
 import {
+  extractRenderLayout,
+  type RenderLayoutResult,
+} from "./classifiers/extractRenderLayout.ts";
+import {
   validatePassiveFireParse,
   type PassiveFireValidationResult,
 } from "./validation/validatePassiveFireParse.ts";
@@ -83,6 +87,13 @@ export type ParserV2Input = {
   quoteId?: string;
   openAIKey: string;
   persistStages?: (stages: StageRecord[]) => void;
+  /**
+   * Optional raw PDF bytes. When provided, the Render PDF assistant
+   * layer runs in parallel to LLM extraction as a layout intelligence
+   * source. It is never authoritative; if omitted or unavailable the
+   * parser continues normally.
+   */
+  pdfBytes?: Uint8Array | null;
 };
 
 export type ParsedLineItemV2 = {
@@ -161,7 +172,19 @@ export type ParserV2Output = {
       rows_before_validation: number;
       rows_after_validation: number;
     } | null;
+    render: {
+      render_enabled: boolean;
+      render_rows_detected: number;
+      render_tables_detected: number;
+      render_totals_detected: number;
+      render_sections_detected: number;
+      layout_extraction_mismatch: boolean;
+      reason: string | null;
+      duration_ms: number;
+      raw_response_summary: string | null;
+    };
   };
+  render_layout: RenderLayoutResult | null;
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
     items: ReturnType<typeof mapToQuoteItems>;
@@ -326,6 +349,39 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       tracker.skip("pf_structure", "trade is not passive_fire");
     }
 
+    // -------- RENDER PDF ASSISTANT LAYER (parallel intelligence) --------
+    // Runs before extraction as a non-authoritative layout source. If
+    // Render is unavailable or times out we mark the stage SKIPPED and
+    // continue. Never replaces extraction output.
+    let render_layout: RenderLayoutResult | null = null;
+    if (input.pdfBytes && input.pdfBytes.byteLength > 0) {
+      tracker.start("render_layout");
+      const renderStart = Date.now();
+      try {
+        render_layout = await extractRenderLayout({
+          pdfBytes: input.pdfBytes,
+          fileName: input.fileName,
+        });
+        if (render_layout.enabled) {
+          tracker.succeed("render_layout");
+        } else {
+          tracker.markEmpty(
+            "render_layout",
+            `render_unavailable:${render_layout.reason ?? "unknown"}`,
+          );
+          anomalies.push(`render_layout_unavailable:${render_layout.reason ?? "unknown"}`);
+        }
+      } catch (err) {
+        console.error("[parser_v2] render layout failed", err);
+        tracker.fail("render_layout", err);
+        anomalies.push("render_layout_failed");
+        render_layout = null;
+      }
+      durations.render_layout = Date.now() - renderStart;
+    } else {
+      tracker.skip("render_layout", "no_pdf_bytes");
+    }
+
     const extractor = EXTRACTOR_BY_TRADE[trade.trade] ?? extractFallback;
     const extractorName = EXTRACTOR_BY_TRADE[trade.trade] ? trade.trade : "fallback";
 
@@ -380,6 +436,16 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       }
     }
     durations.extraction = Date.now() - extractStart;
+
+    if (
+      render_layout?.enabled &&
+      render_layout.rows_detected_total > 20 &&
+      items.length === 0
+    ) {
+      anomalies.push(
+        `layout_extraction_mismatch:render_rows=${render_layout.rows_detected_total}_extractor_rows=0`,
+      );
+    }
 
     if (items.length === 0 && extractor !== extractFallback && !usedFallbackOnThrow) {
       anomalies.push("primary_extractor_zero_rows");
@@ -723,7 +789,22 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
               rows_after_validation: fallbackDebug.reduce((s, c) => s + c.rows_after_validation, 0),
             }
           : null,
+        render: {
+          render_enabled: render_layout?.enabled ?? false,
+          render_rows_detected: render_layout?.rows_detected_total ?? 0,
+          render_tables_detected: render_layout?.tables_detected ?? 0,
+          render_totals_detected: render_layout?.totals_detected ?? 0,
+          render_sections_detected: render_layout?.sections_detected ?? 0,
+          layout_extraction_mismatch:
+            (render_layout?.enabled ?? false) &&
+            (render_layout?.rows_detected_total ?? 0) > 20 &&
+            items.length === 0,
+          reason: render_layout?.reason ?? null,
+          duration_ms: render_layout?.duration_ms ?? 0,
+          raw_response_summary: render_layout?.raw_response_summary ?? null,
+        },
       },
+      render_layout,
       dbPayload: { quote, items: dbItems },
     };
   } catch (err) {
