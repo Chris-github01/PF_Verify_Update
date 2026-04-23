@@ -17,6 +17,8 @@ const MAX_CHUNKS = 8;
 const CHUNK_CONCURRENCY = 4;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_RETRIES = 3;
+const EXTRACTION_STAGE_BUDGET_MS = 35_000;
+const PER_CHUNK_BUDGET_MS = 18_000;
 
 export type ExtractorContext = {
   systemPrompt: string;
@@ -49,6 +51,10 @@ export async function runExtractorLLMWithTelemetry(
   const chunks = buildChunks(ctx.pages, ctx.rawText).slice(0, MAX_CHUNKS);
   const all: ParsedLineItemV2[] = [];
   let succeeded = 0;
+  const stageStart = Date.now();
+
+  const remainingBudget = () =>
+    Math.max(0, EXTRACTION_STAGE_BUDGET_MS - (Date.now() - stageStart));
 
   const runChunk = async (i: number): Promise<unknown[] | null> => {
     const chunk = chunks[i];
@@ -62,17 +68,32 @@ export async function runExtractorLLMWithTelemetry(
       document_chunk: chunk.text,
       context: ctx.extraUserContext ?? {},
     };
-    return await callOpenAIWithRetry({
-      openAIKey: ctx.openAIKey,
-      systemPrompt: ctx.systemPrompt,
-      userPayload,
-      trade: ctx.trade,
-      chunkIndex: i,
-    });
+    const budget = Math.min(PER_CHUNK_BUDGET_MS, remainingBudget());
+    if (budget < 1000) {
+      console.warn(`[extractor:${ctx.trade}] chunk ${i} skipped — no budget remaining`);
+      return null;
+    }
+    return await raceOrNull(
+      callOpenAIWithRetry({
+        openAIKey: ctx.openAIKey,
+        systemPrompt: ctx.systemPrompt,
+        userPayload,
+        trade: ctx.trade,
+        chunkIndex: i,
+      }),
+      budget,
+      `chunk ${i}`,
+    );
   };
 
   const mapper = ctx.rowMapper ?? normaliseRow;
   for (let start = 0; start < chunks.length; start += CHUNK_CONCURRENCY) {
+    if (remainingBudget() < 1000) {
+      console.warn(
+        `[extractor:${ctx.trade}] stage budget exhausted at batch ${start}/${chunks.length} — returning partial`,
+      );
+      break;
+    }
     const batch = chunks
       .slice(start, start + CHUNK_CONCURRENCY)
       .map((_, offset) => runChunk(start + offset));
@@ -83,6 +104,13 @@ export async function runExtractorLLMWithTelemetry(
         for (const r of rows) all.push(mapper(r as Record<string, unknown>, ctx.trade));
       }
     }
+  }
+
+  const elapsed = Date.now() - stageStart;
+  if (elapsed > EXTRACTION_STAGE_BUDGET_MS) {
+    console.warn(
+      `[extractor:${ctx.trade}] stage wall-clock ${elapsed}ms exceeded budget ${EXTRACTION_STAGE_BUDGET_MS}ms — ${succeeded}/${chunks.length} chunks succeeded`,
+    );
   }
 
   const deduped = dedupe(all);
@@ -187,6 +215,27 @@ function toNumberOrNull(v: unknown): number | null {
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(1, Math.max(0, n));
+}
+
+async function raceOrNull<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutP = new Promise<{ __timeout: true }>((resolve) => {
+    timer = setTimeout(() => resolve({ __timeout: true }), timeoutMs);
+  });
+  try {
+    const winner = await Promise.race([promise, timeoutP]);
+    if ((winner as { __timeout?: boolean }).__timeout) {
+      console.warn(`[extractor] ${label} exceeded ${timeoutMs}ms — skipping chunk`);
+      return null;
+    }
+    return winner as T;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 type Chunk = { text: string; pageRange: string };

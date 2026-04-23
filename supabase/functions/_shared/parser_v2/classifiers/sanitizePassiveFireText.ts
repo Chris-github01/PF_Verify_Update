@@ -57,6 +57,8 @@ const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const SANITIZER_MODEL = "gpt-4.1-mini";
 const PAGE_CHAR_BUDGET = 18000;
 const MAX_PAGES = 12;
+const SANITIZER_BUDGET_MS = 15_000;
+const PER_PAGE_BUDGET_MS = 6_000;
 
 const REMOVED_REASONS: PassiveFireRemovedToken["reason"][] = [
   "phone_number",
@@ -83,19 +85,46 @@ export async function sanitizePassiveFireText(ctx: {
       ? ctx.pages.slice(0, MAX_PAGES)
       : [{ pageNum: 1, text: ctx.rawText.slice(0, PAGE_CHAR_BUDGET) }];
 
-  const perPage: { pageNum: number; raw: string; result: PassiveFireSanitizerResult }[] =
-    await Promise.all(
-      pages.map(async (p) => {
-        const result = await sanitizePage({
+  const wallStart = Date.now();
+  const llmPromise = Promise.all(
+    pages.map(async (p) => {
+      const budgetRemaining = Math.max(
+        1000,
+        SANITIZER_BUDGET_MS - (Date.now() - wallStart),
+      );
+      const perPageBudget = Math.min(PER_PAGE_BUDGET_MS, budgetRemaining);
+      const result = await raceWithFallback(
+        sanitizePage({
           text: p.text,
           pageNum: p.pageNum,
           supplier: ctx.supplier,
           fileName: ctx.fileName,
           openAIKey: ctx.openAIKey,
-        });
-        return { pageNum: p.pageNum, raw: p.text, result };
-      }),
+        }),
+        perPageBudget,
+        () => regexSanitizePage(p.text),
+      );
+      return { pageNum: p.pageNum, raw: p.text, result };
+    }),
+  );
+
+  const perPage = await raceWithFallback(
+    llmPromise,
+    SANITIZER_BUDGET_MS,
+    () =>
+      pages.map((p) => ({
+        pageNum: p.pageNum,
+        raw: p.text,
+        result: regexSanitizePage(p.text),
+      })),
+  );
+
+  const elapsed = Date.now() - wallStart;
+  if (elapsed > SANITIZER_BUDGET_MS) {
+    console.warn(
+      `[pf_sanitize] wall-clock ${elapsed}ms exceeded budget ${SANITIZER_BUDGET_MS}ms — regex fallback engaged`,
     );
+  }
 
   const clean_pages = perPage.map((p) => ({
     pageNum: p.pageNum,
@@ -263,4 +292,146 @@ function toNumberOrNull(v: unknown): number | null {
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(1, Math.max(0, n));
+}
+
+async function raceWithFallback<T>(
+  primary: Promise<T>,
+  timeoutMs: number,
+  fallback: () => T,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<{ __timeout: true }>((resolve) => {
+    timer = setTimeout(() => resolve({ __timeout: true }), timeoutMs);
+  });
+  try {
+    const winner = await Promise.race([primary, timeoutPromise]);
+    if ((winner as { __timeout?: boolean }).__timeout) {
+      console.warn(`[pf_sanitize] LLM exceeded ${timeoutMs}ms — using regex fallback`);
+      return fallback();
+    }
+    return winner as T;
+  } catch (err) {
+    console.warn(`[pf_sanitize] LLM threw (${(err as Error)?.message ?? err}) — regex fallback`);
+    return fallback();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Deterministic regex-based PF sanitizer. Fast fallback when the LLM
+ * sanitizer exceeds its budget. Strips / tags the same OCR noise classes
+ * the LLM targets so downstream pricing logic never sees them as money.
+ */
+export function regexSanitizePage(text: string): PassiveFireSanitizerResult {
+  const removed: PassiveFireRemovedToken[] = [];
+  let cleaned = text;
+
+  const patterns: {
+    re: RegExp;
+    reason: PassiveFireRemovedToken["reason"];
+    replace: (m: string) => string;
+  }[] = [
+    {
+      re: /\b(?:\+?61|\+?64|0)[\s-]?[2-9](?:[\s-]?\d){7,9}\b/g,
+      reason: "phone_number",
+      replace: () => "[PHONE]",
+    },
+    {
+      re: /\b(?:0[2-9]|1[38]00)[\s-]?\d{3}[\s-]?\d{3,4}\b/g,
+      reason: "phone_number",
+      replace: () => "[PHONE]",
+    },
+    {
+      re: /\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/g,
+      reason: "date",
+      replace: () => "[DATE]",
+    },
+    {
+      re: /\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{2,4}\b/gi,
+      reason: "date",
+      replace: () => "[DATE]",
+    },
+    {
+      re: /\b(?:Quote|Ref|Reference|Job|PO|Invoice|Order)[\s#:.-]*[A-Z]{0,4}[\s-]?\d{3,10}\b/gi,
+      reason: "reference_number",
+      replace: () => "[REF]",
+    },
+    {
+      re: /\b-?\/(?:30|60|90|120|180|240)\/(?:30|60|90|120|180|240)\b/g,
+      reason: "fire_rating",
+      replace: (m) => m,
+    },
+    {
+      re: /\bFRR[\s:]*-?\/?\d{2,3}\/?\d{2,3}\/?\d{0,3}\b/gi,
+      reason: "fire_rating",
+      replace: (m) => m,
+    },
+    {
+      re: /\b\d{1,4}\s*(?:mm|cm|m|in|inch|inches|ft|"|')\s*(?:x|×|by)\s*\d{1,4}\s*(?:mm|cm|m|in|inch|inches|ft|"|')?\b/gi,
+      reason: "dimension",
+      replace: () => "[DIM]",
+    },
+    {
+      re: /\bPage\s+\d+\s*(?:of\s+\d+)?\b/gi,
+      reason: "page_number",
+      replace: () => "[PAGE]",
+    },
+    {
+      re: /\b(?:Unit|Level|Suite|Shop|Apt)\s+\d+[A-Z]?\b/gi,
+      reason: "address_number",
+      replace: () => "[ADDR]",
+    },
+    {
+      re: /\b[A-Z]{2,}-\d{3,}(?:-[A-Z0-9]+)*\b/g,
+      reason: "product_code",
+      replace: (m) => m,
+    },
+  ];
+
+  for (const { re, reason, replace } of patterns) {
+    cleaned = cleaned.replace(re, (match) => {
+      const contextStart = Math.max(0, cleaned.indexOf(match) - 40);
+      removed.push({
+        value: match,
+        normalized: match.replace(/\s+/g, " ").trim(),
+        reason,
+        line_context: cleaned.substring(contextStart, contextStart + 80),
+      });
+      return replace(match);
+    });
+  }
+
+  const money_candidates: PassiveFireMoneyCandidate[] = [];
+  const moneyRe = /\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/g;
+  let m: RegExpExecArray | null;
+  while ((m = moneyRe.exec(cleaned)) !== null) {
+    const ctxStart = Math.max(0, m.index - 40);
+    money_candidates.push({
+      value: m[0],
+      normalized: Number(m[1].replace(/,/g, "")),
+      context: cleaned.substring(ctxStart, m.index + m[0].length + 40),
+    });
+  }
+
+  const suspicious_numerics: PassiveFireSuspiciousNumeric[] = [];
+  const suspiciousRe = /\b\d{1,3}(?:[lI|O]\d{3})+\b/g;
+  let s: RegExpExecArray | null;
+  while ((s = suspiciousRe.exec(text)) !== null) {
+    suspicious_numerics.push({
+      value: s[0],
+      reason: "ocr_digit_letter_substitution",
+    });
+  }
+
+  const risk_score = clamp01(suspicious_numerics.length / 10);
+
+  return {
+    clean_text: cleaned,
+    clean_pages: [],
+    removed_tokens: removed,
+    money_candidates,
+    suspicious_numerics,
+    risk_score,
+  };
 }
