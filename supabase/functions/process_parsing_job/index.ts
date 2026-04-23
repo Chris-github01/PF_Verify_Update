@@ -729,7 +729,6 @@ Deno.serve(async (req: Request) => {
                 : null,
             }
           : null,
-        extraction_diagnostics: (v2 as any).extraction_diagnostics ?? null,
       },
       metadata: parseMetadata,
       parser_v2_output: v2PersistOutput,
