@@ -343,7 +343,18 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         );
       }
     }
-    if (!extractionFailed) tracker.succeed("extraction");
+    if (!extractionFailed) {
+      const chunksSucceeded = extractionDebug.filter(
+        (c) => c.empty_reason !== "chunk_timeout_or_failure" && c.empty_reason !== "skipped_no_budget",
+      ).length;
+      if (extractionDebug.length > 0 && chunksSucceeded === 0) {
+        anomalies.push("all_extraction_chunks_failed");
+        tracker.fail("extraction", new Error(`all ${extractionDebug.length} chunks timed out or failed`));
+        extractionFailed = true;
+      } else {
+        tracker.succeed("extraction");
+      }
+    }
     durations.extraction = Date.now() - extractStart;
 
     logExtractionDebug("extraction", extractorName, items.length, extractionDebug);
@@ -510,6 +521,40 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         pathB,
         pathC,
       });
+      // PRIORITY 3: when extraction returned zero items, prefer the
+      // passive-fire authoritative total (pf_structure) over the GST
+      // heuristic Path C. pf_structure has a labelled, anchored total
+      // with confidence 0.98 — it must win over `max_value` fallbacks.
+      const pfAuthoritative =
+        trade.trade === "passive_fire"
+          ? extractPfAuthoritativeTotal(passive_fire_structure)
+          : null;
+      if (
+        items.length === 0 &&
+        pfAuthoritative != null &&
+        pfAuthoritative.value > 0 &&
+        (decision.winning_path === "C" ||
+          decision.winning_path == null ||
+          decision.confidence === "LOW")
+      ) {
+        console.warn(
+          `[parser_v2] multipath override: using pf_structure.authoritative_total_ex_gst=${pfAuthoritative.value} (confidence=${pfAuthoritative.confidence}) over Path ${decision.winning_path}=${decision.selected_total}`,
+        );
+        decision.selected_total = pfAuthoritative.value;
+        decision.selected_total_inc_gst = pfAuthoritative.value * 1.15;
+        decision.winning_path = "B";
+        decision.confidence_score = Math.max(decision.confidence_score, pfAuthoritative.confidence);
+        decision.confidence =
+          decision.confidence_score >= 0.8
+            ? "HIGH"
+            : decision.confidence_score >= 0.55
+              ? "MEDIUM"
+              : "LOW";
+        decision.rationale = `pf_structure.authoritative_total_ex_gst override (confidence=${pfAuthoritative.confidence})`;
+        decision.review_reasons.push("pf_authoritative_override");
+        anomalies.push("pf_authoritative_total_override");
+      }
+
       multipathResult = { decision, pathB, pathC };
 
       // If Path A produced no total but the decision engine recovered
@@ -722,6 +767,16 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   } finally {
     clearActiveTracker();
   }
+}
+
+function extractPfAuthoritativeTotal(
+  structure: PassiveFireStructure | null,
+): { value: number; confidence: number } | null {
+  if (!structure) return null;
+  const v = structure.authoritative_total_ex_gst;
+  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) return null;
+  const confidence = typeof structure.confidence === "number" ? structure.confidence : 0.9;
+  return { value: v, confidence };
 }
 
 function formatMessage(err: unknown): string {
