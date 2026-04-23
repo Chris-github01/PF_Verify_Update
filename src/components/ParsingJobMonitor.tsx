@@ -117,12 +117,15 @@ const STAGE_DISPLAY_NAMES: Record<string, string> = {
   parser_v2: 'Parser V2',
   preflight: 'Preflight Check',
   classification: 'Classify Document',
-  sanitizer: '1. Sanitizer',
-  structure: '2. Structure',
-  extractor: '3. Extractor',
-  selector: '4. Selector',
-  validator: '5. Validator',
-  composer: '6. Composer',
+  pf_sanitize: 'Sanitize (Passive Fire)',
+  pf_structure: 'Structure (Passive Fire)',
+  extraction: 'Extract Line Items',
+  fallback_extraction: 'Fallback Extraction',
+  pf_authoritative_total: 'Select Authoritative Total',
+  pf_intent: 'Intent Detection',
+  pf_validation: 'Passive Fire Validation',
+  validation: 'Validate Totals',
+  mappers: 'Map to Database',
 };
 
 function formatStageName(name: string): string {

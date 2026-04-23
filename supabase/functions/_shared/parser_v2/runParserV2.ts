@@ -1,17 +1,26 @@
 /**
  * Parser V2 — LLM-first orchestrator (production).
  *
- * Six canonical prompt-level stages (tracked independently with token usage):
- *   1. sanitizer  — strips OCR noise (PF only)
- *   2. structure  — authoritative total page / section roles (PF only)
- *   3. extractor  — trade-specific gpt-4.1 line-item extractor (+ PF intent refinement)
- *   4. selector   — picks single main-scope total excl GST (PF only)
- *   5. validator  — line math + totals + missing rows + PF validation
- *   6. composer   — final passive-fire record + DB shape mappers
+ * Pipeline:
+ *   1. classifyTrade             → primary trade (PF-first rules)
+ *   2. classifyQuoteType         → itemized | lump_sum | hybrid
+ *   3. classifySupplier          → supplier identity
+ *   3b. sanitizePassiveFireText   (PF only, pre-structure)
+ *                                → strips OCR noise (phone/date/FRR/
+ *                                  refs) before any financial parsing
+ *   4. classifyPassiveFireStructure (PF only, pre-extraction)
+ *                                → authoritative total page, section roles,
+ *                                  numeric red-flags (phone/FRR/references)
+ *   5. extractByTrade            → trade-specific gpt-4.1 extractor
+ *   6. selectPassiveFireAuthoritativeTotal (PF only)
+ *                                → picks single main-scope total excl GST
+ *   7. passive-fire intent       → sub_scope refinement when trade=passive_fire
+ *   8. validation                → line math + totals + missing rows + confidence
+ *   9. mappers                   → DB shape identical to legacy parser
  *
- * Each stage carries status, duration_ms, started_at, completed_at, error, tokens_in, tokens_out.
- * On any throw, a ParserV2StageError is raised with a non-null failedStage so
- * downstream failure reporting never shows `failed_inner_stage: null`.
+ * The orchestrator records a telemetry row to parser_v2_runs when a
+ * SUPABASE service client is available; failures to record never
+ * fail the pipeline.
  */
 
 import { classifyTrade, type TradeClassification } from "./classifiers/classifyTrade.ts";
@@ -56,21 +65,6 @@ import { mapToQuotesTable } from "./mappers/mapToQuotesTable.ts";
 import { mapToQuoteItems } from "./mappers/mapToQuoteItems.ts";
 
 import { StageTracker, ParserV2StageError, type StageRecord } from "./stageTracker.ts";
-import { resetBucket, snapshotBucket } from "./tokenBucket.ts";
-
-let CURRENT_TRACKER: StageTracker | null = null;
-let CURRENT_STAGE: string | null = null;
-
-/** Allows the outer handler to inspect the in-flight pipeline state on hard timeout. */
-export function getCurrentParserV2State(): {
-  currentStage: string | null;
-  stages: StageRecord[];
-} {
-  return {
-    currentStage: CURRENT_STAGE,
-    stages: CURRENT_TRACKER ? CURRENT_TRACKER.snapshot() : [],
-  };
-}
 
 export type ParserV2Input = {
   rawText: string;
@@ -162,16 +156,8 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   const durations: Record<string, number> = {};
   const anomalies: string[] = [];
   const tracker = new StageTracker();
-  let currentStage: string = "preflight";
-  CURRENT_TRACKER = tracker;
-  CURRENT_STAGE = currentStage;
-  const setStage = (name: string) => {
-    currentStage = name;
-    CURRENT_STAGE = name;
-  };
 
   try {
-    setStage("preflight");
     if (!input.openAIKey) {
       tracker.start("preflight");
       tracker.fail("preflight", new Error("parser_v2: openAIKey is required"));
@@ -199,9 +185,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       openAIKey: input.openAIKey,
     };
 
-    setStage("classification");
     tracker.start("classification");
-    resetBucket();
     const classifyStart = Date.now();
     const [tradeResult, quoteTypeResult, supplierResult] = await Promise.allSettled([
       classifyTrade(classificationContext),
@@ -213,9 +197,9 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       .filter((r) => r.status === "rejected")
       .map((r) => (r as PromiseRejectedResult).reason);
     if (classifierErrors.length === 3) {
-      tracker.fail("classification", classifierErrors[0], snapshotBucket());
+      tracker.fail("classification", classifierErrors[0]);
     } else {
-      tracker.succeed("classification", snapshotBucket());
+      tracker.succeed("classification");
     }
 
     const trade = unwrap(tradeResult, {
@@ -239,14 +223,11 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     if (quoteTypeResult.status === "rejected") anomalies.push("classify_quote_type_failed");
     if (supplierResult.status === "rejected") anomalies.push("classify_supplier_failed");
 
-    // ──────────────── STAGE 1: SANITIZER ────────────────
-    setStage("sanitizer");
     let passive_fire_sanitizer: PassiveFireSanitizerResult | null = null;
     let effectiveRawText = input.rawText;
     let effectivePages = input.pages;
     if (trade.trade === "passive_fire") {
-      tracker.start("sanitizer");
-      resetBucket();
+      tracker.start("pf_sanitize");
       const sanitizeStart = Date.now();
       try {
         passive_fire_sanitizer = await sanitizePassiveFireText({
@@ -262,23 +243,20 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         if (passive_fire_sanitizer.clean_text && passive_fire_sanitizer.clean_text.trim().length > 0) {
           effectiveRawText = passive_fire_sanitizer.clean_text;
         }
-        tracker.succeed("sanitizer", snapshotBucket());
+        tracker.succeed("pf_sanitize");
       } catch (err) {
-        console.error("[parser_v2] sanitizer failed", err);
+        console.error("[parser_v2] passive fire sanitizer failed", err);
         anomalies.push("pf_sanitizer_failed");
-        tracker.fail("sanitizer", err, snapshotBucket());
+        tracker.fail("pf_sanitize", err);
       }
-      durations.sanitizer = Date.now() - sanitizeStart;
+      durations.pf_sanitize = Date.now() - sanitizeStart;
     } else {
-      tracker.skip("sanitizer", "trade is not passive_fire");
+      tracker.skip("pf_sanitize", "trade is not passive_fire");
     }
 
-    // ──────────────── STAGE 2: STRUCTURE ────────────────
-    setStage("structure");
     let passive_fire_structure: PassiveFireStructure | null = null;
     if (trade.trade === "passive_fire") {
-      tracker.start("structure");
-      resetBucket();
+      tracker.start("pf_structure");
       const structStart = Date.now();
       try {
         passive_fire_structure = await classifyPassiveFireStructure({
@@ -288,27 +266,24 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
-        tracker.succeed("structure", snapshotBucket());
+        tracker.succeed("pf_structure");
       } catch (err) {
-        console.error("[parser_v2] structure analysis failed", err);
+        console.error("[parser_v2] passive fire structure analysis failed", err);
         anomalies.push("pf_structure_analysis_failed");
-        tracker.fail("structure", err, snapshotBucket());
+        tracker.fail("pf_structure", err);
       }
-      durations.structure = Date.now() - structStart;
+      durations.pf_structure = Date.now() - structStart;
     } else {
-      tracker.skip("structure", "trade is not passive_fire");
+      tracker.skip("pf_structure", "trade is not passive_fire");
     }
 
-    // ──────────────── STAGE 3: EXTRACTOR ────────────────
-    setStage("extractor");
     const extractor = EXTRACTOR_BY_TRADE[trade.trade] ?? extractFallback;
     const extractorName = EXTRACTOR_BY_TRADE[trade.trade] ? trade.trade : "fallback";
 
-    tracker.start("extractor");
-    resetBucket();
+    tracker.start("extraction");
     const extractStart = Date.now();
     let items: ParsedLineItemV2[] = [];
-    let extractionOk = false;
+    let extractionFailed = false;
     try {
       items = await extractor({
         rawText: effectiveRawText,
@@ -318,10 +293,11 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         openAIKey: input.openAIKey,
         structure: passive_fire_structure,
       });
-      extractionOk = true;
     } catch (err) {
-      console.error("[parser_v2] primary extractor threw, trying fallback", err);
+      console.error("[parser_v2] extractor threw, falling back", err);
       anomalies.push("extractor_threw");
+      extractionFailed = true;
+      tracker.fail("extraction", err);
       try {
         items = await extractFallback({
           rawText: input.rawText,
@@ -330,19 +306,21 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
-        extractionOk = true;
       } catch (fallbackErr) {
-        tracker.fail("extractor", fallbackErr, snapshotBucket());
         throw new ParserV2StageError(
           formatMessage(fallbackErr),
-          "extractor",
+          "extraction",
           tracker.snapshot(),
         );
       }
     }
+    if (!extractionFailed) tracker.succeed("extraction");
+    durations.extraction = Date.now() - extractStart;
 
     if (items.length === 0 && extractor !== extractFallback) {
       anomalies.push("primary_extractor_zero_rows");
+      tracker.start("fallback_extraction");
+      const fbStart = Date.now();
       try {
         items = await extractFallback({
           rawText: input.rawText,
@@ -351,34 +329,21 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
+        tracker.succeed("fallback_extraction");
       } catch (err) {
-        tracker.fail("extractor", err, snapshotBucket());
-        throw new ParserV2StageError(formatMessage(err), "extractor", tracker.snapshot());
+        tracker.fail("fallback_extraction", err);
+        throw new ParserV2StageError(
+          formatMessage(err),
+          "fallback_extraction",
+          tracker.snapshot(),
+        );
       }
+      durations.fallback_extraction = Date.now() - fbStart;
     }
 
-    if (trade.trade === "passive_fire" && items.length > 0) {
-      try {
-        const intent = await classifyPassiveFireIntent({
-          items,
-          openAIKey: input.openAIKey,
-        });
-        items = intent.items;
-      } catch (err) {
-        console.error("[parser_v2] passive fire intent failed, keeping raw items", err);
-        anomalies.push("passive_fire_intent_failed");
-      }
-    }
-
-    if (extractionOk) tracker.succeed("extractor", snapshotBucket());
-    durations.extractor = Date.now() - extractStart;
-
-    // ──────────────── STAGE 4: SELECTOR ────────────────
-    setStage("selector");
     let passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null = null;
     if (trade.trade === "passive_fire" && items.length > 0) {
-      tracker.start("selector");
-      resetBucket();
+      tracker.start("pf_authoritative_total");
       const selectorStart = Date.now();
       try {
         passive_fire_authoritative_total = await selectPassiveFireAuthoritativeTotal({
@@ -389,30 +354,73 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
-        tracker.succeed("selector", snapshotBucket());
+        tracker.succeed("pf_authoritative_total");
       } catch (err) {
-        console.error("[parser_v2] authoritative total selection failed", err);
+        console.error("[parser_v2] passive fire authoritative total selection failed", err);
         anomalies.push("pf_authoritative_total_failed");
-        tracker.fail("selector", err, snapshotBucket());
+        tracker.fail("pf_authoritative_total", err);
       }
-      durations.selector = Date.now() - selectorStart;
+      durations.pf_authoritative_total = Date.now() - selectorStart;
     } else {
       tracker.skip(
-        "selector",
+        "pf_authoritative_total",
         trade.trade !== "passive_fire" ? "trade is not passive_fire" : "no items extracted",
       );
     }
 
-    // ──────────────── STAGE 5: VALIDATOR ────────────────
-    setStage("validator");
-    tracker.start("validator");
-    resetBucket();
+    if (trade.trade === "passive_fire" && items.length > 0) {
+      tracker.start("pf_intent");
+      const intentStart = Date.now();
+      try {
+        const intent = await classifyPassiveFireIntent({
+          items,
+          openAIKey: input.openAIKey,
+        });
+        items = intent.items;
+        tracker.succeed("pf_intent");
+      } catch (err) {
+        console.error("[parser_v2] passive fire intent failed, keeping raw items", err);
+        anomalies.push("passive_fire_intent_failed");
+        tracker.fail("pf_intent", err);
+      }
+      durations.pf_intent = Date.now() - intentStart;
+    } else {
+      tracker.skip(
+        "pf_intent",
+        trade.trade !== "passive_fire" ? "trade is not passive_fire" : "no items extracted",
+      );
+    }
+
+    let passive_fire_validation: PassiveFireValidationResult | null = null;
+    if (trade.trade === "passive_fire") {
+      tracker.start("pf_validation");
+      const pfValStart = Date.now();
+      try {
+        passive_fire_validation = await validatePassiveFireParse({
+          structure: passive_fire_structure,
+          authoritative: passive_fire_authoritative_total,
+          sanitizer: passive_fire_sanitizer,
+          items,
+          supplier: supplier.supplierName,
+          openAIKey: input.openAIKey,
+        });
+        tracker.succeed("pf_validation");
+      } catch (err) {
+        console.error("[parser_v2] passive fire validation failed", err);
+        anomalies.push("pf_validation_failed");
+        tracker.fail("pf_validation", err);
+      }
+      durations.pf_validation = Date.now() - pfValStart;
+    } else {
+      tracker.skip("pf_validation", "trade is not passive_fire");
+    }
+
+    tracker.start("validation");
     const validationStart = Date.now();
     let lineMath: ReturnType<typeof validateLineMath>;
     let totals: ReturnType<typeof validateTotals>;
     let missing: ReturnType<typeof detectMissingRows>;
     let confidence: ReturnType<typeof scoreConfidence>;
-    let passive_fire_validation: PassiveFireValidationResult | null = null;
     try {
       lineMath = validateLineMath(items);
       totals = validateTotals(items, input.rawText);
@@ -424,65 +432,44 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         missingRows: missing.missing,
         quoteType: quoteType.quoteType,
       });
-
-      if (trade.trade === "passive_fire") {
-        try {
-          passive_fire_validation = await validatePassiveFireParse({
-            structure: passive_fire_structure,
-            authoritative: passive_fire_authoritative_total,
-            sanitizer: passive_fire_sanitizer,
-            items,
-            supplier: supplier.supplierName,
-            openAIKey: input.openAIKey,
-          });
-        } catch (err) {
-          console.error("[parser_v2] passive fire validation failed", err);
-          anomalies.push("pf_validation_failed");
-        }
-      }
-
-      tracker.succeed("validator", snapshotBucket());
+      tracker.succeed("validation");
     } catch (err) {
-      tracker.fail("validator", err, snapshotBucket());
-      throw new ParserV2StageError(formatMessage(err), "validator", tracker.snapshot());
+      tracker.fail("validation", err);
+      throw new ParserV2StageError(formatMessage(err), "validation", tracker.snapshot());
     }
-    durations.validator = Date.now() - validationStart;
+    durations.validation = Date.now() - validationStart;
 
-    const ERROR_ANOMALIES = new Set([
-      "classify_trade_failed",
-      "classify_quote_type_failed",
-      "classify_supplier_failed",
-      "extractor_threw",
-      "primary_extractor_zero_rows",
-      "passive_fire_intent_failed",
-      "labelled_grand_subtotal_optional_mismatch",
-      "no_totals_available",
-    ]);
-    const combinedAnomalies = [
-      ...anomalies,
-      ...lineMath.anomalies,
-      ...totals.anomalies,
-      ...missing.anomalies,
-    ];
-    const hasErrorAnomaly = combinedAnomalies.some((a) => ERROR_ANOMALIES.has(a));
+  const ERROR_ANOMALIES = new Set([
+    "classify_trade_failed",
+    "classify_quote_type_failed",
+    "classify_supplier_failed",
+    "extractor_threw",
+    "primary_extractor_zero_rows",
+    "passive_fire_intent_failed",
+    "labelled_grand_subtotal_optional_mismatch",
+    "no_totals_available",
+  ]);
+  const combinedAnomalies = [
+    ...anomalies,
+    ...lineMath.anomalies,
+    ...totals.anomalies,
+    ...missing.anomalies,
+  ];
+  const hasErrorAnomaly = combinedAnomalies.some((a) => ERROR_ANOMALIES.has(a));
 
-    const requires_review =
-      confidence.level === "LOW" ||
-      !totals.ok ||
-      missing.missing.length > 0 ||
-      items.length === 0 ||
-      hasErrorAnomaly ||
-      (totals.variants_materially_different &&
-        totals.reconciliation_confidence === "LOW") ||
-      (passive_fire_validation?.requires_review ?? false);
+  const requires_review =
+    confidence.level === "LOW" ||
+    !totals.ok ||
+    missing.missing.length > 0 ||
+    items.length === 0 ||
+    hasErrorAnomaly ||
+    (totals.variants_materially_different &&
+      totals.reconciliation_confidence === "LOW") ||
+    (passive_fire_validation?.requires_review ?? false);
 
-    const mergedAnomalies = dedupeStrings(combinedAnomalies);
+  const mergedAnomalies = dedupeStrings(combinedAnomalies);
 
-    // ──────────────── STAGE 6: COMPOSER ────────────────
-    setStage("composer");
-    tracker.start("composer");
-    resetBucket();
-    const composerStart = Date.now();
+    tracker.start("mappers");
     let passive_fire_final: PassiveFireFinalRecord | null;
     let quote: ReturnType<typeof mapToQuotesTable>;
     let dbItems: ReturnType<typeof mapToQuoteItems>;
@@ -513,12 +500,11 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         items,
       });
       dbItems = mapToQuoteItems({ items });
-      tracker.succeed("composer", snapshotBucket());
+      tracker.succeed("mappers");
     } catch (err) {
-      tracker.fail("composer", err, snapshotBucket());
-      throw new ParserV2StageError(formatMessage(err), "composer", tracker.snapshot());
+      tracker.fail("mappers", err);
+      throw new ParserV2StageError(formatMessage(err), "mappers", tracker.snapshot());
     }
-    durations.composer = Date.now() - composerStart;
 
     const total_duration_ms = Date.now() - runStart;
 
@@ -557,12 +543,11 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   } catch (err) {
     if (err instanceof ParserV2StageError) throw err;
     tracker.failAllInFlight(err);
-    const failedName =
-      tracker.firstFailure()?.name ?? currentStage ?? "unknown";
-    throw new ParserV2StageError(formatMessage(err), failedName, tracker.snapshot());
-  } finally {
-    CURRENT_TRACKER = null;
-    CURRENT_STAGE = null;
+    throw new ParserV2StageError(
+      formatMessage(err),
+      tracker.firstFailure()?.name ?? "unknown",
+      tracker.snapshot(),
+    );
   }
 }
 
