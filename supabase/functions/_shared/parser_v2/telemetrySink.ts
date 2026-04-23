@@ -80,6 +80,3 @@ export function markResponseReceived(usage?: {
   }
   tracker.setTokens(name, patch);
 }
-
-
-export { markLlmCallDuration, markRequestSent, markResponseReceived }
