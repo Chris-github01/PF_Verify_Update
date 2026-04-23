@@ -36,7 +36,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: job, error: jobError } = await supabase
       .from("parsing_jobs")
-      .select("id, supplier_name, status, file_url, filename, trade, metadata, attempt_count, llm_attempted, llm_fail_reason")
+      .select("id, supplier_name, status, file_url, filename, trade, metadata, attempt_count, llm_attempted, llm_fail_reason, quote_id")
       .eq("id", jobId)
       .single();
 
@@ -74,6 +74,16 @@ Deno.serve(async (req: Request) => {
         },
       })
       .eq("id", jobId);
+
+    if (job.quote_id) {
+      await supabase
+        .from("quotes")
+        .update({
+          parse_status: "processing",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", job.quote_id);
+    }
 
     const processUrl = `${supabaseUrl}/functions/v1/process_parsing_job`;
 

@@ -125,6 +125,65 @@ Deno.serve(async (req: Request) => {
 
     console.log("Creating parsing job:", { projectId, supplierName, fileName, organisationId, userId: user.id, storagePath, quoteId, dashboardMode });
 
+    // Pre-create (or reuse) the quote row immediately so the UI can show a
+    // "Processing Quote..." card while Parser V2 runs asynchronously.
+    let effectiveQuoteId = quoteId;
+    if (!effectiveQuoteId) {
+      let revisionNumber = 1;
+      if (dashboardMode === "revisions") {
+        const { data: latestQuote } = await supabase
+          .from("quotes")
+          .select("revision_number")
+          .eq("project_id", projectId)
+          .eq("supplier_name", supplierName)
+          .order("revision_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        revisionNumber = latestQuote?.revision_number
+          ? (latestQuote.revision_number as number) + 1
+          : 2;
+      }
+
+      const { data: newQuote, error: quoteErr } = await supabase
+        .from("quotes")
+        .insert({
+          project_id: projectId,
+          supplier_name: supplierName,
+          organisation_id: organisationId,
+          status: "pending",
+          parse_status: "processing",
+          total_amount: 0,
+          total_price: 0,
+          created_by: user.id,
+          revision_number: revisionNumber,
+          trade,
+          parser_primary: "v2",
+          file_url: storagePath,
+        })
+        .select("id")
+        .single();
+
+      if (quoteErr || !newQuote) {
+        console.error("Failed to pre-create quote:", quoteErr);
+        return new Response(
+          JSON.stringify({ error: `Failed to create quote row: ${quoteErr?.message ?? "unknown"}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      effectiveQuoteId = newQuote.id;
+    } else {
+      // Reuse existing quote (revision flow) — flip to processing.
+      await supabase
+        .from("quotes")
+        .update({
+          parse_status: "processing",
+          parser_primary: "v2",
+          passive_fire_final: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", effectiveQuoteId);
+    }
+
     const jobData: any = {
       project_id: projectId,
       supplier_name: supplierName,
@@ -135,12 +194,9 @@ Deno.serve(async (req: Request) => {
       status: "pending",
       progress: 0,
       trade: trade,
+      quote_id: effectiveQuoteId,
       metadata: { dashboard_mode: dashboardMode },
     };
-
-    if (quoteId) {
-      jobData.quote_id = quoteId;
-    }
 
     const { data: job, error: jobError } = await supabase
       .from("parsing_jobs")
