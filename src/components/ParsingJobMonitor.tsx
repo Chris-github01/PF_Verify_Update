@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Clock, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Activity, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 
@@ -226,24 +226,79 @@ function PipelineStagesPanel({ stages, defaultOpen = true }: { stages: PipelineS
   );
 }
 
-function ParserV2ReportPanel({ v2 }: { v2: NonNullable<ParsingJob['parser_v2_output']> }) {
+function ParserV2ReportPanel({ v2, job }: { v2: NonNullable<ParsingJob['parser_v2_output']>; job?: ParsingJob }) {
   const [open, setOpen] = useState(true);
   const failed = v2.failed === true;
   const pf = v2.passive_fire_final ?? null;
 
+  const handleDownloadJson = () => {
+    const report = {
+      exported_at: new Date().toISOString(),
+      job: job
+        ? {
+            id: job.id,
+            supplier_name: job.supplier_name,
+            filename: job.filename,
+            status: job.status,
+            progress: job.progress,
+            error_message: job.error_message,
+            last_error: job.last_error,
+            last_error_code: job.last_error_code,
+            current_stage: job.current_stage,
+            attempt_count: job.attempt_count,
+            primary_parser: job.primary_parser,
+            fallback_parser: job.fallback_parser,
+            final_parser_used: job.final_parser_used,
+            quote_id: job.quote_id,
+            is_latest: job.is_latest,
+            created_at: job.created_at,
+            updated_at: job.updated_at,
+            metadata: job.metadata ?? null,
+            result_data: job.result_data ?? null,
+            trace_json: job.trace_json ?? null,
+            pipeline_stages: job.pipeline_stages ?? null,
+          }
+        : null,
+      parser_v2_output: v2,
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = (job?.filename ?? job?.supplier_name ?? 'parser-v2-report')
+      .replace(/[^a-z0-9-_\.]+/gi, '_')
+      .slice(0, 80);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    a.download = `parser-v2-report_${safeName}_${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="mt-2 ml-7">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
-      >
-        <Activity size={12} />
-        Parser V2 Report
-        <span className={failed ? 'text-red-400' : 'text-green-400'}>
-          [{failed ? 'FAILED' : 'OK'}]
-        </span>
-        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+        >
+          <Activity size={12} />
+          Parser V2 Report
+          <span className={failed ? 'text-red-400' : 'text-green-400'}>
+            [{failed ? 'FAILED' : 'OK'}]
+          </span>
+          {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        </button>
+        <button
+          onClick={handleDownloadJson}
+          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-slate-600 text-slate-300 hover:text-slate-100 hover:border-slate-400 hover:bg-slate-800 transition-colors"
+          title="Download full error report as JSON"
+        >
+          <Download size={12} />
+          Download JSON
+        </button>
+      </div>
       {open && (
         <div className="mt-1.5 font-mono text-xs bg-slate-900/60 border border-slate-700 rounded px-3 py-2 space-y-1.5">
           <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 pb-1.5 border-b border-slate-700/60">
@@ -888,7 +943,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                     <PipelineStagesPanel stages={job.pipeline_stages} defaultOpen={false} />
                   )}
                   {trace && <TraceReportPanel trace={trace} job={job} />}
-                  {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}
+                  {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} job={job} />}
                 </div>
               );
             })}
@@ -928,7 +983,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                             <PipelineStagesPanel stages={job.pipeline_stages} defaultOpen={false} />
                           )}
                           {trace && <TraceReportPanel trace={trace} job={job} />}
-                          {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}
+                          {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} job={job} />}
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
@@ -1010,7 +1065,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                             <PipelineStagesPanel stages={job.pipeline_stages} defaultOpen />
                           )}
                           {trace && <TraceReportPanel trace={trace} job={job} />}
-                          {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} />}
+                          {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} job={job} />}
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
