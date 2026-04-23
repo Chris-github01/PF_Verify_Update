@@ -3,13 +3,11 @@
  * shape so downstream consumers (award reports, commercial control, UI) see
  * no difference from the legacy parser.
  *
- * Phase 5 changes:
- *   - Add exclusions_detected boolean (derived from items scope_category)
- *   - Populate document_sub_total with grand when optional is null/0 and
- *     grand is valid (main-only quotes shouldn't have a null subtotal)
- *   - Revise has_variants / requires_review to use the new
- *     variants_materially_different + reconciliation_confidence fields,
- *     not raw dual_option_suspected
+ * Instrumented:
+ *   - Logs `quote_total_before_save` (validateTotals output) and
+ *     `quote_total_after_save` (what the row actually carries).
+ *   - Emits a clear warning anomaly when items.length > 0 but
+ *     grand_total is 0 (items exist but totals were not derived).
  */
 
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
@@ -49,7 +47,8 @@ export function mapToQuotesTable(ctx: {
   requires_review: boolean;
   items?: ParsedLineItemV2[];
 }): QuotesTableRow {
-  const exclusions_detected = !!ctx.items?.some(
+  const items = ctx.items ?? [];
+  const exclusions_detected = !!items.some(
     (it) => it.scope_category === "excluded",
   );
 
@@ -68,6 +67,14 @@ export function mapToQuotesTable(ctx: {
   const reviewFromTotals =
     ctx.totals.reconciliation_confidence === "LOW" &&
     ctx.totals.variants_materially_different;
+
+  const anomalies = [...ctx.totals.anomalies];
+  if (items.length > 0 && !grandValid) {
+    console.error(
+      `[mapToQuotesTable] items_with_zero_totals items.length=${items.length} grand_total=${ctx.totals.grand_total} main_total=${ctx.totals.main_total} resolution_source=${ctx.totals.resolution_source}`,
+    );
+    anomalies.push("items_with_zero_totals");
+  }
 
   const requires_review = ctx.requires_review || reviewFromTotals;
 
@@ -99,12 +106,17 @@ export function mapToQuotesTable(ctx: {
     document_sub_total,
     optional_scope_total: optionalPresent ? ctx.totals.optional_total : null,
     document_grand_total: grandValid ? ctx.totals.grand_total : null,
-    parse_anomalies: ctx.totals.anomalies,
+    parse_anomalies: anomalies,
     has_variants,
     exclusions_detected,
     requires_review,
     parser_version: "v2",
   };
   if (ctx.quoteId) row.id = ctx.quoteId;
+
+  console.log(
+    `[mapToQuotesTable] items=${items.length} quote_total_before_save=${ctx.totals.grand_total} quote_total_after_save=${row.total_amount} main_total=${ctx.totals.main_total} optional_total=${ctx.totals.optional_total} resolution_source=${ctx.totals.resolution_source}`,
+  );
+
   return row;
 }

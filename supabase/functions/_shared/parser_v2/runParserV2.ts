@@ -300,6 +300,9 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     let extractionFailed = false;
     let extractionDebug: ExtractorChunkDebug[] = [];
     let fallbackDebug: ExtractorChunkDebug[] | null = null;
+    let chosen_path: "primary" | "fallback" | "fallback_after_throw" = "primary";
+    let extractor_items_count = 0;
+    let fallback_items_count = 0;
     try {
       items = await extractor({
         rawText: effectiveRawText,
@@ -310,12 +313,14 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         structure: passive_fire_structure,
       });
       extractionDebug = takeLastExtractorDebug();
+      extractor_items_count = items.length;
     } catch (err) {
       console.error("[parser_v2] extractor threw, falling back", err);
       anomalies.push("extractor_threw");
       extractionFailed = true;
       extractionDebug = takeLastExtractorDebug();
       tracker.fail("extraction", err);
+      chosen_path = "fallback_after_throw";
       try {
         items = await extractFallback({
           rawText: input.rawText,
@@ -325,6 +330,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           openAIKey: input.openAIKey,
         });
         fallbackDebug = takeLastExtractorDebug();
+        fallback_items_count = items.length;
       } catch (fallbackErr) {
         fallbackDebug = takeLastExtractorDebug();
         throw new ParserV2StageError(
@@ -345,6 +351,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       if (rollup.rows_received > 0 && rollup.rows_saved === 0) {
         anomalies.push("mapping_rejected_all_rows");
       }
+      chosen_path = "fallback";
       tracker.start("fallback_extraction");
       const fbStart = Date.now();
       try {
@@ -356,6 +363,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           openAIKey: input.openAIKey,
         });
         fallbackDebug = takeLastExtractorDebug();
+        fallback_items_count = items.length;
         tracker.succeed("fallback_extraction");
       } catch (err) {
         fallbackDebug = takeLastExtractorDebug();
@@ -617,6 +625,24 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         items,
       });
       dbItems = mapToQuoteItems({ items });
+      const rows_before_mapping = items.length;
+      const rows_after_mapping = dbItems.length;
+      const effective_extractor_count =
+        chosen_path === "primary" ? extractor_items_count : fallback_items_count;
+      console.log(
+        `[runParserV2] chosen_path=${chosen_path} extractor_items_count=${extractor_items_count} fallback_items_count=${fallback_items_count} rows_before_mapping=${rows_before_mapping} rows_after_mapping=${rows_after_mapping} quote_total_before_save=${totals.grand_total}`,
+      );
+      if (effective_extractor_count > 0 && rows_after_mapping === 0) {
+        anomalies.push("mapping_dropped_all_rows");
+        console.error(
+          `[runParserV2] mapping_dropped_all_rows chosen_path=${chosen_path} extractor_items_count=${effective_extractor_count} rows_after_mapping=0`,
+        );
+        throw new ParserV2StageError(
+          `mapping_dropped_all_rows: extractor produced ${effective_extractor_count} rows but mapper returned 0`,
+          "mappers",
+          tracker.snapshot(),
+        );
+      }
       tracker.succeed("mappers");
     } catch (err) {
       tracker.fail("mappers", err);
@@ -658,6 +684,12 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       multipath: multipathResult,
       dbPayload: { quote, items: dbItems },
       debug: {
+        chosen_path,
+        extractor_items_count,
+        fallback_items_count,
+        rows_before_mapping: items.length,
+        rows_after_mapping: dbItems.length,
+        quote_total_before_save: totals.grand_total,
         extraction: {
           extractor: extractorName,
           chunks: extractionDebug,

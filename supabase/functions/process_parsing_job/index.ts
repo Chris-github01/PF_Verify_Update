@@ -573,10 +573,32 @@ Deno.serve(async (req: Request) => {
             : "Excluded",
     }));
 
-    if (rows.length > 0) {
-      const { error: insErr } = await supabase.from("quote_items").insert(rows);
-      if (insErr) throw new Error(`Failed to insert quote items: ${insErr.message}`);
+    const rows_insert_attempted = rows.length;
+    let rows_insert_successful = 0;
+    if (rows_insert_attempted > 0) {
+      const { data: insData, error: insErr } = await supabase
+        .from("quote_items")
+        .insert(rows)
+        .select("id");
+      if (insErr) {
+        console.error(
+          `[process_parsing_job] database_insert_failed quote=${quoteId} rows_insert_attempted=${rows_insert_attempted} rows_insert_successful=0 error=${insErr.message}`,
+        );
+        throw new Error(`database_insert_failed: ${insErr.message}`);
+      }
+      rows_insert_successful = insData?.length ?? 0;
+      if (rows_insert_attempted > 0 && rows_insert_successful === 0) {
+        console.error(
+          `[process_parsing_job] database_insert_failed quote=${quoteId} rows_insert_attempted=${rows_insert_attempted} rows_insert_successful=0`,
+        );
+        throw new Error(
+          `database_insert_failed: attempted ${rows_insert_attempted} but 0 rows were inserted`,
+        );
+      }
     }
+    console.log(
+      `[process_parsing_job] persist_summary quote=${quoteId} items_input=${v2.items.length} rows_insert_attempted=${rows_insert_attempted} rows_insert_successful=${rows_insert_successful} quote_total_before_save=${v2.totals.grand_total} main_total=${mainTotal} grand_total=${grandTotal}`,
+    );
 
     const resolutionConfidence = v2.totals.confidence; // HIGH | MEDIUM | LOW
 
