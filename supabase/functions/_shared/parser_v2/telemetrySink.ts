@@ -62,62 +62,6 @@ export function markLlmCallDuration(durationMs: number, model?: string): void {
  * Called immediately after an OpenAI response body is parsed. Pass the
  * usage block verbatim; missing fields are handled gracefully.
  */
-/**
- * Extraction diagnostics — captured per-run so the UI can show exactly
- * what the extractor returned, even when zero rows were produced.
- */
-export type ExtractionDiagnostics = {
-  raw_response_sample: string | null;
-  raw_response_chars: number;
-  successful_responses: number;
-  empty_content_count: number;
-  malformed_json_count: number;
-  malformed_samples: string[];
-};
-
-let EXTRACTION_DIAGNOSTICS: ExtractionDiagnostics | null = null;
-
-export function installExtractionDiagnostics(): ExtractionDiagnostics {
-  EXTRACTION_DIAGNOSTICS = {
-    raw_response_sample: null,
-    raw_response_chars: 0,
-    successful_responses: 0,
-    empty_content_count: 0,
-    malformed_json_count: 0,
-    malformed_samples: [],
-  };
-  return EXTRACTION_DIAGNOSTICS;
-}
-
-export function clearExtractionDiagnostics(): void {
-  EXTRACTION_DIAGNOSTICS = null;
-}
-
-export function getExtractionDiagnostics(): ExtractionDiagnostics | null {
-  return EXTRACTION_DIAGNOSTICS;
-}
-
-export function recordExtractionResponse(content: string | null | undefined): void {
-  if (!EXTRACTION_DIAGNOSTICS) return;
-  if (content == null || content === "") {
-    EXTRACTION_DIAGNOSTICS.empty_content_count += 1;
-    return;
-  }
-  EXTRACTION_DIAGNOSTICS.successful_responses += 1;
-  EXTRACTION_DIAGNOSTICS.raw_response_chars += content.length;
-  if (EXTRACTION_DIAGNOSTICS.raw_response_sample == null) {
-    EXTRACTION_DIAGNOSTICS.raw_response_sample = content.slice(0, 500);
-  }
-}
-
-export function recordMalformedExtractionJson(content: string | null | undefined): void {
-  if (!EXTRACTION_DIAGNOSTICS) return;
-  EXTRACTION_DIAGNOSTICS.malformed_json_count += 1;
-  if (content && EXTRACTION_DIAGNOSTICS.malformed_samples.length < 3) {
-    EXTRACTION_DIAGNOSTICS.malformed_samples.push(content.slice(0, 300));
-  }
-}
-
 export function markResponseReceived(usage?: {
   prompt_tokens?: number;
   completion_tokens?: number;

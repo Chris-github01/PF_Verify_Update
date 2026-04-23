@@ -65,7 +65,13 @@ import { mapToQuotesTable } from "./mappers/mapToQuotesTable.ts";
 import { mapToQuoteItems } from "./mappers/mapToQuoteItems.ts";
 
 import { StageTracker, ParserV2StageError, type StageRecord } from "./stageTracker.ts";
-import { installActiveTracker, clearActiveTracker } from "./telemetrySink.ts";
+import {
+  installActiveTracker,
+  clearActiveTracker,
+  installExtractionDiagnostics,
+  clearExtractionDiagnostics,
+  type ExtractionDiagnostics,
+} from "./telemetrySink.ts";
 
 import { runPathB, type PathBResult } from "./multipath/pathB_commercialTotals.ts";
 import { runPathC, type PathCResult } from "./multipath/pathC_deterministicStructure.ts";
@@ -138,11 +144,72 @@ export type ParserV2Output = {
     pathB: PathBResult;
     pathC: PathCResult;
   };
+  extraction_diagnostics: {
+    primary: ExtractionQualitySummary;
+    fallback: ExtractionQualitySummary | null;
+  };
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
     items: ReturnType<typeof mapToQuoteItems>;
   };
 };
+
+export type ExtractionQualitySummary = {
+  rows_returned: number;
+  main_total: number | null;
+  optional_total: number | null;
+  totals_found: boolean;
+  passed: boolean;
+  empty_reason: string | null;
+  raw_response_chars: number;
+  raw_response_sample: string | null;
+  successful_responses: number;
+  empty_content_count: number;
+  malformed_json_count: number;
+  malformed_samples: string[];
+};
+
+function evaluateExtractionQuality(
+  items: ParsedLineItemV2[],
+  diagnostics: ExtractionDiagnostics,
+): ExtractionQualitySummary {
+  const mainSum = items
+    .filter((it) => it.scope_category === "main")
+    .reduce((s, it) => s + (it.total_price ?? 0), 0);
+  const optionalSum = items
+    .filter((it) => it.scope_category === "optional")
+    .reduce((s, it) => s + (it.total_price ?? 0), 0);
+  const main_total = mainSum > 0 ? mainSum : null;
+  const optional_total = optionalSum > 0 ? optionalSum : null;
+  const totals_found = main_total != null || optional_total != null;
+  const rows_returned = items.length;
+
+  let empty_reason: string | null = null;
+  if (rows_returned === 0 && !totals_found) {
+    if (diagnostics.malformed_json_count > 0 && diagnostics.successful_responses === 0) {
+      empty_reason = "malformed_output";
+    } else if (diagnostics.successful_responses === 0) {
+      empty_reason = "no_llm_response";
+    } else {
+      empty_reason = "extractor_empty_output";
+    }
+  }
+
+  return {
+    rows_returned,
+    main_total,
+    optional_total,
+    totals_found,
+    passed: rows_returned >= 1 || totals_found,
+    empty_reason,
+    raw_response_chars: diagnostics.raw_response_chars,
+    raw_response_sample: diagnostics.raw_response_sample,
+    successful_responses: diagnostics.successful_responses,
+    empty_content_count: diagnostics.empty_content_count,
+    malformed_json_count: diagnostics.malformed_json_count,
+    malformed_samples: diagnostics.malformed_samples,
+  };
+}
 
 type ExtractorFn = (ctx: {
   rawText: string;
@@ -295,8 +362,9 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
 
     tracker.start("extraction");
     const extractStart = Date.now();
+    const primaryDiag = installExtractionDiagnostics();
     let items: ParsedLineItemV2[] = [];
-    let extractionFailed = false;
+    let extractionThrew = false;
     try {
       items = await extractor({
         rawText: effectiveRawText,
@@ -307,33 +375,46 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         structure: passive_fire_structure,
       });
     } catch (err) {
-      console.error("[parser_v2] extractor threw, falling back", err);
+      console.error("[parser_v2] extractor threw", err);
       anomalies.push("extractor_threw");
-      extractionFailed = true;
+      extractionThrew = true;
       tracker.fail("extraction", err);
-      try {
-        items = await extractFallback({
-          rawText: input.rawText,
-          pages: input.pages,
-          quoteType: quoteType.quoteType,
-          supplier: supplier.supplierName,
-          openAIKey: input.openAIKey,
-        });
-      } catch (fallbackErr) {
-        throw new ParserV2StageError(
-          formatMessage(fallbackErr),
+    }
+    durations.extraction = Date.now() - extractStart;
+    const primaryQuality = evaluateExtractionQuality(items, primaryDiag);
+    clearExtractionDiagnostics();
+
+    // Quality gate: an extractor that returned nothing usable is FAILED,
+    // not PASSED. A stage with zero rows and no totals is not a success.
+    if (!extractionThrew) {
+      if (primaryQuality.passed) {
+        tracker.succeed("extraction");
+      } else {
+        anomalies.push(
+          primaryQuality.empty_reason === "malformed_output"
+            ? "extractor_malformed_output"
+            : "extractor_empty_output",
+        );
+        tracker.fail(
           "extraction",
-          tracker.snapshot(),
+          new Error(
+            primaryQuality.empty_reason === "malformed_output"
+              ? "malformed_output"
+              : "extractor_empty_output",
+          ),
         );
       }
     }
-    if (!extractionFailed) tracker.succeed("extraction");
-    durations.extraction = Date.now() - extractStart;
 
-    if (items.length === 0 && extractor !== extractFallback) {
-      anomalies.push("primary_extractor_zero_rows");
+    // Fallback extraction runs whenever the primary produced nothing
+    // usable (zero rows AND no totals) — same quality gate applies.
+    let fallbackQuality: ExtractionQualitySummary | null = null;
+    if (!primaryQuality.passed && extractor !== extractFallback) {
+      if (!extractionThrew) anomalies.push("primary_extractor_zero_rows");
       tracker.start("fallback_extraction");
       const fbStart = Date.now();
+      const fbDiag = installExtractionDiagnostics();
+      let fbThrew = false;
       try {
         items = await extractFallback({
           rawText: input.rawText,
@@ -342,16 +423,33 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
         });
-        tracker.succeed("fallback_extraction");
       } catch (err) {
+        fbThrew = true;
         tracker.fail("fallback_extraction", err);
-        throw new ParserV2StageError(
-          formatMessage(err),
-          "fallback_extraction",
-          tracker.snapshot(),
-        );
+        anomalies.push("fallback_extractor_threw");
       }
       durations.fallback_extraction = Date.now() - fbStart;
+      fallbackQuality = evaluateExtractionQuality(items, fbDiag);
+      clearExtractionDiagnostics();
+      if (!fbThrew) {
+        if (fallbackQuality.passed) {
+          tracker.succeed("fallback_extraction");
+        } else {
+          anomalies.push(
+            fallbackQuality.empty_reason === "malformed_output"
+              ? "fallback_malformed_output"
+              : "fallback_empty_output",
+          );
+          tracker.fail(
+            "fallback_extraction",
+            new Error(
+              fallbackQuality.empty_reason === "malformed_output"
+                ? "malformed_output"
+                : "extractor_empty_output",
+            ),
+          );
+        }
+      }
     }
 
     let passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null = null;
@@ -557,11 +655,23 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     multipathResult.decision.selected_total > 0 &&
     multipathResult.decision.confidence !== "LOW";
 
+  // Gate 7: overall success requires valid rows OR a valid total.
+  // Completed stages alone are not sufficient — a quote with zero items
+  // and zero recovered total is a failure, not a "green pass".
+  const hasValidOutput =
+    items.length > 0 ||
+    (totals.grand_total != null && totals.grand_total > 0) ||
+    multipathRecovered;
+  if (!hasValidOutput) {
+    anomalies.push("no_business_output");
+    combinedAnomalies.push("no_business_output");
+  }
+
   const requires_review =
     confidence.level === "LOW" ||
     !totals.ok ||
     missing.missing.length > 0 ||
-    (items.length === 0 && !multipathRecovered) ||
+    !hasValidOutput ||
     hasErrorAnomaly ||
     (totals.variants_materially_different &&
       totals.reconciliation_confidence === "LOW") ||
@@ -640,6 +750,10 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_validation,
       passive_fire_final,
       multipath: multipathResult,
+      extraction_diagnostics: {
+        primary: primaryQuality,
+        fallback: fallbackQuality,
+      },
       dbPayload: { quote, items: dbItems },
     };
   } catch (err) {
