@@ -49,10 +49,13 @@ Deno.serve(async (req: Request) => {
 
     const attemptCount = (job.attempt_count as number) ?? 0;
     const priorLlmFailed = job.llm_attempted === true && job.llm_fail_reason != null;
+    const isPassiveFire = String(job.trade ?? "").toLowerCase() === "passive_fire";
 
-    // Loop-breaker: if LLM already failed and we've had 2+ attempts, inform the caller
-    // that the next run will skip LLM entirely (handled in process_parsing_job)
-    const willSkipLlm = attemptCount >= 2 || (priorLlmFailed && attemptCount >= 1);
+    // Loop-breaker: only skip LLM when a prior attempt actually executed the LLM
+    // and recorded a concrete failure reason. A raw attempt_count heuristic is a
+    // false positive when Parser V2 times out before llm_attempted is set.
+    // Passive_fire stays on the V2 path unconditionally while we verify it.
+    const willSkipLlm = !isPassiveFire && priorLlmFailed && attemptCount >= 2;
 
     console.log(`[Resume] Job ${jobId} (${job.supplier_name}) — attempt_count=${attemptCount}, priorLlmFailed=${priorLlmFailed}, willSkipLlm=${willSkipLlm}`);
 
