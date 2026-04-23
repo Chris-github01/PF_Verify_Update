@@ -29,8 +29,20 @@ export type ExtractorContext = {
   supplier: string;
   openAIKey: string;
   extraUserContext?: Record<string, unknown>;
-  rowMapper?: (raw: Record<string, unknown>, trade: string) => ParsedLineItemV2;
+  rowMapper?: (raw: Record<string, unknown>, trade: string) => ParsedLineItemV2 | null;
 };
+
+export type ExtractorEmptyReason =
+  | "no_items_key"
+  | "parse_failed"
+  | "schema_failed"
+  | "all_rows_invalid"
+  | "empty_array"
+  | "mapper_rejected"
+  | "empty_response_content"
+  | "chunk_timeout_or_failure"
+  | "skipped_no_budget"
+  | null;
 
 export type ExtractorChunkDebug = {
   chunk_index: number;
@@ -41,6 +53,10 @@ export type ExtractorChunkDebug = {
   schema_error: string | null;
   rows_before_validation: number;
   rows_after_validation: number;
+  valid_after_mapper: number;
+  empty_reason: ExtractorEmptyReason;
+  salvaged: boolean;
+  root_alias_used: string | null;
 };
 
 export type ExtractorResult = {
@@ -52,7 +68,7 @@ export type ExtractorResult = {
   debug: ExtractorChunkDebug[];
 };
 
-const MAX_RAW_RESPONSE_PERSIST = 4000;
+const MAX_RAW_RESPONSE_PERSIST = 20_000;
 
 let LAST_EXTRACTOR_DEBUG: ExtractorChunkDebug[] = [];
 
@@ -108,6 +124,10 @@ export async function runExtractorLLMWithTelemetry(
           schema_error: null,
           rows_before_validation: 0,
           rows_after_validation: 0,
+          valid_after_mapper: 0,
+          empty_reason: "skipped_no_budget",
+          salvaged: false,
+          root_alias_used: null,
         },
       };
     }
@@ -134,6 +154,10 @@ export async function runExtractorLLMWithTelemetry(
           schema_error: null,
           rows_before_validation: 0,
           rows_after_validation: 0,
+          valid_after_mapper: 0,
+          empty_reason: "chunk_timeout_or_failure",
+          salvaged: false,
+          root_alias_used: null,
         },
       };
     }
@@ -148,6 +172,10 @@ export async function runExtractorLLMWithTelemetry(
         schema_error: result.schemaError,
         rows_before_validation: result.rows?.length ?? 0,
         rows_after_validation: result.rows?.length ?? 0,
+        valid_after_mapper: 0,
+        empty_reason: result.emptyReason,
+        salvaged: result.salvaged,
+        root_alias_used: result.rootAliasUsed,
       },
     };
   };
@@ -165,11 +193,26 @@ export async function runExtractorLLMWithTelemetry(
       .map((_, offset) => runChunk(start + offset));
     const results = await Promise.all(batch);
     for (const r of results) {
-      debug.push(r.debug);
       if (r.rows != null) {
         succeeded++;
-        for (const row of r.rows) all.push(mapper(row as Record<string, unknown>, ctx.trade));
+        let validCount = 0;
+        for (const row of r.rows) {
+          const mapped = mapper(row as Record<string, unknown>, ctx.trade);
+          if (mapped) {
+            all.push(mapped);
+            validCount++;
+          }
+        }
+        r.debug.valid_after_mapper = validCount;
+        if (r.debug.empty_reason == null && validCount === 0) {
+          if ((r.rows?.length ?? 0) === 0) {
+            r.debug.empty_reason = "empty_array";
+          } else {
+            r.debug.empty_reason = "all_rows_invalid";
+          }
+        }
       }
+      debug.push(r.debug);
     }
   }
 
@@ -197,6 +240,9 @@ type ChunkCallResult = {
   parsedJson: unknown | null;
   parseError: string | null;
   schemaError: string | null;
+  emptyReason: ExtractorEmptyReason;
+  salvaged: boolean;
+  rootAliasUsed: string | null;
 };
 
 async function callOpenAIWithRetry(args: {
@@ -242,37 +288,94 @@ async function callOpenAIWithRetry(args: {
       markLlmCallDuration(Date.now() - reqStart, EXTRACTOR_MODEL);
       markResponseReceived(json?.usage);
       const content = json?.choices?.[0]?.message?.content;
-      if (!content) {
+      if (!content || typeof content !== "string") {
         return {
           rows: [],
           rawResponseText: null,
           parsedJson: null,
           parseError: "empty_response_content",
           schemaError: null,
+          emptyReason: "empty_response_content",
+          salvaged: false,
+          rootAliasUsed: null,
         };
       }
-      const rawResponseText = typeof content === "string"
-        ? content.slice(0, MAX_RAW_RESPONSE_PERSIST)
-        : null;
+      const rawResponseText = content.slice(0, MAX_RAW_RESPONSE_PERSIST);
+      const stripped = stripJsonFences(content);
+      let parsed: unknown = null;
+      let parseError: string | null = null;
       try {
-        const parsed = JSON.parse(content);
-        const hasItemsArray = Array.isArray(parsed?.items);
-        return {
-          rows: hasItemsArray ? parsed.items : [],
-          rawResponseText,
-          parsedJson: parsed,
-          parseError: null,
-          schemaError: hasItemsArray ? null : "missing_items_array",
-        };
+        parsed = JSON.parse(stripped);
       } catch (parseErr) {
+        parseError = (parseErr as Error)?.message ?? "json_parse_failed";
+      }
+
+      if (parsed != null) {
+        const picked = pickRowsArray(parsed);
+        if (picked.rows != null) {
+          if (picked.rows.length === 0) {
+            return {
+              rows: [],
+              rawResponseText,
+              parsedJson: parsed,
+              parseError: null,
+              schemaError: null,
+              emptyReason: "empty_array",
+              salvaged: false,
+              rootAliasUsed: picked.alias,
+            };
+          }
+          return {
+            rows: picked.rows,
+            rawResponseText,
+            parsedJson: parsed,
+            parseError: null,
+            schemaError: null,
+            emptyReason: null,
+            salvaged: false,
+            rootAliasUsed: picked.alias,
+          };
+        }
+        // parsed ok, but no recognised items array
         return {
           rows: [],
           rawResponseText,
-          parsedJson: null,
-          parseError: (parseErr as Error)?.message ?? "json_parse_failed",
-          schemaError: null,
+          parsedJson: parsed,
+          parseError: null,
+          schemaError: "no_items_key",
+          emptyReason: "no_items_key",
+          salvaged: false,
+          rootAliasUsed: null,
         };
       }
+
+      // JSON.parse failed — try regex salvage
+      const salvaged = salvageJsonRows(content);
+      if (salvaged.length > 0) {
+        console.warn(
+          `[extractor:${args.trade}] chunk ${args.chunkIndex} JSON parse failed — salvaged ${salvaged.length} rows via regex`,
+        );
+        return {
+          rows: salvaged,
+          rawResponseText,
+          parsedJson: null,
+          parseError,
+          schemaError: null,
+          emptyReason: null,
+          salvaged: true,
+          rootAliasUsed: "salvage",
+        };
+      }
+      return {
+        rows: [],
+        rawResponseText,
+        parsedJson: null,
+        parseError,
+        schemaError: null,
+        emptyReason: "parse_failed",
+        salvaged: false,
+        rootAliasUsed: null,
+      };
     } catch (err) {
       lastErr = err;
       const backoff = 400 * Math.pow(2, attempt);
@@ -286,17 +389,90 @@ async function callOpenAIWithRetry(args: {
   return null;
 }
 
-export function normaliseRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 {
+function stripJsonFences(s: string): string {
+  let out = s.trim();
+  // Strip leading ```json or ``` fences
+  out = out.replace(/^```(?:json|JSON)?\s*\n?/i, "");
+  // Strip trailing ```
+  out = out.replace(/\n?```\s*$/i, "");
+  return out.trim();
+}
+
+const ROOT_ALIASES = ["items", "line_items", "lineItems", "rows", "quote_items", "quoteItems", "data"];
+
+function pickRowsArray(
+  parsed: unknown,
+): { rows: unknown[] | null; alias: string | null } {
+  if (parsed == null || typeof parsed !== "object") return { rows: null, alias: null };
+  if (Array.isArray(parsed)) return { rows: parsed, alias: "root_array" };
+  const obj = parsed as Record<string, unknown>;
+  for (const alias of ROOT_ALIASES) {
+    const v = obj[alias];
+    if (Array.isArray(v)) return { rows: v, alias };
+  }
+  // Look one level deeper for common wrapper shapes
+  for (const k of Object.keys(obj)) {
+    const v = obj[k];
+    if (v != null && typeof v === "object" && !Array.isArray(v)) {
+      const inner = v as Record<string, unknown>;
+      for (const alias of ROOT_ALIASES) {
+        const iv = inner[alias];
+        if (Array.isArray(iv)) return { rows: iv, alias: `${k}.${alias}` };
+      }
+    }
+  }
+  return { rows: null, alias: null };
+}
+
+/** Recover row-like `{...}` objects from free-text when JSON.parse fails. */
+function salvageJsonRows(raw: string): unknown[] {
+  const out: unknown[] = [];
+  const stripped = stripJsonFences(raw);
+  const re = /\{[^{}]*?"(?:description|desc)"\s*:\s*"[^"]*"[^{}]*\}/gs;
+  const matches = stripped.match(re);
+  if (!matches) return out;
+  for (const m of matches) {
+    try {
+      const obj = JSON.parse(m);
+      if (obj && typeof obj === "object") out.push(obj);
+    } catch {
+      // ignore — best-effort salvage
+    }
+  }
+  return out;
+}
+
+/**
+ * Map a raw LLM row into our canonical line-item shape. Tolerates field
+ * aliases (desc/description, qty/quantity, rate/unit_price, total/total_price/amount).
+ * Returns `null` if the row does not meet the minimum threshold:
+ *   - non-empty description
+ *   - AND at least one of (quantity, unit_price, total_price) is numeric
+ */
+export function normaliseRow(
+  r: Record<string, unknown>,
+  trade: string,
+): ParsedLineItemV2 | null {
+  const description = String(r.description ?? r.desc ?? r.name ?? "").trim();
+  const quantity = toNumberOrNull(r.quantity ?? r.qty ?? r.qnty);
+  const unit_price = toNumberOrNull(r.unit_price ?? r.rate ?? r.unitRate ?? r.unit_rate);
+  const total_price = toNumberOrNull(r.total_price ?? r.total ?? r.amount ?? r.line_total ?? r.lineTotal);
+
+  if (!description) return null;
+  if (quantity == null && unit_price == null && total_price == null) return null;
+
   return {
-    item_number: r.item_number == null ? null : String(r.item_number),
-    description: String(r.description ?? "").trim(),
-    quantity: toNumberOrNull(r.quantity),
-    unit: r.unit == null ? null : String(r.unit),
-    unit_price: toNumberOrNull(r.unit_price),
-    total_price: toNumberOrNull(r.total_price),
-    scope_category: normaliseScope(r.scope_category),
+    item_number: r.item_number == null && r.itemNumber == null && r.line_id == null
+      ? null
+      : String(r.item_number ?? r.itemNumber ?? r.line_id),
+    description,
+    quantity,
+    unit: r.unit == null && r.uom == null ? null : String(r.unit ?? r.uom),
+    unit_price,
+    total_price,
+    scope_category: normaliseScope(r.scope_category ?? r.scope ?? r.category),
     trade: String(r.trade ?? trade),
-    sub_scope: r.sub_scope == null ? null : String(r.sub_scope),
+    sub_scope: r.sub_scope == null && r.subScope == null ? null : String(r.sub_scope ?? r.subScope),
     frr: r.frr == null ? null : String(r.frr),
     source: "llm",
     confidence: clamp01(Number(r.confidence ?? 0.6)),
@@ -312,7 +488,7 @@ function normaliseScope(v: unknown): "main" | "optional" | "excluded" {
 
 function toNumberOrNull(v: unknown): number | null {
   if (v == null || v === "") return null;
-  const n = typeof v === "number" ? v : Number(String(v).replace(/[$,\s]/g, ""));
+  const n = typeof v === "number" ? v : Number(String(v).replace(/[$,\s()]/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 

@@ -170,6 +170,10 @@ export type ParserV2Output = {
       chunks: ExtractorChunkDebug[];
       rows_before_validation: number;
       rows_after_validation: number;
+      valid_after_mapper: number;
+      empty_reasons: string[];
+      salvaged_chunks: number;
+      root_aliases_used: string[];
       input_sources: ExtractorInputSources;
       render_hints_attached: boolean;
     };
@@ -177,6 +181,8 @@ export type ParserV2Output = {
       chunks: ExtractorChunkDebug[];
       rows_before_validation: number;
       rows_after_validation: number;
+      valid_after_mapper: number;
+      empty_reasons: string[];
     } | null;
     render: {
       render_enabled: boolean;
@@ -851,6 +857,18 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           chunks: extractionDebug,
           rows_before_validation: extractionDebug.reduce((s, c) => s + c.rows_before_validation, 0),
           rows_after_validation: extractionDebug.reduce((s, c) => s + c.rows_after_validation, 0),
+          valid_after_mapper: extractionDebug.reduce((s, c) => s + (c.valid_after_mapper ?? 0), 0),
+          empty_reasons: extractionDebug
+            .map((c) => c.empty_reason)
+            .filter((r): r is string => !!r),
+          salvaged_chunks: extractionDebug.filter((c) => c.salvaged).length,
+          root_aliases_used: Array.from(
+            new Set(
+              extractionDebug
+                .map((c) => c.root_alias_used)
+                .filter((a): a is string => !!a),
+            ),
+          ),
           input_sources: extractorInputSources,
           render_hints_attached: renderHintsForExtractor != null,
         },
@@ -859,6 +877,10 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
               chunks: fallbackDebug,
               rows_before_validation: fallbackDebug.reduce((s, c) => s + c.rows_before_validation, 0),
               rows_after_validation: fallbackDebug.reduce((s, c) => s + c.rows_after_validation, 0),
+              valid_after_mapper: fallbackDebug.reduce((s, c) => s + (c.valid_after_mapper ?? 0), 0),
+              empty_reasons: fallbackDebug
+                .map((c) => c.empty_reason)
+                .filter((r): r is string => !!r),
             }
           : null,
         render: {
