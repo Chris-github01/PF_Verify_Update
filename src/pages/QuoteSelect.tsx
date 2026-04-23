@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp, Bug, Eye, Code, Download, ShieldCheck, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { CheckSquare, Square, Info, ArrowRight, AlertCircle, CheckCircle, Layers, FlaskConical, X, ChevronDown, ChevronUp, Bug, Eye, Code, Download, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrade } from '../lib/tradeContext';
 import { classifyParsedQuoteRows } from '../lib/classification/classifyParsedQuoteRows';
@@ -1321,18 +1321,6 @@ export default function QuoteSelect({
 
   useEffect(() => {
     loadQuotes();
-
-    if (!projectId) return;
-    const channel = supabase
-      .channel(`quotes_parse_status_${projectId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'quotes', filter: `project_id=eq.${projectId}` },
-        () => { loadQuotes(); },
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, [projectId, dashboardMode, currentTrade]);
 
   const loadQuotes = async () => {
@@ -1360,7 +1348,6 @@ export default function QuoteSelect({
       let itemsByQuote: Record<string, { quantity: number; unit_price: number; total_price: number; description: string }[]> = {};
 
       let fileUrlByQuote: Record<string, string> = {};
-      let jobIdByQuote: Record<string, string> = {};
 
       if (quoteIds.length > 0) {
         const { data: allItems } = await supabase
@@ -1378,18 +1365,14 @@ export default function QuoteSelect({
 
         const { data: parsingJobs } = await supabase
           .from('parsing_jobs')
-          .select('id, quote_id, file_url, created_at')
+          .select('quote_id, file_url')
           .in('quote_id', quoteIds)
-          .order('created_at', { ascending: false });
+          .not('file_url', 'is', null);
 
         if (parsingJobs) {
           for (const job of parsingJobs) {
-            if (!job.quote_id) continue;
-            if (job.file_url && !fileUrlByQuote[job.quote_id]) {
+            if (job.quote_id && job.file_url && !fileUrlByQuote[job.quote_id]) {
               fileUrlByQuote[job.quote_id] = job.file_url;
-            }
-            if (!jobIdByQuote[job.quote_id]) {
-              jobIdByQuote[job.quote_id] = job.id;
             }
           }
         }
@@ -1430,7 +1413,6 @@ export default function QuoteSelect({
         return {
           ...quote,
           file_url: fileUrlByQuote[quote.id] ?? quote.file_url ?? null,
-          job_id: jobIdByQuote[quote.id] ?? null,
           items_count: (quote.inserted_items_count && quote.inserted_items_count > 0)
             ? quote.inserted_items_count
             : (quote.final_items_count && quote.final_items_count > 0)
@@ -1448,33 +1430,6 @@ export default function QuoteSelect({
       setMessage({ type: 'error', text: `Failed to load quotes: ${error instanceof Error ? error.message : 'Unknown error'}` });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const retryParsing = async (jobId: string | null | undefined, quoteId: string) => {
-    if (!jobId) {
-      setMessage({ type: 'error', text: 'No parsing job found for this quote. Please re-upload.' });
-      return;
-    }
-    try {
-      setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, parse_status: 'processing' } : q));
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resume_parsing_job`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ jobId }),
-      });
-      if (!resp.ok) {
-        const body = await resp.text();
-        throw new Error(body || `HTTP ${resp.status}`);
-      }
-      setMessage({ type: 'success', text: 'Retry dispatched. Parsing will resume shortly.' });
-    } catch (err) {
-      console.error('Retry failed:', err);
-      setMessage({ type: 'error', text: `Retry failed: ${err instanceof Error ? err.message : 'Unknown error'}` });
     }
   };
 
@@ -1730,21 +1685,9 @@ export default function QuoteSelect({
                               </p>
                             )}
                           </div>
-                          {quote.parse_status === 'processing' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap bg-blue-500/20 text-blue-300 border-blue-500/30">
-                              <Loader2 size={11} className="animate-spin" />
-                              Processing Quote...
-                            </span>
-                          ) : quote.parse_status === 'failed' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap bg-red-500/20 text-red-300 border-red-500/30">
-                              <AlertCircle size={11} />
-                              Failed
-                            </span>
-                          ) : (
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${getStatusColor(quote.status)}`}>
-                              {getStatusLabel(quote.status)}
-                            </span>
-                          )}
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${getStatusColor(quote.status)}`}>
+                            {getStatusLabel(quote.status)}
+                          </span>
                         </div>
 
                         <div className="flex items-center gap-4 text-xs flex-wrap">
@@ -1771,17 +1714,7 @@ export default function QuoteSelect({
                     </div>
                   </button>
 
-                  <div className="flex items-center gap-2 px-3 border-l border-slate-700/50">
-                    {quote.parse_status === 'failed' && (
-                      <button
-                        onClick={() => retryParsing((quote as any).job_id, quote.id)}
-                        title="Retry parsing"
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-300 text-xs font-medium transition-all whitespace-nowrap"
-                      >
-                        <RefreshCw size={13} />
-                        Retry
-                      </button>
-                    )}
+                  <div className="flex items-center px-3 border-l border-slate-700/50">
                     <button
                       onClick={() => setParseModal({ quoteId: quote.id, quoteName: quote.supplier_name, fileUrl: quote.file_url ?? null, tradeType: quote.trade ?? currentTrade })}
                       title="View parse results"
