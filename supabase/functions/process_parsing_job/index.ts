@@ -25,37 +25,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const BUILD_VERSION = "2026-04-23-slow-finalize";
-
-// Required inner stages that must all have passed for a run to be considered
-// semantically successful even if the outer watchdog already fired. If these
-// are all green, the job is committed as success (or success_slow_finalize).
-const REQUIRED_INNER_STAGES = [
-  "classification",
-  "pf_sanitize",
-  "pf_structure",
-  "extraction",
-  "pf_authoritative_total",
-  "validation",
-  "mappers",
-] as const;
-
-const TERMINAL_MAP_STAGE = "mappers";
-
-function allRequiredStagesPassed(stages: StageRecord[]): boolean {
-  const byName = new Map(stages.map((s) => [s.name, s]));
-  for (const name of REQUIRED_INNER_STAGES) {
-    const record = byName.get(name);
-    if (!record) return false;
-    if (record.status !== "passed" && record.status !== "skipped") return false;
-  }
-  return true;
-}
-
-function mapToDatabasePassed(stages: StageRecord[]): boolean {
-  const record = stages.find((s) => s.name === TERMINAL_MAP_STAGE);
-  return !!record && (record.status === "passed" || record.status === "skipped");
-}
+const BUILD_VERSION = "2026-04-22-v2-only";
 
 interface ParsingJob {
   id: string;
@@ -276,22 +246,9 @@ Deno.serve(async (req: Request) => {
     }
 
     let v2: ParserV2Output;
-    const requestStart = Date.now();
     const v2Start = Date.now();
     const V2_TIMEOUT_MS = 110_000;
-    // Grace window after the soft watchdog fires. If the inner parser is still
-    // progressing (stages passing under the durable sink) we give it this long
-    // to finish before admitting defeat. Kept inside edge runtime wall clock.
-    const V2_GRACE_MS = 25_000;
     outerTracker.start("parser_v2");
-    let slowFinalize = false;
-    let successCommittedAt: string | null = null;
-    let timeoutFiredAt: string | null = null;
-
-    await supabase.from("parsing_jobs").update({
-      parser_started_at: new Date(v2Start).toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq("id", jobId);
 
     // Durable telemetry: persist pipeline_stages after every stage transition
     // so that an outer timeout never destroys the evidence of where we died.
@@ -311,6 +268,7 @@ Deno.serve(async (req: Request) => {
     const persistStages = (stages: StageRecord[]): void => {
       liveInnerStages = stages;
       const now = Date.now();
+      // Coalesce writes: at most every 400ms, but always allow terminal transitions
       const hasActive = stages.some((s) => s.status === "running");
       if (!hasActive || now - lastPersistAt >= 400) {
         lastPersistAt = now;
@@ -326,155 +284,54 @@ Deno.serve(async (req: Request) => {
       }, 400);
     };
 
-    // Cancellable watchdog. We keep a handle so we can clear it the moment
-    // the parser resolves — a stale timer must never reject a committed
-    // success promise. We also track whether the parser settled, so the
-    // catch block can distinguish "real parser failure" from "slow parser
-    // that kept running".
-    let watchdogHandle: number | null = null;
-    let watchdogRejected = false;
-    let parserSettled = false;
-    let parserResolvedValue: ParserV2Output | null = null;
-    let parserRejectedError: unknown = null;
-
-    const v2Promise = runParserV2({
-      rawText,
-      pages: allPages,
-      fileName: typedJob.filename,
-      supplierHint: typedJob.supplier_name,
-      tradeHint: trade,
-      projectId: typedJob.project_id,
-      organisationId: typedJob.organisation_id,
-      quoteId: typedJob.quote_id ?? undefined,
-      openAIKey: openAiKey,
-      persistStages,
-    }).then(
-      (value) => {
-        parserSettled = true;
-        parserResolvedValue = value;
-        return value;
-      },
-      (err) => {
-        parserSettled = true;
-        parserRejectedError = err;
-        throw err;
-      },
-    );
-
-    const watchdogPromise = new Promise<never>((_, reject) => {
-      watchdogHandle = setTimeout(() => {
-        watchdogRejected = true;
-        timeoutFiredAt = new Date().toISOString();
-        reject(new Error(`parser_v2_timeout: exceeded ${V2_TIMEOUT_MS}ms`));
-      }, V2_TIMEOUT_MS) as unknown as number;
-    });
-
-    const clearWatchdog = () => {
-      if (watchdogHandle != null) {
-        clearTimeout(watchdogHandle);
-        watchdogHandle = null;
-      }
-    };
-
     try {
-      try {
-        v2 = await Promise.race([v2Promise, watchdogPromise]);
-        clearWatchdog();
-        outerTracker.succeed("parser_v2");
-      } catch (raceErr) {
-        // If the parser itself rejected (not the watchdog), re-throw — it's a real failure.
-        if (!watchdogRejected) {
-          clearWatchdog();
-          throw raceErr;
-        }
-
-        // Watchdog fired first. If all required inner stages already passed
-        // (durably persisted by the sink), the parser has effectively succeeded;
-        // just await its resolution. Otherwise give it a grace window.
-        if (allRequiredStagesPassed(liveInnerStages) && parserSettled && parserResolvedValue) {
-          slowFinalize = true;
-          v2 = parserResolvedValue;
-          outerTracker.succeed("parser_v2");
-        } else {
-          try {
-            const graceTimeout = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("grace_period_exceeded")), V2_GRACE_MS),
-            );
-            v2 = await Promise.race([v2Promise, graceTimeout]);
-            slowFinalize = true;
-            outerTracker.succeed("parser_v2");
-          } catch (graceErr) {
-            // Grace also expired. Last-chance check: if the durable sink
-            // recorded all required stages as passed in the meantime, treat
-            // as slow success using the resolved value if any.
-            if (
-              allRequiredStagesPassed(liveInnerStages) &&
-              parserSettled &&
-              parserResolvedValue
-            ) {
-              slowFinalize = true;
-              v2 = parserResolvedValue;
-              outerTracker.succeed("parser_v2");
-            } else {
-              throw raceErr;
-            }
-          }
-        }
-      }
+      const v2Promise = runParserV2({
+        rawText,
+        pages: allPages,
+        fileName: typedJob.filename,
+        supplierHint: typedJob.supplier_name,
+        tradeHint: trade,
+        projectId: typedJob.project_id,
+        organisationId: typedJob.organisation_id,
+        quoteId: typedJob.quote_id ?? undefined,
+        openAIKey: openAiKey,
+        persistStages,
+      });
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(
+          () => reject(new Error(`parser_v2_timeout: exceeded ${V2_TIMEOUT_MS}ms`)),
+          V2_TIMEOUT_MS,
+        );
+      });
+      v2 = await Promise.race([v2Promise, timeoutPromise]);
+      outerTracker.succeed("parser_v2");
     } catch (v2Err) {
-      clearWatchdog();
       const msg = v2Err instanceof Error ? v2Err.message : String(v2Err);
       const stack = v2Err instanceof Error ? v2Err.stack?.slice(0, 1500) : undefined;
       console.error("[V2] threw:", msg);
       outerTracker.fail("parser_v2", v2Err);
-
-      // Hard guard: if Map to Database already passed, we must not fail
-      // the job. Treat as slow finalize instead.
       const innerStages =
         v2Err instanceof ParserV2StageError && v2Err.stages.length > 0
           ? v2Err.stages
           : liveInnerStages;
-
-      if (mapToDatabasePassed(innerStages) && parserResolvedValue) {
-        console.warn("[V2] watchdog fired after Map to Database passed; committing slow finalize");
-        slowFinalize = true;
-        v2 = parserResolvedValue;
-        // fall through to the success-commit path below
-      } else {
-        const failedInnerStage =
-          v2Err instanceof ParserV2StageError
-            ? v2Err.failedStage
-            : innerStages.find((s) => s.status === "running")?.name ?? null;
-        const report = buildFailureReport("parser_v2_exception", msg, {
-          stack,
-          duration_ms: Date.now() - v2Start,
-          failed_inner_stage: failedInnerStage,
-          timeout_fired_at: timeoutFiredAt,
-        });
-        const combined = [...outerTracker.snapshot(), ...innerStages];
-        await persistFailure(
-          supabase,
-          typedJob,
-          jobId,
-          report,
-          null,
-          combined,
-          {
-            parserStartedAt: new Date(v2Start).toISOString(),
-            timeoutFiredAt,
-            pureParsingMs: Date.now() - v2Start,
-            totalRuntimeMs: Date.now() - requestStart,
-          },
-        );
-        return new Response(
-          JSON.stringify({ success: false, jobId, error: msg, stage: report.stage }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+      const failedInnerStage =
+        v2Err instanceof ParserV2StageError
+          ? v2Err.failedStage
+          : innerStages.find((s) => s.status === "running")?.name ?? null;
+      const report = buildFailureReport("parser_v2_exception", msg, {
+        stack,
+        duration_ms: Date.now() - v2Start,
+        failed_inner_stage: failedInnerStage,
+      });
+      const combined = [...outerTracker.snapshot(), ...innerStages];
+      await persistFailure(supabase, typedJob, jobId, report, null, combined);
+      return new Response(
+        JSON.stringify({ success: false, jobId, error: msg, stage: report.stage }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const v2DurationMs = Date.now() - v2Start;
-    const finalizeStart = Date.now();
     console.log(`[V2] done in ${v2DurationMs}ms items=${v2.items.length} total=${v2.totals.grand_total} confidence=${v2.totals.confidence}`);
 
     // -------- STEP 4: persist V2 output --------
@@ -660,52 +517,27 @@ Deno.serve(async (req: Request) => {
       ...(v2.telemetry.stages ?? []),
     ];
 
-    const finalizeMs = Date.now() - finalizeStart;
-    const totalRuntimeMs = Date.now() - requestStart;
-    successCommittedAt = new Date().toISOString();
-    const terminalStatus = slowFinalize ? "success_slow_finalize" : "completed";
-    const terminalStageLabel = slowFinalize
-      ? "Completed successfully (slow finalize)"
-      : "Completed";
-
     await supabase.from("parsing_jobs").update({
-      status: terminalStatus,
+      status: "completed",
       progress: 100,
-      current_stage: terminalStageLabel,
+      current_stage: "Completed",
       quote_id: quoteId,
-      result_data: {
-        ...parseMetadata,
-        slow_finalize: slowFinalize,
-        pure_parsing_ms: v2DurationMs,
-        finalize_ms: finalizeMs,
-        total_runtime_ms: totalRuntimeMs,
-        timeout_fired_at: timeoutFiredAt,
-      },
+      result_data: parseMetadata,
       metadata: parseMetadata,
       parser_v2_output: v2PersistOutput,
       pipeline_stages: combinedStages,
       final_parser_used: "parser_v2(gpt-4.1)",
       last_error: null,
       last_error_code: null,
-      completed_at: successCommittedAt,
-      success_committed_at: successCommittedAt,
-      timeout_fired_at: timeoutFiredAt,
-      last_stage_completed_at: successCommittedAt,
-      pure_parsing_ms: v2DurationMs,
-      finalize_ms: finalizeMs,
-      total_runtime_ms: totalRuntimeMs,
-      updated_at: successCommittedAt,
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }).eq("id", jobId);
 
-    console.log(
-      `[PIPELINE_END] V2 success job=${jobId} quote=${quoteId} items=${v2.items.length} total=${mainTotal} status=${terminalStatus} slow=${slowFinalize}`,
-    );
+    console.log(`[PIPELINE_END] V2 success job=${jobId} quote=${quoteId} items=${v2.items.length} total=${mainTotal}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        slowFinalize,
-        status: terminalStatus,
         jobId,
         quoteId,
         itemCount: v2.items.length,
@@ -713,11 +545,6 @@ Deno.serve(async (req: Request) => {
         grandTotal,
         mainTotal,
         confidence: finalRecord?.confidence ?? null,
-        timing: {
-          pure_parsing_ms: v2DurationMs,
-          finalize_ms: finalizeMs,
-          total_runtime_ms: totalRuntimeMs,
-        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
@@ -762,36 +589,7 @@ async function persistFailure(
   report: V2FailureReport,
   v2: ParserV2Output | null = null,
   stages: StageRecord[] = [],
-  timing: {
-    parserStartedAt?: string | null;
-    timeoutFiredAt?: string | null;
-    pureParsingMs?: number | null;
-    totalRuntimeMs?: number | null;
-  } = {},
 ): Promise<void> {
-  // Belt & braces: never overwrite a committed success. If another write path
-  // already committed this job as success (or success_slow_finalize), leave
-  // it alone.
-  try {
-    const { data: existing } = await supabase
-      .from("parsing_jobs")
-      .select("status, success_committed_at")
-      .eq("id", jobId)
-      .maybeSingle();
-    if (
-      existing?.success_committed_at ||
-      existing?.status === "completed" ||
-      existing?.status === "success_slow_finalize"
-    ) {
-      console.warn(
-        `[persistFailure] skipping — job ${jobId} already committed as ${existing?.status}`,
-      );
-      return;
-    }
-  } catch (_) {
-    /* proceed to write failure */
-  }
-
   const trade = typedJob.trade || "passive_fire";
 
   // Ensure a quote exists so the UI can display the Parser Report
@@ -855,7 +653,7 @@ async function persistFailure(
     v2_failure: failurePassiveFireFinal,
   };
 
-  const failurePatch: Record<string, unknown> = {
+  await supabase.from("parsing_jobs").update({
     status: "failed",
     progress: 100,
     current_stage: `Failed — ${report.stage}`,
@@ -870,11 +668,5 @@ async function persistFailure(
     last_error_code: report.stage,
     completed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-  };
-  if (timing.parserStartedAt) failurePatch.parser_started_at = timing.parserStartedAt;
-  if (timing.timeoutFiredAt) failurePatch.timeout_fired_at = timing.timeoutFiredAt;
-  if (timing.pureParsingMs != null) failurePatch.pure_parsing_ms = timing.pureParsingMs;
-  if (timing.totalRuntimeMs != null) failurePatch.total_runtime_ms = timing.totalRuntimeMs;
-
-  await supabase.from("parsing_jobs").update(failurePatch).eq("id", jobId);
+  }).eq("id", jobId);
 }
