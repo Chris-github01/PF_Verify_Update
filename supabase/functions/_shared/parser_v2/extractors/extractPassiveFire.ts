@@ -103,6 +103,7 @@ export async function extractPassiveFire(ctx: {
   supplier: string;
   openAIKey: string;
   structure?: PassiveFireStructure | null;
+  extraUserContext?: Record<string, unknown>;
 }): Promise<ParsedLineItemV2[]> {
   const prescan = prescanPassiveFire(ctx.rawText);
   const structure = ctx.structure ?? null;
@@ -124,6 +125,7 @@ export async function extractPassiveFire(ctx: {
       frr_required: true,
       prescan,
       financial_map: structure,
+      ...(ctx.extraUserContext ?? {}),
     },
     rowMapper: useStructureAwarePrompt ? mapLineItemRow : undefined,
   });

@@ -166,6 +166,8 @@ export type ParserV2Output = {
       chunks: ExtractorChunkDebug[];
       rows_before_validation: number;
       rows_after_validation: number;
+      input_sources: ExtractorInputSources;
+      render_hints_attached: boolean;
     };
     fallback_extraction: {
       chunks: ExtractorChunkDebug[];
@@ -204,7 +206,20 @@ type ExtractorFn = (ctx: {
   supplier: string;
   openAIKey: string;
   structure?: PassiveFireStructure | null;
+  extraUserContext?: Record<string, unknown>;
 }) => Promise<ParsedLineItemV2[]>;
+
+export type ExtractorInputSources = {
+  native_text: boolean;
+  ocr_text: boolean;
+  render_text: boolean;
+  render_rows: boolean;
+  render_tables: boolean;
+  native_text_chars: number;
+  render_text_chars: number;
+  render_rows_count: number;
+  render_tables_count: number;
+};
 
 const EXTRACTOR_BY_TRADE: Record<string, ExtractorFn> = {
   passive_fire: extractPassiveFire,
@@ -391,6 +406,48 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     const extractor = EXTRACTOR_BY_TRADE[trade.trade] ?? extractFallback;
     const extractorName = EXTRACTOR_BY_TRADE[trade.trade] ? trade.trade : "fallback";
 
+    const renderHintsForExtractor = render_layout?.enabled
+      ? {
+          rows_detected_total: render_layout.rows_detected_total,
+          tables_detected: render_layout.tables_detected,
+          sections_detected: render_layout.sections_detected,
+          totals_detected: render_layout.totals_detected,
+          tables: render_layout.tables.map((t) => ({
+            page: t.page,
+            section: t.section,
+            rows_detected: t.rows_detected,
+            columns: t.columns,
+            rows: t.rows.slice(0, 50),
+          })),
+          totals_blocks: render_layout.totals_blocks,
+          section_headers: render_layout.section_headers,
+          repeated_schedules: render_layout.repeated_schedules,
+          note:
+            "These are layout hints only. Use them to cross-check table structure, row counts, and totals. Never invent rows not present in the document text.",
+        }
+      : null;
+
+    const extractorInputSources: ExtractorInputSources = {
+      native_text: (effectiveRawText?.length ?? 0) > 0,
+      ocr_text: false,
+      render_text:
+        (render_layout?.enabled ?? false) &&
+        (render_layout?.extracted_text_chars ?? 0) > 0,
+      render_rows:
+        (render_layout?.enabled ?? false) &&
+        (render_layout?.rows_detected_total ?? 0) > 0,
+      render_tables:
+        (render_layout?.enabled ?? false) &&
+        (render_layout?.tables_detected ?? 0) > 0,
+      native_text_chars: effectiveRawText?.length ?? 0,
+      render_text_chars: render_layout?.extracted_text_chars ?? 0,
+      render_rows_count: render_layout?.rows_detected_total ?? 0,
+      render_tables_count: render_layout?.tables_detected ?? 0,
+    };
+    console.log(
+      `[extractor_input_sources] ${JSON.stringify(extractorInputSources)} render_hints_attached=${renderHintsForExtractor != null}`,
+    );
+
     tracker.start("extraction");
     const extractStart = Date.now();
     let items: ParsedLineItemV2[] = [];
@@ -406,6 +463,10 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         supplier: supplier.supplierName,
         openAIKey: input.openAIKey,
         structure: passive_fire_structure,
+        extraUserContext: {
+          input_sources: extractorInputSources,
+          ...(renderHintsForExtractor ? { render_hints: renderHintsForExtractor } : {}),
+        },
       });
       extractionDebug = takeLastExtractorDebug();
     } catch (err) {
@@ -422,6 +483,10 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           quoteType: quoteType.quoteType,
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
+          extraUserContext: {
+            input_sources: extractorInputSources,
+            ...(renderHintsForExtractor ? { render_hints: renderHintsForExtractor } : {}),
+          },
         });
         fallbackDebug = takeLastExtractorDebug();
       } catch (fallbackErr) {
@@ -464,6 +529,10 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           quoteType: quoteType.quoteType,
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
+          extraUserContext: {
+            input_sources: extractorInputSources,
+            ...(renderHintsForExtractor ? { render_hints: renderHintsForExtractor } : {}),
+          },
         });
         fallbackDebug = takeLastExtractorDebug();
         if (items.length === 0) {
@@ -787,6 +856,8 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           chunks: extractionDebug,
           rows_before_validation: extractionDebug.reduce((s, c) => s + c.rows_before_validation, 0),
           rows_after_validation: extractionDebug.reduce((s, c) => s + c.rows_after_validation, 0),
+          input_sources: extractorInputSources,
+          render_hints_attached: renderHintsForExtractor != null,
         },
         fallback_extraction: fallbackDebug
           ? {

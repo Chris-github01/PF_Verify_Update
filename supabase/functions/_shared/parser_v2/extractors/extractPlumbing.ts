@@ -8,6 +8,7 @@ export async function extractPlumbing(ctx: {
   quoteType: string;
   supplier: string;
   openAIKey: string;
+  extraUserContext?: Record<string, unknown>;
 }): Promise<ParsedLineItemV2[]> {
   return await runExtractorLLM({
     systemPrompt: PLUMBING_PROMPT,
@@ -20,6 +21,7 @@ export async function extractPlumbing(ctx: {
     extraUserContext: {
       focus:
         "Plumbing scope: hot/cold water, sanitary, stormwater, drainage, fixtures, insulation. Ignore fire-rated penetration sealing — that is passive fire scope.",
+      ...(ctx.extraUserContext ?? {}),
     },
   });
 }

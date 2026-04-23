@@ -14,6 +14,7 @@ export async function extractFallback(ctx: {
   quoteType: string;
   supplier: string;
   openAIKey: string;
+  extraUserContext?: Record<string, unknown>;
 }): Promise<ParsedLineItemV2[]> {
   const rows = await runExtractorLLM({
     systemPrompt: FALLBACK_PROMPT,
@@ -23,6 +24,7 @@ export async function extractFallback(ctx: {
     quoteType: ctx.quoteType,
     supplier: ctx.supplier,
     openAIKey: ctx.openAIKey,
+    extraUserContext: ctx.extraUserContext,
   });
   return rows.map((r) => ({ ...r, confidence: Math.min(r.confidence, 0.55) }));
 }
