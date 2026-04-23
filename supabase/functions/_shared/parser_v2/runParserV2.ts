@@ -67,6 +67,10 @@ import { mapToQuoteItems } from "./mappers/mapToQuoteItems.ts";
 import { StageTracker, ParserV2StageError, type StageRecord } from "./stageTracker.ts";
 import { installActiveTracker, clearActiveTracker } from "./telemetrySink.ts";
 
+import { runPathB, type PathBResult } from "./multipath/pathB_commercialTotals.ts";
+import { runPathC, type PathCResult } from "./multipath/pathC_deterministicStructure.ts";
+import { decide, type MultiPathDecision } from "./multipath/decisionEngine.ts";
+
 export type ParserV2Input = {
   rawText: string;
   pages: { pageNum: number; text: string }[];
@@ -129,6 +133,11 @@ export type ParserV2Output = {
   passive_fire_sanitizer: PassiveFireSanitizerResult | null;
   passive_fire_validation: PassiveFireValidationResult | null;
   passive_fire_final: PassiveFireFinalRecord | null;
+  multipath: {
+    decision: MultiPathDecision;
+    pathB: PathBResult;
+    pathC: PathCResult;
+  };
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
     items: ReturnType<typeof mapToQuoteItems>;
@@ -443,6 +452,84 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     }
     durations.validation = Date.now() - validationStart;
 
+    // -------- MULTI-PATH DECISION ENGINE --------
+    // Always run Path B (labelled totals) and Path C (deterministic
+    // structure) — they are fast, deterministic, and provide a safety
+    // net when Path A extracts zero rows or returns a suspect total.
+    tracker.start("multipath_decision");
+    const multipathStart = Date.now();
+    let multipathResult: { decision: MultiPathDecision; pathB: PathBResult; pathC: PathCResult };
+    try {
+      const pathB = runPathB({
+        rawText: effectiveRawText,
+        pages: effectivePages,
+      });
+      const pathC = runPathC({
+        rawText: effectiveRawText,
+        pages: effectivePages,
+      });
+      const rowSumMain = items
+        .filter((it) => it.scope_category === "main")
+        .reduce((s, it) => s + (it.total_price ?? 0), 0);
+      const rowSumWithOptional = items.reduce((s, it) => s + (it.total_price ?? 0), 0);
+      const decision = decide({
+        pathA: {
+          items_count: items.length,
+          row_sum_main: rowSumMain,
+          row_sum_with_optional: rowSumWithOptional,
+          line_math_ok: lineMath.ok,
+          totals_ok: totals.ok,
+        },
+        pathB,
+        pathC,
+      });
+      multipathResult = { decision, pathB, pathC };
+
+      // If Path A produced no total but the decision engine recovered
+      // one, patch the totals object so downstream mappers and the
+      // zero-items guard see a valid quote value.
+      if (
+        (!totals.grand_total || totals.grand_total <= 0) &&
+        decision.selected_total != null &&
+        decision.selected_total > 0
+      ) {
+        totals.main_total = decision.selected_total;
+        totals.grand_total = decision.selected_total_inc_gst ?? decision.selected_total;
+        totals.resolution_source = `multipath:${decision.winning_path}:${decision.rationale}`;
+        anomalies.push("multipath_total_recovered");
+      }
+      tracker.succeed("multipath_decision");
+    } catch (err) {
+      console.error("[parser_v2] multi-path decision engine failed", err);
+      anomalies.push("multipath_failed");
+      tracker.fail("multipath_decision", err);
+      multipathResult = {
+        decision: {
+          selected_total: null,
+          selected_total_inc_gst: null,
+          winning_path: null,
+          confidence: "LOW",
+          confidence_score: 0,
+          secondary_candidates: [],
+          requires_review: true,
+          review_reasons: ["multipath_exception"],
+          agreement: { a_b_match: null, a_c_match: null, b_c_match: null },
+          rationale: "multi-path engine threw",
+        },
+        pathB: { candidates: [], best: null, succeeded: false },
+        pathC: {
+          all_currency: [],
+          gst_relations: [],
+          rollups: [],
+          best_total: null,
+          best_source: null,
+          confidence: 0,
+          succeeded: false,
+        },
+      };
+    }
+    durations.multipath_decision = Date.now() - multipathStart;
+
   const ERROR_ANOMALIES = new Set([
     "classify_trade_failed",
     "classify_quote_type_failed",
@@ -461,15 +548,25 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
   ];
   const hasErrorAnomaly = combinedAnomalies.some((a) => ERROR_ANOMALIES.has(a));
 
+  // Zero items alone no longer forces manual review — the multipath
+  // decision engine can recover a valid quote total from labelled
+  // totals (Path B) or deterministic structure (Path C).
+  const multipathRecovered =
+    items.length === 0 &&
+    multipathResult.decision.selected_total != null &&
+    multipathResult.decision.selected_total > 0 &&
+    multipathResult.decision.confidence !== "LOW";
+
   const requires_review =
     confidence.level === "LOW" ||
     !totals.ok ||
     missing.missing.length > 0 ||
-    items.length === 0 ||
+    (items.length === 0 && !multipathRecovered) ||
     hasErrorAnomaly ||
     (totals.variants_materially_different &&
       totals.reconciliation_confidence === "LOW") ||
-    (passive_fire_validation?.requires_review ?? false);
+    (passive_fire_validation?.requires_review ?? false) ||
+    multipathResult.decision.requires_review;
 
   const mergedAnomalies = dedupeStrings(combinedAnomalies);
 
@@ -542,6 +639,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_sanitizer,
       passive_fire_validation,
       passive_fire_final,
+      multipath: multipathResult,
       dbPayload: { quote, items: dbItems },
     };
   } catch (err) {
