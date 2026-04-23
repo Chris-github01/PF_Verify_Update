@@ -9,7 +9,13 @@
  */
 
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
-import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../telemetrySink.ts";
+import {
+  markLlmCallDuration,
+  markRequestSent,
+  markResponseReceived,
+  recordExtractionResponse,
+  recordMalformedExtractionJson,
+} from "../telemetrySink.ts";
 
 const EXTRACTOR_MODEL = "gpt-4.1";
 const CHUNK_CHAR_BUDGET = 18000;
@@ -166,9 +172,15 @@ async function callOpenAIWithRetry(args: {
       markLlmCallDuration(Date.now() - reqStart, EXTRACTOR_MODEL);
       markResponseReceived(json?.usage);
       const content = json?.choices?.[0]?.message?.content;
+      recordExtractionResponse(content);
       if (!content) return [];
-      const parsed = JSON.parse(content);
-      return Array.isArray(parsed.items) ? parsed.items : [];
+      try {
+        const parsed = JSON.parse(content);
+        return Array.isArray(parsed.items) ? parsed.items : [];
+      } catch (parseErr) {
+        recordMalformedExtractionJson(content);
+        throw parseErr;
+      }
     } catch (err) {
       lastErr = err;
       const backoff = 400 * Math.pow(2, attempt);
