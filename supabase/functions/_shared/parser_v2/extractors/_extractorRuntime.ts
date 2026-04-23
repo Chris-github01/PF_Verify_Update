@@ -9,6 +9,7 @@
  */
 
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
+import { markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
 const EXTRACTOR_MODEL = "gpt-4.1";
 const CHUNK_CHAR_BUDGET = 18000;
@@ -93,8 +94,10 @@ async function callOpenAIWithRetry(args: {
   chunkIndex: number;
 }): Promise<unknown[] | null> {
   let lastErr: unknown = null;
+  const userJson = JSON.stringify(args.userPayload);
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      markRequestSent(Math.round((args.systemPrompt.length + userJson.length) / 4));
       const res = await fetch(OPENAI_URL, {
         method: "POST",
         headers: {
@@ -107,7 +110,7 @@ async function callOpenAIWithRetry(args: {
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: args.systemPrompt },
-            { role: "user", content: JSON.stringify(args.userPayload) },
+            { role: "user", content: userJson },
           ],
         }),
       });
@@ -119,6 +122,7 @@ async function callOpenAIWithRetry(args: {
         throw new Error(`fatal HTTP ${res.status}: ${bodyTxt.slice(0, 200)}`);
       }
       const json = await res.json();
+      markResponseReceived(json?.usage);
       const content = json?.choices?.[0]?.message?.content;
       if (!content) return [];
       const parsed = JSON.parse(content);

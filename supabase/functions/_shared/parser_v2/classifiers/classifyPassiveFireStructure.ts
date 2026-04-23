@@ -11,6 +11,7 @@
  */
 
 import { PASSIVE_FIRE_STRUCTURE_PROMPT } from "../prompts/passiveFireStructurePrompt.ts";
+import { markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
 export type PassiveFireSectionRole =
   | "main_included"
@@ -76,6 +77,8 @@ export async function classifyPassiveFireStructure(ctx: {
     pages: buildPageSummary(ctx.pages, ctx.rawText),
   };
 
+  const userJson = JSON.stringify(payload);
+  markRequestSent(Math.round((PASSIVE_FIRE_STRUCTURE_PROMPT.length + userJson.length) / 4));
   const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -88,7 +91,7 @@ export async function classifyPassiveFireStructure(ctx: {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: PASSIVE_FIRE_STRUCTURE_PROMPT },
-        { role: "user", content: JSON.stringify(payload) },
+        { role: "user", content: userJson },
       ],
     }),
   });
@@ -99,6 +102,7 @@ export async function classifyPassiveFireStructure(ctx: {
   }
 
   const json = await res.json();
+  markResponseReceived(json?.usage);
   const content = json?.choices?.[0]?.message?.content;
   if (!content) throw new Error("classifyPassiveFireStructure empty response");
 

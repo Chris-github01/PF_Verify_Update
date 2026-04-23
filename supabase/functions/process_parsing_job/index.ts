@@ -249,41 +249,6 @@ Deno.serve(async (req: Request) => {
     const v2Start = Date.now();
     const V2_TIMEOUT_MS = 110_000;
     outerTracker.start("parser_v2");
-
-    // Durable telemetry: persist pipeline_stages after every stage transition
-    // so that an outer timeout never destroys the evidence of where we died.
-    let liveInnerStages: StageRecord[] = [];
-    let lastPersistAt = 0;
-    let persistPending = false;
-    const flushStages = async (stages: StageRecord[]): Promise<void> => {
-      try {
-        await supabase.from("parsing_jobs").update({
-          pipeline_stages: [...outerTracker.snapshot(), ...stages],
-          updated_at: new Date().toISOString(),
-        }).eq("id", jobId!);
-      } catch (e) {
-        console.error("[persistStages] write failed", e);
-      }
-    };
-    const persistStages = (stages: StageRecord[]): void => {
-      liveInnerStages = stages;
-      const now = Date.now();
-      // Coalesce writes: at most every 400ms, but always allow terminal transitions
-      const hasActive = stages.some((s) => s.status === "running");
-      if (!hasActive || now - lastPersistAt >= 400) {
-        lastPersistAt = now;
-        void flushStages(stages);
-        return;
-      }
-      if (persistPending) return;
-      persistPending = true;
-      setTimeout(() => {
-        persistPending = false;
-        lastPersistAt = Date.now();
-        void flushStages(liveInnerStages);
-      }, 400);
-    };
-
     try {
       const v2Promise = runParserV2({
         rawText,
@@ -295,7 +260,6 @@ Deno.serve(async (req: Request) => {
         organisationId: typedJob.organisation_id,
         quoteId: typedJob.quote_id ?? undefined,
         openAIKey: openAiKey,
-        persistStages,
       });
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(
@@ -310,14 +274,8 @@ Deno.serve(async (req: Request) => {
       const stack = v2Err instanceof Error ? v2Err.stack?.slice(0, 1500) : undefined;
       console.error("[V2] threw:", msg);
       outerTracker.fail("parser_v2", v2Err);
-      const innerStages =
-        v2Err instanceof ParserV2StageError && v2Err.stages.length > 0
-          ? v2Err.stages
-          : liveInnerStages;
-      const failedInnerStage =
-        v2Err instanceof ParserV2StageError
-          ? v2Err.failedStage
-          : innerStages.find((s) => s.status === "running")?.name ?? null;
+      const innerStages = v2Err instanceof ParserV2StageError ? v2Err.stages : [];
+      const failedInnerStage = v2Err instanceof ParserV2StageError ? v2Err.failedStage : null;
       const report = buildFailureReport("parser_v2_exception", msg, {
         stack,
         duration_ms: Date.now() - v2Start,

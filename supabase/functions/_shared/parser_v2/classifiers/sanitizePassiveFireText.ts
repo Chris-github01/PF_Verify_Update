@@ -14,6 +14,7 @@
  */
 
 import { PASSIVE_FIRE_SANITIZER_PROMPT } from "../prompts/passiveFireSanitizerPrompt.ts";
+import { markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
 export type PassiveFireRemovedToken = {
   value: string;
@@ -143,6 +144,7 @@ async function sanitizePage(ctx: {
     text,
   };
 
+  markRequestSent(Math.round((PASSIVE_FIRE_SANITIZER_PROMPT.length + text.length) / 4));
   const res = await fetch(OPENAI_URL, {
     method: "POST",
     headers: {
@@ -169,6 +171,7 @@ async function sanitizePage(ctx: {
   }
 
   const json = await res.json();
+  markResponseReceived(json?.usage);
   const content = json?.choices?.[0]?.message?.content;
   if (!content) return emptyResult(text);
 

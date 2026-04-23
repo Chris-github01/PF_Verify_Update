@@ -1,11 +1,15 @@
 /**
  * Stage tracker — records the lifecycle of each pipeline stage so
- * callers (UI, dashboards) can see exactly which stage failed and which
- * stages passed.
+ * callers (UI, dashboards, durable DB telemetry) can see exactly which
+ * stage is running, which stages passed/failed, and the token usage of
+ * each LLM call in real time.
  *
  * Stage lifecycle:
- *   pending  → start() → running → succeed()/fail()/skip() → passed|failed|skipped
+ *   pending  -> start() -> running -> succeed()/fail()/skip() -> passed|failed|skipped
  *
+ * A sink callback fires after every mutation (start, setTokens, succeed,
+ * fail, skip, failAllInFlight) so the caller can persist the snapshot
+ * to the database before the outer request is torn down by a timeout.
  * The tracker stores stages in insertion order and never throws; it is
  * safe to call from within try/catch blocks during a failing run.
  */
@@ -28,9 +32,21 @@ export interface StageCompletion {
   tokens_out?: number | null;
 }
 
+export type StageSink = (snapshot: StageRecord[]) => void;
+
 export class StageTracker {
   private stages: StageRecord[] = [];
   private byName = new Map<string, StageRecord>();
+  private currentStageName: string | null = null;
+  private sink: StageSink | null = null;
+
+  setSink(sink: StageSink | null): void {
+    this.sink = sink;
+  }
+
+  getCurrentStage(): string | null {
+    return this.currentStageName;
+  }
 
   /**
    * Wraps an async stage so it records start/complete/fail automatically.
@@ -62,20 +78,22 @@ export class StageTracker {
       existing.completed_at = null;
       existing.duration_ms = null;
       existing.error_message = null;
-      return;
+    } else {
+      const record: StageRecord = {
+        name,
+        status: "running",
+        started_at: now,
+        completed_at: null,
+        duration_ms: null,
+        error_message: null,
+        tokens_in: null,
+        tokens_out: null,
+      };
+      this.stages.push(record);
+      this.byName.set(name, record);
     }
-    const record: StageRecord = {
-      name,
-      status: "running",
-      started_at: now,
-      completed_at: null,
-      duration_ms: null,
-      error_message: null,
-      tokens_in: null,
-      tokens_out: null,
-    };
-    this.stages.push(record);
-    this.byName.set(name, record);
+    this.currentStageName = name;
+    this.emit();
   }
 
   succeed(name: string, completion?: StageCompletion): void {
@@ -84,6 +102,8 @@ export class StageTracker {
     this.finalise(record, "passed");
     if (completion?.tokens_in != null) record.tokens_in = completion.tokens_in;
     if (completion?.tokens_out != null) record.tokens_out = completion.tokens_out;
+    if (this.currentStageName === name) this.currentStageName = null;
+    this.emit();
   }
 
   fail(name: string, err: unknown, completion?: StageCompletion): void {
@@ -92,6 +112,8 @@ export class StageTracker {
     record.error_message = formatError(err);
     if (completion?.tokens_in != null) record.tokens_in = completion.tokens_in;
     if (completion?.tokens_out != null) record.tokens_out = completion.tokens_out;
+    if (this.currentStageName === name) this.currentStageName = null;
+    this.emit();
   }
 
   skip(name: string, reason?: string): void {
@@ -104,20 +126,34 @@ export class StageTracker {
         ? new Date(now).getTime() - new Date(existing.started_at).getTime()
         : 0;
       existing.error_message = reason ?? null;
-      return;
+    } else {
+      const record: StageRecord = {
+        name,
+        status: "skipped",
+        started_at: now,
+        completed_at: now,
+        duration_ms: 0,
+        error_message: reason ?? null,
+        tokens_in: null,
+        tokens_out: null,
+      };
+      this.stages.push(record);
+      this.byName.set(name, record);
     }
-    const record: StageRecord = {
-      name,
-      status: "skipped",
-      started_at: now,
-      completed_at: now,
-      duration_ms: 0,
-      error_message: reason ?? null,
-      tokens_in: null,
-      tokens_out: null,
-    };
-    this.stages.push(record);
-    this.byName.set(name, record);
+    if (this.currentStageName === name) this.currentStageName = null;
+    this.emit();
+  }
+
+  /**
+   * Update token counts on a (typically still-running) stage and emit
+   * immediately so the durable sink can persist mid-stage progress.
+   */
+  setTokens(name: string, patch: { tokens_in?: number | null; tokens_out?: number | null }): void {
+    const record = this.byName.get(name);
+    if (!record) return;
+    if (patch.tokens_in != null) record.tokens_in = patch.tokens_in;
+    if (patch.tokens_out != null) record.tokens_out = patch.tokens_out;
+    this.emit();
   }
 
   /** Mark every not-yet-finished stage as failed with the given error. */
@@ -128,6 +164,8 @@ export class StageTracker {
         record.error_message = formatError(err);
       }
     }
+    this.currentStageName = null;
+    this.emit();
   }
 
   snapshot(): StageRecord[] {
@@ -150,6 +188,15 @@ export class StageTracker {
     record.duration_ms = record.started_at
       ? new Date(now).getTime() - new Date(record.started_at).getTime()
       : 0;
+  }
+
+  private emit(): void {
+    if (!this.sink) return;
+    try {
+      this.sink(this.snapshot());
+    } catch {
+      // sink must never break the pipeline
+    }
   }
 }
 
