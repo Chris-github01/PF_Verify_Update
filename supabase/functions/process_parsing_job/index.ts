@@ -481,32 +481,14 @@ Deno.serve(async (req: Request) => {
     await setStage(supabase, jobId, "Saving Parser V2 output", 80);
 
     const finalRecord = v2.passive_fire_final;
-    const rawMainTotal = finalRecord?.quote_total_ex_gst ?? v2.totals.main_total ?? v2.totals.grand_total;
-    const rawGrandTotal = v2.totals.grand_total ?? rawMainTotal;
+    const mainTotal = finalRecord?.quote_total_ex_gst ?? v2.totals.main_total ?? v2.totals.grand_total;
+    const grandTotal = v2.totals.grand_total ?? mainTotal;
     const optionalTotal = finalRecord?.optional_total ?? v2.totals.optional_total ?? 0;
 
-    // Multi-path recovery: zero rows does NOT equal zero value.
-    // If Path B (labelled totals) or Path C (deterministic structure)
-    // produced a trustworthy total, commit it as the quote value.
-    const multipath = (v2 as any).multipath;
-    const recoveredTotal = multipath?.decision?.selected_total ?? null;
-    const mainTotal =
-      rawMainTotal && rawMainTotal > 0 ? rawMainTotal : recoveredTotal ?? 0;
-    const grandTotal =
-      rawGrandTotal && rawGrandTotal > 0
-        ? rawGrandTotal
-        : multipath?.decision?.selected_total_inc_gst ?? recoveredTotal ?? 0;
-    const effectiveMainTotal = mainTotal;
-    const effectiveGrandTotal = grandTotal;
-
-    // Only fail when ALL THREE paths returned nothing usable.
-    if (
-      v2.items.length === 0 &&
-      (!effectiveGrandTotal || effectiveGrandTotal <= 0)
-    ) {
+    if (v2.items.length === 0) {
       const report = buildFailureReport(
         "parser_v2_no_items",
-        "All three extraction paths failed to recover a quote total",
+        "Parser V2 returned zero line items after extraction",
         {
           anomalies: v2.validation.anomalies,
           extractor_used: v2.telemetry.extractor_used,
@@ -514,15 +496,6 @@ Deno.serve(async (req: Request) => {
           duration_ms: v2DurationMs,
           classification: v2.classification,
           passive_fire_validation: v2.passive_fire_validation,
-          multipath_decision: multipath?.decision ?? null,
-          path_b_candidates: multipath?.pathB?.candidates ?? [],
-          path_c_best: multipath?.pathC
-            ? {
-                best_total: multipath.pathC.best_total,
-                best_source: multipath.pathC.best_source,
-                confidence: multipath.pathC.confidence,
-              }
-            : null,
         },
       );
       const combined = [...outerTracker.snapshot(), ...(v2.telemetry.stages ?? [])];
@@ -714,21 +687,6 @@ Deno.serve(async (req: Request) => {
         total_runtime_ms: totalRuntimeMs,
         timeout_fired_at: timeoutFiredAt,
         needs_async_processing: needsAsyncProcessing,
-        multipath: multipath
-          ? {
-              decision: multipath.decision,
-              path_b_candidates: multipath.pathB?.candidates?.slice(0, 10) ?? [],
-              path_c: multipath.pathC
-                ? {
-                    best_total: multipath.pathC.best_total,
-                    best_source: multipath.pathC.best_source,
-                    confidence: multipath.pathC.confidence,
-                    gst_relations: multipath.pathC.gst_relations?.slice(0, 5) ?? [],
-                    rollups: multipath.pathC.rollups?.slice(0, 5) ?? [],
-                  }
-                : null,
-            }
-          : null,
       },
       metadata: parseMetadata,
       parser_v2_output: v2PersistOutput,
@@ -895,6 +853,29 @@ async function persistFailure(
     }).eq("id", quoteId);
   }
 
+  // Persist the FULL V2 output on the failure path so the UI can show
+  // exactly what happened (classification, diagnostics, multipath,
+  // passive-fire artefacts). Previously only a thin failure summary was
+  // written, which is why the Parser V2 Report panel showed
+  // "No V2 output recorded" for failed runs.
+  const v2FullOutput = v2
+    ? {
+        classification: v2.classification,
+        items: v2.items,
+        totals: v2.totals,
+        validation: v2.validation,
+        requires_review: v2.requires_review,
+        telemetry: v2.telemetry,
+        passive_fire_structure: v2.passive_fire_structure,
+        passive_fire_authoritative_total: v2.passive_fire_authoritative_total,
+        passive_fire_sanitizer: v2.passive_fire_sanitizer,
+        passive_fire_validation: v2.passive_fire_validation,
+        passive_fire_final: v2.passive_fire_final,
+        multipath: (v2 as any).multipath ?? null,
+        extraction_diagnostics: (v2 as any).extraction_diagnostics ?? null,
+      }
+    : null;
+
   const metadata = {
     parser_strategy: "parser_v2_only",
     parser_version: "v2",
@@ -903,6 +884,8 @@ async function persistFailure(
     build_version: BUILD_VERSION,
     trade,
     v2_failure: failurePassiveFireFinal,
+    extraction_diagnostics: (v2 as any)?.extraction_diagnostics ?? null,
+    multipath: (v2 as any)?.multipath?.decision ?? null,
   };
 
   const failurePatch: Record<string, unknown> = {
@@ -911,8 +894,11 @@ async function persistFailure(
     current_stage: `Failed — ${report.stage}`,
     quote_id: quoteId,
     metadata,
-    result_data: metadata,
-    parser_v2_output: failurePassiveFireFinal,
+    result_data: {
+      ...metadata,
+      parser_v2_output: v2FullOutput,
+    },
+    parser_v2_output: v2FullOutput ?? failurePassiveFireFinal,
     pipeline_stages: stages,
     final_parser_used: "parser_v2_failed",
     error_message: report.message,
