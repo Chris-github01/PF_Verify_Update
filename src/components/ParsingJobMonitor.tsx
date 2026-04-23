@@ -99,6 +99,15 @@ interface ParsingJob {
     anomalies?: string[];
     classification?: Record<string, unknown> | null;
     extractor_used?: string | null;
+    chosen_path?: string | null;
+    raw_rows?: number | null;
+    normalized_rows?: number | null;
+    saved_rows?: number | null;
+    rows_insert_attempted?: number | null;
+    rows_insert_successful?: number | null;
+    items_count?: number | null;
+    main_total?: number | null;
+    grand_total?: number | null;
     passive_fire_final?: {
       confidence?: number;
       review_status?: string;
@@ -231,6 +240,24 @@ function ParserV2ReportPanel({ v2 }: { v2: NonNullable<ParsingJob['parser_v2_out
       </button>
       {open && (
         <div className="mt-1.5 font-mono text-xs bg-slate-900/60 border border-slate-700 rounded px-3 py-2 space-y-1.5">
+          {(v2.raw_rows != null || v2.normalized_rows != null || v2.saved_rows != null || v2.chosen_path) && (
+            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 pb-1.5 border-b border-slate-700/60">
+              <div className="text-slate-500">chosen_path</div>
+              <div className="text-slate-200">{v2.chosen_path ?? '—'}</div>
+              <div className="text-slate-500">raw_rows</div>
+              <div className={(v2.raw_rows ?? 0) > 0 ? 'text-green-400' : 'text-slate-300'}>
+                {v2.raw_rows ?? 0}
+              </div>
+              <div className="text-slate-500">normalized_rows</div>
+              <div className={(v2.normalized_rows ?? 0) > 0 ? 'text-green-400' : 'text-orange-400'}>
+                {v2.normalized_rows ?? 0}
+              </div>
+              <div className="text-slate-500">saved_rows</div>
+              <div className={(v2.saved_rows ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}>
+                {v2.saved_rows ?? 0}
+              </div>
+            </div>
+          )}
           {failed ? (
             <>
               <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">

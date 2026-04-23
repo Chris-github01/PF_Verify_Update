@@ -486,9 +486,24 @@ Deno.serve(async (req: Request) => {
     const optionalTotal = finalRecord?.optional_total ?? v2.totals.optional_total ?? 0;
 
     if (v2.items.length === 0) {
+      const earlyDebug = (v2 as unknown as { debug?: Record<string, unknown> }).debug ?? null;
+      const earlyExtraction = earlyDebug?.extraction as Record<string, unknown> | undefined;
+      const earlyFallback = earlyDebug?.fallback_extraction as Record<string, unknown> | null | undefined;
+      const rawRowsSeen =
+        ((earlyExtraction?.rows_received as number | undefined) ?? 0) +
+        ((earlyFallback?.rows_received as number | undefined) ?? 0);
+      const normalizedRowsSeen =
+        ((earlyExtraction?.rows_after_normalize as number | undefined) ?? 0) +
+        ((earlyFallback?.rows_after_normalize as number | undefined) ?? 0);
+      const stageCode =
+        rawRowsSeen > 0 ? "parser_mapping_dropped_rows" : "parser_v2_no_items";
+      const msg =
+        rawRowsSeen > 0
+          ? `parser_mapping_dropped_rows: extractor returned ${rawRowsSeen} raw rows but normalization kept ${normalizedRowsSeen}`
+          : "Parser V2 returned zero line items after extraction";
       const report = buildFailureReport(
-        "parser_v2_no_items",
-        "Parser V2 returned zero line items after extraction",
+        stageCode,
+        msg,
         {
           anomalies: v2.validation.anomalies,
           extractor_used: v2.telemetry.extractor_used,
@@ -496,6 +511,12 @@ Deno.serve(async (req: Request) => {
           duration_ms: v2DurationMs,
           classification: v2.classification,
           passive_fire_validation: v2.passive_fire_validation,
+          chosen_path: earlyDebug?.chosen_path ?? null,
+          raw_rows: rawRowsSeen,
+          normalized_rows: normalizedRowsSeen,
+          saved_rows: 0,
+          extraction_debug: earlyExtraction ?? null,
+          fallback_extraction_debug: earlyFallback ?? null,
         },
       );
       const combined = [...outerTracker.snapshot(), ...(v2.telemetry.stages ?? [])];
@@ -654,6 +675,9 @@ Deno.serve(async (req: Request) => {
       item_count: v2.items.length,
     };
 
+    const v2Debug = (v2 as unknown as { debug?: Record<string, unknown> }).debug ?? null;
+    const extractionDbg = v2Debug?.extraction as Record<string, unknown> | undefined;
+    const fallbackDbg = v2Debug?.fallback_extraction as Record<string, unknown> | null | undefined;
     const v2PersistOutput = {
       failed: false,
       confidence: finalRecord?.confidence ?? null,
@@ -674,6 +698,20 @@ Deno.serve(async (req: Request) => {
       total_duration_ms: v2.telemetry.total_duration_ms,
       classification: v2.classification,
       items_count: v2.items.length,
+      chosen_path: v2Debug?.chosen_path ?? null,
+      raw_rows:
+        (extractionDbg?.rows_received as number | undefined) ??
+        (fallbackDbg?.rows_received as number | undefined) ??
+        0,
+      normalized_rows:
+        (extractionDbg?.rows_after_normalize as number | undefined) ??
+        (fallbackDbg?.rows_after_normalize as number | undefined) ??
+        0,
+      saved_rows: rows_insert_successful,
+      rows_insert_attempted,
+      rows_insert_successful,
+      extraction_debug: extractionDbg ?? null,
+      fallback_extraction_debug: fallbackDbg ?? null,
     };
 
     const combinedStages = [
