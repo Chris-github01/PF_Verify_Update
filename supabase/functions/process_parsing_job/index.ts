@@ -895,29 +895,6 @@ async function persistFailure(
     }).eq("id", quoteId);
   }
 
-  // Persist the FULL V2 output on the failure path so the UI can show
-  // exactly what happened (classification, diagnostics, multipath,
-  // passive-fire artefacts). Previously only a thin failure summary was
-  // written, which is why the Parser V2 Report panel showed
-  // "No V2 output recorded" for failed runs.
-  const v2FullOutput = v2
-    ? {
-        classification: v2.classification,
-        items: v2.items,
-        totals: v2.totals,
-        validation: v2.validation,
-        requires_review: v2.requires_review,
-        telemetry: v2.telemetry,
-        passive_fire_structure: v2.passive_fire_structure,
-        passive_fire_authoritative_total: v2.passive_fire_authoritative_total,
-        passive_fire_sanitizer: v2.passive_fire_sanitizer,
-        passive_fire_validation: v2.passive_fire_validation,
-        passive_fire_final: v2.passive_fire_final,
-        multipath: (v2 as any).multipath ?? null,
-        extraction_diagnostics: (v2 as any).extraction_diagnostics ?? null,
-      }
-    : null;
-
   const metadata = {
     parser_strategy: "parser_v2_only",
     parser_version: "v2",
@@ -926,8 +903,6 @@ async function persistFailure(
     build_version: BUILD_VERSION,
     trade,
     v2_failure: failurePassiveFireFinal,
-    extraction_diagnostics: (v2 as any)?.extraction_diagnostics ?? null,
-    multipath: (v2 as any)?.multipath?.decision ?? null,
   };
 
   const failurePatch: Record<string, unknown> = {
@@ -936,11 +911,8 @@ async function persistFailure(
     current_stage: `Failed — ${report.stage}`,
     quote_id: quoteId,
     metadata,
-    result_data: {
-      ...metadata,
-      parser_v2_output: v2FullOutput,
-    },
-    parser_v2_output: v2FullOutput ?? failurePassiveFireFinal,
+    result_data: metadata,
+    parser_v2_output: failurePassiveFireFinal,
     pipeline_stages: stages,
     final_parser_used: "parser_v2_failed",
     error_message: report.message,
