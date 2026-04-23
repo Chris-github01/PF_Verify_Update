@@ -348,7 +348,6 @@ Deno.serve(async (req: Request) => {
       quoteId: typedJob.quote_id ?? undefined,
       openAIKey: openAiKey,
       persistStages,
-      pdfBytes: fileExtension === "pdf" ? new Uint8Array(fileBuffer) : null,
     }).then(
       (value) => {
         parserSettled = true;
@@ -653,7 +652,6 @@ Deno.serve(async (req: Request) => {
       total_duration_ms: v2.telemetry.total_duration_ms,
       classification: v2.classification,
       items_count: v2.items.length,
-      debug: v2.debug,
     };
 
     const combinedStages = [

@@ -8,7 +8,6 @@ export async function extractHVAC(ctx: {
   quoteType: string;
   supplier: string;
   openAIKey: string;
-  extraUserContext?: Record<string, unknown>;
 }): Promise<ParsedLineItemV2[]> {
   return await runExtractorLLM({
     systemPrompt: HVAC_PROMPT,
@@ -21,7 +20,6 @@ export async function extractHVAC(ctx: {
     extraUserContext: {
       focus:
         "HVAC / mechanical scope: ductwork, AHU/FCU/VAV, chillers, controls, commissioning. Fire dampers remain HVAC unless explicitly sold as passive-fire scope.",
-      ...(ctx.extraUserContext ?? {}),
     },
   });
 }

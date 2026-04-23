@@ -40,14 +40,6 @@ import {
   type PassiveFireSanitizerResult,
 } from "./classifiers/sanitizePassiveFireText.ts";
 import {
-  extractRenderLayout,
-  type RenderLayoutResult,
-} from "./classifiers/extractRenderLayout.ts";
-import {
-  buildRenderHelperBundle,
-  type RenderHelperBundle,
-} from "./classifiers/buildRenderHelperRows.ts";
-import {
   validatePassiveFireParse,
   type PassiveFireValidationResult,
 } from "./validation/validatePassiveFireParse.ts";
@@ -56,7 +48,6 @@ import {
   type PassiveFireFinalRecord,
 } from "./composePassiveFireFinalRecord.ts";
 
-import { takeLastExtractorDebug, type ExtractorChunkDebug } from "./extractors/_extractorRuntime.ts";
 import { extractPassiveFire } from "./extractors/extractPassiveFire.ts";
 import { extractElectrical } from "./extractors/extractElectrical.ts";
 import { extractPlumbing } from "./extractors/extractPlumbing.ts";
@@ -91,13 +82,6 @@ export type ParserV2Input = {
   quoteId?: string;
   openAIKey: string;
   persistStages?: (stages: StageRecord[]) => void;
-  /**
-   * Optional raw PDF bytes. When provided, the Render PDF assistant
-   * layer runs in parallel to LLM extraction as a layout intelligence
-   * source. It is never authoritative; if omitted or unavailable the
-   * parser continues normally.
-   */
-  pdfBytes?: Uint8Array | null;
 };
 
 export type ParsedLineItemV2 = {
@@ -154,55 +138,6 @@ export type ParserV2Output = {
     pathB: PathBResult;
     pathC: PathCResult;
   };
-  debug: {
-    sanitize: {
-      raw_response_text: string | null;
-      parsed_json: unknown | null;
-      parse_error: string | null;
-      schema_error: string | null;
-      input_chars: number;
-      output_chars: number;
-      retention_ratio: number;
-      fallback_to_raw_text: boolean;
-      reason: string | null;
-    } | null;
-    extraction: {
-      chunks: ExtractorChunkDebug[];
-      rows_before_validation: number;
-      rows_after_validation: number;
-      valid_after_mapper: number;
-      empty_reasons: string[];
-      salvaged_chunks: number;
-      root_aliases_used: string[];
-      input_sources: ExtractorInputSources;
-      render_hints_attached: boolean;
-    };
-    fallback_extraction: {
-      chunks: ExtractorChunkDebug[];
-      rows_before_validation: number;
-      rows_after_validation: number;
-      valid_after_mapper: number;
-      empty_reasons: string[];
-    } | null;
-    render: {
-      render_enabled: boolean;
-      render_pages: number;
-      render_rows_detected: number;
-      render_tables_detected: number;
-      render_totals_detected: number;
-      render_sections_detected: number;
-      extracted_text_chars: number;
-      items_count_from_render: number;
-      http_status: number | null;
-      endpoint: string | null;
-      layout_extraction_mismatch: boolean;
-      reason: string | null;
-      duration_ms: number;
-      raw_response_summary: string | null;
-      json_payload_preview: string | null;
-    };
-  };
-  render_layout: RenderLayoutResult | null;
   dbPayload: {
     quote: ReturnType<typeof mapToQuotesTable>;
     items: ReturnType<typeof mapToQuoteItems>;
@@ -216,20 +151,7 @@ type ExtractorFn = (ctx: {
   supplier: string;
   openAIKey: string;
   structure?: PassiveFireStructure | null;
-  extraUserContext?: Record<string, unknown>;
 }) => Promise<ParsedLineItemV2[]>;
-
-export type ExtractorInputSources = {
-  native_text: boolean;
-  ocr_text: boolean;
-  render_text: boolean;
-  render_rows: boolean;
-  render_tables: boolean;
-  native_text_chars: number;
-  render_text_chars: number;
-  render_rows_count: number;
-  render_tables_count: number;
-};
 
 const EXTRACTOR_BY_TRADE: Record<string, ExtractorFn> = {
   passive_fire: extractPassiveFire,
@@ -334,19 +256,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         if (passive_fire_sanitizer.clean_text && passive_fire_sanitizer.clean_text.trim().length > 0) {
           effectiveRawText = passive_fire_sanitizer.clean_text;
         }
-
-        const dbg = passive_fire_sanitizer.sanitizer_debug;
-        if (dbg.fallback_to_raw_text) {
-          // call succeeded but sanitizer produced nothing usable — mark
-          // empty; we've fallen back to raw text so pipeline continues.
-          anomalies.push(`pf_sanitizer_fail_open:${dbg.reason ?? "unknown"}`);
-          tracker.markEmpty(
-            "pf_sanitize",
-            `fail_open:${dbg.reason ?? "unknown"} ratio=${dbg.retention_ratio.toFixed(3)}`,
-          );
-        } else {
-          tracker.succeed("pf_sanitize");
-        }
+        tracker.succeed("pf_sanitize");
       } catch (err) {
         console.error("[parser_v2] passive fire sanitizer failed", err);
         anomalies.push("pf_sanitizer_failed");
@@ -380,82 +290,13 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       tracker.skip("pf_structure", "trade is not passive_fire");
     }
 
-    // -------- RENDER PDF ASSISTANT LAYER (parallel intelligence) --------
-    // Runs before extraction as a non-authoritative layout source. If
-    // Render is unavailable or times out we mark the stage SKIPPED and
-    // continue. Never replaces extraction output.
-    let render_layout: RenderLayoutResult | null = null;
-    if (input.pdfBytes && input.pdfBytes.byteLength > 0) {
-      tracker.start("render_layout");
-      const renderStart = Date.now();
-      try {
-        render_layout = await extractRenderLayout({
-          pdfBytes: input.pdfBytes,
-          fileName: input.fileName,
-        });
-        if (render_layout.enabled) {
-          tracker.succeed("render_layout");
-        } else {
-          tracker.markEmpty(
-            "render_layout",
-            `render_unavailable:${render_layout.reason ?? "unknown"}`,
-          );
-          anomalies.push(`render_layout_unavailable:${render_layout.reason ?? "unknown"}`);
-        }
-      } catch (err) {
-        console.error("[parser_v2] render layout failed", err);
-        tracker.fail("render_layout", err);
-        anomalies.push("render_layout_failed");
-        render_layout = null;
-      }
-      durations.render_layout = Date.now() - renderStart;
-    } else {
-      tracker.skip("render_layout", "no_pdf_bytes");
-    }
-
     const extractor = EXTRACTOR_BY_TRADE[trade.trade] ?? extractFallback;
     const extractorName = EXTRACTOR_BY_TRADE[trade.trade] ? trade.trade : "fallback";
-
-    const renderHelperBundle: RenderHelperBundle | null = render_layout?.enabled
-      ? buildRenderHelperBundle(render_layout)
-      : null;
-    const renderHintsForExtractor = renderHelperBundle;
-    if (renderHelperBundle) {
-      console.log(
-        `[render_helper] structured_tables=${renderHelperBundle.tables.length} ` +
-        `structured_rows=${renderHelperBundle.tables.reduce((s, t) => s + t.rows.length, 0)} ` +
-        `totals_blocks=${renderHelperBundle.totals_blocks.length}`,
-      );
-    }
-
-    const extractorInputSources: ExtractorInputSources = {
-      native_text: (effectiveRawText?.length ?? 0) > 0,
-      ocr_text: false,
-      render_text:
-        (render_layout?.enabled ?? false) &&
-        (render_layout?.extracted_text_chars ?? 0) > 0,
-      render_rows:
-        (render_layout?.enabled ?? false) &&
-        (render_layout?.rows_detected_total ?? 0) > 0,
-      render_tables:
-        (render_layout?.enabled ?? false) &&
-        (render_layout?.tables_detected ?? 0) > 0,
-      native_text_chars: effectiveRawText?.length ?? 0,
-      render_text_chars: render_layout?.extracted_text_chars ?? 0,
-      render_rows_count: render_layout?.rows_detected_total ?? 0,
-      render_tables_count: render_layout?.tables_detected ?? 0,
-    };
-    console.log(
-      `[extractor_input_sources] ${JSON.stringify(extractorInputSources)} render_hints_attached=${renderHintsForExtractor != null}`,
-    );
 
     tracker.start("extraction");
     const extractStart = Date.now();
     let items: ParsedLineItemV2[] = [];
     let extractionFailed = false;
-    let extractionDebug: ExtractorChunkDebug[] = [];
-    let fallbackDebug: ExtractorChunkDebug[] | null = null;
-    let usedFallbackOnThrow = false;
     try {
       items = await extractor({
         rawText: effectiveRawText,
@@ -464,34 +305,21 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         supplier: supplier.supplierName,
         openAIKey: input.openAIKey,
         structure: passive_fire_structure,
-        extraUserContext: {
-          input_sources: extractorInputSources,
-          ...(renderHintsForExtractor ? { render_hints: renderHintsForExtractor } : {}),
-        },
       });
-      extractionDebug = takeLastExtractorDebug();
     } catch (err) {
       console.error("[parser_v2] extractor threw, falling back", err);
       anomalies.push("extractor_threw");
       extractionFailed = true;
-      extractionDebug = takeLastExtractorDebug();
       tracker.fail("extraction", err);
       try {
-        usedFallbackOnThrow = true;
         items = await extractFallback({
           rawText: input.rawText,
           pages: input.pages,
           quoteType: quoteType.quoteType,
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
-          extraUserContext: {
-            input_sources: extractorInputSources,
-            ...(renderHintsForExtractor ? { render_hints: renderHintsForExtractor } : {}),
-          },
         });
-        fallbackDebug = takeLastExtractorDebug();
       } catch (fallbackErr) {
-        fallbackDebug = takeLastExtractorDebug();
         throw new ParserV2StageError(
           formatMessage(fallbackErr),
           "extraction",
@@ -499,27 +327,10 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         );
       }
     }
-    if (!extractionFailed) {
-      if (items.length === 0) {
-        // LLM call succeeded but produced no usable rows — not PASSED.
-        tracker.markEmpty("extraction", "zero_rows_extracted");
-      } else {
-        tracker.succeed("extraction");
-      }
-    }
+    if (!extractionFailed) tracker.succeed("extraction");
     durations.extraction = Date.now() - extractStart;
 
-    if (
-      render_layout?.enabled &&
-      render_layout.rows_detected_total > 20 &&
-      items.length === 0
-    ) {
-      anomalies.push(
-        `layout_extraction_mismatch:render_rows=${render_layout.rows_detected_total}_extractor_rows=0`,
-      );
-    }
-
-    if (items.length === 0 && extractor !== extractFallback && !usedFallbackOnThrow) {
+    if (items.length === 0 && extractor !== extractFallback) {
       anomalies.push("primary_extractor_zero_rows");
       tracker.start("fallback_extraction");
       const fbStart = Date.now();
@@ -530,19 +341,9 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           quoteType: quoteType.quoteType,
           supplier: supplier.supplierName,
           openAIKey: input.openAIKey,
-          extraUserContext: {
-            input_sources: extractorInputSources,
-            ...(renderHintsForExtractor ? { render_hints: renderHintsForExtractor } : {}),
-          },
         });
-        fallbackDebug = takeLastExtractorDebug();
-        if (items.length === 0) {
-          tracker.markEmpty("fallback_extraction", "zero_rows_extracted");
-        } else {
-          tracker.succeed("fallback_extraction");
-        }
+        tracker.succeed("fallback_extraction");
       } catch (err) {
-        fallbackDebug = takeLastExtractorDebug();
         tracker.fail("fallback_extraction", err);
         throw new ParserV2StageError(
           formatMessage(err),
@@ -839,72 +640,6 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_validation,
       passive_fire_final,
       multipath: multipathResult,
-      debug: {
-        sanitize: passive_fire_sanitizer
-          ? {
-              raw_response_text: passive_fire_sanitizer.sanitizer_debug.raw_response_text,
-              parsed_json: passive_fire_sanitizer.sanitizer_debug.parsed_json,
-              parse_error: passive_fire_sanitizer.sanitizer_debug.parse_error,
-              schema_error: passive_fire_sanitizer.sanitizer_debug.schema_error,
-              input_chars: passive_fire_sanitizer.sanitizer_debug.input_chars,
-              output_chars: passive_fire_sanitizer.sanitizer_debug.output_chars,
-              retention_ratio: passive_fire_sanitizer.sanitizer_debug.retention_ratio,
-              fallback_to_raw_text: passive_fire_sanitizer.sanitizer_debug.fallback_to_raw_text,
-              reason: passive_fire_sanitizer.sanitizer_debug.reason,
-            }
-          : null,
-        extraction: {
-          chunks: extractionDebug,
-          rows_before_validation: extractionDebug.reduce((s, c) => s + c.rows_before_validation, 0),
-          rows_after_validation: extractionDebug.reduce((s, c) => s + c.rows_after_validation, 0),
-          valid_after_mapper: extractionDebug.reduce((s, c) => s + (c.valid_after_mapper ?? 0), 0),
-          empty_reasons: extractionDebug
-            .map((c) => c.empty_reason)
-            .filter((r): r is string => !!r),
-          salvaged_chunks: extractionDebug.filter((c) => c.salvaged).length,
-          root_aliases_used: Array.from(
-            new Set(
-              extractionDebug
-                .map((c) => c.root_alias_used)
-                .filter((a): a is string => !!a),
-            ),
-          ),
-          input_sources: extractorInputSources,
-          render_hints_attached: renderHintsForExtractor != null,
-        },
-        fallback_extraction: fallbackDebug
-          ? {
-              chunks: fallbackDebug,
-              rows_before_validation: fallbackDebug.reduce((s, c) => s + c.rows_before_validation, 0),
-              rows_after_validation: fallbackDebug.reduce((s, c) => s + c.rows_after_validation, 0),
-              valid_after_mapper: fallbackDebug.reduce((s, c) => s + (c.valid_after_mapper ?? 0), 0),
-              empty_reasons: fallbackDebug
-                .map((c) => c.empty_reason)
-                .filter((r): r is string => !!r),
-            }
-          : null,
-        render: {
-          render_enabled: render_layout?.enabled ?? false,
-          render_pages: render_layout?.render_pages ?? 0,
-          render_rows_detected: render_layout?.rows_detected_total ?? 0,
-          render_tables_detected: render_layout?.tables_detected ?? 0,
-          render_totals_detected: render_layout?.totals_detected ?? 0,
-          render_sections_detected: render_layout?.sections_detected ?? 0,
-          extracted_text_chars: render_layout?.extracted_text_chars ?? 0,
-          items_count_from_render: render_layout?.items_count_from_render ?? 0,
-          http_status: render_layout?.http_status ?? null,
-          endpoint: render_layout?.endpoint ?? null,
-          layout_extraction_mismatch:
-            (render_layout?.enabled ?? false) &&
-            (render_layout?.rows_detected_total ?? 0) > 20 &&
-            items.length === 0,
-          reason: render_layout?.reason ?? null,
-          duration_ms: render_layout?.duration_ms ?? 0,
-          raw_response_summary: render_layout?.raw_response_summary ?? null,
-          json_payload_preview: render_layout?.json_payload_preview ?? null,
-        },
-      },
-      render_layout,
       dbPayload: { quote, items: dbItems },
     };
   } catch (err) {

@@ -8,7 +8,6 @@ export async function extractActiveFire(ctx: {
   quoteType: string;
   supplier: string;
   openAIKey: string;
-  extraUserContext?: Record<string, unknown>;
 }): Promise<ParsedLineItemV2[]> {
   return await runExtractorLLM({
     systemPrompt: ACTIVE_FIRE_PROMPT,
@@ -21,7 +20,6 @@ export async function extractActiveFire(ctx: {
     extraUserContext: {
       focus:
         "Active fire scope: sprinklers, hydrants, hose reels, fire alarm/detection, EWIS, pumps, tank. Exclude passive-fire penetration sealing.",
-      ...(ctx.extraUserContext ?? {}),
     },
   });
 }

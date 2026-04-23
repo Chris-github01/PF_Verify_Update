@@ -8,7 +8,6 @@ export async function extractCarpentry(ctx: {
   quoteType: string;
   supplier: string;
   openAIKey: string;
-  extraUserContext?: Record<string, unknown>;
 }): Promise<ParsedLineItemV2[]> {
   return await runExtractorLLM({
     systemPrompt: CARPENTRY_PROMPT,
@@ -20,7 +19,6 @@ export async function extractCarpentry(ctx: {
     openAIKey: ctx.openAIKey,
     extraUserContext: {
       focus: "Carpentry / joinery scope: framing, timber, plasterboard, doors, hardware, fit-off.",
-      ...(ctx.extraUserContext ?? {}),
     },
   });
 }

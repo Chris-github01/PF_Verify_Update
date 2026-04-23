@@ -8,7 +8,6 @@ export async function extractElectrical(ctx: {
   quoteType: string;
   supplier: string;
   openAIKey: string;
-  extraUserContext?: Record<string, unknown>;
 }): Promise<ParsedLineItemV2[]> {
   return await runExtractorLLM({
     systemPrompt: ELECTRICAL_PROMPT,
@@ -20,7 +19,6 @@ export async function extractElectrical(ctx: {
     openAIKey: ctx.openAIKey,
     extraUserContext: {
       focus: "Electrical scope: cabling, switchboards, lighting, power circuits, testing & commissioning.",
-      ...(ctx.extraUserContext ?? {}),
     },
   });
 }

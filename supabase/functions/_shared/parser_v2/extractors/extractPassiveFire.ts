@@ -103,7 +103,6 @@ export async function extractPassiveFire(ctx: {
   supplier: string;
   openAIKey: string;
   structure?: PassiveFireStructure | null;
-  extraUserContext?: Record<string, unknown>;
 }): Promise<ParsedLineItemV2[]> {
   const prescan = prescanPassiveFire(ctx.rawText);
   const structure = ctx.structure ?? null;
@@ -125,7 +124,6 @@ export async function extractPassiveFire(ctx: {
       frr_required: true,
       prescan,
       financial_map: structure,
-      ...(ctx.extraUserContext ?? {}),
     },
     rowMapper: useStructureAwarePrompt ? mapLineItemRow : undefined,
   });
@@ -133,7 +131,7 @@ export async function extractPassiveFire(ctx: {
   return postProcess(rawItems, prescan);
 }
 
-function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 | null {
+function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineItemV2 {
   const base = normaliseRow(
     {
       item_number: r.item_number ?? null,
@@ -151,7 +149,6 @@ function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineIt
     },
     trade,
   );
-  if (!base) return null;
 
   const block = toStringOrNull(r.building_or_block);
   const page = toStringOrNull(r.source_page);
