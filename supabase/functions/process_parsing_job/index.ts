@@ -398,6 +398,8 @@ Deno.serve(async (req: Request) => {
       parser_v2_total_inc_gst: finalRecord?.quote_total_inc_gst ?? null,
       parser_v2_optional_total: finalRecord?.optional_total ?? null,
       passive_fire_final: finalRecord,
+      parse_status: "success",
+      parsed_at: new Date().toISOString(),
     }).eq("id", quoteId);
 
     const parseMetadata = {
@@ -563,6 +565,7 @@ async function persistFailure(
       passive_fire_final: failurePassiveFireFinal,
       resolution_source: "parser_v2_failed",
       resolution_confidence: "LOW",
+      parse_status: "failed",
       updated_at: new Date().toISOString(),
     }).eq("id", quoteId);
   }
