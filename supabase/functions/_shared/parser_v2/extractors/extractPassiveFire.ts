@@ -19,7 +19,6 @@ import type { ParsedLineItemV2 } from "../runParserV2.ts";
 import type { PassiveFireStructure } from "../classifiers/classifyPassiveFireStructure.ts";
 import { runExtractorLLM, normaliseRow, normaliseRowLoose } from "./_extractorRuntime.ts";
 import { extractFallback } from "./extractFallback.ts";
-import { tryDeterministicTableParse } from "./_tableRegexParser.ts";
 
 export const EXTRACT_PASSIVE_FIRE_VERSION = "v2-loose-rows-2026-04-23";
 console.log(`[extractPassiveFire] MODULE_LOAD version=${EXTRACT_PASSIVE_FIRE_VERSION}`);
@@ -113,26 +112,6 @@ export async function extractPassiveFire(ctx: {
   const prescan = prescanPassiveFire(ctx.rawText);
   const structure = ctx.structure ?? null;
   const useStructureAwarePrompt = structure !== null;
-
-  // PRIORITY 2: try deterministic table parse before paying LLM cost.
-  const authoritativeTotal =
-    typeof structure?.authoritative_total_ex_gst === "number"
-      ? structure.authoritative_total_ex_gst
-      : null;
-  const deterministic = tryDeterministicTableParse({
-    rawText: ctx.rawText,
-    trade: "passive_fire",
-    authoritativeTotal,
-  });
-  console.log(
-    `[extractPassiveFire] deterministic_pre_parse rows=${deterministic.row_count} strategy=${deterministic.strategy} sum=${deterministic.matched_total} matches_authoritative=${deterministic.matches_authoritative}`,
-  );
-  if (deterministic.matches_authoritative && deterministic.items.length >= 3) {
-    console.log(
-      `[extractPassiveFire] deterministic_short_circuit — skipping LLM (rows=${deterministic.items.length})`,
-    );
-    return postProcess(deterministic.items, prescan);
-  }
 
   const rawItems = await runExtractorLLM({
     systemPrompt: useStructureAwarePrompt

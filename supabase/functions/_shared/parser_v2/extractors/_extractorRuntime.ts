@@ -12,16 +12,15 @@
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
 import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
-const EXTRACTOR_MODEL = "gpt-4.1-mini";
+const EXTRACTOR_MODEL = "gpt-4.1";
 const CHUNK_CHAR_BUDGET = 18000;
 const MAX_CHUNKS = 8;
 const CHUNK_CONCURRENCY = 4;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_RETRIES = 3;
-const EXTRACTION_STAGE_BUDGET_MS = 240_000;
-const PER_CHUNK_BUDGET_MS = 90_000;
+const EXTRACTION_STAGE_BUDGET_MS = 35_000;
+const PER_CHUNK_BUDGET_MS = 18_000;
 const MAX_RAW_RESPONSE_PERSIST = 20_000;
-export const EXTRACTOR_RUNTIME_VERSION = "v3-abort-mini-2026-04-23";
 
 export type ExtractorContext = {
   systemPrompt: string;
@@ -129,22 +128,24 @@ export async function runExtractorLLMWithTelemetry(
       document_chunk: chunk.text,
       context: ctx.extraUserContext ?? {},
     };
-    const stageRemaining = remainingBudget();
-    if (stageRemaining < 1000) {
+    const budget = Math.min(PER_CHUNK_BUDGET_MS, remainingBudget());
+    if (budget < 1000) {
       console.warn(`[extractor:${ctx.trade}] chunk ${i} skipped — no budget remaining`);
       d.empty_reason = "skipped_no_budget";
       d.parse_error = "skipped_no_budget";
       return { rows: null, debug: d };
     }
-    const result = await callOpenAIWithRetry({
-      openAIKey: ctx.openAIKey,
-      systemPrompt: ctx.systemPrompt,
-      userPayload,
-      trade: ctx.trade,
-      chunkIndex: i,
-      perAttemptBudgetMs: Math.min(PER_CHUNK_BUDGET_MS, stageRemaining),
-      stageRemainingMs: () => remainingBudget(),
-    });
+    const result = await raceOrNull(
+      callOpenAIWithRetry({
+        openAIKey: ctx.openAIKey,
+        systemPrompt: ctx.systemPrompt,
+        userPayload,
+        trade: ctx.trade,
+        chunkIndex: i,
+      }),
+      budget,
+      `chunk ${i}`,
+    );
     if (result == null) {
       d.empty_reason = "chunk_timeout_or_failure";
       d.parse_error = "chunk_timeout_or_failure";
@@ -235,35 +236,18 @@ async function callOpenAIWithRetry(args: {
   userPayload: Record<string, unknown>;
   trade: string;
   chunkIndex: number;
-  perAttemptBudgetMs: number;
-  stageRemainingMs: () => number;
 }): Promise<ChunkCallResult | null> {
   let lastErr: unknown = null;
   const userJson = JSON.stringify(args.userPayload);
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const stageRemaining = args.stageRemainingMs();
-    if (stageRemaining < 1000) {
-      console.warn(
-        `[extractor:${args.trade}] chunk ${args.chunkIndex} attempt ${attempt} skipped — stage budget exhausted`,
-      );
-      break;
-    }
-    const attemptBudget = Math.min(args.perAttemptBudgetMs, stageRemaining);
-    const controller = new AbortController();
-    const abortTimer = setTimeout(() => {
-      try {
-        controller.abort();
-      } catch { /* ignore */ }
-    }, attemptBudget);
     try {
       markRequestSent(
         Math.round((args.systemPrompt.length + userJson.length) / 4),
         EXTRACTOR_MODEL,
       );
       const reqStart = Date.now();
-      const fetchPromise = fetch(OPENAI_URL, {
+      const res = await fetch(OPENAI_URL, {
         method: "POST",
-        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${args.openAIKey}`,
           "Content-Type": "application/json",
@@ -278,19 +262,6 @@ async function callOpenAIWithRetry(args: {
           ],
         }),
       });
-      const raced = await raceOrNull(
-        fetchPromise,
-        attemptBudget,
-        `chunk ${args.chunkIndex} attempt ${attempt}`,
-      );
-      if (raced == null) {
-        try {
-          controller.abort();
-        } catch { /* ignore */ }
-        lastErr = new Error(`attempt_timeout_${attemptBudget}ms`);
-        continue;
-      }
-      const res = raced;
       if (res.status === 429 || res.status >= 500) {
         throw new Error(`transient HTTP ${res.status}`);
       }
@@ -391,15 +362,12 @@ async function callOpenAIWithRetry(args: {
       };
     } catch (err) {
       lastErr = err;
-    } finally {
-      clearTimeout(abortTimer);
+      const backoff = 400 * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, backoff));
     }
-    const backoff = 400 * Math.pow(2, attempt);
-    if (args.stageRemainingMs() <= backoff + 500) break;
-    await new Promise((r) => setTimeout(r, backoff));
   }
   console.error(
-    `[extractor:${args.trade}] chunk ${args.chunkIndex} failed after retries`,
+    `[extractor:${args.trade}] chunk ${args.chunkIndex} failed after ${MAX_RETRIES} attempts`,
     lastErr,
   );
   return null;
@@ -608,45 +576,6 @@ async function raceOrNull<T>(
 
 type Chunk = { text: string; pageRange: string };
 
-// PRIORITY 4: identify pages that actually carry schedule rows. Cover
-// pages, T&Cs, logos, and signature blocks are excluded from chunking
-// to avoid spending LLM budget on boilerplate.
-const SCHEDULE_HEADERS_RE = /\b(firestopping\s+schedule|line\s*id|unit\s+rate|qty\s+unit|quantity\s+unit|item\s+description|schedule\s+of\s+(?:rates|quantities|works)|scope\s+of\s+work(?:s)?|pricing\s+schedule|bill\s+of\s+quantities|boq)\b/i;
-const BOILERPLATE_RE = /\b(terms\s+and\s+conditions|general\s+conditions|standard\s+terms|privacy\s+policy|health\s+and\s+safety|insurance\s+certificate|signed\s+on\s+behalf|authorised\s+signatory|company\s+profile|quality\s+assurance\s+statement)\b/i;
-const CURRENCY_LINE_RE = /\$\s?\d[\d,]*\.\d{2}/;
-
-function isScheduleBearing(text: string): boolean {
-  if (!text || text.trim().length < 40) return false;
-  if (SCHEDULE_HEADERS_RE.test(text)) return true;
-  const currencyMatches = text.match(/\$\s?\d[\d,]*\.\d{2}/g);
-  if (currencyMatches && currencyMatches.length >= 3) return true;
-  const digitDensity = (text.match(/\d/g)?.length ?? 0) / Math.max(1, text.length);
-  if (digitDensity > 0.04 && CURRENCY_LINE_RE.test(text)) return true;
-  return false;
-}
-
-function isBoilerplate(text: string): boolean {
-  if (!text) return true;
-  if (BOILERPLATE_RE.test(text)) {
-    const currencyCount = (text.match(/\$\s?\d[\d,]*\.\d{2}/g) ?? []).length;
-    if (currencyCount < 2) return true;
-  }
-  return false;
-}
-
-function filterSchedulePages(
-  pages: { pageNum: number; text: string }[],
-): { pageNum: number; text: string }[] {
-  if (!pages || pages.length === 0) return pages;
-  const kept = pages.filter((p) => isScheduleBearing(p.text) && !isBoilerplate(p.text));
-  // Safety: if aggressive filter wipes out everything, fall back to
-  // dropping only pages that are clearly boilerplate.
-  if (kept.length === 0) {
-    return pages.filter((p) => !isBoilerplate(p.text));
-  }
-  return kept;
-}
-
 function buildChunks(
   pages: { pageNum: number; text: string }[],
   rawText: string,
@@ -657,21 +586,10 @@ function buildChunks(
       pageRange: `chunk_${idx + 1}`,
     }));
   }
-  const filtered = filterSchedulePages(pages);
-  if (filtered.length !== pages.length) {
-    const kept = filtered.map((p) => p.pageNum).join(",");
-    const dropped = pages
-      .filter((p) => !filtered.includes(p))
-      .map((p) => p.pageNum)
-      .join(",");
-    console.log(
-      `[extractor:chunks] filtered ${pages.length}→${filtered.length} pages kept=[${kept}] dropped=[${dropped}]`,
-    );
-  }
   const chunks: Chunk[] = [];
   let buffer = "";
-  let firstPage = filtered[0].pageNum;
-  let lastPage = filtered[0].pageNum;
+  let firstPage = pages[0].pageNum;
+  let lastPage = pages[0].pageNum;
 
   const flush = () => {
     if (!buffer.trim()) return;
@@ -679,7 +597,7 @@ function buildChunks(
     buffer = "";
   };
 
-  for (const p of filtered) {
+  for (const p of pages) {
     const block = `\n\n[Page ${p.pageNum}]\n${p.text}`;
     if (buffer.length + block.length > CHUNK_CHAR_BUDGET && buffer.length > 0) {
       flush();
