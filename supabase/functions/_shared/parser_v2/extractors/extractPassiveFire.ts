@@ -208,12 +208,6 @@ function reconcileWithStructure(
   const OPTIONAL_HEADER_RE =
     /\b(optional|add[-\s]?(?:to[-\s]?)?scope|add[-\s]?on|provisional|extra[-\s]?over|alternate|alternative|priced\s+separately|separate\s+price|price\s+on\s+application|if\s+accepted|if\s+required|tbc|client\s+to\s+confirm|architectural\s*\/?\s*structural\s+details?|flush\s+box(?:es)?)\b/i;
 
-  // Broader regex applied at row-description level in PASS 4. Includes
-  // "architectural/structural <noun>" (beam/column/cavity/barrier/detail)
-  // because these sub-header rows rarely carry the word "optional" inline.
-  const OPTIONAL_DESC_HINT_RE =
-    /\b(optional|provisional|extra[-\s]?over|alternate|alternative|priced\s+separately|separately\s+priced|price\s+on\s+application|if\s+accepted|if\s+required|tbc|client\s+to\s+confirm|add[-\s]?on|add[-\s]?to[-\s]?scope|architectural\s*\/?\s*structural\s+(?:beam|column|cavity|barrier|detail|post|joist|rafter|stud)|flush\s+box(?:es)?|intumescent\s+flush\s+box|putty\s+pad)\b/i;
-
   const optionalSections = structure.sections
     .filter(
       (s) =>
@@ -302,47 +296,38 @@ function reconcileWithStructure(
     }
   }
 
-  // PASS 4 — description-level optional-hint keywords. Triggers when we
-  // still overshoot main_scope_subtotal, and catches rows under common
-  // optional sub-headers (Architectural/Structural, Flush Boxes, etc.)
-  // whose source_section was lost or whose Prompt 2 section was named
-  // differently. Runs even if Prompt 2 never emitted an optional section,
-  // as long as we have a trustworthy main target.
+  // PASS 4 — page-range inheritance from Prompt 2. For each row, find the
+  // section in structure.sections whose `page` is the closest page <= row
+  // source_page. That section's section_role is the authoritative scope
+  // for the row (ancestor-stack inheritance). This is trade-agnostic and
+  // relies entirely on Prompt 2's structural analysis — no hardcoded
+  // keywords on row descriptions, so it generalises to any quote.
   const pass4Idx = new Set<number>();
-  if (mainTarget != null && mainTarget > 0 && hasConfidence) {
-    const sumMainAfter123 = items.reduce((acc, it, idx) => {
-      if (it.scope_category !== "main") return acc;
-      if (pass1Idx.has(idx) || pass2Idx.has(idx) || pass3Idx.has(idx))
-        return acc;
-      return acc + (it.total_price ?? 0);
-    }, 0);
-    const deviation = (sumMainAfter123 - mainTarget) / mainTarget;
-    if (deviation > 0.15) {
-      const rows = items
-        .map((it, idx) => ({ it, idx }))
-        .filter(
-          (r) =>
-            r.it.scope_category === "main" &&
-            !pass1Idx.has(r.idx) &&
-            !pass2Idx.has(r.idx) &&
-            !pass3Idx.has(r.idx),
-        )
-        .sort((a, b) => (b.it.total_price ?? 0) - (a.it.total_price ?? 0));
-      let remaining = sumMainAfter123 - mainTarget;
-      for (const { it, idx } of rows) {
-        if (remaining <= 0) break;
-        const haystack = [
-          it.description ?? "",
-          it.source_section ?? "",
-          it.sub_scope ?? "",
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!OPTIONAL_DESC_HINT_RE.test(haystack)) continue;
-        pass4Idx.add(idx);
-        remaining -= it.total_price ?? 0;
+  const excludedByPage = new Set<number>();
+  const pagedSections = [...structure.sections]
+    .filter((s) => s.page != null && Number.isFinite(s.page))
+    .sort((a, b) => (a.page as number) - (b.page as number));
+  if (pagedSections.length > 0) {
+    const roleForPage = (page: number | null | undefined) => {
+      if (page == null || !Number.isFinite(page)) return null;
+      let role: typeof pagedSections[number]["section_role"] | null = null;
+      let name: string | null = null;
+      for (const s of pagedSections) {
+        if ((s.page as number) <= page) {
+          role = s.section_role;
+          name = s.section_name;
+        } else break;
       }
-    }
+      return role == null ? null : { role, name };
+    };
+    items.forEach((it, idx) => {
+      if (it.scope_category !== "main") return;
+      if (pass1Idx.has(idx) || pass2Idx.has(idx) || pass3Idx.has(idx)) return;
+      const ctx = roleForPage(it.source_page ?? null);
+      if (!ctx) return;
+      if (ctx.role === "optional") pass4Idx.add(idx);
+      else if (ctx.role === "excluded") excludedByPage.add(idx);
+    });
   }
 
   const all = new Set<number>([
@@ -351,9 +336,9 @@ function reconcileWithStructure(
     ...pass3Idx,
     ...pass4Idx,
   ]);
-  if (all.size === 0) {
+  if (all.size === 0 && excludedByPage.size === 0) {
     console.log(
-      `[extractPassiveFire] reconcile: no rows reclassified (optional_sections=${optionalSections.length})`,
+      `[extractPassiveFire] reconcile: no rows reclassified (optional_sections=${optionalSections.length}, paged_sections=${pagedSections.length})`,
     );
     return items;
   }
@@ -362,16 +347,24 @@ function reconcileWithStructure(
     (acc, it, idx) => (all.has(idx) ? acc + (it.total_price ?? 0) : acc),
     0,
   );
+  const excludedTotal = items.reduce(
+    (acc, it, idx) =>
+      excludedByPage.has(idx) ? acc + (it.total_price ?? 0) : acc,
+    0,
+  );
   console.warn(
     `[extractPassiveFire] reconcile: reclassified ${all.size} rows ` +
-      `($${reclassifiedTotal.toFixed(2)}) main→optional ` +
+      `($${reclassifiedTotal.toFixed(2)}) main→optional, dropped ${excludedByPage.size} excluded ` +
+      `($${excludedTotal.toFixed(2)}) ` +
       `[pass1=${pass1Idx.size} pass2=${pass2Idx.size} pass3=${pass3Idx.size} pass4=${pass4Idx.size}] ` +
       `main_target=${mainTarget ?? "null"} optional_target=${structure.optional_scope_total ?? "null"}`,
   );
 
-  return items.map((it, idx) =>
-    all.has(idx) ? { ...it, scope_category: "optional" as const } : it,
-  );
+  return items
+    .map((it, idx) =>
+      all.has(idx) ? { ...it, scope_category: "optional" as const } : it,
+    )
+    .filter((_, idx) => !excludedByPage.has(idx));
 }
 
 const STOPWORDS = new Set([
@@ -473,6 +466,7 @@ function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineIt
 
   const block = toStringOrNull(r.building_or_block);
   const page = toStringOrNull(r.source_page);
+  const pageNum = toNumberOrNull(r.source_page);
   const section = toStringOrNull(r.source_section);
   const rowRole = toStringOrNull(r.row_role);
   const serviceTrade = toStringOrNull(r.service_trade);
@@ -516,6 +510,7 @@ function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineIt
         : null) ||
       null,
     source_section: section,
+    source_page: pageNum,
     building_or_block: block,
   };
 }
@@ -524,6 +519,12 @@ function toStringOrNull(v: unknown): string | null {
   if (v == null) return null;
   const s = String(v).trim();
   return s.length === 0 ? null : s;
+}
+
+function toNumberOrNull(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) ? n : null;
 }
 
 function prescanPassiveFire(text: string): PassiveFirePrescan {

@@ -102,6 +102,7 @@ export type ParsedLineItemV2 = {
   source: "llm" | "regex_fallback";
   confidence: number;
   source_section?: string | null;
+  source_page?: number | null;
   building_or_block?: string | null;
 };
 
