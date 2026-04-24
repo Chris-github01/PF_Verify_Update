@@ -245,14 +245,34 @@ function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineIt
   const section = toStringOrNull(r.source_section);
   const rowRole = toStringOrNull(r.row_role);
   const serviceTrade = toStringOrNull(r.service_trade);
+  const systemName = toStringOrNull(r.system_name) ?? toStringOrNull(r.passive_fire_system);
+  const penetrationType = toStringOrNull(r.penetration_type);
+  const frr = toStringOrNull(r.frr);
 
-  const contextParts: string[] = [];
-  if (block) contextParts.push(`[${block}]`);
-  if (section) contextParts.push(`(${section})`);
-  const prefix = contextParts.join(" ");
-  const description = prefix
-    ? `${prefix} ${base.description}`.trim()
-    : base.description;
+  let description = base.description;
+
+  const hasSystem = systemName && !description.toLowerCase().includes(systemName.toLowerCase());
+  const hasFrr = frr && !description.toLowerCase().includes(frr.toLowerCase());
+  const hasService =
+    serviceTrade &&
+    serviceTrade !== "unknown" &&
+    serviceTrade !== "mixed" &&
+    !description.toLowerCase().includes(serviceTrade.toLowerCase());
+
+  const enrichParts: string[] = [];
+  if (hasService) enrichParts.push(serviceTrade!);
+  if (penetrationType && !description.toLowerCase().includes(penetrationType.toLowerCase())) {
+    enrichParts.push(penetrationType.replace(/_/g, " "));
+  }
+  if (enrichParts.length > 0) {
+    description = `${enrichParts.join(" ")} ${description}`.trim();
+  }
+  if (hasFrr) description = `${description} ${frr}`.trim();
+  if (hasSystem) description = `${description} — ${systemName}`.trim();
+
+  if (block) {
+    description = `[${block}] ${description}`.trim();
+  }
 
   return {
     ...base,

@@ -67,7 +67,17 @@ STEP 10 — PASSIVE FIRE SYSTEM DETECTION
 Examples: Ryanfire Batt 502, Hilti CP606, CP611a, Allproof Collar, Protecta FR Collar, Multiflex, Powerpad, FirePro M707, Servowrap, Rokwrap.
 Store in system_name.
 
-STEP 11 — CONFIDENCE RULES
+STEP 11 — DESCRIPTION COMPOSITION (CRITICAL)
+The "description" field MUST be a self-contained identity that a reviewer can read without looking at other columns. Compose it from whichever of these components are present in the source row, in this order:
+{service_trade} {penetration_type} {size} {substrate} {frr} — {system_name/installation_material}
+Examples:
+- "Hydraulic PVC pipe 100mm concrete floor -/60/60 — Allproof Low Profile Collar"
+- "Electrical cable bundle 20mm CLT floor -/60/60 — Ryanfire SL Collar with Mastic"
+- "Mechanical duct 300x200 plasterboard wall -/60/60 — Hilti CP606"
+Never omit the installation material / product / system when it is visible in the source — that field is what differentiates otherwise-identical penetration rows. Also continue to populate system_name separately.
+If a component is missing in the source, drop it; never invent values. This rule is generic across quote structures: every passive-fire quote has service, size, substrate, FRR and product dimensions even when column layouts differ.
+
+STEP 12 — CONFIDENCE RULES
 High: clear row structure, qty + rate + total present, known passive fire product, inside detail schedule.
 Medium: missing one numeric field.
 Low: OCR fragmented row, unclear if summary or detail.
@@ -79,7 +89,7 @@ STRICT OUTPUT JSON:
       "source_page": 4,
       "source_section": "Hydraulic Penetrations",
       "building_or_block": "Building A",
-      "description": "PVC Pipe 100mm Concrete Floor",
+      "description": "Hydraulic PVC pipe 100mm concrete floor -/60/60 — Allproof Low Profile Collar",
       "trade": "passive_fire",
       "service_trade": "hydraulic",
       "system_name": "Allproof Low Profile Collar",
