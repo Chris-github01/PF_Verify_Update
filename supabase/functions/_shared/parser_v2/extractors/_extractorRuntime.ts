@@ -578,7 +578,7 @@ async function raceOrNull<T>(
   });
   try {
     const winner = await Promise.race([promise, timeoutP]);
-    if ((winner as { __timeout?: boolean }).__timeout) {
+    if (winner && typeof winner === "object" && (winner as { __timeout?: boolean }).__timeout) {
       console.warn(`[extractor] ${label} exceeded ${timeoutMs}ms — skipping chunk`);
       return null;
     }
