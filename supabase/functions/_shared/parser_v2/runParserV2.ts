@@ -101,6 +101,8 @@ export type ParsedLineItemV2 = {
   frr: string | null;
   source: "llm" | "regex_fallback";
   confidence: number;
+  source_section?: string | null;
+  building_or_block?: string | null;
 };
 
 export type ParserV2Output = {

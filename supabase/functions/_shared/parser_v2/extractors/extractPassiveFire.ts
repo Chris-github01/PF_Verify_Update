@@ -204,67 +204,165 @@ function reconcileWithStructure(
   structure: PassiveFireStructure | null,
 ): ParsedLineItemV2[] {
   if (!structure) return items;
-  const mainTarget = structure.main_scope_subtotal;
-  const optTarget = structure.optional_scope_total;
-  if (mainTarget == null || mainTarget <= 0) return items;
-  if (!Number.isFinite(structure.confidence) || structure.confidence < 0.5) return items;
 
-  const sumMain = items
-    .filter((it) => it.scope_category === "main")
-    .reduce((acc, it) => acc + (it.total_price ?? 0), 0);
-  if (sumMain <= 0) return items;
+  const OPTIONAL_HEADER_RE =
+    /\b(optional|add[-\s]?(?:to[-\s]?)?scope|add[-\s]?on|provisional|extra[-\s]?over|alternate|alternative|priced\s+separately|separate\s+price|price\s+on\s+application|if\s+accepted|if\s+required|tbc|client\s+to\s+confirm|architectural\s*\/?\s*structural\s+details?|flush\s+box(?:es)?)\b/i;
 
-  const deviation = Math.abs(sumMain - mainTarget) / mainTarget;
-  if (deviation <= 0.2) return items;
-  if (sumMain <= mainTarget) return items; // undershoot not addressed here
+  const optionalSections = structure.sections
+    .filter(
+      (s) =>
+        s.section_role === "optional" ||
+        OPTIONAL_HEADER_RE.test(s.section_name ?? ""),
+    )
+    .map((s) => ({
+      name: s.section_name.toLowerCase().trim(),
+      tokens: tokenize(s.section_name),
+    }))
+    .filter((s) => s.tokens.length > 0);
 
-  // Build optional-section name set from Prompt 2
-  const optionalSectionNames = new Set(
-    structure.sections
-      .filter((s) => s.section_role === "optional")
-      .map((s) => s.section_name.toLowerCase().trim())
-      .filter((n) => n.length > 0),
-  );
+  const optionalSectionFromStructure = optionalSections.length > 0;
 
-  const OPTIONAL_HINT_RE =
-    /\b(optional|add\s+to\s+scope|provisional|extra\s+over|alternate|alternative|priced\s+separately|tbc|if\s+accepted|if\s+required|architectural\s+details?|structural\s+details?|flush\s+box(?:es)?)\b/i;
-
-  const overshoot = sumMain - mainTarget;
-  const mainRows = items
-    .map((it, idx) => ({ it, idx }))
-    .filter((r) => r.it.scope_category === "main")
-    .sort((a, b) => (b.it.total_price ?? 0) - (a.it.total_price ?? 0));
-
-  let remainingToReclass = overshoot;
-  const reclassIdx = new Set<number>();
-  for (const { it, idx } of mainRows) {
-    if (remainingToReclass <= 0) break;
-    const desc = (it.description ?? "").toLowerCase();
-    const sub = (it.sub_scope ?? "").toLowerCase();
-    const matchesOptionalSection = [...optionalSectionNames].some(
-      (n) => desc.includes(n) || sub.includes(n),
-    );
-    const matchesOptionalHint = OPTIONAL_HINT_RE.test(desc) || OPTIONAL_HINT_RE.test(sub);
-    if (!matchesOptionalSection && !matchesOptionalHint) continue;
-    reclassIdx.add(idx);
-    remainingToReclass -= it.total_price ?? 0;
+  // PASS 1 — deterministic section-name match.
+  // Any row whose source_section matches an optional Prompt 2 section gets
+  // reclassified, regardless of overshoot magnitude.
+  const pass1Idx = new Set<number>();
+  if (optionalSectionFromStructure) {
+    items.forEach((it, idx) => {
+      if (it.scope_category !== "main") return;
+      const rowSection = (it.source_section ?? "").toString();
+      if (!rowSection) return;
+      const rowTokens = tokenize(rowSection);
+      if (rowTokens.length === 0) return;
+      const matched = optionalSections.some((s) =>
+        tokenOverlap(rowTokens, s.tokens) >= 0.5 ||
+        rowSection.toLowerCase().includes(s.name) ||
+        s.name.includes(rowSection.toLowerCase()),
+      );
+      if (matched) pass1Idx.add(idx);
+    });
   }
 
-  if (reclassIdx.size === 0) {
-    console.warn(
-      `[extractPassiveFire] reconcile overshoot ${overshoot.toFixed(2)} but no optional-match candidates — leaving rows unchanged`,
+  // PASS 2 — inline optional header keywords in source_section or description.
+  // This catches cases where Prompt 2 missed the header but the LLM captured
+  // it into source_section (or left a breadcrumb in the description).
+  const pass2Idx = new Set<number>();
+  items.forEach((it, idx) => {
+    if (it.scope_category !== "main") return;
+    if (pass1Idx.has(idx)) return;
+    const section = (it.source_section ?? "").toString();
+    if (section && OPTIONAL_HEADER_RE.test(section)) {
+      pass2Idx.add(idx);
+      return;
+    }
+  });
+
+  // PASS 3 — overshoot-triggered token overlap against optional section
+  // tokens on description (handles rows where source_section was lost).
+  const pass3Idx = new Set<number>();
+  const mainTarget = structure.main_scope_subtotal;
+  if (
+    mainTarget != null &&
+    mainTarget > 0 &&
+    Number.isFinite(structure.confidence) &&
+    structure.confidence >= 0.5
+  ) {
+    const sumMainAfter12 = items.reduce((acc, it, idx) => {
+      if (it.scope_category !== "main") return acc;
+      if (pass1Idx.has(idx) || pass2Idx.has(idx)) return acc;
+      return acc + (it.total_price ?? 0);
+    }, 0);
+    const deviation = (sumMainAfter12 - mainTarget) / mainTarget;
+    if (deviation > 0.2 && optionalSectionFromStructure) {
+      const rows = items
+        .map((it, idx) => ({ it, idx }))
+        .filter(
+          (r) =>
+            r.it.scope_category === "main" &&
+            !pass1Idx.has(r.idx) &&
+            !pass2Idx.has(r.idx),
+        )
+        .sort((a, b) => (b.it.total_price ?? 0) - (a.it.total_price ?? 0));
+      let remaining = sumMainAfter12 - mainTarget;
+      for (const { it, idx } of rows) {
+        if (remaining <= 0) break;
+        const descTokens = tokenize(it.description ?? "");
+        const subTokens = tokenize(it.sub_scope ?? "");
+        const matched = optionalSections.some(
+          (s) =>
+            tokenOverlap(descTokens, s.tokens) >= 0.5 ||
+            tokenOverlap(subTokens, s.tokens) >= 0.5,
+        );
+        if (!matched) continue;
+        pass3Idx.add(idx);
+        remaining -= it.total_price ?? 0;
+      }
+    }
+  }
+
+  const all = new Set<number>([...pass1Idx, ...pass2Idx, ...pass3Idx]);
+  if (all.size === 0) {
+    console.log(
+      `[extractPassiveFire] reconcile: no rows reclassified (optional_sections=${optionalSections.length})`,
     );
     return items;
   }
 
+  const reclassifiedTotal = items.reduce(
+    (acc, it, idx) => (all.has(idx) ? acc + (it.total_price ?? 0) : acc),
+    0,
+  );
   console.warn(
-    `[extractPassiveFire] reconcile: main_sum=${sumMain.toFixed(2)} target=${mainTarget.toFixed(2)} ` +
-      `optional_target=${optTarget ?? "null"} reclassified=${reclassIdx.size} rows as optional`,
+    `[extractPassiveFire] reconcile: reclassified ${all.size} rows ` +
+      `($${reclassifiedTotal.toFixed(2)}) main→optional ` +
+      `[pass1=${pass1Idx.size} pass2=${pass2Idx.size} pass3=${pass3Idx.size}] ` +
+      `main_target=${mainTarget ?? "null"} optional_target=${structure.optional_scope_total ?? "null"}`,
   );
 
   return items.map((it, idx) =>
-    reclassIdx.has(idx) ? { ...it, scope_category: "optional" as const } : it,
+    all.has(idx) ? { ...it, scope_category: "optional" as const } : it,
   );
+}
+
+const STOPWORDS = new Set([
+  "the",
+  "and",
+  "or",
+  "of",
+  "to",
+  "a",
+  "an",
+  "in",
+  "on",
+  "for",
+  "with",
+  "scope",
+  "section",
+  "items",
+  "details",
+  "detail",
+  "extras",
+  "general",
+  "passive",
+  "fire",
+]);
+
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3 && !STOPWORDS.has(t));
+}
+
+function tokenOverlap(a: string[], b: string[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const setA = new Set(a);
+  const setB = new Set(b);
+  let shared = 0;
+  for (const t of setA) if (setB.has(t)) shared++;
+  const denom = Math.min(setA.size, setB.size);
+  return denom === 0 ? 0 : shared / denom;
 }
 
 const CURRENCY_LINE_RE = /(?:\$|NZD|AUD|USD|£|€)\s?\d[\d,]*(?:\.\d+)?/i;
@@ -366,9 +464,8 @@ function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineIt
         ? `service_penetration_${serviceTrade}`
         : null) ||
       null,
-    // carry source page/section into a discoverable place without breaking the
-    // DB schema — we tag into sub_scope when there is still space, otherwise
-    // discard. The primary audit trail is the ignored_rows + prescan logs.
+    source_section: section,
+    building_or_block: block,
   };
 }
 
