@@ -13,8 +13,8 @@ import type { ParsedLineItemV2 } from "../runParserV2.ts";
 import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
 const EXTRACTOR_MODEL = "gpt-4.1";
-const CHUNK_CHAR_BUDGET = 8000;
-const MAX_CHUNKS = 12;
+const CHUNK_CHAR_BUDGET = 14000;
+const MAX_CHUNKS = 10;
 const CHUNK_CONCURRENCY = 6;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_RETRIES = 2;
