@@ -75,10 +75,18 @@ Rows containing wording like: not shown on drawings, extra over, allowance made 
 If Prompt 2 marked included: scope_category = main
 If Prompt 2 marked ambiguous: scope_category = ambiguous
 
-STEP 7 — DEDUPLICATION RULES
-Remove duplicates caused by OCR repeats. Two rows are duplicates when these match closely:
-description, qty, unit_rate, line_total, building/block, page section.
-Keep highest-confidence copy. Do NOT dedupe rows from different buildings/blocks.
+STEP 7 — DEDUPLICATION RULES (CRITICAL — DO NOT OVER-DEDUPE)
+Only remove duplicates caused by OCR repeats of the SAME physical line (same page, same section, same building_or_block). Two rows are duplicates ONLY when ALL of the following match:
+  - description (close match)
+  - quantity + unit_rate + line_total (all equal)
+  - building_or_block (equal — null counts as its own bucket)
+  - source_section (equal)
+  - source_page (within ±1)
+Keep the highest-confidence copy.
+
+ANTI-DEDUPE RULE (MANDATORY): Never dedupe across different buildings/blocks. If the quote presents a per-block detail schedule (e.g. "BLOCK B30", "BLOCK B31", "BLOCK B32", "BLOCK B33", "BLOCK B34") and each block repeats the SAME service rows with IDENTICAL descriptions and values, these are DISTINCT line items — each block is a separately priced installation at a separate location. You MUST emit one row PER block, PER service, even if description/qty/rate/total are identical across blocks. Populate building_or_block for every such row so the downstream consumer can tell them apart. Failing to emit per-block rows will undercount the main scope.
+
+If you are unsure whether rows are separate-block repeats or genuine OCR duplicates, prefer to KEEP them (set confidence lower) — undercounting main scope is worse than a minor double-count, which downstream reconciliation will catch.
 
 STEP 8 — PRESERVE LOCATION CONTEXT
 Capture building_or_block: Building A, Building B, Block B30, Basement, Tower 1, Level 3. Critical for analytics.
