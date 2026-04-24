@@ -44,7 +44,9 @@ If Prompt 2 says summary_vs_breakdown_exclusive = true:
 - Do NOT also extract summary totals as rows
 
 STEP 5 — OPTIONAL SCOPE RULE (SECTION-HEADER STACK — CRITICAL)
-Track the active section-header stack as you read the document top-to-bottom. A row INHERITS scope_category = optional from ANY ancestor header on its stack that matches any of these triggers (case-insensitive, tolerant of punctuation):
+Track the active section-header stack as you read the document top-to-bottom. You MUST emit on every row a field section_path: an ordered array of every ancestor header currently on the stack, from outermost (top-level Building/Block or scope partition) to innermost (the immediate sub-header). Example: section_path = ["Building B30", "OPTIONAL SCOPE", "Architectural/Structural Details"]. This path is MANDATORY and must reflect the hierarchy shown by indentation, bold/caps, whitespace gaps, and page breaks — not just the single nearest header.
+
+A row INHERITS scope_category = optional from ANY ancestor header on its stack that matches any of these triggers (case-insensitive, tolerant of punctuation):
   - "OPTIONAL SCOPE", "OPTIONAL ITEMS", "OPTIONAL EXTRAS", "OPTIONAL"
   - "ADD TO SCOPE", "ADD-ONS", "ADDITIONAL SCOPE"
   - "PROVISIONAL SUM", "PROVISIONAL SCOPE", "PROVISIONAL"
@@ -53,10 +55,12 @@ Track the active section-header stack as you read the document top-to-bottom. A 
   - "PRICED SEPARATELY", "SEPARATE PRICE", "PRICE ON APPLICATION"
   - "CLIENT TO CONFIRM", "TBC", "IF ACCEPTED", "IF REQUIRED"
   - Tick-box indicators: "☐", "[ ]", "[  ]", empty/filled rectangles in row or header
-  - Rows from sections Prompt 2 tagged section_role = "optional"
-Sub-headers NESTED under an Optional parent (e.g. "Architectural/Structural Details", "Flush Boxes", "Optional Extras") do NOT reset scope back to main — they inherit optional from the parent. Only a new peer-level header with main-scope semantics (e.g. "MAIN SCOPE", "INCLUDED SCOPE", next Building/Block header) resets the stack.
-If a row has no keyword of its own but its nearest Optional ancestor is active, mark it scope_category = optional.
+  - Any section Prompt 2 (financial_map.sections) tagged section_role = "optional" OR whose parent_section chain reaches an optional ancestor
+Sub-headers NESTED under an Optional parent (e.g. "Architectural/Structural Details", "Flush Boxes", "Cavity Barriers", "Beam Encasement", "Optional Extras", "Additional Items") do NOT reset scope back to main — they inherit optional from the parent. Only a new peer-level header with main-scope semantics (e.g. "MAIN SCOPE", "INCLUDED SCOPE", next Building/Block header at the same or higher indent level) resets the stack.
+If a row has no keyword of its own but ANY element of its section_path is an Optional ancestor (by keyword OR by Prompt 2 classification), mark it scope_category = optional.
 Never mark an inherited-optional row as main.
+
+When a large block of visually similar rows (e.g. a table of beams, cavity barriers, penetrations) appears under what is visibly an Optional parent header, classify EVERY row in that block as optional — do not cherry-pick only the rows whose description contains the literal word "optional".
 
 STEP 5b — PROMPT 2 CROSS-CHECK (HARD SIGNAL)
 The user context includes financial_map from Prompt 2. Its sections[] array lists section_name + section_role (main_included | optional | excluded | rates_reference | terms). Before finalising scope_category on any row, match its source_section against financial_map.sections by case-insensitive substring or token overlap:
@@ -108,6 +112,7 @@ STRICT OUTPUT JSON:
     {
       "source_page": 4,
       "source_section": "Hydraulic Penetrations",
+      "section_path": ["Building A", "MAIN SCOPE", "Hydraulic Penetrations"],
       "building_or_block": "Building A",
       "description": "Hydraulic PVC pipe 100mm concrete floor -/60/60 — Allproof Low Profile Collar",
       "trade": "passive_fire",

@@ -103,6 +103,7 @@ export type ParsedLineItemV2 = {
   confidence: number;
   source_section?: string | null;
   source_page?: number | null;
+  section_path?: string[] | null;
   building_or_block?: string | null;
 };
 

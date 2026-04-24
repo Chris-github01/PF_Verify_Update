@@ -44,6 +44,13 @@ Supplier-pattern hints:
 - Global-style quotes may contain an intermediate "estimated grand total" for identified drawings only, while the front summary has the true total excl GST for included scope.
 - Passive Fire NZ-style quotes may contain building-level totals plus a page-1 master roll-up. Use the master roll-up as authoritative total.
 
+SECTION HIERARCHY RULES (CRITICAL)
+You MUST enumerate EVERY header and sub-header as a separate entry in sections[].
+  - For each section emit: page (first page it appears), page_start, page_end (inclusive page range it covers before the next PEER or higher header begins), parent_section (the immediate parent header's section_name, or null for top-level).
+  - A nested sub-header under an optional/excluded parent INHERITS the parent's role. Example: under "OPTIONAL SCOPE" a sub-header like "Architectural/Structural Details", "Flush Boxes", "Cavity Barriers", "Beam Encasement", "Additional Items" MUST be emitted as its own section with section_role = "optional" and parent_section = "OPTIONAL SCOPE". Do NOT classify these sub-sections as main_included — they belong to the optional parent's scope unless a new peer-level main header follows.
+  - Only a peer-level main-scope header (e.g. next building/block, "MAIN SCOPE", "INCLUDED SCOPE") resets the stack.
+  - Rows between a sub-header and the next peer header fall under that sub-header's page_start..page_end.
+
 Return STRICT JSON:
 {
   "trade": "passive_fire",
@@ -59,7 +66,10 @@ Return STRICT JSON:
   "sections": [
     {
       "page": number,
+      "page_start": number,
+      "page_end": number,
       "section_name": string,
+      "parent_section": string|null,
       "section_role": "main_included|optional|excluded|rates_reference|terms|summary|breakdown|non_financial_metadata",
       "rolled_into_master_total": true|false|null,
       "section_total": number|null,

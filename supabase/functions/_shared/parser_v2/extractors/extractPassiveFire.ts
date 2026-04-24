@@ -208,10 +208,34 @@ function reconcileWithStructure(
   const OPTIONAL_HEADER_RE =
     /\b(optional|add[-\s]?(?:to[-\s]?)?scope|add[-\s]?on|provisional|extra[-\s]?over|alternate|alternative|priced\s+separately|separate\s+price|price\s+on\s+application|if\s+accepted|if\s+required|tbc|client\s+to\s+confirm|architectural\s*\/?\s*structural\s+details?|flush\s+box(?:es)?)\b/i;
 
+  // Build a set of section names that are optional either directly OR via
+  // their parent_section chain. This is the structural ancestor inheritance
+  // Prompt 2 now emits via parent_section — no keyword matching on row content.
+  const sectionByName = new Map<string, typeof structure.sections[number]>();
+  structure.sections.forEach((s) => {
+    const key = (s.section_name ?? "").toLowerCase().trim();
+    if (key) sectionByName.set(key, s);
+  });
+  const resolveOptionalByChain = (name: string): boolean => {
+    let cur: typeof structure.sections[number] | undefined = sectionByName.get(
+      (name ?? "").toLowerCase().trim(),
+    );
+    const seen = new Set<string>();
+    while (cur) {
+      if (cur.section_role === "optional") return true;
+      const parent = (cur.parent_section ?? "").toLowerCase().trim();
+      if (!parent || seen.has(parent)) break;
+      seen.add(parent);
+      cur = sectionByName.get(parent);
+    }
+    return false;
+  };
+
   const optionalSections = structure.sections
     .filter(
       (s) =>
         s.section_role === "optional" ||
+        resolveOptionalByChain(s.section_name ?? "") ||
         OPTIONAL_HEADER_RE.test(s.section_name ?? ""),
     )
     .map((s) => ({
@@ -330,11 +354,40 @@ function reconcileWithStructure(
     });
   }
 
+  // PASS 5 — section_path ancestor match. Prompt 3 now emits the full
+  // ancestor header chain per row (section_path). If ANY element of that
+  // chain matches an optional section (by Prompt 2 classification OR by
+  // inline optional keyword on the header text), force the row optional.
+  // This is the authoritative structural signal: it uses the LLM's own
+  // hierarchy tracking rather than post-hoc keyword matching on row text.
+  const pass5Idx = new Set<number>();
+  items.forEach((it, idx) => {
+    if (it.scope_category !== "main") return;
+    if (pass1Idx.has(idx) || pass2Idx.has(idx) || pass3Idx.has(idx) || pass4Idx.has(idx)) return;
+    const path = it.section_path ?? null;
+    if (!path || path.length === 0) return;
+    const ancestorOptional = path.some((h) => {
+      if (!h) return false;
+      if (OPTIONAL_HEADER_RE.test(h)) return true;
+      if (resolveOptionalByChain(h)) return true;
+      const hTokens = tokenize(h);
+      if (hTokens.length === 0) return false;
+      return optionalSections.some(
+        (s) =>
+          tokenOverlap(hTokens, s.tokens) >= 0.5 ||
+          h.toLowerCase().includes(s.name) ||
+          s.name.includes(h.toLowerCase()),
+      );
+    });
+    if (ancestorOptional) pass5Idx.add(idx);
+  });
+
   const all = new Set<number>([
     ...pass1Idx,
     ...pass2Idx,
     ...pass3Idx,
     ...pass4Idx,
+    ...pass5Idx,
   ]);
   if (all.size === 0 && excludedByPage.size === 0) {
     console.log(
@@ -356,7 +409,7 @@ function reconcileWithStructure(
     `[extractPassiveFire] reconcile: reclassified ${all.size} rows ` +
       `($${reclassifiedTotal.toFixed(2)}) main→optional, dropped ${excludedByPage.size} excluded ` +
       `($${excludedTotal.toFixed(2)}) ` +
-      `[pass1=${pass1Idx.size} pass2=${pass2Idx.size} pass3=${pass3Idx.size} pass4=${pass4Idx.size}] ` +
+      `[pass1=${pass1Idx.size} pass2=${pass2Idx.size} pass3=${pass3Idx.size} pass4=${pass4Idx.size} pass5=${pass5Idx.size}] ` +
       `main_target=${mainTarget ?? "null"} optional_target=${structure.optional_scope_total ?? "null"}`,
   );
 
@@ -468,6 +521,11 @@ function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineIt
   const page = toStringOrNull(r.source_page);
   const pageNum = toNumberOrNull(r.source_page);
   const section = toStringOrNull(r.source_section);
+  const sectionPath = Array.isArray(r.section_path)
+    ? (r.section_path as unknown[])
+        .map((x) => (typeof x === "string" ? x.trim() : ""))
+        .filter((x) => x.length > 0)
+    : null;
   const rowRole = toStringOrNull(r.row_role);
   const serviceTrade = toStringOrNull(r.service_trade);
   const systemName = toStringOrNull(r.system_name) ?? toStringOrNull(r.passive_fire_system);
@@ -511,6 +569,7 @@ function mapLineItemRow(r: Record<string, unknown>, trade: string): ParsedLineIt
       null,
     source_section: section,
     source_page: pageNum,
+    section_path: sectionPath && sectionPath.length > 0 ? sectionPath : null,
     building_or_block: block,
   };
 }

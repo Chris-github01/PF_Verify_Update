@@ -32,7 +32,10 @@ export type PassiveFireFinancialStructure =
 
 export type PassiveFireStructureSection = {
   page: number | null;
+  page_start: number | null;
+  page_end: number | null;
   section_name: string;
+  parent_section: string | null;
   section_role: PassiveFireSectionRole;
   rolled_into_master_total: boolean | null;
   section_total: number | null;
@@ -155,7 +158,10 @@ function normaliseSection(v: unknown): PassiveFireStructureSection {
   const r = (v ?? {}) as Record<string, unknown>;
   return {
     page: toNumberOrNull(r.page),
+    page_start: toNumberOrNull(r.page_start) ?? toNumberOrNull(r.page),
+    page_end: toNumberOrNull(r.page_end),
     section_name: String(r.section_name ?? "").trim(),
+    parent_section: toStringOrNull(r.parent_section),
     section_role: normaliseSectionRole(r.section_role),
     rolled_into_master_total:
       typeof r.rolled_into_master_total === "boolean" ? r.rolled_into_master_total : null,
