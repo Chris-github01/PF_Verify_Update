@@ -43,8 +43,28 @@ If Prompt 2 says summary_vs_breakdown_exclusive = true:
 - Detailed schedules are extractable rows
 - Do NOT also extract summary totals as rows
 
-STEP 5 — OPTIONAL SCOPE RULE
-If row belongs to section tagged optional_scope OR contains wording: optional, add to scope, tbc, if accepted, tick box, alternate, then set scope_category = optional. Never mark as main.
+STEP 5 — OPTIONAL SCOPE RULE (SECTION-HEADER STACK — CRITICAL)
+Track the active section-header stack as you read the document top-to-bottom. A row INHERITS scope_category = optional from ANY ancestor header on its stack that matches any of these triggers (case-insensitive, tolerant of punctuation):
+  - "OPTIONAL SCOPE", "OPTIONAL ITEMS", "OPTIONAL EXTRAS", "OPTIONAL"
+  - "ADD TO SCOPE", "ADD-ONS", "ADDITIONAL SCOPE"
+  - "PROVISIONAL SUM", "PROVISIONAL SCOPE", "PROVISIONAL"
+  - "EXTRA OVER", "EXTRAS"
+  - "ALTERNATE", "ALTERNATIVE", "ALTERNATIVE SCOPE"
+  - "PRICED SEPARATELY", "SEPARATE PRICE", "PRICE ON APPLICATION"
+  - "CLIENT TO CONFIRM", "TBC", "IF ACCEPTED", "IF REQUIRED"
+  - Tick-box indicators: "☐", "[ ]", "[  ]", empty/filled rectangles in row or header
+  - Rows from sections Prompt 2 tagged section_role = "optional"
+Sub-headers NESTED under an Optional parent (e.g. "Architectural/Structural Details", "Flush Boxes", "Optional Extras") do NOT reset scope back to main — they inherit optional from the parent. Only a new peer-level header with main-scope semantics (e.g. "MAIN SCOPE", "INCLUDED SCOPE", next Building/Block header) resets the stack.
+If a row has no keyword of its own but its nearest Optional ancestor is active, mark it scope_category = optional.
+Never mark an inherited-optional row as main.
+
+STEP 5b — PROMPT 2 CROSS-CHECK (HARD SIGNAL)
+The user context includes financial_map from Prompt 2. Its sections[] array lists section_name + section_role (main_included | optional | excluded | rates_reference | terms). Before finalising scope_category on any row, match its source_section against financial_map.sections by case-insensitive substring or token overlap:
+  - If the matched section_role = "optional" → force scope_category = optional.
+  - If the matched section_role = "excluded" → do NOT extract the row at all; add to ignored_rows with reason "excluded_by_structure".
+  - If the matched section_role = "main_included" → scope_category = main unless the row itself has inline optional keywords.
+  - If matched section_role = "summary" and rolled_into_master_total = true → ignored_rows reason "summary_total".
+Prompt 2's determination overrides inline row text when ambiguous.
 
 STEP 6 — INCLUDED EXTRA-OVER RULE
 Rows containing wording like: not shown on drawings, extra over, allowance made for, included estimate items.

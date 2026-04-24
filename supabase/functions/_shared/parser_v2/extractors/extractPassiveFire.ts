@@ -142,7 +142,12 @@ export async function extractPassiveFire(ctx: {
     `[extractPassiveFire] after_post_process=${processed.length} (filtered ${rawItems.length - processed.length})`,
   );
 
-  if (processed.length === 0) {
+  const reconciled = reconcileWithStructure(processed, structure);
+  console.log(
+    `[extractPassiveFire] after_reconcile=${reconciled.length} reclassified=${reconciled.length - processed.length + (processed.length - reconciled.length)}`,
+  );
+
+  if (reconciled.length === 0) {
     console.error(
       `[extractPassiveFire] ZERO_ROWS_AFTER_POSTPROCESS — dumping sanitized text (first 4000 chars) and invoking fallback`,
     );
@@ -182,7 +187,84 @@ export async function extractPassiveFire(ctx: {
     }
   }
 
-  return processed;
+  return reconciled;
+}
+
+/**
+ * Reconcile extracted rows against Prompt 2 (structure) totals. If the sum of
+ * scope_category="main" rows materially overshoots structure.main_scope_subtotal
+ * while structure.optional_scope_total is non-trivial and structure.confidence
+ * is reasonable, reclassify the largest main rows whose source context looks
+ * optional (sub_scope/description tokens) until the main total lands within
+ * tolerance. Trade-agnostic in shape; tuned for PF overshoot caused by
+ * missed section-header inheritance.
+ */
+function reconcileWithStructure(
+  items: ParsedLineItemV2[],
+  structure: PassiveFireStructure | null,
+): ParsedLineItemV2[] {
+  if (!structure) return items;
+  const mainTarget = structure.main_scope_subtotal;
+  const optTarget = structure.optional_scope_total;
+  if (mainTarget == null || mainTarget <= 0) return items;
+  if (!Number.isFinite(structure.confidence) || structure.confidence < 0.5) return items;
+
+  const sumMain = items
+    .filter((it) => it.scope_category === "main")
+    .reduce((acc, it) => acc + (it.total_price ?? 0), 0);
+  if (sumMain <= 0) return items;
+
+  const deviation = Math.abs(sumMain - mainTarget) / mainTarget;
+  if (deviation <= 0.2) return items;
+  if (sumMain <= mainTarget) return items; // undershoot not addressed here
+
+  // Build optional-section name set from Prompt 2
+  const optionalSectionNames = new Set(
+    structure.sections
+      .filter((s) => s.section_role === "optional")
+      .map((s) => s.section_name.toLowerCase().trim())
+      .filter((n) => n.length > 0),
+  );
+
+  const OPTIONAL_HINT_RE =
+    /\b(optional|add\s+to\s+scope|provisional|extra\s+over|alternate|alternative|priced\s+separately|tbc|if\s+accepted|if\s+required|architectural\s+details?|structural\s+details?|flush\s+box(?:es)?)\b/i;
+
+  const overshoot = sumMain - mainTarget;
+  const mainRows = items
+    .map((it, idx) => ({ it, idx }))
+    .filter((r) => r.it.scope_category === "main")
+    .sort((a, b) => (b.it.total_price ?? 0) - (a.it.total_price ?? 0));
+
+  let remainingToReclass = overshoot;
+  const reclassIdx = new Set<number>();
+  for (const { it, idx } of mainRows) {
+    if (remainingToReclass <= 0) break;
+    const desc = (it.description ?? "").toLowerCase();
+    const sub = (it.sub_scope ?? "").toLowerCase();
+    const matchesOptionalSection = [...optionalSectionNames].some(
+      (n) => desc.includes(n) || sub.includes(n),
+    );
+    const matchesOptionalHint = OPTIONAL_HINT_RE.test(desc) || OPTIONAL_HINT_RE.test(sub);
+    if (!matchesOptionalSection && !matchesOptionalHint) continue;
+    reclassIdx.add(idx);
+    remainingToReclass -= it.total_price ?? 0;
+  }
+
+  if (reclassIdx.size === 0) {
+    console.warn(
+      `[extractPassiveFire] reconcile overshoot ${overshoot.toFixed(2)} but no optional-match candidates — leaving rows unchanged`,
+    );
+    return items;
+  }
+
+  console.warn(
+    `[extractPassiveFire] reconcile: main_sum=${sumMain.toFixed(2)} target=${mainTarget.toFixed(2)} ` +
+      `optional_target=${optTarget ?? "null"} reclassified=${reclassIdx.size} rows as optional`,
+  );
+
+  return items.map((it, idx) =>
+    reclassIdx.has(idx) ? { ...it, scope_category: "optional" as const } : it,
+  );
 }
 
 const CURRENCY_LINE_RE = /(?:\$|NZD|AUD|USD|£|€)\s?\d[\d,]*(?:\.\d+)?/i;
