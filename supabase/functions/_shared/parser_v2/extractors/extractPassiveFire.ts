@@ -208,6 +208,12 @@ function reconcileWithStructure(
   const OPTIONAL_HEADER_RE =
     /\b(optional|add[-\s]?(?:to[-\s]?)?scope|add[-\s]?on|provisional|extra[-\s]?over|alternate|alternative|priced\s+separately|separate\s+price|price\s+on\s+application|if\s+accepted|if\s+required|tbc|client\s+to\s+confirm|architectural\s*\/?\s*structural\s+details?|flush\s+box(?:es)?)\b/i;
 
+  // Broader regex applied at row-description level in PASS 4. Includes
+  // "architectural/structural <noun>" (beam/column/cavity/barrier/detail)
+  // because these sub-header rows rarely carry the word "optional" inline.
+  const OPTIONAL_DESC_HINT_RE =
+    /\b(optional|provisional|extra[-\s]?over|alternate|alternative|priced\s+separately|separately\s+priced|price\s+on\s+application|if\s+accepted|if\s+required|tbc|client\s+to\s+confirm|add[-\s]?on|add[-\s]?to[-\s]?scope|architectural\s*\/?\s*structural\s+(?:beam|column|cavity|barrier|detail|post|joist|rafter|stud)|flush\s+box(?:es)?|intumescent\s+flush\s+box|putty\s+pad)\b/i;
+
   const optionalSections = structure.sections
     .filter(
       (s) =>
@@ -260,12 +266,9 @@ function reconcileWithStructure(
   // tokens on description (handles rows where source_section was lost).
   const pass3Idx = new Set<number>();
   const mainTarget = structure.main_scope_subtotal;
-  if (
-    mainTarget != null &&
-    mainTarget > 0 &&
-    Number.isFinite(structure.confidence) &&
-    structure.confidence >= 0.5
-  ) {
+  const hasConfidence =
+    Number.isFinite(structure.confidence) && structure.confidence >= 0.5;
+  if (mainTarget != null && mainTarget > 0 && hasConfidence) {
     const sumMainAfter12 = items.reduce((acc, it, idx) => {
       if (it.scope_category !== "main") return acc;
       if (pass1Idx.has(idx) || pass2Idx.has(idx)) return acc;
@@ -299,7 +302,55 @@ function reconcileWithStructure(
     }
   }
 
-  const all = new Set<number>([...pass1Idx, ...pass2Idx, ...pass3Idx]);
+  // PASS 4 — description-level optional-hint keywords. Triggers when we
+  // still overshoot main_scope_subtotal, and catches rows under common
+  // optional sub-headers (Architectural/Structural, Flush Boxes, etc.)
+  // whose source_section was lost or whose Prompt 2 section was named
+  // differently. Runs even if Prompt 2 never emitted an optional section,
+  // as long as we have a trustworthy main target.
+  const pass4Idx = new Set<number>();
+  if (mainTarget != null && mainTarget > 0 && hasConfidence) {
+    const sumMainAfter123 = items.reduce((acc, it, idx) => {
+      if (it.scope_category !== "main") return acc;
+      if (pass1Idx.has(idx) || pass2Idx.has(idx) || pass3Idx.has(idx))
+        return acc;
+      return acc + (it.total_price ?? 0);
+    }, 0);
+    const deviation = (sumMainAfter123 - mainTarget) / mainTarget;
+    if (deviation > 0.15) {
+      const rows = items
+        .map((it, idx) => ({ it, idx }))
+        .filter(
+          (r) =>
+            r.it.scope_category === "main" &&
+            !pass1Idx.has(r.idx) &&
+            !pass2Idx.has(r.idx) &&
+            !pass3Idx.has(r.idx),
+        )
+        .sort((a, b) => (b.it.total_price ?? 0) - (a.it.total_price ?? 0));
+      let remaining = sumMainAfter123 - mainTarget;
+      for (const { it, idx } of rows) {
+        if (remaining <= 0) break;
+        const haystack = [
+          it.description ?? "",
+          it.source_section ?? "",
+          it.sub_scope ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!OPTIONAL_DESC_HINT_RE.test(haystack)) continue;
+        pass4Idx.add(idx);
+        remaining -= it.total_price ?? 0;
+      }
+    }
+  }
+
+  const all = new Set<number>([
+    ...pass1Idx,
+    ...pass2Idx,
+    ...pass3Idx,
+    ...pass4Idx,
+  ]);
   if (all.size === 0) {
     console.log(
       `[extractPassiveFire] reconcile: no rows reclassified (optional_sections=${optionalSections.length})`,
@@ -314,7 +365,7 @@ function reconcileWithStructure(
   console.warn(
     `[extractPassiveFire] reconcile: reclassified ${all.size} rows ` +
       `($${reclassifiedTotal.toFixed(2)}) main→optional ` +
-      `[pass1=${pass1Idx.size} pass2=${pass2Idx.size} pass3=${pass3Idx.size}] ` +
+      `[pass1=${pass1Idx.size} pass2=${pass2Idx.size} pass3=${pass3Idx.size} pass4=${pass4Idx.size}] ` +
       `main_target=${mainTarget ?? "null"} optional_target=${structure.optional_scope_total ?? "null"}`,
   );
 
