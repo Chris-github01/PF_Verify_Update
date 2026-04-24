@@ -14,12 +14,13 @@ import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../t
 
 const EXTRACTOR_MODEL = "gpt-4.1";
 const CHUNK_CHAR_BUDGET = 18000;
-const MAX_CHUNKS = 8;
-const CHUNK_CONCURRENCY = 4;
+const MAX_CHUNKS = 6;
+const CHUNK_CONCURRENCY = 6;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const MAX_RETRIES = 3;
-const EXTRACTION_STAGE_BUDGET_MS = 35_000;
-const PER_CHUNK_BUDGET_MS = 18_000;
+const MAX_RETRIES = 2;
+const EXTRACTION_STAGE_BUDGET_MS = 45_000;
+const PER_CHUNK_BUDGET_MS = 22_000;
+const PER_REQUEST_BUDGET_MS = 20_000;
 const MAX_RAW_RESPONSE_PERSIST = 20_000;
 
 export type ExtractorContext = {
@@ -240,6 +241,8 @@ async function callOpenAIWithRetry(args: {
   let lastErr: unknown = null;
   const userJson = JSON.stringify(args.userPayload);
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const abortCtl = new AbortController();
+    const abortTimer = setTimeout(() => abortCtl.abort(), PER_REQUEST_BUDGET_MS);
     try {
       markRequestSent(
         Math.round((args.systemPrompt.length + userJson.length) / 4),
@@ -248,6 +251,7 @@ async function callOpenAIWithRetry(args: {
       const reqStart = Date.now();
       const res = await fetch(OPENAI_URL, {
         method: "POST",
+        signal: abortCtl.signal,
         headers: {
           Authorization: `Bearer ${args.openAIKey}`,
           "Content-Type": "application/json",
@@ -256,6 +260,7 @@ async function callOpenAIWithRetry(args: {
           model: EXTRACTOR_MODEL,
           temperature: 0,
           response_format: { type: "json_object" },
+          max_tokens: 3500,
           messages: [
             { role: "system", content: args.systemPrompt },
             { role: "user", content: userJson },
@@ -362,8 +367,17 @@ async function callOpenAIWithRetry(args: {
       };
     } catch (err) {
       lastErr = err;
-      const backoff = 400 * Math.pow(2, attempt);
+      const isAbort = (err as Error)?.name === "AbortError";
+      if (isAbort) {
+        console.warn(
+          `[extractor:${args.trade}] chunk ${args.chunkIndex} attempt ${attempt} aborted after ${PER_REQUEST_BUDGET_MS}ms`,
+        );
+        break;
+      }
+      const backoff = 300 * Math.pow(2, attempt);
       await new Promise((r) => setTimeout(r, backoff));
+    } finally {
+      clearTimeout(abortTimer);
     }
   }
   console.error(
