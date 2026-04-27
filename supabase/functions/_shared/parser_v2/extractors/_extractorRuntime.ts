@@ -209,6 +209,8 @@ export async function runExtractorLLMWithTelemetry(
     );
   }
 
+  applyBannerScopeOverride(all, ctx.pages, ctx.trade);
+
   const deduped = dedupe(all);
   return {
     items: deduped,
@@ -490,7 +492,15 @@ export function normaliseRow(
     frr: r.frr == null ? null : String(r.frr),
     source: "llm",
     confidence: clamp01(Number(r.confidence ?? 0.6)),
+    source_page: extractSourcePage(r),
   };
+}
+
+function extractSourcePage(r: Record<string, unknown>): number | null {
+  const v = r.source_page ?? r.sourcePage ?? r.page ?? r.page_number ?? r.pageNumber;
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).replace(/[^0-9]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /**
@@ -547,6 +557,7 @@ export function normaliseRowLoose(
     frr: r.frr == null ? null : String(r.frr),
     source: "llm",
     confidence: clamp01(Number(r.confidence ?? 0.55)),
+    source_page: extractSourcePage(r),
   };
 }
 
@@ -628,8 +639,9 @@ function buildChunks(
   return chunks;
 }
 
-function buildBannerPreamble(pages: { pageNum: number; text: string }[]): string {
-  type BannerHit = { page: number; role: "main" | "optional"; banner: string };
+type BannerHit = { page: number; role: "main" | "optional"; banner: string };
+
+function detectBannerHits(pages: { pageNum: number; text: string }[]): BannerHit[] {
 
   // Page-level banner detection is intentionally STRICT.
   // It only fires when the page begins with a recognised "QUOTE BREAKDOWN ..."
@@ -663,6 +675,65 @@ function buildBannerPreamble(pages: { pageNum: number; text: string }[]): string
       banner: (optMatch ?? mainMatch)![0].replace(/\s+/g, " ").trim().slice(0, 80),
     });
   }
+  return hits;
+}
+
+/**
+ * Deterministic post-processing override.
+ *
+ * For Global-Fire-style quotes the page banners (e.g. "QUOTE BREAKDOWN — ITEMS
+ * IDENTIFIED ON DRAWINGS" on page 2, "...NOT SHOWN ON DRAWINGS" on page 6) are
+ * the authoritative source of scope_category. The LLM occasionally misclassifies
+ * rows from those pages because the in-table sub-headers (Electrical Penetrations,
+ * Hydraulic Penetrations) appear on both main and optional pages. We trust the
+ * banner-map and force scope_category accordingly.
+ *
+ * Pages NOT covered by a banner are left untouched — the LLM's section-stack
+ * decision stands (this is the Optimal-Fire layout where main + optional sit
+ * under intra-page sub-headers).
+ */
+function applyBannerScopeOverride(
+  rows: ParsedLineItemV2[],
+  pages: { pageNum: number; text: string }[],
+  trade: string,
+): void {
+  if (trade !== "passive_fire" && trade !== "fire") return;
+  const hits = detectBannerHits(pages);
+  if (hits.length === 0) return;
+  const sorted = [...hits].sort((a, b) => a.page - b.page);
+  const minPage = sorted[0].page;
+  const maxPage = pages.length ? pages[pages.length - 1].pageNum : sorted[sorted.length - 1].page;
+
+  const resolveRole = (page: number): "main" | "optional" | null => {
+    if (page < minPage || page > maxPage) return null;
+    let current: "main" | "optional" | null = null;
+    for (const h of sorted) {
+      if (h.page <= page) current = h.role;
+      else break;
+    }
+    return current;
+  };
+
+  let overridden = 0;
+  for (const row of rows) {
+    const page = row.source_page;
+    if (page == null) continue;
+    const role = resolveRole(page);
+    if (role == null) continue;
+    if (row.scope_category !== role && row.scope_category !== "excluded") {
+      row.scope_category = role;
+      overridden++;
+    }
+  }
+  if (overridden > 0) {
+    console.log(
+      `[extractor:${trade}] banner-map override applied: ${overridden}/${rows.length} rows scope-corrected`,
+    );
+  }
+}
+
+function buildBannerPreamble(pages: { pageNum: number; text: string }[]): string {
+  const hits = detectBannerHits(pages);
   if (hits.length === 0) return "";
 
   const lines: string[] = [];
