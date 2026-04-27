@@ -246,6 +246,35 @@ function reconcileWithStructure(
 
   const optionalSectionFromStructure = optionalSections.length > 0;
 
+  // GUARD — explicit MAIN ancestor short-circuit.
+  // If the LLM tagged a row with an unambiguous MAIN ancestor in its source_section
+  // or section_path (e.g. "MAIN SCOPE SUMMARY", "ITEMS IDENTIFIED ON DRAWINGS",
+  // "MAIN SCOPE BREAKDOWN", "INCLUDED SCOPE", "BASE SCOPE", "TENDER SCOPE"),
+  // we trust the LLM and exempt the row from every reclassification pass.
+  // This stops over-eager structure-driven flips when Prompt 2 mis-tags a
+  // breakdown sub-section.
+  const MAIN_ANCESTOR_RE =
+    /\b(items?\s+identified\s+on\s+drawings|identified\s+on\s+drawings|main\s+scope(?:\s+(?:summary|breakdown))?|included\s+scope|base\s+scope|tender\s+scope|main\s+breakdown|included\s+works|building\s+breakdown|level\s+breakdown|floor\s+breakdown|schedule\s+of\s+works|quote\s+breakdown\s+main)\b/i;
+  const protectedMainIdx = new Set<number>();
+  items.forEach((it, idx) => {
+    if (it.scope_category !== "main") return;
+    const sec = (it.source_section ?? "").toString();
+    if (sec && MAIN_ANCESTOR_RE.test(sec)) {
+      protectedMainIdx.add(idx);
+      return;
+    }
+    const path = it.section_path ?? null;
+    if (path && path.length > 0 && path.some((h) => !!h && MAIN_ANCESTOR_RE.test(h))) {
+      protectedMainIdx.add(idx);
+    }
+  });
+  if (protectedMainIdx.size > 0) {
+    console.log(
+      `[extractPassiveFire] reconcile: protected ${protectedMainIdx.size}/${items.length} rows ` +
+        `with explicit MAIN ancestor — exempted from all reclassification passes`,
+    );
+  }
+
   // PASS 1 — deterministic section-name match.
   // Any row whose source_section matches an optional Prompt 2 section gets
   // reclassified, regardless of overshoot magnitude.
@@ -253,6 +282,7 @@ function reconcileWithStructure(
   if (optionalSectionFromStructure) {
     items.forEach((it, idx) => {
       if (it.scope_category !== "main") return;
+      if (protectedMainIdx.has(idx)) return;
       const rowSection = (it.source_section ?? "").toString();
       if (!rowSection) return;
       const rowTokens = tokenize(rowSection);
@@ -272,6 +302,7 @@ function reconcileWithStructure(
   const pass2Idx = new Set<number>();
   items.forEach((it, idx) => {
     if (it.scope_category !== "main") return;
+    if (protectedMainIdx.has(idx)) return;
     if (pass1Idx.has(idx)) return;
     const section = (it.source_section ?? "").toString();
     if (section && OPTIONAL_HEADER_RE.test(section)) {
@@ -299,6 +330,7 @@ function reconcileWithStructure(
         .filter(
           (r) =>
             r.it.scope_category === "main" &&
+            !protectedMainIdx.has(r.idx) &&
             !pass1Idx.has(r.idx) &&
             !pass2Idx.has(r.idx),
         )
@@ -346,6 +378,7 @@ function reconcileWithStructure(
     };
     items.forEach((it, idx) => {
       if (it.scope_category !== "main") return;
+      if (protectedMainIdx.has(idx)) return;
       if (pass1Idx.has(idx) || pass2Idx.has(idx) || pass3Idx.has(idx)) return;
       const ctx = roleForPage(it.source_page ?? null);
       if (!ctx) return;
@@ -363,6 +396,7 @@ function reconcileWithStructure(
   const pass5Idx = new Set<number>();
   items.forEach((it, idx) => {
     if (it.scope_category !== "main") return;
+    if (protectedMainIdx.has(idx)) return;
     if (pass1Idx.has(idx) || pass2Idx.has(idx) || pass3Idx.has(idx) || pass4Idx.has(idx)) return;
     const path = it.section_path ?? null;
     if (!path || path.length === 0) return;
