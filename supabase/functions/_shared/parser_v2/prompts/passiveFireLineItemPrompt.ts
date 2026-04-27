@@ -28,6 +28,27 @@ STEP 1 — ONLY EXTRACT VALID PASSIVE FIRE SCOPE
 Examples of valid rows:
 Fire collars, Batt systems, Mastic sealing, Graphite seals, Pipe wraps, Servowrap, Rokwrap, Putty pads, Flush box pads, Perimeter seals, Door seals, Lift door seals, Cable tray fire stopping, PVC pipe penetrations, Copper pipe penetrations, Steel pipe penetrations, PEX penetrations, Mechanical penetrations, Hydraulic penetrations, Electrical penetrations, PS3 / QA charges, Site setup if clearly part of awarded scope.
 
+STEP 1b — COMPLETENESS RULE (CRITICAL — NO TRUNCATION, NO SKIPPING)
+You MUST emit EVERY priced row from EVERY breakdown table on EVERY breakdown page. Passive fire quotes routinely contain 50–250 priced rows across multiple trade tables (Electrical Penetrations, Hydraulic Penetrations, Mechanical Penetrations, Fire Protection Penetrations, Patches, Linear Seals, Other Services, etc.) — do NOT stop after the first table or first page. Walk every breakdown table top-to-bottom and emit every row that has a Quantity column value AND a Total/Subtotal column value (Base Rate, Insulation Wrap, Total).
+
+Do NOT omit rows because:
+  - the same Service name (e.g. "Cable Bundle (Data)", "Copper Pipe", "PVC Pipe", "Steel Pipe", "PEX Pipe", "Cable Tray") appears multiple times — each row with a different Size, Fire Resistance Rating (FRR), or Substrate is a SEPARATE priced line item. A quote with "PVC Pipe 40mm -/30/30 Concrete Floor 145 Nr $44.61", "PVC Pipe 65mm -/30/30 Concrete Floor 315 Nr $49.15", and "PVC Pipe 100mm -/30/30 Concrete Floor 603 Nr $61.19" is THREE distinct rows.
+  - the row appears on a later page — keep extracting through all pages until you reach Tags / Exclusions / Rates Schedule / Quote Diagram pages.
+  - a "Sub Total" / "Base Rate" / "Insulation Wrap" / "Base Rate + Insulation Wrap" line appears at the foot of a table — those are subtotals (ignored_rows reason "subtotal"), but the priced rows ABOVE them must all be extracted.
+  - the row's Insulation Wrap column is "$ -" — the row is still valid; just record line_total from the Total column.
+
+Trade tables you MUST always walk (in addition to any others present):
+  1. Electrical Penetrations
+  2. Hydraulic Penetrations (typically the largest — copper pipe, insulated copper pipe, PEX pipe, PVC pipe, PVC floor waste, unit entries — often spans 2+ pages)
+  3. Mechanical Penetrations (fire boxes, refrigerant pipe sets, insulated copper pipe Thermobreak, PVC, unit entries)
+  4. Fire Protection Penetrations (cable bundle alarm, steel pipe many sizes, unit entries)
+  5. Patches (batt patches single/double)
+  6. Linear Seals (door perimeter seals DT-D1..DT-S1, lift door seals)
+  7. Other Services (flush box intumescent pads)
+  8. Any optional/confirmation breakdown duplicating the above tables
+
+If a quote's breakdown looks like it has fewer than ~30 rows in total, you have almost certainly stopped early — re-walk the document.
+
 STEP 2 — CLASSIFY TRADE CORRECTLY
 Even if item references another service trade (Electrical Penetrations / Hydraulic Penetrations / Mechanical Penetrations), if work performed is firestopping / passive protection:
 trade = passive_fire
