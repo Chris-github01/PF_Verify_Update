@@ -51,6 +51,20 @@ You MUST enumerate EVERY header and sub-header as a separate entry in sections[]
   - Only a peer-level main-scope header (e.g. next building/block, "MAIN SCOPE", "INCLUDED SCOPE") resets the stack.
   - Rows between a sub-header and the next peer header fall under that sub-header's page_start..page_end.
 
+PAGE-BANNER SCOPE DETECTION (CRITICAL — DIFFERENT QUOTE STRUCTURE)
+Some suppliers (e.g. Global Fire) DO NOT use in-table optional headers. They classify scope via PAGE-LEVEL BANNERS / TITLES at the top of each breakdown page (large bold heading, often centred, spanning the full page width, immediately preceding a Penetration Type / Quantity / Unit Rate / Total table).
+
+You MUST detect these page banners and emit them as TOP-LEVEL sections in sections[] with:
+  - section_name = the verbatim banner text (e.g. "ITEMS IDENTIFIED ON DRAWINGS" or "NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE")
+  - parent_section = null
+  - page_start..page_end covering every consecutive page that page-banner applies to (until the next page-banner appears)
+  - section_role = "main_included" for: "ITEMS IDENTIFIED ON DRAWINGS", "QUOTE BREAKDOWN — ITEMS IDENTIFIED ON DRAWINGS", "ON DRAWINGS", "MAIN SCOPE BREAKDOWN", "INCLUDED SCOPE BREAKDOWN", "BASE SCOPE", "SCOPE OF WORKS"
+  - section_role = "optional" for: "NOT SHOWN ON DRAWINGS", "ITEMS WITH CONFIRMATION", "ITEMS WITH CONFIRMATION / OPTIONAL SCOPE", "OPTIONAL SCOPE BREAKDOWN", "ADD TO SCOPE BREAKDOWN", "EXTRA OVER", "TBC BREAKDOWN", "PROVISIONAL BREAKDOWN", "ADD-ONS", "ITEMS REQUIRING CONFIRMATION", or any banner combining "NOT SHOWN" + ("OPTIONAL"|"CONFIRMATION"|"TBC")
+
+Sub-sections inside a page-banner page (Electrical Penetrations, Hydraulic Penetrations, Mechanical Penetrations, Architectural, etc.) MUST set parent_section = the page banner and INHERIT its section_role. So under a "NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE" banner, "Electrical Penetrations" is section_role = "optional" — even though the same trade name appears as section_role = "main_included" under an earlier "ITEMS IDENTIFIED ON DRAWINGS" banner. The banner overrides the trade name.
+
+If a quote has NO page banners, fall back to the in-table optional header rules above.
+
 Return STRICT JSON:
 {
   "trade": "passive_fire",

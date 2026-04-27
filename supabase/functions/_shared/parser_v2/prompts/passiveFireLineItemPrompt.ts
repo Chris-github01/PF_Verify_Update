@@ -62,6 +62,39 @@ Never mark an inherited-optional row as main.
 
 When a large block of visually similar rows (e.g. a table of beams, cavity barriers, penetrations) appears under what is visibly an Optional parent header, classify EVERY row in that block as optional — do not cherry-pick only the rows whose description contains the literal word "optional".
 
+STEP 5a — PAGE-BANNER SCOPE INHERITANCE (CRITICAL — DIFFERENT QUOTE STRUCTURE)
+Some suppliers (e.g. Global Fire) do NOT mark optional scope with a table-internal header. Instead, the scope classification is shown as a PAGE BANNER / PAGE TITLE at the top of each breakdown page. You MUST detect these page-level banners and inherit their scope onto every row that appears on that page until the next page-banner changes.
+
+MAIN-scope page banners (case-insensitive, tolerant of punctuation/line breaks/dashes/em-dashes) include:
+  - "QUOTE BREAKDOWN — ITEMS IDENTIFIED ON DRAWINGS"
+  - "ITEMS IDENTIFIED ON DRAWINGS"
+  - "IDENTIFIED ON DRAWINGS"
+  - "ON DRAWINGS"
+  - "MAIN SCOPE BREAKDOWN", "INCLUDED SCOPE BREAKDOWN"
+  - "BASE SCOPE", "SCOPE OF WORKS", "SCOPE BREAKDOWN"
+
+OPTIONAL-scope page banners include:
+  - "QUOTE BREAKDOWN — NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE"
+  - "NOT SHOWN ON DRAWINGS"
+  - "ITEMS WITH CONFIRMATION"
+  - "ITEMS WITH CONFIRMATION / OPTIONAL SCOPE"
+  - "OPTIONAL SCOPE BREAKDOWN", "ADD TO SCOPE BREAKDOWN"
+  - "EXTRA OVER", "TBC BREAKDOWN", "PROVISIONAL BREAKDOWN"
+  - "ADD-ONS", "ITEMS REQUIRING CONFIRMATION"
+  - Any page banner combining "NOT SHOWN" + ("OPTIONAL" | "CONFIRMATION" | "TBC")
+
+Page banners are typically rendered as large, centred or bold heading text at the top of a breakdown page, often immediately preceding the table header row (Penetration Type / Quantity / Unit Rate / Total). They span across the full page width and apply to ALL rows on the page until the next page banner appears.
+
+For every row, push the active page banner onto the FRONT of section_path (outermost). Example: a "Cable Bundle 20mm" row appearing on a page whose banner is "QUOTE BREAKDOWN — NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE" must have section_path beginning with ["NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE", ...] and scope_category = optional regardless of the in-table sub-section name (e.g. "Electrical Penetrations").
+
+PAGE BANNERS OVERRIDE in-table trade/sub-section headers (Electrical Penetrations, Hydraulic Penetrations, Mechanical Penetrations, Architectural, etc.) for SCOPE CLASSIFICATION purposes. The in-table headers remain as source_section / sub-section descriptors (so analytics still show the trade), but they do NOT determine main-vs-optional — the page banner does.
+
+If a page banner says "ITEMS IDENTIFIED ON DRAWINGS" then EVERY row on that page (Electrical Penetrations, Hydraulic Penetrations, Mechanical Penetrations, etc.) is scope_category = main, even if those same trade categories also appear on later "NOT SHOWN ON DRAWINGS" pages where they would be optional.
+
+If a quote has NO page banners (e.g. Optimal-style quotes that mark optional inside the table itself), fall back to the in-table optional triggers in STEP 5 above.
+
+NEVER classify a row as optional purely because the trade category (e.g. "Electrical Penetrations") also appears in an optional section elsewhere in the document. Use the active page banner first, then the in-table section-header stack, never the trade name in isolation.
+
 STEP 5b — PROMPT 2 CROSS-CHECK (HARD SIGNAL)
 The user context includes financial_map from Prompt 2. Its sections[] array lists section_name + section_role (main_included | optional | excluded | rates_reference | terms). Before finalising scope_category on any row, match its source_section against financial_map.sections by case-insensitive substring or token overlap:
   - If the matched section_role = "optional" → force scope_category = optional.
