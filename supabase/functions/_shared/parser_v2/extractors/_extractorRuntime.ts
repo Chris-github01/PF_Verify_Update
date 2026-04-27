@@ -13,15 +13,15 @@ import type { ParsedLineItemV2 } from "../runParserV2.ts";
 import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
 const EXTRACTOR_MODEL = "gpt-4.1";
-const CHUNK_CHAR_BUDGET = 14000;
-const MAX_CHUNKS = 10;
+const CHUNK_CHAR_BUDGET = 6000;
+const MAX_CHUNKS = 20;
 const CHUNK_CONCURRENCY = 10;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_RETRIES = 1;
-const EXTRACTION_STAGE_BUDGET_MS = 75_000;
+const EXTRACTION_STAGE_BUDGET_MS = 90_000;
 const PER_CHUNK_BUDGET_MS = 60_000;
 const PER_REQUEST_BUDGET_MS = 55_000;
-const LLM_MAX_TOKENS = 8000;
+const LLM_MAX_TOKENS = 16000;
 const MAX_RAW_RESPONSE_PERSIST = 20_000;
 
 export type ExtractorContext = {
@@ -671,5 +671,7 @@ function canonicalKey(it: ParsedLineItemV2): string {
     it.unit_price ?? "",
     it.total_price ?? "",
     it.scope_category,
+    (it as { source_page?: number }).source_page ?? "",
+    (it as { parent_section?: string }).parent_section ?? "",
   ].join("|");
 }
