@@ -601,6 +601,7 @@ function buildChunks(
       pageRange: `chunk_${idx + 1}`,
     }));
   }
+  const bannerPreamble = buildBannerPreamble(pages);
   const chunks: Chunk[] = [];
   let buffer = "";
   let firstPage = pages[0].pageNum;
@@ -608,7 +609,8 @@ function buildChunks(
 
   const flush = () => {
     if (!buffer.trim()) return;
-    chunks.push({ text: buffer, pageRange: `p${firstPage}-p${lastPage}` });
+    const text = bannerPreamble ? `${bannerPreamble}\n\n${buffer}` : buffer;
+    chunks.push({ text, pageRange: `p${firstPage}-p${lastPage}` });
     buffer = "";
   };
 
@@ -624,6 +626,73 @@ function buildChunks(
   }
   flush();
   return chunks;
+}
+
+function buildBannerPreamble(pages: { pageNum: number; text: string }[]): string {
+  type BannerHit = { page: number; role: "main" | "optional"; banner: string };
+  const optionalPatterns: RegExp[] = [
+    /not\s+shown\s+on\s+drawings/i,
+    /items?\s+with\s+confirmation/i,
+    /optional\s+scope/i,
+    /optional\s+items?/i,
+    /optional\s+extras?/i,
+    /add[\s-]?to[\s-]?scope/i,
+    /add[\s-]?ons?/i,
+    /provisional\s+(scope|sum|breakdown)/i,
+    /extra\s+over\b/i,
+    /tbc\s+breakdown/i,
+    /alternat(e|ive)\s+scope/i,
+  ];
+  const mainPatterns: RegExp[] = [
+    /items?\s+identified\s+on\s+drawings/i,
+    /identified\s+on\s+drawings/i,
+    /\bon\s+drawings\b/i,
+    /main\s+scope(\s+breakdown)?/i,
+    /included\s+scope(\s+breakdown)?/i,
+    /base\s+scope/i,
+    /scope\s+breakdown/i,
+    /scope\s+of\s+works/i,
+    /quote\s+breakdown/i,
+  ];
+
+  const hits: BannerHit[] = [];
+  for (const p of pages) {
+    const head = p.text.slice(0, 600);
+    let isOptional = false;
+    let matched: string | null = null;
+    for (const re of optionalPatterns) {
+      const m = head.match(re);
+      if (m) { isOptional = true; matched = m[0]; break; }
+    }
+    if (!matched) {
+      for (const re of mainPatterns) {
+        const m = head.match(re);
+        if (m) { matched = m[0]; break; }
+      }
+    }
+    if (matched) {
+      hits.push({
+        page: p.pageNum,
+        role: isOptional ? "optional" : "main",
+        banner: matched.replace(/\s+/g, " ").trim().slice(0, 80),
+      });
+    }
+  }
+  if (hits.length === 0) return "";
+
+  const lines: string[] = [];
+  lines.push("[BANNER MAP — DETERMINISTIC, USE THIS FOR scope_category]");
+  lines.push("Each entry is the page where a scope banner was detected. The banner applies from that page until the next entry. Use this to set scope_category for every row.");
+  for (const h of hits) {
+    lines.push(`  page ${h.page}: role=${h.role}  banner="${h.banner}"`);
+  }
+  lines.push("Rules:");
+  lines.push(" 1. For every extracted row, find the most recent BANNER MAP entry whose page <= row.source_page.");
+  lines.push(" 2. If that entry's role = main, scope_category MUST be \"main\".");
+  lines.push(" 3. If that entry's role = optional, scope_category MUST be \"optional\".");
+  lines.push(" 4. If a row's source_page is BEFORE the first banner entry, default scope_category = main.");
+  lines.push(" 5. The banner map OVERRIDES in-table sub-headers like \"Electrical Penetrations\" / \"Hydraulic Penetrations\" for SCOPE classification.");
+  return lines.join("\n");
 }
 
 function chunkRawText(text: string): string[] {
