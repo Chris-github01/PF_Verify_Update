@@ -666,23 +666,28 @@ function detectBannerHits(pages: { pageNum: number; text: string }[]): BannerHit
   // (Optimal/Optimal-Fire layout, where main + optional scope can coexist on
   // the same page under sub-headers like "OPTIONAL SCOPE").
 
-  const headerAnchorRe = /quote\s+breakdown/i;
-  const mainQualifierRe = /(items?\s+identified\s+on\s+drawings|identified\s+on\s+drawings|main\s+scope\s+breakdown|included\s+scope\s+breakdown|base\s+scope\s+breakdown)/i;
-  const optionalQualifierRe = /(not\s+shown\s+on\s+drawings|items?\s+with\s+confirmation|optional\s+scope\s+breakdown|add[\s-]?to[\s-]?scope\s+breakdown|tbc\s+breakdown|provisional\s+breakdown)/i;
+  const mainQualifierRe = /(items?\s+identified\s+on\s+drawings|identified\s+on\s+drawings|main\s+scope\s+breakdown|included\s+scope\s+breakdown|base\s+scope\s+breakdown|tender\s+scope\s+breakdown)/i;
+  const optionalQualifierRe = /(not\s+shown\s+on\s+drawings|items?\s+with\s+confirmation|optional\s+scope\s+breakdown|add[\s-]?to[\s-]?scope\s+breakdown|tbc\s+breakdown|provisional\s+breakdown|optional\s+scope|add\s+to\s+scope)/i;
 
   const hits: BannerHit[] = [];
   for (const p of pages) {
-    // Only inspect the very top of the page (first ~250 chars). True page
-    // banners always appear there; deeper occurrences of "OPTIONAL SCOPE"
-    // are in-table sub-headers that the LLM must handle, not a page banner.
-    const headerZone = p.text.slice(0, 250);
-    const anchor = headerZone.match(headerAnchorRe);
-    if (!anchor) continue;
+    // Inspect the top of each page. Page banners on the Global-Fire layout
+    // sit at the very top, but pdf extraction sometimes inserts metadata
+    // before the banner so we scan the first ~600 chars to be safe.
+    const headerZone = p.text.slice(0, 600);
 
     const optMatch = headerZone.match(optionalQualifierRe);
     const mainMatch = headerZone.match(mainQualifierRe);
-    if (!optMatch && !mainMatch) continue;          // anchor only — ambiguous, skip
-    if (optMatch && mainMatch) continue;            // both phrases present — ambiguous, skip
+    if (!optMatch && !mainMatch) continue;
+    if (optMatch && mainMatch) {
+      // Both phrases present in the same header zone — pick whichever
+      // appears first on the page, since a later phrase usually belongs
+      // to a sub-section reference, not the page banner itself.
+      const role: "main" | "optional" = mainMatch.index! < optMatch.index! ? "main" : "optional";
+      const banner = (role === "main" ? mainMatch : optMatch)[0].replace(/\s+/g, " ").trim().slice(0, 80);
+      hits.push({ page: p.pageNum, role, banner });
+      continue;
+    }
 
     hits.push({
       page: p.pageNum,
