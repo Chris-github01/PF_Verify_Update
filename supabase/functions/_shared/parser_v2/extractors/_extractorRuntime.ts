@@ -177,13 +177,19 @@ export async function runExtractorLLMWithTelemetry(
       .slice(start, start + CHUNK_CONCURRENCY)
       .map((_, offset) => runChunk(start + offset));
     const results = await Promise.all(batch);
-    for (const r of results) {
+    for (let bi = 0; bi < results.length; bi++) {
+      const r = results[bi];
+      const chunk = chunks[start + bi];
+      const chunkPageRange = parsePageRange(chunk.pageRange);
       if (r.rows != null) {
         succeeded++;
         let validCount = 0;
         for (const row of r.rows) {
           const mapped = mapper(row as Record<string, unknown>, ctx.trade);
           if (mapped) {
+            if (mapped.source_page == null && chunkPageRange) {
+              mapped.source_page = chunkPageRange.first;
+            }
             all.push(mapped);
             validCount++;
           }
@@ -601,6 +607,15 @@ async function raceOrNull<T>(
 }
 
 type Chunk = { text: string; pageRange: string };
+
+function parsePageRange(pageRange: string): { first: number; last: number } | null {
+  const m = pageRange.match(/^p(\d+)-p(\d+)$/);
+  if (!m) return null;
+  const first = Number(m[1]);
+  const last = Number(m[2]);
+  if (!Number.isFinite(first) || !Number.isFinite(last)) return null;
+  return { first, last };
+}
 
 function buildChunks(
   pages: { pageNum: number; text: string }[],
