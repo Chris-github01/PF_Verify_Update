@@ -666,23 +666,31 @@ function detectBannerHits(pages: { pageNum: number; text: string }[]): BannerHit
   // (Optimal/Optimal-Fire layout, where main + optional scope can coexist on
   // the same page under sub-headers like "OPTIONAL SCOPE").
 
-  const mainQualifierRe = /(items?\s+identified\s+on\s+drawings|identified\s+on\s+drawings|main\s+scope\s+breakdown|included\s+scope\s+breakdown|base\s+scope\s+breakdown|tender\s+scope\s+breakdown)/i;
-  const optionalQualifierRe = /(not\s+shown\s+on\s+drawings|items?\s+with\s+confirmation|optional\s+scope\s+breakdown|add[\s-]?to[\s-]?scope\s+breakdown|tbc\s+breakdown|provisional\s+breakdown|optional\s+scope|add\s+to\s+scope)/i;
+  // The Global-Fire layout uses page banners that always begin with an explicit
+  // anchor phrase like "QUOTE BREAKDOWN — ITEMS IDENTIFIED ON DRAWINGS" or
+  // "QUOTE BREAKDOWN — NOT SHOWN ON DRAWINGS". Requiring the anchor prevents
+  // intra-page sub-headers in the Optimal layout (e.g. "OPTIONAL SCOPE") from
+  // being misread as page banners.
+  const anchorRe = /(quote\s+breakdown|scope\s+breakdown|price\s+breakdown|pricing\s+summary|tender\s+breakdown)/i;
+  const mainQualifierRe = /(items?\s+identified\s+on\s+drawings|identified\s+on\s+drawings|main\s+scope|included\s+scope|base\s+scope|tender\s+scope)/i;
+  const optionalQualifierRe = /(not\s+shown\s+on\s+drawings|items?\s+with\s+confirmation|optional\s+scope|add[\s-]?to[\s-]?scope|provisional\s+scope|tbc\s+scope)/i;
 
   const hits: BannerHit[] = [];
   for (const p of pages) {
-    // Inspect the top of each page. Page banners on the Global-Fire layout
-    // sit at the very top, but pdf extraction sometimes inserts metadata
-    // before the banner so we scan the first ~600 chars to be safe.
-    const headerZone = p.text.slice(0, 600);
+    // Page banners on Global-Fire sit at the very top. PDF extraction
+    // sometimes inserts a small amount of metadata before the banner, so
+    // we look at the first 400 chars for the anchor, then expect the
+    // qualifier within ~150 chars of the anchor.
+    const headerZone = p.text.slice(0, 400);
+    const anchor = headerZone.match(anchorRe);
+    if (!anchor) continue;
+    const anchorIdx = anchor.index ?? 0;
+    const window = headerZone.slice(anchorIdx, anchorIdx + 200);
 
-    const optMatch = headerZone.match(optionalQualifierRe);
-    const mainMatch = headerZone.match(mainQualifierRe);
+    const optMatch = window.match(optionalQualifierRe);
+    const mainMatch = window.match(mainQualifierRe);
     if (!optMatch && !mainMatch) continue;
     if (optMatch && mainMatch) {
-      // Both phrases present in the same header zone — pick whichever
-      // appears first on the page, since a later phrase usually belongs
-      // to a sub-section reference, not the page banner itself.
       const role: "main" | "optional" = mainMatch.index! < optMatch.index! ? "main" : "optional";
       const banner = (role === "main" ? mainMatch : optMatch)[0].replace(/\s+/g, " ").trim().slice(0, 80);
       hits.push({ page: p.pageNum, role, banner });
