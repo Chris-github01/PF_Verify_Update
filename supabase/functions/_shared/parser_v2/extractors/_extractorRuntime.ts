@@ -630,68 +630,55 @@ function buildChunks(
 
 function buildBannerPreamble(pages: { pageNum: number; text: string }[]): string {
   type BannerHit = { page: number; role: "main" | "optional"; banner: string };
-  const optionalPatterns: RegExp[] = [
-    /not\s+shown\s+on\s+drawings/i,
-    /items?\s+with\s+confirmation/i,
-    /optional\s+scope/i,
-    /optional\s+items?/i,
-    /optional\s+extras?/i,
-    /add[\s-]?to[\s-]?scope/i,
-    /add[\s-]?ons?/i,
-    /provisional\s+(scope|sum|breakdown)/i,
-    /extra\s+over\b/i,
-    /tbc\s+breakdown/i,
-    /alternat(e|ive)\s+scope/i,
-  ];
-  const mainPatterns: RegExp[] = [
-    /items?\s+identified\s+on\s+drawings/i,
-    /identified\s+on\s+drawings/i,
-    /\bon\s+drawings\b/i,
-    /main\s+scope(\s+breakdown)?/i,
-    /included\s+scope(\s+breakdown)?/i,
-    /base\s+scope/i,
-    /scope\s+breakdown/i,
-    /scope\s+of\s+works/i,
-    /quote\s+breakdown/i,
-  ];
+
+  // Page-level banner detection is intentionally STRICT.
+  // It only fires when the page begins with a recognised "QUOTE BREAKDOWN ..."
+  // header that immediately resolves to main- or optional-scope. This is the
+  // Global-Fire layout. Pages without such a top-of-page banner are NOT added
+  // to the map; the LLM uses its in-prompt section-stack rules for those
+  // (Optimal/Optimal-Fire layout, where main + optional scope can coexist on
+  // the same page under sub-headers like "OPTIONAL SCOPE").
+
+  const headerAnchorRe = /quote\s+breakdown/i;
+  const mainQualifierRe = /(items?\s+identified\s+on\s+drawings|identified\s+on\s+drawings|main\s+scope\s+breakdown|included\s+scope\s+breakdown|base\s+scope\s+breakdown)/i;
+  const optionalQualifierRe = /(not\s+shown\s+on\s+drawings|items?\s+with\s+confirmation|optional\s+scope\s+breakdown|add[\s-]?to[\s-]?scope\s+breakdown|tbc\s+breakdown|provisional\s+breakdown)/i;
 
   const hits: BannerHit[] = [];
   for (const p of pages) {
-    const head = p.text.slice(0, 600);
-    let isOptional = false;
-    let matched: string | null = null;
-    for (const re of optionalPatterns) {
-      const m = head.match(re);
-      if (m) { isOptional = true; matched = m[0]; break; }
-    }
-    if (!matched) {
-      for (const re of mainPatterns) {
-        const m = head.match(re);
-        if (m) { matched = m[0]; break; }
-      }
-    }
-    if (matched) {
-      hits.push({
-        page: p.pageNum,
-        role: isOptional ? "optional" : "main",
-        banner: matched.replace(/\s+/g, " ").trim().slice(0, 80),
-      });
-    }
+    // Only inspect the very top of the page (first ~250 chars). True page
+    // banners always appear there; deeper occurrences of "OPTIONAL SCOPE"
+    // are in-table sub-headers that the LLM must handle, not a page banner.
+    const headerZone = p.text.slice(0, 250);
+    const anchor = headerZone.match(headerAnchorRe);
+    if (!anchor) continue;
+
+    const optMatch = headerZone.match(optionalQualifierRe);
+    const mainMatch = headerZone.match(mainQualifierRe);
+    if (!optMatch && !mainMatch) continue;          // anchor only — ambiguous, skip
+    if (optMatch && mainMatch) continue;            // both phrases present — ambiguous, skip
+
+    hits.push({
+      page: p.pageNum,
+      role: optMatch ? "optional" : "main",
+      banner: (optMatch ?? mainMatch)![0].replace(/\s+/g, " ").trim().slice(0, 80),
+    });
   }
   if (hits.length === 0) return "";
 
   const lines: string[] = [];
-  lines.push("[BANNER MAP — DETERMINISTIC, USE THIS FOR scope_category]");
-  lines.push("Each entry is the page where a scope banner was detected. The banner applies from that page until the next entry. Use this to set scope_category for every row.");
+  lines.push("[PAGE BANNER MAP — DETERMINISTIC, GLOBAL-FIRE LAYOUT]");
+  lines.push("These pages start with a recognised page-level scope banner. The banner applies from that page until the next mapped page. Pages NOT listed here have no page-level banner — for those, you MUST use your section-header rules (STEP 5) to set scope_category, NOT this map.");
   for (const h of hits) {
     lines.push(`  page ${h.page}: role=${h.role}  banner="${h.banner}"`);
   }
-  lines.push("Rules:");
-  lines.push(" 1. For every extracted row, find the most recent BANNER MAP entry whose page <= row.source_page.");
-  lines.push(" 2. If that entry's role = main, scope_category MUST be \"main\".");
-  lines.push(" 3. If that entry's role = optional, scope_category MUST be \"optional\".");
-  lines.push(" 4. If a row's source_page is BEFORE the first banner entry, default scope_category = main.");
-  lines.push(" 5. The banner map OVERRIDES in-table sub-headers like \"Electrical Penetrations\" / \"Hydraulic Penetrations\" for SCOPE classification.");
+  lines.push("Rules for pages listed above:");
+  lines.push(" 1. For every row whose source_page is listed (or is between two listed pages), set scope_category strictly from the most recent listed entry whose page <= row.source_page.");
+  lines.push(" 2. role=main  -> scope_category MUST be \"main\".");
+  lines.push(" 3. role=optional -> scope_category MUST be \"optional\".");
+  lines.push(" 4. The banner OVERRIDES in-table sub-headers (Electrical Penetrations, Hydraulic Penetrations, etc.) for scope only.");
+  lines.push("Rules for pages NOT listed above:");
+  lines.push(" 5. Default scope_category = \"main\" UNLESS the row sits under an in-table optional sub-header per STEP 5 of the prompt (e.g. \"OPTIONAL SCOPE\", \"Optional Extras\", \"ADD TO SCOPE\", \"PROVISIONAL\", \"TBC\", tickbox).");
+  lines.push(" 6. Sub-headers like \"SERVICES IDENTIFIED NOT PART OF PASSIVE FIRE SCHEDULE\" are MAIN scope (they roll up into the main sub-total even though the wording sounds excluded). Do NOT mark these rows optional.");
   return lines.join("\n");
 }
 
