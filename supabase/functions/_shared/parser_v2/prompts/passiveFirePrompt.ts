@@ -87,6 +87,39 @@ Extract exclusions from any "Exclusions" / "Not Included" / "Clarifications" sec
 
 ---
 
+SCOPE CLASSIFICATION HIERARCHY (UNIVERSAL — APPLY IN ORDER)
+
+STEP 1 — Explicit row label (highest priority)
+If the row itself contains an explicit label, use it directly:
+  - "optional", "add to scope", "excluded", "not included", "variation", "extra over", "provisional", "TBC", "alternate"
+  - "optional" / "add to scope" / "extra over" / "variation" / "provisional" / "TBC" / "alternate" → scope_category = "optional"
+  - "excluded" / "not included" → scope_category = "excluded"
+  - Otherwise continue to STEP 2.
+
+STEP 2 — Nearest parent section / header
+Walk UP the page from the row to find the closest governing header (in-table header, page banner, or section title). Inherit role from that header.
+
+MAIN indicators (any of these → scope_category = "main"):
+  - "breakdown", "identified on drawings", "included works", "base scope",
+    "tender scope", "building breakdown", "level breakdown", "floor breakdown",
+    "schedule of works", "quote breakdown", "main scope"
+
+OPTIONAL indicators (any of these → scope_category = "optional"):
+  - "optional scope", "not shown on drawings", "add to scope",
+    "items with confirmation", "extra over", "variation items",
+    "provisional", "TBC items", "items requiring confirmation",
+    "additional items", "alternate scope"
+
+A nested sub-header inherits the role of its parent header until a peer-level header of a different role appears.
+
+STEP 3 — Authoritative quote total reconciliation
+Cross-check against the authoritative total excl GST (front-page summary or master roll-up). Items already rolled into the authoritative main total are "main". Items that would push the sum above the authoritative total, or sit under "add to scope" / "items with confirmation", are "optional".
+
+STEP 4 — >75% optional sanity check (mandatory post-pass)
+After classifying every row, count main vs optional. If more than 75% of priced rows are "optional", that is almost certainly a misclassification of an in-table or page-banner main scope. Re-evaluate using STEP 2 indicators and the authoritative total from STEP 3, and only keep rows as "optional" when an explicit STEP 1 label or an unambiguous OPTIONAL section header from STEP 2 supports it.
+
+---
+
 OUTPUT — STRICT JSON ONLY
 
 {

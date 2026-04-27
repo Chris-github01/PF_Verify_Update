@@ -64,79 +64,75 @@ If Prompt 2 says summary_vs_breakdown_exclusive = true:
 - Detailed schedules are extractable rows
 - Do NOT also extract summary totals as rows
 
-STEP 4b — DEFAULT SCOPE = MAIN (HARD RULE)
-The DEFAULT scope_category for every extracted row is "main". Only flip a row to "optional" when there is EXPLICIT, LOCAL, ON-PAGE evidence that the row sits inside an optional section (page banner on the SAME source_page, or in-table optional header earlier on the SAME page above the row, or Prompt 2 financial_map.sections matching the row's source_page).
-NEVER mark a row optional purely because the document mentions optional scope somewhere else, or because an optional banner appears later in the document. Optional scope is LOCAL to its page range.
-SANITY CHECK (mandatory): after classifying every row, count main vs optional. Passive Fire quotes are typically MAJORITY main scope (60–95%). If you are about to return ≥ 80% of rows as optional, you have almost certainly globalised an optional banner that only applies to a few late pages — re-evaluate every "optional" row, and unless it falls on a page Prompt 2 explicitly tagged optional (or the row's source_page is within an optional page-banner's page_start..page_end), flip it back to main.
+STEP 4b — SCOPE CLASSIFICATION HIERARCHY (UNIVERSAL — APPLY IN ORDER)
+For every priced row, decide scope_category by walking these four steps in order. The FIRST step that yields a verdict wins. Never skip a step. Always emit section_path on every row (ordered ancestor headers from outermost to innermost) so the classification is auditable.
 
-STEP 5 — OPTIONAL SCOPE RULE (SECTION-HEADER STACK — CRITICAL)
-Track the active section-header stack as you read the document top-to-bottom. You MUST emit on every row a field section_path: an ordered array of every ancestor header currently on the stack, from outermost (top-level Building/Block or scope partition) to innermost (the immediate sub-header). Example: section_path = ["Building B30", "OPTIONAL SCOPE", "Architectural/Structural Details"]. This path is MANDATORY and must reflect the hierarchy shown by indentation, bold/caps, whitespace gaps, and page breaks — not just the single nearest header.
+  STEP 4b.1 — EXPLICIT ROW LABEL
+  If the row text itself explicitly contains any of:
+    optional, add to scope, excluded, variation, extra over, provisional, TBC, alternate
+  classify by that explicit label:
+    - "optional" / "add to scope" / "extra over" / "provisional" / "TBC" / "alternate" / "variation" → scope_category = optional
+    - "excluded" → do NOT extract; add to ignored_rows with reason "excluded_by_label"
+  Done for that row.
 
-A row INHERITS scope_category = optional from ANY ancestor header on its stack that matches any of these triggers (case-insensitive, tolerant of punctuation):
-  - "OPTIONAL SCOPE", "OPTIONAL ITEMS", "OPTIONAL EXTRAS", "OPTIONAL"
-  - "ADD TO SCOPE", "ADD-ONS", "ADDITIONAL SCOPE"
-  - "PROVISIONAL SUM", "PROVISIONAL SCOPE", "PROVISIONAL"
-  - "EXTRA OVER", "EXTRAS"
-  - "ALTERNATE", "ALTERNATIVE", "ALTERNATIVE SCOPE"
-  - "PRICED SEPARATELY", "SEPARATE PRICE", "PRICE ON APPLICATION"
-  - "CLIENT TO CONFIRM", "TBC", "IF ACCEPTED", "IF REQUIRED"
-  - Tick-box indicators: "☐", "[ ]", "[  ]", empty/filled rectangles in row or header
-  - Any section Prompt 2 (financial_map.sections) tagged section_role = "optional" OR whose parent_section chain reaches an optional ancestor
-Sub-headers NESTED under an Optional parent (e.g. "Architectural/Structural Details", "Flush Boxes", "Cavity Barriers", "Beam Encasement", "Optional Extras", "Additional Items") do NOT reset scope back to main — they inherit optional from the parent. Only a new peer-level header with main-scope semantics (e.g. "MAIN SCOPE", "INCLUDED SCOPE", next Building/Block header at the same or higher indent level) resets the stack.
-If a row has no keyword of its own but ANY element of its section_path is an Optional ancestor (by keyword OR by Prompt 2 classification), mark it scope_category = optional.
-Never mark an inherited-optional row as main.
+  STEP 4b.2 — NEAREST PARENT SECTION / HEADER / PAGE BANNER
+  Else inspect the nearest parent section, sub-header, OR page banner active on the row's source_page (build a page→banner map first; the banner active on a row is the most recent banner on or before that page).
 
-When a large block of visually similar rows (e.g. a table of beams, cavity barriers, penetrations) appears under what is visibly an Optional parent header, classify EVERY row in that block as optional — do not cherry-pick only the rows whose description contains the literal word "optional".
+  MAIN section / banner indicators (case-insensitive, tolerant of dashes/punctuation/line breaks):
+    - "breakdown"
+    - "identified on drawings"
+    - "included works", "included scope"
+    - "base scope", "tender scope"
+    - "building breakdown", "level breakdown", "floor breakdown"
+    - "schedule of works"
+    - "quote breakdown" (when not paired with an optional qualifier on the same line)
+    - "main scope", "main scope breakdown"
+  ⇒ scope_category = main
 
-STEP 5a — PAGE-BANNER SCOPE INHERITANCE (CRITICAL — DIFFERENT QUOTE STRUCTURE)
-Some suppliers (e.g. Global Fire) do NOT mark optional scope with in-table headers. Instead, scope is shown as a PAGE BANNER / PAGE TITLE at the top of each breakdown page (e.g. "QUOTE BREAKDOWN — ITEMS IDENTIFIED ON DRAWINGS" or "QUOTE BREAKDOWN — NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE").
+  OPTIONAL section / banner indicators (case-insensitive):
+    - "optional scope", "optional items", "optional extras", "optional"
+    - "not shown on drawings"
+    - "add to scope", "add-ons", "additional scope"
+    - "items with confirmation", "items requiring confirmation", "client to confirm", "if accepted", "if required"
+    - "extra over", "extras"
+    - "variation items"
+    - "provisional sum", "provisional scope", "provisional"
+    - "TBC items", "TBC breakdown"
+    - "alternate", "alternative", "alternative scope"
+    - "priced separately", "separate price", "price on application"
+    - Tick-box header indicators: "☐", "[ ]", "[  ]", empty/filled rectangles
+    - Any section Prompt 2 (financial_map.sections) tagged section_role = "optional", OR whose parent_section chain reaches an optional ancestor
+  ⇒ scope_category = optional
 
-PAGE BANNERS ARE LOCAL, NOT GLOBAL. A banner applies ONLY to rows whose source_page is on or after that banner's page AND before the next banner. Build a page→banner map first, THEN classify each row by looking up the banner active on its source_page. NEVER apply an optional banner to rows on earlier or unrelated pages.
+  Section / banner inheritance is HIERARCHICAL: a row inherits its classification from ANY ancestor on its section_path that matches the indicators above. Sub-headers nested under an Optional parent (e.g. "Architectural/Structural Details", "Flush Boxes", "Cavity Barriers", "Beam Encasement", and even "Electrical Penetrations" when sitting under an optional banner) do NOT reset scope back to main — they inherit optional from the parent. Only a new peer-level header with main-scope semantics (a new MAIN page banner, "MAIN SCOPE", "INCLUDED SCOPE", or the next Building/Block header at the same or higher indent level) resets the stack.
 
-MAIN-scope page banners (case-insensitive, tolerant of punctuation/dashes/em-dashes/line breaks):
-  - "QUOTE BREAKDOWN — ITEMS IDENTIFIED ON DRAWINGS"
-  - "ITEMS IDENTIFIED ON DRAWINGS"
-  - "IDENTIFIED ON DRAWINGS"
-  - "ON DRAWINGS"
-  - "MAIN SCOPE BREAKDOWN", "INCLUDED SCOPE BREAKDOWN"
-  - "BASE SCOPE", "SCOPE OF WORKS", "SCOPE BREAKDOWN"
+  Page banners are LOCAL, not global. A banner applies ONLY to rows whose source_page is on or after that banner's page AND before the next banner. NEVER apply an optional banner to rows on earlier or unrelated pages. Banners OVERRIDE in-table trade headers (Electrical Penetrations, Hydraulic Penetrations, Mechanical Penetrations, Architectural, etc.) for SCOPE — those trade headers stay as source_section descriptors only.
 
-OPTIONAL-scope page banners:
-  - "QUOTE BREAKDOWN — NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE"
-  - "NOT SHOWN ON DRAWINGS"
-  - "ITEMS WITH CONFIRMATION", "ITEMS WITH CONFIRMATION / OPTIONAL SCOPE"
-  - "OPTIONAL SCOPE BREAKDOWN", "ADD TO SCOPE BREAKDOWN"
-  - "EXTRA OVER", "TBC BREAKDOWN", "PROVISIONAL BREAKDOWN"
-  - "ADD-ONS", "ITEMS REQUIRING CONFIRMATION"
-  - Any banner combining "NOT SHOWN" + ("OPTIONAL"|"CONFIRMATION"|"TBC")
+  When a large block of visually similar rows (a table of beams, cavity barriers, penetrations) appears under an Optional parent header or banner, classify EVERY row in that block as optional — do not cherry-pick only the rows whose description contains the literal word "optional".
 
-For every row:
-  1. Determine the banner active on its source_page (the most recent banner appearing on or before that page).
-  2. Push that banner onto the FRONT of section_path (outermost).
-  3. Set scope_category strictly from that banner: main_included banner → main; optional banner → optional.
-  4. Banners OVERRIDE in-table trade headers (Electrical Penetrations, Hydraulic Penetrations, Mechanical Penetrations, Architectural, etc.) for SCOPE classification. The trade headers stay as source_section descriptors.
+  STEP 4b.3 — AUTHORITATIVE QUOTE TOTAL RECONCILIATION
+  If the section is unclear after Step 4b.2, compare the row against the authoritative quote total (Prompt 4's selected_main_total_ex_gst, or Prompt 2's authoritative_total_ex_gst as fallback):
+    - Rows that mathematically contribute to the selected main total ⇒ scope_category = main
+    - Rows that are subtotalled separately, OUTSIDE the selected main total (their subtotal feeds an "Optional", "Add-On", "Extra Over" or "Provisional" sub-total instead) ⇒ scope_category = optional
+  Use Prompt 2's section.section_total values to test which rows roll into which total. If a section's section_total is part of the master roll-up that equals the selected main total, its rows are MAIN. If a section's section_total sits outside that roll-up, its rows are OPTIONAL.
+
+  STEP 4b.4 — MAJORITY-OPTIONAL SANITY CHECK (MANDATORY POST-PASS)
+  After classifying every row, count the proportion classified optional. If MORE THAN 75% of priced rows are classified optional AND the quote contains a clear main total (Prompt 4 selected_main_total_ex_gst, or Prompt 2 authoritative_total_ex_gst, is non-null and non-zero):
+    - You have almost certainly globalised an optional banner / header that only applies to a small portion of the document.
+    - Re-evaluate every "optional" row. Convert any UNRESOLVED row to MAIN unless one of these is still true after re-inspection:
+        a) The row text itself contains an explicit optional label (Step 4b.1), OR
+        b) The row's source_page falls strictly within an optional page banner's page_start..page_end range, OR
+        c) The row's source_section matches a Prompt 2 section tagged section_role = "optional".
+  This sanity check is MANDATORY. Passive Fire quotes are typically MAJORITY main scope (60–95%); a >75% optional outcome is almost always a misclassification.
 
 WORKED EXAMPLE (Global-style quote, 13 pages):
-  - Pages 1–3: cover, summary, terms (no banner; rows here are usually summary totals → ignored_rows)
-  - Pages 4–8: banner "ITEMS IDENTIFIED ON DRAWINGS" → every breakdown row on these pages is scope_category = main, even though the in-table sub-sections are "Electrical Penetrations", "Hydraulic Penetrations", "Mechanical Penetrations".
-  - Pages 9–12: banner "NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE" → every row on these pages is scope_category = optional, even though the same in-table sub-sections ("Electrical Penetrations", "Hydraulic Penetrations") appear here too.
+  - Pages 1–3: cover, summary, terms (no banner; rows here are summary totals → ignored_rows).
+  - Pages 4–8: MAIN banner "ITEMS IDENTIFIED ON DRAWINGS" → every breakdown row on these pages is scope_category = main, even though the in-table sub-sections are "Electrical Penetrations", "Hydraulic Penetrations", "Mechanical Penetrations".
+  - Pages 9–12: OPTIONAL banner "NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE" → every row on these pages is scope_category = optional.
   - Page 13: terms (no banner) → ignored.
-A row "Cable Bundle 20mm — TPS — concrete floor — -/30/30" appearing on page 5 must be MAIN. The same wording appearing on page 10 must be OPTIONAL. The sub-section name "Electrical Penetrations" is identical on both — only the page banner determines scope.
+A row "Cable Bundle 20mm — TPS — concrete floor — -/30/30" on page 5 is MAIN. The identical wording on page 10 is OPTIONAL. Sub-section name is identical on both — only the page banner determines scope.
 
-If a quote has NO page banners (Optimal-style), fall back to in-table optional triggers in STEP 5.
-
-STEP 5b — PROMPT 2 CROSS-CHECK (HARD SIGNAL)
-The user context includes financial_map from Prompt 2. Its sections[] array lists section_name + section_role (main_included | optional | excluded | rates_reference | terms). Before finalising scope_category on any row, match its source_section against financial_map.sections by case-insensitive substring or token overlap:
-  - If the matched section_role = "optional" → force scope_category = optional.
-  - If the matched section_role = "excluded" → do NOT extract the row at all; add to ignored_rows with reason "excluded_by_structure".
-  - If the matched section_role = "main_included" → scope_category = main unless the row itself has inline optional keywords.
-  - If matched section_role = "summary" and rolled_into_master_total = true → ignored_rows reason "summary_total".
-Prompt 2's determination overrides inline row text when ambiguous.
-
-STEP 6 — INCLUDED EXTRA-OVER RULE
-Rows containing wording like: not shown on drawings, extra over, allowance made for, included estimate items.
-If Prompt 2 marked included: scope_category = main
-If Prompt 2 marked ambiguous: scope_category = ambiguous
+If a quote has NO page banners (Optimal-style), Step 4b.2 falls back to in-table sub-headers and Prompt 2 section roles, then Step 4b.3 reconciles against the authoritative total.
 
 STEP 7 — DEDUPLICATION RULES (CRITICAL — DO NOT OVER-DEDUPE)
 Only remove duplicates caused by OCR repeats of the SAME physical line (same page, same section, same building_or_block). Two rows are duplicates ONLY when ALL of the following match:
