@@ -287,9 +287,8 @@ async function callOpenAIWithRetry(args: {
         },
         body: JSON.stringify({
           model: EXTRACTOR_MODEL,
-          temperature: 0,
           response_format: { type: "json_object" },
-          max_tokens: LLM_MAX_TOKENS,
+          max_completion_tokens: LLM_MAX_TOKENS,
           messages: [
             { role: "system", content: args.systemPrompt },
             { role: "user", content: userJson },
