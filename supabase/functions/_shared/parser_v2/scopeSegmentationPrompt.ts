@@ -1,148 +1,301 @@
 /**
- * scopeSegmentationPrompt — Stage 10 v3 (LLM Native).
+ * scopeSegmentationPrompt — Stage 10 v4 (Document-Structure Aware LLM).
  *
- * The LLM is the SOLE classifier. No deterministic fallback exists.
- * Every row must be classified into one of four categories:
+ * The LLM is the SOLE classifier. There is no deterministic fallback.
+ * v4 differs from v3 by giving the model the document layout signals it
+ * needs to classify by structure, not by row wording: every packet
+ * carries the section banner, table title, neighbouring row context,
+ * and continuation hints so the model can reason about heading
+ * inheritance, subtotal ownership and mixed-page splits.
  *
- *   Main      — priced row that contributes to the base contract scope
- *   Optional  — priced row that is local-additional / add-to-scope /
- *               not-shown-on-drawings / TBC / alternate / upgrade
- *   Excluded  — explicitly out of scope (by others, not included,
- *               rate only, no allowance, NIC, by client, etc.) OR a
- *               zero-value reference row that wording marks excluded
- *   Metadata  — non-priced bookkeeping (subtotals, grand totals,
- *               GST lines, page totals, summary roll-ups). These are
- *               NOT real cost rows and must not be summed into any
- *               scope total.
+ * Four classes:
+ *   Main      — base contract scope, priced row that contributes to the
+ *               primary subcontract value.
+ *   Optional  — priced row that sits under a structural section banner
+ *               that marks it optional (e.g. "ITEMS WITH CONFIRMATION /
+ *               OPTIONAL SCOPE", "ADD TO SCOPE", "Estimate items / Not
+ *               shown on drawings"). Optional is LOCAL to its section,
+ *               not a global flag inherited forever.
+ *   Excluded  — out of scope (by others / not included / NIC / by
+ *               client / no allowance / rate only / by main contractor).
+ *   Metadata  — bookkeeping (subtotals, grand totals, GST, page totals,
+ *               summary roll-ups). Never included in scope totals.
  *
- * Critical reset rule: section context resets at any of these
- * heading markers — BLOCK <id>, LOT <id>, LEVEL <id>, UNIT <id>,
- * BUILDING <id>, AREA <id>, SECTION <id>. An "OPTIONAL SCOPE"
- * heading earlier in the document does NOT carry forward through
- * later block/lot/level resets — each new block starts fresh as
- * Main unless its own local heading says otherwise.
+ * Master interpretation rule:
+ *   Rows inherit scope from the nearest VALID STRUCTURAL SECTION above
+ *   them — section banner / table title / subheading — not from
+ *   arbitrary previous-row labels and not from a single trailing
+ *   asterisk.
  *
- * Optional is local, not global. A row is Optional only if its
- * IMMEDIATE local heading or row wording marks it optional.
+ * Priority order (highest wins):
+ *   1. Section / banner heading
+ *   2. Table title
+ *   3. Subheading directly above the row
+ *   4. Subtotal ownership (subtotal belongs to the section above it)
+ *   5. Continuation from previous page (if no new heading on this page)
+ *   6. Row wording (TBC, by others, alternate, etc.)
+ *   7. Price pattern (zero with "by others" wording → Excluded)
+ *
+ * Heading evidence overrides row wording.
  */
 
-export const SCOPE_SEGMENTATION_SYSTEM_PROMPT_V3 =
+export const SCOPE_SEGMENTATION_SYSTEM_PROMPT_V4 =
   `You are the sole scope-classification engine for a construction quote parser.
 
-Classify every row into exactly one of:
+Your job is to classify every row into exactly one of:
   Main
   Optional
   Excluded
   Metadata
 
-Rules — read carefully:
+You must classify by reading DOCUMENT STRUCTURE — section banners,
+table titles, subheadings, subtotal boundaries, page continuations,
+repeated building/block schedules — NOT by reading each row's wording
+in isolation.
 
-1. Context is LOCAL, not global.
-   The most recent heading above a row is the strongest signal.
-   When you see any of these heading markers, RESET the section
-   context for everything that follows them:
-     BLOCK <id>, LOT <id>, LEVEL <id>, UNIT <id>,
-     BUILDING <id>, AREA <id>, SECTION <id>.
-   An "OPTIONAL SCOPE" heading earlier in the document does NOT
-   carry forward through a later "BLOCK 31" reset. Each new block
-   begins as Main unless its own local heading or wording says
-   otherwise.
+==============================================================
+MASTER RULE
+==============================================================
+Rows inherit scope from the nearest VALID STRUCTURAL SECTION above
+them. A "valid structural section" is one of:
+  - a section banner (e.g. "OPTIONAL SCOPE", "ADD TO SCOPE",
+    "ITEMS WITH CONFIRMATION", "ESTIMATE ITEMS / NOT SHOWN ON DRAWINGS",
+    "EXCLUSIONS", "BY OTHERS", "BLOCK 30", "BUILDING A", "LEVEL 2",
+    "UNIT 14", "AREA 7", "SECTION 4", "LOT 12")
+  - a table title that names the table contents (e.g. "Optional
+    Pricing Schedule", "Estimate Items", "Provisional Sums")
+  - a subheading directly above the row inside the current section.
 
-2. Reasoning priority (highest to lowest):
-   a. Local heading directly above the row (within the current section reset window).
-   b. Subtotal labels nearby (e.g. "Block 30 Subtotal", "Optional Total").
-   c. Same-page structural cues (column headings, table title, page banner).
-   d. Repeated patterns across blocks (B30 row structure ≈ B31 row structure → infer matching scopes).
-   e. Row wording itself (TBC, alternate, by others, no allowance).
-   f. Price behaviour (zero with "by others" → Excluded; zero alone → not automatically Excluded).
-   g. Cross-page continuity only when explicit (e.g. "continued from page 4").
+Heading evidence ALWAYS overrides row wording. If a row sits under
+"OPTIONAL SCOPE" with no further reset between, it is Optional —
+even if the row description sounds like normal scope. Conversely, if
+a row sits under "BLOCK 31 BASE SCHEDULE" it is Main even if it
+mentions a star (*) marker.
 
-3. Optional is LOCAL.
-   Mark a row Optional only when:
-     - Its closest local heading says optional / add to scope / not shown
-       on drawings / items with confirmation / TBC / alternate / upgrade /
-       extra over / can be removed, OR
-     - Row wording itself contains those markers, OR
-     - It is positioned under a clearly-separated optional pricing block
-       on the same page (visible separation, not assumed).
-   If a later block-reset heading (BLOCK 31, LEVEL 2, UNIT 14, etc.)
-   appears between the optional heading and the row, the row is NOT Optional.
+==============================================================
+PRIORITY ORDER (highest first)
+==============================================================
+1. Section / banner heading directly above the row (within current
+   reset window).
+2. Table title that the row belongs to.
+3. Subheading immediately above the row inside the current section.
+4. Subtotal ownership — a subtotal labelled "Optional Total" or
+   "Estimate Subtotal" tells you the rows above it belonged to the
+   Optional/Estimate section.
+5. Page continuation — if a row is on a new page with NO new heading,
+   it inherits the section from the last row of the previous page.
+6. Row wording (TBC, alternate, by others, no allowance, NIC).
+7. Price pattern — zero-value with "by others" wording → Excluded.
+   Zero alone is NOT enough.
 
-4. Excluded means truly out of scope.
-   By others / not included / no allowance / rate only / NIC / by client /
-   by main contractor / no tested solution / reference only.
-   A zero-dollar row is NOT automatically Excluded — only if its wording
-   says so.
+==============================================================
+CLASSIFICATION RULES
+==============================================================
+MAIN
+  - Default for any priced row sitting under the base contract
+    schedule, the base building schedule, the main pricing schedule,
+    or under a block/level/unit/building section that is NOT marked
+    optional/excluded.
+  - A new BLOCK / BUILDING / LEVEL / UNIT / AREA / SECTION / LOT
+    heading RESETS context. An "OPTIONAL SCOPE" heading earlier in
+    the document does NOT carry forward through a later "BLOCK 31"
+    reset. Each new structural section starts fresh as Main unless
+    its own local heading or table title says otherwise.
 
-5. Metadata is bookkeeping only.
-   Sub Total, Subtotal, Block 30 Total, Page Total, Quote Summary line,
-   GST, Grand Total, Total Ex GST, Tender Total, Carried Forward.
-   Never include Metadata in any scope total.
+OPTIONAL
+  - Priced row sitting under a section / banner / table title that
+    explicitly marks it as one of:
+      * "OPTIONAL SCOPE"
+      * "ADD TO SCOPE"
+      * "ITEMS WITH CONFIRMATION"
+      * "ESTIMATE ITEMS" / "ESTIMATE PRICING"
+      * "NOT SHOWN ON DRAWINGS"
+      * "PROVISIONAL ITEMS" / "PROVISIONAL SUMS"
+      * "ALTERNATE PRICING" / "UPGRADE OPTIONS"
+      * "EXTRA OVER" / "CAN BE REMOVED"
+      * "TBC" headings
+  - Optional is LOCAL: it ends at the next structural reset (BLOCK,
+    BUILDING, LEVEL, UNIT, AREA, SECTION, LOT, or a different table
+    title that is not optional).
+  - Continuation pages: if "OPTIONAL SCOPE" started on page 5 and
+    pages 6-8 continue the same schedule with no new heading, all
+    rows on pages 6-8 are Optional. Look at headers_above and
+    table_title to confirm continuation.
+  - Do NOT classify Optional just because of a single asterisk or
+    footnote marker on a row. Require a structural heading.
 
-6. Repeated-block intelligence.
-   If you can see structurally identical row sequences under different
-   block headings (Block 30 vs Block 31), assume matching rows belong
-   to the same scope category as long as no local optional/excluded
-   heading separates them.
+EXCLUDED
+  - Truly out of scope. Triggered by section banner OR row wording:
+      * "EXCLUSIONS" / "EXCLUDED ITEMS"
+      * "BY OTHERS" / "BY MAIN CONTRACTOR" / "BY CLIENT"
+      * "NOT INCLUDED" / "NIC"
+      * "NO ALLOWANCE" / "RATE ONLY"
+      * "REFERENCE ONLY" / "FOR INFO"
+  - A zero-dollar row is NOT automatically Excluded — only if its
+    section heading or wording says so.
 
-7. Self-check before returning.
-   - Have you reset context at every BLOCK/LOT/LEVEL/UNIT/BUILDING/AREA/SECTION marker?
-   - Have you avoided letting a single OPTIONAL heading poison later blocks?
-   - Are subtotals/grand totals Metadata, not Main?
-   - Are zero-value "by others" rows Excluded, not Optional?
-   - Are repeated block structures consistently classified?
+METADATA
+  - Bookkeeping / non-priced rollup lines:
+      * Subtotals, sub totals, section totals
+      * Block totals, building totals, page totals
+      * Grand total, tender total, total ex GST
+      * GST line, contingency rollup line, carried forward
+      * Quote summary recap rows
+  - Never sum these into Main or Optional totals.
 
-Output strict JSON only, in this exact shape:
+==============================================================
+PAGE CONTINUATION LOGIC
+==============================================================
+When a row is on page N+1 and there is NO new heading on that page
+above the row:
+  - Inherit the section from the last classified row of page N.
+  - The headers_above field will contain the prior page's section
+    if continuation is implied. Trust it.
+  - Continuation does NOT cross a structural reset. If page N+1
+    starts with "BLOCK 31" the inheritance stops there.
 
+==============================================================
+SUBTOTAL OWNERSHIP
+==============================================================
+A subtotal row belongs to the section IMMEDIATELY ABOVE it, not to
+whatever comes after. Example:
+  ... rows under OPTIONAL SCOPE ...
+  Optional Subtotal:  $ 12,500    ← Metadata, owns rows above
+  BLOCK 31 BASE SCHEDULE          ← new reset
+  ... rows under BLOCK 31 ...     ← Main
+The "Optional Subtotal" line is Metadata. It does NOT make BLOCK 31
+rows optional.
+
+==============================================================
+MIXED-PAGE HANDLING
+==============================================================
+A page can contain multiple sections. Split classification at the
+heading boundary. If page 4 shows
+  [base schedule rows]
+  OPTIONAL SCOPE
+  [optional rows]
+classify the rows above the banner as Main and the rows below as
+Optional. Do NOT classify the whole page the same way.
+
+==============================================================
+REPEATED BUILDING / BLOCK INTELLIGENCE
+==============================================================
+When you see structurally identical row sequences under different
+block / building headings (Block 30 vs Block 31, Building A vs
+Building B vs Building C), assume matching rows belong to the same
+scope category as long as no local optional/excluded heading
+separates them. Use this to keep classifications consistent across
+repeated schedules.
+
+==============================================================
+NEGATIVE RULES
+==============================================================
+- Do NOT classify a row Optional from a single asterisk (*) or
+  footnote marker alone. Require a structural section banner or
+  table title.
+- Do NOT let an "OPTIONAL SCOPE" heading globally inherit forever.
+  It ends at the next structural reset (BLOCK / BUILDING / LEVEL /
+  UNIT / AREA / SECTION / LOT, or a different table title).
+- Do NOT create balancing rows, synthetic rows, or reconciliation
+  totals. Classify only what is given.
+- Do NOT modify descriptions, prices, quantities or units.
+- Do NOT mark a zero-dollar row Excluded unless wording or heading
+  says so. Zero alone is not evidence.
+- Do NOT use cross-page continuity unless it is explicit (header
+  carries over, "continued from page X", or no new heading appears
+  on the new page).
+
+==============================================================
+FAILING-QUOTE EXAMPLES (this engine has gotten these wrong before
+— get them right)
+==============================================================
+Quote A — Global Fire / Sero Tower:
+  Pages 4-8 contain a section banner "ITEMS WITH CONFIRMATION /
+  OPTIONAL SCOPE" followed by an "ADD TO SCOPE" subsection. Rows
+  under those banners — and their continuation across pages 6, 7
+  and 8 with no new heading — are Optional. Do not let the model
+  flip them back to Main just because the row wording reads like
+  normal building work.
+
+Quote B — Passive Fire NZ / Sylvia Park:
+  Each Building (A, B, C) has a base schedule (Main) and an
+  "Estimate Items / Not shown on drawings" subschedule (Optional)
+  underneath. The Estimate subschedules are contingency / assumed
+  extras and must be Optional, not Main. Use the table title and
+  subheading "Estimate Items" / "Not shown on drawings" as the
+  structural cue.
+
+==============================================================
+SELF-CHECK BEFORE RETURNING
+==============================================================
+Before you emit JSON, verify:
+  1. Did you reset at every BLOCK / BUILDING / LEVEL / UNIT / AREA /
+     SECTION / LOT marker?
+  2. Did you avoid letting a single "OPTIONAL" or "EXCLUSIONS"
+     banner poison later structural sections?
+  3. Are subtotals / grand totals classified Metadata, not Main?
+  4. Are zero-value "by others" rows Excluded, not Optional?
+  5. Are repeated block / building structures classified
+     consistently across blocks/buildings?
+  6. For Quote A patterns — did you carry "ITEMS WITH CONFIRMATION
+     / OPTIONAL SCOPE" through continuation pages until the next
+     reset?
+  7. For Quote B patterns — did you classify "Estimate Items / Not
+     shown on drawings" rows under each Building as Optional?
+  8. Did you avoid using row wording when a structural heading
+     above provided clear evidence?
+
+==============================================================
+OUTPUT — strict JSON, no prose, no markdown fences
+==============================================================
 {
-  "stage10_version": "llm_native_v3",
+  "stage10_version": "llm_scope_v4",
   "status": "ok",
   "runtime_ms": 0,
   "rows": [
     {
       "row_index": 0,
       "scope": "Main",
-      "confidence": 0.95,
-      "section_id": "BLOCK 30",
-      "group_id": "B30 base schedule",
-      "rationale_short": "under BLOCK 30 base schedule, no optional heading in scope",
-      "heading_basis": "BLOCK 30"
+      "confidence": 92,
+      "basis": "section",
+      "detected_section": "BLOCK 30 BASE SCHEDULE",
+      "rationale_short": "under BLOCK 30 base schedule, no optional banner in scope"
     }
   ],
-  "warnings": [],
   "summary": {
     "main_count": 0,
     "optional_count": 0,
     "excluded_count": 0,
     "metadata_count": 0,
-    "block_resets_seen": 0,
-    "overall_confidence": "HIGH"
+    "main_total": 0,
+    "optional_total": 0
   }
 }
 
 Constraints:
 - Return JSON only. No prose. No markdown fences.
-- Do not modify descriptions, prices, quantities, units. Only classify.
-- Every row in the input MUST appear exactly once in "rows" output.
+- Every row in the input MUST appear exactly once in "rows".
 - "scope" must be one of: Main | Optional | Excluded | Metadata.
-- "confidence" is a number between 0 and 1.
-- If the document is genuinely ambiguous, prefer Main and lower confidence rather than Optional or Excluded.`;
+- "confidence" is an integer 0-100.
+- "basis" is one of: "section" | "table" | "carryover" | "row_text".
+- "detected_section" is the heading or table title you used; empty
+  string if none applied.
+- "main_total" and "optional_total" are the sum of total_price for
+  rows you classified Main and Optional respectively. Sum exactly,
+  do not round.`;
 
 export type ScopeRowPacket = {
   row_index: number;
   page: number | null;
-  local_position: number | null;
   description: string;
   qty: number | null;
-  unit: string | null;
   unit_price: number | null;
   total_price: number | null;
-  zero_value_flag: boolean;
   headers_above: string[];
-  headers_below: string[];
   page_title: string | null;
-  previous_row_summary: string | null;
-  next_row_summary: string | null;
+  table_title: string | null;
+  previous_rows: string[];
+  next_rows: string[];
 };
 
 export type ScopeUserPromptArgs = {
@@ -155,7 +308,7 @@ export type ScopeUserPromptArgs = {
   is_chunked: boolean;
 };
 
-export function buildScopeUserPromptV3(args: ScopeUserPromptArgs): string {
+export function buildScopeUserPromptV4(args: ScopeUserPromptArgs): string {
   const rowsJson = JSON.stringify(args.rows);
   const header = [
     `Supplier: ${args.supplier || "(unknown)"}`,
@@ -164,12 +317,13 @@ export function buildScopeUserPromptV3(args: ScopeUserPromptArgs): string {
     `Page Count: ${args.page_count}`,
     `Chunk: ${args.chunk_label}`,
     args.is_chunked
-      ? "This input is a chunk of a larger row set. Some rows from adjacent chunks are included as context overlap — classify them too. Use the headers_above / headers_below / previous_row_summary / next_row_summary on each packet to anchor decisions; do not assume context from rows outside this chunk."
+      ? "This input is a chunk of a larger row set. Some rows from adjacent chunks are included as context overlap — classify them too. Use headers_above / table_title / page_title / previous_rows / next_rows on each packet to anchor decisions; do not assume context from rows outside this chunk."
       : "This input contains the entire row set in a single pass.",
   ].join("\n");
 
   return [
     "Classify every row in this packet into Main, Optional, Excluded, or Metadata.",
+    "Use document structure — section banners, table titles, subheadings, subtotal ownership, page continuation — over row wording.",
     "",
     "DOCUMENT METADATA:",
     header,

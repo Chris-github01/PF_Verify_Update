@@ -1,14 +1,12 @@
 /**
- * scopeSegmentationLLM — Stage 10 v3 (LLM Native).
+ * scopeSegmentationLLM — Stage 10 v4 (Document-Structure Aware LLM).
  *
  * The LLM is the SOLE classifier. There is no deterministic fallback.
  *
  * Chunking:
  *   - ≤220 rows: single pass.
- *   - >220 rows: chunks of 90 with overlap of 12 rows on each side
- *     (overlap rows give the model the same anchoring context as in
- *     the neighbouring chunk so block-reset boundaries don't get
- *     mis-classified at the seam).
+ *   - >220 rows: chunks of 90 with overlap of 12 rows so structural
+ *     headings carry across the seam.
  *
  * Budget:
  *   - Stage wall-clock: 30s hard cap (`STAGE_BUDGET_MS`).
@@ -20,13 +18,13 @@
  */
 
 import {
-  SCOPE_SEGMENTATION_SYSTEM_PROMPT_V3,
-  buildScopeUserPromptV3,
+  SCOPE_SEGMENTATION_SYSTEM_PROMPT_V4,
+  buildScopeUserPromptV4,
   type ScopeRowPacket,
 } from "./scopeSegmentationPrompt.ts";
 
 export const SCOPE_SEGMENTATION_MODEL = "gpt-5.4-mini";
-export const STAGE10_VERSION = "llm_native_v3";
+export const STAGE10_VERSION = "llm_scope_v4";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
@@ -39,15 +37,15 @@ export const CHUNK_SIZE = 90;
 export const CHUNK_OVERLAP = 12;
 
 export type LLMScope = "Main" | "Optional" | "Excluded" | "Metadata";
+export type LLMBasis = "section" | "table" | "carryover" | "row_text";
 
 export type LLMRowResult = {
   row_index: number;
   scope: LLMScope;
-  confidence: number;
-  section_id: string | null;
-  group_id: string | null;
+  confidence: number; // 0-100
+  basis: LLMBasis;
+  detected_section: string;
   rationale_short: string;
-  heading_basis: string | null;
 };
 
 export type LLMSummary = {
@@ -55,7 +53,8 @@ export type LLMSummary = {
   optional_count: number;
   excluded_count: number;
   metadata_count: number;
-  block_resets_seen: number;
+  main_total: number;
+  optional_total: number;
   overall_confidence: "HIGH" | "MEDIUM" | "LOW";
 };
 
@@ -76,6 +75,7 @@ export type LLMClassifyResultFailed = {
   stage10_version: typeof STAGE10_VERSION;
   runtime_ms: number;
   model_used: string;
+  error: string;
   error_type:
     | "missing_openai_key"
     | "deadline_exhausted"
@@ -102,9 +102,12 @@ export type ClassifyArgs = {
   quote_type: string;
   page_count: number;
   rows: ScopeRowPacket[];
+  /** Map of row_index → total_price, used to compute main_total/optional_total
+   * locally so the engine doesn't depend on the LLM's arithmetic. */
+  totals_by_row?: Map<number, number | null>;
 };
 
-export async function classifyRowsLLMV3(
+export async function classifyRowsLLMV4(
   args: ClassifyArgs,
 ): Promise<LLMClassifyResult> {
   const start = Date.now();
@@ -118,6 +121,7 @@ export async function classifyRowsLLMV3(
       stage10_version: STAGE10_VERSION,
       runtime_ms: Date.now() - start,
       model_used: SCOPE_SEGMENTATION_MODEL,
+      error: "missing_openai_key",
       error_type: "missing_openai_key",
       debug_hint: "openAIKey not provided to scope segmentation engine",
       rows: [],
@@ -140,7 +144,8 @@ export async function classifyRowsLLMV3(
         optional_count: 0,
         excluded_count: 0,
         metadata_count: 0,
-        block_resets_seen: 0,
+        main_total: 0,
+        optional_total: 0,
         overall_confidence: "HIGH",
       },
       chunks_used: 0,
@@ -168,6 +173,7 @@ export async function classifyRowsLLMV3(
         stage10_version: STAGE10_VERSION,
         runtime_ms: Date.now() - start,
         model_used: SCOPE_SEGMENTATION_MODEL,
+        error: "deadline_exhausted",
         error_type: "deadline_exhausted",
         debug_hint: `wall-clock deadline reached after ${i}/${chunks.length} chunks`,
         rows: dedupeRows(outcomes.flatMap((o) => o.rows)),
@@ -177,7 +183,7 @@ export async function classifyRowsLLMV3(
       };
     }
     const label = `chunk_${i + 1}_of_${chunks.length}`;
-    const userPrompt = buildScopeUserPromptV3({
+    const userPrompt = buildScopeUserPromptV4({
       supplier: args.supplier,
       trade: args.trade,
       quote_type: args.quote_type,
@@ -189,7 +195,7 @@ export async function classifyRowsLLMV3(
     const timeoutMs = Math.min(PER_CALL_TIMEOUT_MS, remaining);
     const call = await callLLMOnce({
       openAIKey: args.openAIKey,
-      systemPrompt: SCOPE_SEGMENTATION_SYSTEM_PROMPT_V3,
+      systemPrompt: SCOPE_SEGMENTATION_SYSTEM_PROMPT_V4,
       userPrompt,
       label,
       timeoutMs,
@@ -240,6 +246,7 @@ export async function classifyRowsLLMV3(
       stage10_version: STAGE10_VERSION,
       runtime_ms: Date.now() - start,
       model_used: SCOPE_SEGMENTATION_MODEL,
+      error: first?.error ?? "unknown",
       error_type: first?.error_type ?? "unknown",
       debug_hint: `all ${outcomes.length} chunk(s) failed: ${first?.error ?? "unknown"}`,
       rows: [],
@@ -258,6 +265,7 @@ export async function classifyRowsLLMV3(
         stage10_version: STAGE10_VERSION,
         runtime_ms: Date.now() - start,
         model_used: SCOPE_SEGMENTATION_MODEL,
+        error: "missing_rows",
         error_type: "missing_rows",
         debug_hint: `LLM returned 0 rows; expected ${allRows.length}`,
         rows: [],
@@ -268,7 +276,7 @@ export async function classifyRowsLLMV3(
     }
   }
 
-  const summary = buildSummary(merged);
+  const summary = buildSummary(merged, args.totals_by_row);
   return {
     status: "ok",
     stage10_version: STAGE10_VERSION,
@@ -305,8 +313,8 @@ function mergeChunkRows(perChunk: LLMRowResult[][]): LLMRowResult[] {
         byIndex.set(row.row_index, row);
         continue;
       }
-      // Higher confidence wins on overlap. Tie → keep first.
-      if (row.confidence > existing.confidence + 0.05) {
+      // Higher confidence wins on overlap (confidence is 0-100).
+      if (row.confidence > existing.confidence + 5) {
         byIndex.set(row.row_index, row);
       }
     }
@@ -318,32 +326,48 @@ function dedupeRows(rows: LLMRowResult[]): LLMRowResult[] {
   return mergeChunkRows([rows]);
 }
 
-function buildSummary(rows: LLMRowResult[]): LLMSummary {
+function buildSummary(
+  rows: LLMRowResult[],
+  totals?: Map<number, number | null>,
+): LLMSummary {
   let main = 0;
   let optional = 0;
   let excluded = 0;
   let metadata = 0;
-  const sections = new Set<string>();
+  let mainTotal = 0;
+  let optionalTotal = 0;
   let confSum = 0;
   for (const r of rows) {
     if (r.scope === "Main") main++;
     else if (r.scope === "Optional") optional++;
     else if (r.scope === "Excluded") excluded++;
     else if (r.scope === "Metadata") metadata++;
-    if (r.section_id) sections.add(r.section_id);
     confSum += r.confidence;
+    if (totals) {
+      const t = totals.get(r.row_index);
+      if (typeof t === "number" && Number.isFinite(t)) {
+        if (r.scope === "Main") mainTotal += t;
+        else if (r.scope === "Optional") optionalTotal += t;
+      }
+    }
   }
   const avg = rows.length > 0 ? confSum / rows.length : 0;
   const overall: "HIGH" | "MEDIUM" | "LOW" =
-    avg >= 0.85 ? "HIGH" : avg >= 0.65 ? "MEDIUM" : "LOW";
+    avg >= 85 ? "HIGH" : avg >= 65 ? "MEDIUM" : "LOW";
   return {
     main_count: main,
     optional_count: optional,
     excluded_count: excluded,
     metadata_count: metadata,
-    block_resets_seen: sections.size,
+    main_total: round2(mainTotal),
+    optional_total: round2(optionalTotal),
     overall_confidence: overall,
   };
+}
+
+function round2(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
 }
 
 // --------------------------------------------------------------------------
@@ -408,7 +432,7 @@ async function callLLMOnce(args: CallArgs): Promise<CallResult> {
     const msg = isAbort
       ? `timeout_${args.timeoutMs}ms`
       : `network:${(err as Error)?.message ?? String(err)}`.slice(0, 200);
-    console.warn(`[scopeSegmentationLLM:v3] ${args.label} failed: ${msg}`);
+    console.warn(`[scopeSegmentationLLM:v4] ${args.label} failed: ${msg}`);
     return {
       content: null,
       error: msg,
@@ -458,15 +482,14 @@ function normaliseRow(raw: Record<string, unknown>): LLMRowResult | null {
   if (!Number.isFinite(idx)) return null;
   const scope = normaliseScope(raw.scope ?? raw.scope_category ?? raw.category);
   if (!scope) return null;
-  const confidence = clamp01(Number(raw.confidence ?? 0.6));
+  const confidence = clampConfidence(raw.confidence);
   return {
     row_index: Math.round(idx),
     scope,
     confidence,
-    section_id: optString(raw.section_id),
-    group_id: optString(raw.group_id),
+    basis: normaliseBasis(raw.basis),
+    detected_section: optString(raw.detected_section ?? raw.section_id ?? raw.heading_basis) ?? "",
     rationale_short: String(raw.rationale_short ?? raw.reason ?? "").slice(0, 200),
-    heading_basis: optString(raw.heading_basis),
   };
 }
 
@@ -477,6 +500,23 @@ function normaliseScope(v: unknown): LLMScope | null {
   if (s === "excluded" || s === "exclusion") return "Excluded";
   if (s === "metadata" || s === "subtotal" || s === "total") return "Metadata";
   return null;
+}
+
+function normaliseBasis(v: unknown): LLMBasis {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (s === "section") return "section";
+  if (s === "table") return "table";
+  if (s === "carryover" || s === "continuation") return "carryover";
+  return "row_text";
+}
+
+function clampConfidence(v: unknown): number {
+  let n = Number(v ?? 60);
+  if (!Number.isFinite(n)) n = 60;
+  // Accept either 0-1 or 0-100 from the model; coerce to 0-100 integer.
+  if (n > 0 && n <= 1) n = n * 100;
+  n = Math.round(n);
+  return Math.min(100, Math.max(0, n));
 }
 
 function stripJsonFences(s: string): string {
@@ -501,11 +541,6 @@ function salvageRows(raw: string): LLMRowResult[] {
     }
   }
   return out;
-}
-
-function clamp01(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.min(1, Math.max(0, n));
 }
 
 function optString(v: unknown): string | null {
