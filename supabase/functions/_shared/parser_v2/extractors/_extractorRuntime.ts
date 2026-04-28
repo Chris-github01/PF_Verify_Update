@@ -703,11 +703,21 @@ const BLOCK_RESET_RE =
 
 function chunkStartsWithBlockReset(body: string): boolean {
   const lines = body.split(/\r?\n/);
+  let scanned = 0;
   for (const raw of lines) {
+    if (scanned >= 30) break;
     const line = raw.trim();
     if (!line) continue;
     if (/^\[Page\s+\d+\]/i.test(line)) continue;
-    return BLOCK_RESET_RE.test(line);
+    scanned++;
+    if (BLOCK_RESET_RE.test(line)) return true;
+    if (
+      OPTIONAL_HEADER_RE.test(line) ||
+      EXCLUDED_HEADER_RE.test(line) ||
+      MAIN_HEADER_RE.test(line)
+    ) {
+      return false;
+    }
   }
   return false;
 }
@@ -960,6 +970,7 @@ function dedupe(items: ParsedLineItemV2[]): ParsedLineItemV2[] {
 function canonicalKey(it: ParsedLineItemV2): string {
   const desc = it.description
     .toLowerCase()
+    .replace(/^\s*(?:\[[^\]]{0,40}\]\s*)+/g, "")
     .replace(/\s+/g, " ")
     .replace(/[^a-z0-9\s\-\/]/g, "")
     .trim()
