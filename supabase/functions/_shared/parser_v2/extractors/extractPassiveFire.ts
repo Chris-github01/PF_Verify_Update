@@ -20,7 +20,7 @@ import type { PassiveFireStructure } from "../classifiers/classifyPassiveFireStr
 import { runExtractorLLM, normaliseRow, normaliseRowLoose } from "./_extractorRuntime.ts";
 import { extractFallback } from "./extractFallback.ts";
 
-export const EXTRACT_PASSIVE_FIRE_VERSION = "v2-loose-rows-2026-04-23";
+export const EXTRACT_PASSIVE_FIRE_VERSION = "v2-dedupe-bucket-anchor-2026-04-28";
 console.log(`[extractPassiveFire] MODULE_LOAD version=${EXTRACT_PASSIVE_FIRE_VERSION}`);
 
 type PassiveFirePrescan = {
