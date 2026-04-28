@@ -72,6 +72,10 @@ import {
   runScopeSegmentationEngine,
   type ScopeSegmentationResult,
 } from "./scopeSegmentationEngine.ts";
+import {
+  extractAuthoritativeTotalsFromText,
+  type AuthoritativeTotals,
+} from "./extractAuthoritativeTotalsFromText.ts";
 
 import { runPathB, type PathBResult } from "./multipath/pathB_commercialTotals.ts";
 import { runPathC, type PathCResult } from "./multipath/pathC_deterministicStructure.ts";
@@ -146,6 +150,7 @@ export type ParserV2Output = {
   passive_fire_sanitizer: PassiveFireSanitizerResult | null;
   passive_fire_validation: PassiveFireValidationResult | null;
   passive_fire_final: PassiveFireFinalRecord | null;
+  authoritative_totals: AuthoritativeTotals | null;
   scope_segmentation: ScopeSegmentationResult | null;
   multipath: {
     decision: MultiPathDecision;
@@ -391,33 +396,24 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       logExtractionDebug("fallback_extraction", "fallback", items.length, fallbackDebug ?? []);
     }
 
-    let scope_segmentation: ScopeSegmentationResult | null = null;
-    if (items.length > 0) {
-      tracker.start("scope_segmentation");
-      const segStart = Date.now();
-      try {
-        scope_segmentation = await runScopeSegmentationEngine({
-          extracted_items: items,
-          rawText: effectiveRawText,
-          allPages: effectivePages,
-          quote_type: quoteType.quoteType,
-          trade: trade.trade,
-          supplier: supplier.supplierName,
-          authoritative_totals: { main_total: null, optional_total: null },
-          openAIKey: input.openAIKey,
-        });
-        items = scope_segmentation.items;
-        tracker.succeed("scope_segmentation");
-      } catch (err) {
-        console.error("[parser_v2] scope segmentation failed", err);
-        anomalies.push("scope_segmentation_failed");
-        tracker.fail("scope_segmentation", err);
-      }
-      durations.scope_segmentation = Date.now() - segStart;
-    } else {
-      tracker.skip("scope_segmentation", "no items extracted");
+    // ---- Deterministic totals extraction (runs BEFORE scope segmentation
+    // so Layer 4 reconciliation has a real authoritative envelope to anchor
+    // against). Conservative regex-only — null when uncertain.
+    tracker.start("deterministic_totals");
+    const detStart = Date.now();
+    let authoritative_totals: AuthoritativeTotals | null = null;
+    try {
+      authoritative_totals = extractAuthoritativeTotalsFromText(effectiveRawText);
+      tracker.succeed("deterministic_totals");
+    } catch (err) {
+      console.error("[parser_v2] deterministic totals extractor failed", err);
+      anomalies.push("deterministic_totals_failed");
+      tracker.fail("deterministic_totals", err);
     }
+    durations.deterministic_totals = Date.now() - detStart;
 
+    // ---- PF authoritative-total selector runs BEFORE scope segmentation
+    // so its selected_main_total_ex_gst can also feed the engine.
     let passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null = null;
     if (trade.trade === "passive_fire" && items.length > 0) {
       tracker.start("pf_authoritative_total");
@@ -443,6 +439,45 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         "pf_authoritative_total",
         trade.trade !== "passive_fire" ? "trade is not passive_fire" : "no items extracted",
       );
+    }
+
+    // ---- Scope segmentation engine, fed with the strongest available
+    // authoritative totals from (a) the PF total selector and (b) the
+    // deterministic regex extractor. PF selector wins for main when
+    // present; deterministic extractor fills optional/excluded gaps.
+    let scope_segmentation: ScopeSegmentationResult | null = null;
+    if (items.length > 0) {
+      tracker.start("scope_segmentation");
+      const segStart = Date.now();
+      const main_total =
+        passive_fire_authoritative_total?.selected_main_total_ex_gst ??
+        authoritative_totals?.main_total ??
+        null;
+      const optional_total =
+        passive_fire_authoritative_total?.optional_total_ex_gst ??
+        authoritative_totals?.optional_total ??
+        null;
+      try {
+        scope_segmentation = await runScopeSegmentationEngine({
+          extracted_items: items,
+          rawText: effectiveRawText,
+          allPages: effectivePages,
+          quote_type: quoteType.quoteType,
+          trade: trade.trade,
+          supplier: supplier.supplierName,
+          authoritative_totals: { main_total, optional_total },
+          openAIKey: input.openAIKey,
+        });
+        items = scope_segmentation.items;
+        tracker.succeed("scope_segmentation");
+      } catch (err) {
+        console.error("[parser_v2] scope segmentation failed", err);
+        anomalies.push("scope_segmentation_failed");
+        tracker.fail("scope_segmentation", err);
+      }
+      durations.scope_segmentation = Date.now() - segStart;
+    } else {
+      tracker.skip("scope_segmentation", "no items extracted");
     }
 
     if (trade.trade === "passive_fire" && items.length > 0) {
@@ -721,6 +756,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_sanitizer,
       passive_fire_validation,
       passive_fire_final,
+      authoritative_totals,
       scope_segmentation,
       multipath: multipathResult,
       dbPayload: { quote, items: dbItems },
