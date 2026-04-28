@@ -465,13 +465,17 @@ function advanceStateThroughText(
 
 function findLineIndex(lines: string[], desc: string, start: number): number {
   if (!desc) return -1;
-  const needle = desc.slice(0, 40).toLowerCase();
+  // Strip any leading "[Block XX] " prefix that the extractor added so we
+  // can still anchor the enriched description against the raw page text.
+  const stripped = desc.replace(/^\s*\[[^\]]+\]\s*/, "").trim();
+  const source = stripped.length >= 4 ? stripped : desc;
+  const needle = source.slice(0, 40).toLowerCase();
   if (needle.length < 4) return -1;
   for (let i = start; i < lines.length; i++) {
     if (lines[i].toLowerCase().includes(needle)) return i;
   }
   // Secondary pass with shorter prefix.
-  const short = desc.slice(0, 20).toLowerCase();
+  const short = source.slice(0, 20).toLowerCase();
   if (short.length < 4) return -1;
   for (let i = start; i < lines.length; i++) {
     if (lines[i].toLowerCase().includes(short)) return i;

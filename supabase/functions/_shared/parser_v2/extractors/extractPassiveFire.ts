@@ -690,13 +690,15 @@ function postProcess(
   const beforeDescFilter = items.length;
   const afterDescFilter = items.filter((it) => it.description && it.description.length >= 3);
   const afterSummaryFilter = afterDescFilter.filter((it) => !isSummaryRow(it));
+  const afterDedupe = dedupePassiveFireRows(afterSummaryFilter);
   console.log(
     `[extractPassiveFire] postProcess before=${beforeDescFilter} ` +
       `after_desc_filter=${afterDescFilter.length} ` +
-      `after_summary_filter=${afterSummaryFilter.length}`,
+      `after_summary_filter=${afterSummaryFilter.length} ` +
+      `after_dedupe=${afterDedupe.length} (collapsed ${afterSummaryFilter.length - afterDedupe.length})`,
   );
 
-  return afterSummaryFilter.map((it) => {
+  return afterDedupe.map((it) => {
     const sub_scope = harmoniseSubScope(it);
     const frr = it.frr ?? extractFRRFromDescription(it.description) ?? frrFallback;
     return {
@@ -706,6 +708,46 @@ function postProcess(
       frr,
     };
   });
+}
+
+/**
+ * Collapse duplicate rows that the LLM emitted multiple times for the same
+ * underlying line. Duplicates commonly arise when the extractor is run over
+ * overlapping chunks, or when the LLM re-emits a row under a `[Block XX]`
+ * prefix for a block that was already captured. We key on
+ * (source_page, total_price rounded, description without leading [Block X]
+ * bracket prefix). When two rows collide, prefer the one that still carries
+ * section_path + source_section (higher structural fidelity).
+ */
+function dedupePassiveFireRows(items: ParsedLineItemV2[]): ParsedLineItemV2[] {
+  const BLOCK_PREFIX_RE = /^\s*\[[^\]]+\]\s*/;
+  const keyFor = (it: ParsedLineItemV2): string => {
+    const desc = (it.description ?? "")
+      .replace(BLOCK_PREFIX_RE, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const total = it.total_price == null ? "null" : Math.round((it.total_price ?? 0) * 100);
+    const page = it.source_page ?? "null";
+    return `${page}|${total}|${desc}`;
+  };
+  const scoreFidelity = (it: ParsedLineItemV2): number => {
+    let s = 0;
+    if (it.section_path && it.section_path.length > 0) s += 2;
+    if (it.source_section) s += 1;
+    if (it.building_or_block) s += 1;
+    return s;
+  };
+  const byKey = new Map<string, ParsedLineItemV2>();
+  for (const it of items) {
+    const k = keyFor(it);
+    const prev = byKey.get(k);
+    if (!prev || scoreFidelity(it) > scoreFidelity(prev)) {
+      byKey.set(k, it);
+    }
+  }
+  return [...byKey.values()];
 }
 
 function harmoniseSubScope(it: ParsedLineItemV2): string {
