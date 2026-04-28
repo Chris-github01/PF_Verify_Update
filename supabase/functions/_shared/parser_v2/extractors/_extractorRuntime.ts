@@ -12,7 +12,7 @@
 import type { ParsedLineItemV2 } from "../runParserV2.ts";
 import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../telemetrySink.ts";
 
-const EXTRACTOR_MODEL = "gpt-4.1";
+const EXTRACTOR_MODEL = "gpt-5.5";
 const CHUNK_CHAR_BUDGET = 6000;
 const MAX_CHUNKS = 20;
 const CHUNK_CONCURRENCY = 4;
