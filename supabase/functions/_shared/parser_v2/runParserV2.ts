@@ -69,13 +69,9 @@ import { StageTracker, ParserV2StageError, type StageRecord } from "./stageTrack
 import { installActiveTracker, clearActiveTracker } from "./telemetrySink.ts";
 
 import {
-  runScopeSegmentationEngine,
-  type ScopeSegmentationResult,
-} from "./scopeSegmentationEngine.ts";
-import {
-  runScopeConsensusEngine,
-  consensusToSegmentationResult,
-} from "./scopeConsensusEngine.ts";
+  runScopeMarkerDetection,
+  type ScopeMarkerResult,
+} from "./scopeMarkerDetection.ts";
 import {
   extractAuthoritativeTotalsFromText,
   type AuthoritativeTotals,
@@ -85,7 +81,7 @@ import { runPathB, type PathBResult } from "./multipath/pathB_commercialTotals.t
 import { runPathC, type PathCResult } from "./multipath/pathC_deterministicStructure.ts";
 import { decide, type MultiPathDecision } from "./multipath/decisionEngine.ts";
 
-export const RUN_PARSER_V2_VERSION = "v3-chosen-path-2026-04-23";
+export const RUN_PARSER_V2_VERSION = "v4-deterministic-scope-markers-2026-04-28";
 console.log(`[runParserV2] MODULE_LOAD version=${RUN_PARSER_V2_VERSION}`);
 
 export type ParserV2Input = {
@@ -155,7 +151,7 @@ export type ParserV2Output = {
   passive_fire_validation: PassiveFireValidationResult | null;
   passive_fire_final: PassiveFireFinalRecord | null;
   authoritative_totals: AuthoritativeTotals | null;
-  scope_segmentation: ScopeSegmentationResult | null;
+  scope_marker_detection: ScopeMarkerResult | null;
   multipath: {
     decision: MultiPathDecision;
     pathB: PathBResult;
@@ -445,44 +441,29 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       );
     }
 
-    // ---- Scope segmentation engine, fed with the strongest available
-    // authoritative totals from (a) the PF total selector and (b) the
-    // deterministic regex extractor. PF selector wins for main when
-    // present; deterministic extractor fills optional/excluded gaps.
-    let scope_segmentation: ScopeSegmentationResult | null = null;
+    // ---- Stage 10 v5: Deterministic Scope Marker Detection.
+    // Pure rule-based scan over document structure. Runs BEFORE the
+    // passive-fire authoritative-total selector so the total selector
+    // sees correctly-classified main/optional/excluded rows.
+    let scope_marker_detection: ScopeMarkerResult | null = null;
     if (items.length > 0) {
-      tracker.start("scope_segmentation");
+      tracker.start("scope_marker_detection");
       const segStart = Date.now();
-      const main_total =
-        passive_fire_authoritative_total?.selected_main_total_ex_gst ??
-        authoritative_totals?.main_total ??
-        null;
-      const optional_total =
-        passive_fire_authoritative_total?.optional_total_ex_gst ??
-        authoritative_totals?.optional_total ??
-        null;
       try {
-        const consensus = await runScopeConsensusEngine({
-          extracted_items: items,
-          rawText: effectiveRawText,
-          allPages: effectivePages,
-          quote_type: quoteType.quoteType,
-          trade: trade.trade,
-          supplier: supplier.supplierName,
-          authoritative_totals: { main_total, optional_total },
-          openAIKey: input.openAIKey,
+        scope_marker_detection = runScopeMarkerDetection({
+          items,
+          pages: effectivePages,
         });
-        scope_segmentation = consensusToSegmentationResult(consensus);
-        items = scope_segmentation.items;
-        tracker.succeed("scope_segmentation");
+        items = scope_marker_detection.items;
+        tracker.succeed("scope_marker_detection");
       } catch (err) {
-        console.error("[parser_v2] scope segmentation failed", err);
-        anomalies.push("scope_segmentation_failed");
-        tracker.fail("scope_segmentation", err);
+        console.error("[parser_v2] scope marker detection failed", err);
+        anomalies.push("scope_marker_detection_failed");
+        tracker.fail("scope_marker_detection", err);
       }
-      durations.scope_segmentation = Date.now() - segStart;
+      durations.scope_marker_detection = Date.now() - segStart;
     } else {
-      tracker.skip("scope_segmentation", "no items extracted");
+      tracker.skip("scope_marker_detection", "no items extracted");
     }
 
     if (trade.trade === "passive_fire" && items.length > 0) {
@@ -762,7 +743,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_validation,
       passive_fire_final,
       authoritative_totals,
-      scope_segmentation,
+      scope_marker_detection,
       multipath: multipathResult,
       dbPayload: { quote, items: dbItems },
       debug: {
