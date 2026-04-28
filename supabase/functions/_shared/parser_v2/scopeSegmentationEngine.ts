@@ -1,31 +1,29 @@
 /**
- * Scope Segmentation Engine — Parser V2 Stage 10 (LLM-primary).
+ * Scope Segmentation Engine — Parser V2 Stage 10 (deterministic-first, LLM-assist).
+ *
+ * Hardened against parser_v2 outer-timeout regressions: the deterministic
+ * classifier always produces the baseline result. The LLM is invoked ONLY on
+ * ambiguous rows under a single 8s wall-clock budget. If the LLM does not
+ * complete within that window, the deterministic result is preserved in full.
  *
  * Pipeline:
- *   1. Build compact document context (page 1 + totals pages + scope-keyword
- *      pages) and structural heading list.
- *   2. Send all extracted rows to the LLM in one call (<=120 rows) or in
- *      80-row batches (>120 rows). Same context + totals per batch.
- *   3. Apply confidence-tiered overwrite:
- *        >= 0.70  -> overwrite scope_category
- *        0.50-0.69 -> preserve original scope_category but record label/reason
- *        <  0.50  -> set scope_segmentation_label = "Unknown"
- *   4. Excluded keyword override at confidence >= 0.80 ("by others",
- *      "no allowance", "excluded", "not included", "rate only").
- *   5. Reconcile sums to authoritative totals (1.5% tolerance). If uncertain
- *      rows < 60, run a second LLM review pass on uncertain rows only.
- *   6. On any LLM failure, fall back to the deterministic section-anchored
- *      classifier preserved at the bottom of this file.
+ *   1. Deterministic baseline classification on all rows.
+ *   2. Identify ambiguous rows (Unknown, low confidence, or
+ *      mismatched-anchor heuristics).
+ *   3. If openAI key present and ambiguous rows > 0, call LLM with an 8s
+ *      wall-clock deadline on those rows only.
+ *   4. Replace ambiguous rows whose LLM confidence >= 0.70.
+ *   5. Apply Excluded keyword override at conf >= 0.80.
+ *   6. Reconcile sums to authoritative totals (1.5% tolerance) and report.
  *
  * Public types (`ScopeSegmentationItem`, `ScopeSegmentationResult`,
- * `ScopeSegmentationInput`) are stable — downstream stages and edge functions
- * are unchanged.
+ * `ScopeSegmentationInput`) are stable — downstream is unchanged.
  */
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 import {
   classifyRowsLLM,
-  classifyRowsLLMReview,
+  PER_REQUEST_BUDGET_MS,
   SCOPE_SEGMENTATION_MODEL,
   type LLMItemResult,
 } from "./scopeSegmentationLLM.ts";
@@ -58,6 +56,7 @@ export type ScopeSegmentationSummary = {
   confidence: "HIGH" | "MEDIUM" | "LOW";
   llm_used: boolean;
   llm_review_used: boolean;
+  llm_timed_out: boolean;
   model_used: string | null;
   rows_sent_to_llm: number;
   rows_classified_main: number;
@@ -103,17 +102,19 @@ export type ScopeSegmentationInput = {
 // --------------------------------------------------------------------------
 
 const TOTALS_TOLERANCE = 0.015;
-const REVIEW_PASS_MAX_UNCERTAIN = 60;
 const OVERWRITE_THRESHOLD = 0.7;
-const PRESERVE_THRESHOLD = 0.5;
 const EXCLUDED_OVERRIDE_THRESHOLD = 0.8;
-const CONTEXT_PAGE_BUDGET = 4500;
+const CONTEXT_PAGE_BUDGET = 3000;
+/** Wall-clock cap for the entire LLM-assist step. */
+const LLM_STAGE_BUDGET_MS = 8_000;
+/** Rows considered "ambiguous" enough to send to the LLM. */
+const AMBIGUOUS_CONFIDENCE_THRESHOLD = 0.7;
+/** Hard cap on rows we will hand to the LLM in this stage. */
+const MAX_AMBIGUOUS_ROWS_FOR_LLM = 80;
 
 const EXCLUDED_OVERRIDE_RE =
   /\b(by\s+others|no\s+allowance|excluded|not\s+included|rate\s+only)\b/i;
 
-// Heading detection (used to feed structural cues to the LLM and to support
-// the deterministic fallback path).
 const MAIN_HEADER_PATTERNS: RegExp[] = [
   /^\s*main\s+scope\s*:?\s*$/i,
   /^\s*included\s+scope\s*:?\s*$/i,
@@ -165,6 +166,11 @@ const EXCLUDED_HEADER_PATTERNS: RegExp[] = [
 const CONTEXT_KEYWORDS_RE =
   /\b(quote\s+summary|estimate\s+summary|quote\s+breakdown|sub[\s-]?total|optional\s+scope|add\s+to\s+scope|not\s+shown\s+on\s+drawings|items?\s+with\s+confirmation|by\s+others|no\s+allowance|exclud|not\s+included|rate\s+only|tbc|provisional|grand\s+total|total\s+ex\s+gst|main\s+total|optional\s+total)\b/i;
 
+const DETERMINISTIC_OPTIONAL_DESC_RE =
+  /\b(optional|add\s+to\s+scope|not\s+shown\s+on\s+drawings|extra\s+over|TBC|alternate|upgrade)\b/i;
+const DETERMINISTIC_EXCLUDED_DESC_RE =
+  /\b(by\s+others|provisional\s+only|no\s+tested\s+solution|rate\s+only|not\s+included)\b/i;
+
 // --------------------------------------------------------------------------
 // Public entry point
 // --------------------------------------------------------------------------
@@ -174,126 +180,101 @@ export async function runScopeSegmentationEngine(
 ): Promise<ScopeSegmentationResult> {
   const layers: string[] = [];
   const headings = extractHeadings(input.allPages ?? []);
-  const importantContext = buildDocumentContext(
-    input.allPages ?? [],
-    input.rawText,
-    input.authoritative_totals,
-  );
 
-  const llmRows: ScopeSegmentationLLMRow[] = input.extracted_items.map(
-    (item, idx) => ({
-      row_id: `r${idx}`,
-      description: item.description ?? "",
-      quantity: item.quantity ?? null,
-      unit: item.unit ?? null,
-      unit_price: item.unit_price ?? null,
-      total_price: item.total_price ?? null,
-      source_page: item.source_page ?? null,
-      current_scope_category: String(item.scope_category ?? "main"),
-      existing_confidence: typeof item.confidence === "number" ? item.confidence : null,
-      parent_section: (item as { parent_section?: string | null }).parent_section ?? null,
-      nearby_heading: nearestHeadingForPage(item.source_page ?? null, headings),
-    }),
-  );
+  // Step 1 — deterministic baseline (always runs; no LLM).
+  const working = buildDeterministicBaseline(input.extracted_items, headings);
+  layers.push("deterministic_baseline");
 
-  // Layer 1 — LLM-primary classification.
-  const llmAttempt = await tryLLMPrimary(input, llmRows, headings, importantContext);
+  // Step 2 — pick ambiguous rows for an LLM-assist pass.
+  const ambiguous = pickAmbiguousRows(working).slice(0, MAX_AMBIGUOUS_ROWS_FOR_LLM);
 
-  if (!llmAttempt.ok) {
-    layers.push("llm_failed_fallback_deterministic");
-    console.warn(
-      `[scopeSegmentationEngine] LLM-primary failed (${llmAttempt.error}) — falling back to deterministic segmentation`,
+  let llmUsed = false;
+  let llmTimedOut = false;
+  let resolvedByLLM = 0;
+  const llmErrors: string[] = [];
+
+  if (ambiguous.length > 0 && input.openAIKey) {
+    const importantContext = buildDocumentContext(
+      input.allPages ?? [],
+      input.rawText,
+      input.authoritative_totals,
     );
-    const fallback = await runDeterministicFallback(input);
-    fallback.summary.layers_applied = ["llm_failed", ...fallback.summary.layers_applied];
-    fallback.summary.fallback_used = "deterministic_existing";
-    fallback.summary.llm_errors = llmAttempt.errors;
-    fallback.summary.model_used = SCOPE_SEGMENTATION_MODEL;
-    return fallback;
+    const llmRows: ScopeSegmentationLLMRow[] = ambiguous.map((w) =>
+      llmRowFor(w, headings),
+    );
+    try {
+      const deadlineEpochMs = Date.now() + LLM_STAGE_BUDGET_MS;
+      const result = await classifyRowsLLM({
+        openAIKey: input.openAIKey,
+        supplier: input.supplier,
+        trade: input.trade,
+        quote_type: input.quote_type,
+        main_total: input.authoritative_totals.main_total,
+        optional_total: input.authoritative_totals.optional_total,
+        grand_total: null,
+        page_count: input.allPages?.length ?? 0,
+        important_document_context: importantContext,
+        headings,
+        rows: llmRows,
+        deadlineEpochMs,
+      });
+      llmUsed = result.items.length > 0;
+      llmTimedOut = result.timedOut;
+      llmErrors.push(...result.errors);
+      if (result.items.length > 0) {
+        const byId = new Map(result.items.map((it) => [it.row_id, it] as const));
+        for (const w of working) {
+          const upd = byId.get(w.row_id);
+          if (!upd) continue;
+          if (applyLLMResult(w, upd)) resolvedByLLM++;
+        }
+        layers.push("llm_assist_applied");
+      } else {
+        layers.push(llmTimedOut ? "llm_assist_timed_out" : "llm_assist_no_items");
+      }
+    } catch (err) {
+      llmErrors.push(`unexpected:${(err as Error)?.message ?? String(err)}`.slice(0, 200));
+      layers.push("llm_assist_error");
+    }
+  } else if (ambiguous.length === 0) {
+    layers.push("llm_assist_skipped_no_ambiguous");
+  } else {
+    layers.push("llm_assist_skipped_no_key");
   }
 
-  layers.push("llm_primary");
-
-  // Layer 2 — apply LLM classifications via confidence tiers.
-  const working = applyLLMResults(input.extracted_items, llmAttempt.itemsById);
-  layers.push("confidence_tier_apply");
-
-  // Layer 3 — Excluded keyword override.
+  // Step 3 — Excluded keyword override.
   let excludedOverrides = 0;
   for (const w of working) {
     if (
       EXCLUDED_OVERRIDE_RE.test(w.item.description ?? "") &&
-      w.confidence >= EXCLUDED_OVERRIDE_THRESHOLD
+      w.confidence >= EXCLUDED_OVERRIDE_THRESHOLD &&
+      w.label !== "Excluded"
     ) {
-      if (w.label !== "Excluded") {
-        w.label = "Excluded";
-        w.reason = `keyword_override:excluded:${w.reason}`.slice(0, 200);
-        excludedOverrides++;
-      }
+      w.label = "Excluded";
+      w.reason = `keyword_override:excluded:${w.reason}`.slice(0, 200);
+      excludedOverrides++;
     }
   }
   if (excludedOverrides > 0) layers.push("excluded_keyword_override");
 
-  // Layer 4 — totals reconciliation; trigger review pass only if necessary.
+  // Step 4 — totals reconciliation.
   const sums = computeSums(working);
   const mainTarget = input.authoritative_totals.main_total;
   const optTarget = input.authoritative_totals.optional_total;
-  const matched_main = mainTarget != null ? withinTolerance(sums.main, mainTarget) : false;
-  const matched_optional = optTarget != null ? withinTolerance(sums.optional, optTarget) : false;
-  const needsReview =
-    !matched_main && (mainTarget != null) ||
-    !matched_optional && (optTarget != null);
-
-  let llmReviewUsed = false;
-  let resolvedByReview = 0;
-  if (needsReview && input.openAIKey) {
-    const uncertain = working.filter((w) => w.confidence < 0.85);
-    if (uncertain.length > 0 && uncertain.length < REVIEW_PASS_MAX_UNCERTAIN) {
-      const reviewRows = uncertain.map((w) => llmRowFor(w, headings));
-      const review = await classifyRowsLLMReview({
-        openAIKey: input.openAIKey,
-        main_total: mainTarget,
-        optional_total: optTarget,
-        main_sum: sums.main,
-        optional_sum: sums.optional,
-        important_document_context: importantContext,
-        headings,
-        rows: reviewRows,
-      });
-      llmReviewUsed = true;
-      layers.push("llm_review_pass");
-      const byId = new Map(review.items.map((it) => [it.row_id, it] as const));
-      for (const w of working) {
-        const upd = byId.get(w.row_id);
-        if (!upd) continue;
-        const newLabel = mapLabel(upd.scope_category);
-        const newConf = upd.confidence;
-        if (newConf >= OVERWRITE_THRESHOLD && newLabel !== w.label) {
-          w.label = newLabel;
-          w.confidence = Math.max(w.confidence, newConf);
-          w.reason = `review:${(upd.reason ?? "").slice(0, 80) || "structural"}`;
-          resolvedByReview++;
-        }
-      }
-    }
-  }
-
-  // Recompute final sums + match flags.
-  const finalSums = computeSums(working);
-  const final_matched_main =
-    mainTarget != null ? withinTolerance(finalSums.main, mainTarget) : false;
-  const final_matched_optional =
-    optTarget != null ? withinTolerance(finalSums.optional, optTarget) : false;
-  const delta_main = mainTarget != null ? round2(finalSums.main - mainTarget) : null;
-  const delta_optional = optTarget != null ? round2(finalSums.optional - optTarget) : null;
+  const matched_main =
+    mainTarget != null ? withinTolerance(sums.main, mainTarget) : false;
+  const matched_optional =
+    optTarget != null ? withinTolerance(sums.optional, optTarget) : false;
+  const delta_main = mainTarget != null ? round2(sums.main - mainTarget) : null;
+  const delta_optional = optTarget != null ? round2(sums.optional - optTarget) : null;
 
   // Confidence rollup.
   const avgConfidence =
     working.length > 0 ? working.reduce((s, w) => s + w.confidence, 0) / working.length : 0;
   let confidence: "HIGH" | "MEDIUM" | "LOW";
   if (
-    (final_matched_main || mainTarget == null) &&
-    (final_matched_optional || optTarget == null) &&
+    (matched_main || mainTarget == null) &&
+    (matched_optional || optTarget == null) &&
     avgConfidence >= 0.85
   ) {
     confidence = "HIGH";
@@ -316,40 +297,41 @@ export async function runScopeSegmentationEngine(
   return {
     items,
     summary: {
-      main_sum: round2(finalSums.main),
-      optional_sum: round2(finalSums.optional),
-      excluded_sum: round2(finalSums.excluded),
-      unknown_sum: round2(finalSums.unknown),
-      matched_main_total: final_matched_main,
-      matched_optional_total: final_matched_optional,
+      main_sum: round2(sums.main),
+      optional_sum: round2(sums.optional),
+      excluded_sum: round2(sums.excluded),
+      unknown_sum: round2(sums.unknown),
+      matched_main_total: matched_main,
+      matched_optional_total: matched_optional,
       delta_main,
       delta_optional,
       confidence,
-      llm_used: true,
-      llm_review_used: llmReviewUsed,
-      model_used: SCOPE_SEGMENTATION_MODEL,
-      rows_sent_to_llm: llmAttempt.rowsSent,
+      llm_used: llmUsed,
+      llm_review_used: false,
+      llm_timed_out: llmTimedOut,
+      model_used: llmUsed ? SCOPE_SEGMENTATION_MODEL : null,
+      rows_sent_to_llm: ambiguous.length,
       rows_classified_main: counts.Main,
       rows_classified_optional: counts.Optional,
       rows_classified_excluded: counts.Excluded,
       rows_classified_unknown: counts.Unknown,
-      llm_resolved_rows: resolvedByReview,
+      llm_resolved_rows: resolvedByLLM,
       headings_detected: headings.length,
       layers_applied: layers,
-      fallback_used: null,
-      llm_errors: llmAttempt.errors,
+      fallback_used: llmTimedOut || llmErrors.length > 0 ? "deterministic_baseline_preserved" : null,
+      llm_errors: llmErrors,
       examples,
       requires_scope_review:
         confidence === "LOW" ||
-        (!final_matched_main && mainTarget != null) ||
-        (!final_matched_optional && optTarget != null) ||
+        (!matched_main && mainTarget != null) ||
+        (!matched_optional && optTarget != null) ||
         counts.Unknown > 0,
     },
   };
 }
 
 // --------------------------------------------------------------------------
-// LLM-primary helpers
+// Deterministic baseline + ambiguity selection
 // --------------------------------------------------------------------------
 
 type WorkingRow = {
@@ -359,110 +341,71 @@ type WorkingRow = {
   label: ScopeLabel;
   confidence: number;
   reason: string;
-  llmLabel: ScopeLabel | null;
-  llmConfidence: number;
+  source: "preserved" | "keyword_excluded" | "keyword_optional";
 };
 
-type LLMAttempt =
-  | {
-      ok: true;
-      itemsById: Map<string, LLMItemResult>;
-      errors: string[];
-      rowsSent: number;
-    }
-  | { ok: false; error: string; errors: string[] };
-
-async function tryLLMPrimary(
-  input: ScopeSegmentationInput,
-  rows: ScopeSegmentationLLMRow[],
-  headings: ScopeSegmentationLLMHeading[],
-  importantContext: string,
-): Promise<LLMAttempt> {
-  if (!input.openAIKey) {
-    return { ok: false, error: "missing_openai_key", errors: ["missing_openai_key"] };
-  }
-  if (rows.length === 0) {
-    return { ok: true, itemsById: new Map(), errors: [], rowsSent: 0 };
-  }
-  try {
-    const result = await classifyRowsLLM({
-      openAIKey: input.openAIKey,
-      supplier: input.supplier,
-      trade: input.trade,
-      quote_type: input.quote_type,
-      main_total: input.authoritative_totals.main_total,
-      optional_total: input.authoritative_totals.optional_total,
-      grand_total: null,
-      page_count: input.allPages?.length ?? 0,
-      important_document_context: importantContext,
-      headings,
-      rows,
-    });
-    if (result.items.length === 0) {
-      return {
-        ok: false,
-        error: result.errors[0] ?? "llm_no_items",
-        errors: result.errors,
-      };
-    }
-    const itemsById = new Map<string, LLMItemResult>();
-    for (const it of result.items) itemsById.set(it.row_id, it);
-    return { ok: true, itemsById, errors: result.errors, rowsSent: rows.length };
-  } catch (err) {
-    return {
-      ok: false,
-      error: (err as Error)?.message ?? "llm_unexpected_error",
-      errors: [(err as Error)?.message ?? "llm_unexpected_error"],
-    };
-  }
-}
-
-function applyLLMResults(
+function buildDeterministicBaseline(
   extracted: ParsedLineItemV2[],
-  itemsById: Map<string, LLMItemResult>,
+  _headings: ScopeSegmentationLLMHeading[],
 ): WorkingRow[] {
   const out: WorkingRow[] = [];
   for (let i = 0; i < extracted.length; i++) {
     const item = extracted[i];
-    const row_id = `r${i}`;
-    const llm = itemsById.get(row_id) ?? null;
-    const initialLabel: ScopeLabel = mapLabel(item.scope_category);
-    let label: ScopeLabel = initialLabel;
-    let confidence = typeof item.confidence === "number" ? item.confidence : 0.5;
-    let reason = "preserved:no_llm_result";
-    let llmLabel: ScopeLabel | null = null;
-    let llmConfidence = 0;
-    if (llm) {
-      llmLabel = llm.scope_category;
-      llmConfidence = llm.confidence;
-      const llmReason = (llm.reason ?? "").slice(0, 160);
-      if (llm.confidence >= OVERWRITE_THRESHOLD) {
-        label = llm.scope_category;
-        confidence = llm.confidence;
-        reason = `llm_overwrite:${llmReason}`;
-      } else if (llm.confidence >= PRESERVE_THRESHOLD) {
-        // preserve original scope_category; record LLM label/reason for audit
-        label = initialLabel;
-        confidence = Math.max(confidence, llm.confidence);
-        reason = `llm_low_conf_preserved:${llm.scope_category.toLowerCase()}:${llmReason}`;
-      } else {
-        label = "Unknown";
-        confidence = llm.confidence;
-        reason = `llm_low_conf_unknown:${llm.scope_category.toLowerCase()}:${llmReason}`;
-      }
+    let label: ScopeLabel = mapLabel(item.scope_category);
+    let confidence =
+      typeof item.confidence === "number" && item.confidence > 0 ? item.confidence : 0.55;
+    let reason = `preserved:${String(item.scope_category ?? "main")}`;
+    let source: WorkingRow["source"] = "preserved";
+
+    const desc = item.description ?? "";
+    if (DETERMINISTIC_EXCLUDED_DESC_RE.test(desc)) {
+      label = "Excluded";
+      confidence = Math.max(confidence, 0.7);
+      reason = "deterministic:keyword_excluded";
+      source = "keyword_excluded";
+    } else if (DETERMINISTIC_OPTIONAL_DESC_RE.test(desc) && label !== "Excluded") {
+      label = "Optional";
+      confidence = Math.max(confidence, 0.6);
+      reason = "deterministic:keyword_optional";
+      source = "keyword_optional";
     }
+
     out.push({
-      row_id,
+      row_id: `r${i}`,
       index: i,
       item,
       label,
       confidence,
       reason,
-      llmLabel,
-      llmConfidence,
+      source,
     });
   }
   return out;
+}
+
+function pickAmbiguousRows(rows: WorkingRow[]): WorkingRow[] {
+  return rows.filter(
+    (w) => w.label === "Unknown" || w.confidence < AMBIGUOUS_CONFIDENCE_THRESHOLD,
+  );
+}
+
+function applyLLMResult(target: WorkingRow, llm: LLMItemResult): boolean {
+  const newLabel = mapLabel(llm.scope_category);
+  if (llm.confidence < OVERWRITE_THRESHOLD) {
+    // Record the LLM hint for audit but do not change deterministic label.
+    target.reason =
+      `${target.reason}|llm_low_conf:${newLabel}:${(llm.reason ?? "").slice(0, 80)}`.slice(0, 200);
+    return false;
+  }
+  if (newLabel === target.label) {
+    target.confidence = Math.max(target.confidence, llm.confidence);
+    target.reason = `llm_confirms:${(llm.reason ?? "").slice(0, 120)}`;
+    return false;
+  }
+  target.label = newLabel;
+  target.confidence = llm.confidence;
+  target.reason = `llm_overwrite:${(llm.reason ?? "").slice(0, 140)}`;
+  return true;
 }
 
 function llmRowFor(
@@ -606,16 +549,14 @@ function buildDocumentContext(
   const pushPage = (p: { pageNum: number; text: string }, label: string) => {
     if (used >= CONTEXT_PAGE_BUDGET) return;
     const remaining = CONTEXT_PAGE_BUDGET - used;
-    const text = (p.text ?? "").slice(0, Math.min(900, remaining));
+    const text = (p.text ?? "").slice(0, Math.min(700, remaining));
     if (!text) return;
     parts.push(`--- ${label} (page ${p.pageNum}) ---\n${text}`);
     used += text.length + 40;
   };
 
-  // Page 1 is always useful (cover/summary).
   pushPage(pages[0], "PAGE 1");
 
-  // Pages mentioning totals or "summary".
   for (const p of pages.slice(1)) {
     if (used >= CONTEXT_PAGE_BUDGET) break;
     const lower = (p.text ?? "").toLowerCase();
@@ -626,7 +567,6 @@ function buildDocumentContext(
     if (totalHit) pushPage(p, "TOTALS PAGE");
   }
 
-  // Pages with strong scope-keyword density.
   for (const p of pages) {
     if (used >= CONTEXT_PAGE_BUDGET) break;
     if (CONTEXT_KEYWORDS_RE.test(p.text ?? "")) pushPage(p, "SCOPE KEYWORDS");
@@ -644,91 +584,6 @@ function matchesAny(text: string, patterns: RegExp[]): boolean {
   return false;
 }
 
-// --------------------------------------------------------------------------
-// Deterministic fallback (only used when LLM-primary fails)
-// --------------------------------------------------------------------------
-
-const FALLBACK_OPTIONAL_DESC_RE =
-  /\b(optional|add\s+to\s+scope|not\s+shown\s+on\s+drawings|extra\s+over|TBC|alternate|upgrade)\b/i;
-const FALLBACK_EXCLUDED_DESC_RE =
-  /\b(by\s+others|provisional\s+only|no\s+tested\s+solution|rate\s+only|not\s+included)\b/i;
-
-async function runDeterministicFallback(
-  input: ScopeSegmentationInput,
-): Promise<ScopeSegmentationResult> {
-  const layers: string[] = ["fallback_keyword_initial"];
-  const headings = extractHeadings(input.allPages ?? []);
-  const rows: WorkingRow[] = input.extracted_items.map((item, idx) => ({
-    row_id: `r${idx}`,
-    index: idx,
-    item,
-    label: mapLabel(item.scope_category),
-    confidence: typeof item.confidence === "number" ? item.confidence : 0.55,
-    reason: `fallback:preserved:${item.scope_category}`,
-    llmLabel: null,
-    llmConfidence: 0,
-  }));
-
-  // Description-based hints for rows still labelled Main/Unknown.
-  for (const r of rows) {
-    const desc = r.item.description ?? "";
-    if (FALLBACK_EXCLUDED_DESC_RE.test(desc)) {
-      r.label = "Excluded";
-      r.confidence = Math.max(r.confidence, 0.7);
-      r.reason = "fallback:keyword_excluded";
-    } else if (FALLBACK_OPTIONAL_DESC_RE.test(desc) && r.label !== "Excluded") {
-      r.label = "Optional";
-      r.confidence = Math.max(r.confidence, 0.6);
-      r.reason = "fallback:keyword_optional";
-    }
-  }
-
-  const sums = computeSums(rows);
-  const mainTarget = input.authoritative_totals.main_total;
-  const optTarget = input.authoritative_totals.optional_total;
-  const matched_main = mainTarget != null ? withinTolerance(sums.main, mainTarget) : false;
-  const matched_optional = optTarget != null ? withinTolerance(sums.optional, optTarget) : false;
-
-  const items = composeOutputItems(rows);
-  const counts = countLabels(rows);
-  const avgConf =
-    rows.length > 0 ? rows.reduce((s, r) => s + r.confidence, 0) / rows.length : 0;
-  const confidence: "HIGH" | "MEDIUM" | "LOW" =
-    avgConf >= 0.8 ? "HIGH" : avgConf >= 0.6 ? "MEDIUM" : "LOW";
-
-  return {
-    items,
-    summary: {
-      main_sum: round2(sums.main),
-      optional_sum: round2(sums.optional),
-      excluded_sum: round2(sums.excluded),
-      unknown_sum: round2(sums.unknown),
-      matched_main_total: matched_main,
-      matched_optional_total: matched_optional,
-      delta_main: mainTarget != null ? round2(sums.main - mainTarget) : null,
-      delta_optional: optTarget != null ? round2(sums.optional - optTarget) : null,
-      confidence,
-      llm_used: false,
-      llm_review_used: false,
-      model_used: null,
-      rows_sent_to_llm: 0,
-      rows_classified_main: counts.Main,
-      rows_classified_optional: counts.Optional,
-      rows_classified_excluded: counts.Excluded,
-      rows_classified_unknown: counts.Unknown,
-      llm_resolved_rows: 0,
-      headings_detected: headings.length,
-      layers_applied: layers,
-      fallback_used: "deterministic_existing",
-      llm_errors: [],
-      examples: rows.slice(0, 10).map((w) => ({
-        row_id: w.row_id,
-        description: (w.item.description ?? "").slice(0, 140),
-        scope_category: w.label,
-        confidence: round3(w.confidence),
-        reason: w.reason,
-      })),
-      requires_scope_review: true,
-    },
-  };
-}
+// Stage 10 budget exposed for diagnostics/tests.
+export const SCOPE_SEGMENTATION_LLM_BUDGET_MS = LLM_STAGE_BUDGET_MS;
+export const SCOPE_SEGMENTATION_PER_REQUEST_MS = PER_REQUEST_BUDGET_MS;

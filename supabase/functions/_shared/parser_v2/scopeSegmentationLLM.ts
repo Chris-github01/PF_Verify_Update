@@ -1,13 +1,12 @@
 /**
  * scopeSegmentationLLM — OpenAI client used by the Scope Segmentation Engine.
  *
- * - Uses the existing high-quality parser model (gpt-5.4-mini).
- * - Mirrors the call shape used by _extractorRuntime.ts (json_object response,
- *   max_completion_tokens, reasoning_effort=low, verbosity=low).
- * - Batches >120 rows into groups of 80 (each batch sees the same document
- *   context + totals so the LLM can reason structurally per batch).
- * - 60s timeout per request, single retry on transient failures.
- * - Tolerant JSON parsing (fence-strip + salvage).
+ * Hardened against parser_v2 outer-timeout regressions:
+ *   - Per-call 8s hard cap (PER_REQUEST_BUDGET_MS).
+ *   - Caller-supplied wall-clock deadline (`deadlineEpochMs`); subsequent
+ *     batches short-circuit if the deadline is exceeded.
+ *   - Zero retries — a slow/failed call must not consume more than its slice.
+ *   - Tolerant JSON parsing (fence-strip + salvage).
  */
 
 import {
@@ -21,11 +20,10 @@ import {
 export const SCOPE_SEGMENTATION_MODEL = "gpt-5.4-mini";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const PER_REQUEST_BUDGET_MS = 60_000;
-const MAX_COMPLETION_TOKENS = 8000;
+export const PER_REQUEST_BUDGET_MS = 8_000;
+const MAX_COMPLETION_TOKENS = 4000;
 const SINGLE_BATCH_LIMIT = 120;
 const SPLIT_BATCH_SIZE = 80;
-const MAX_RETRIES = 1;
 
 export type LLMScopeCategory = "Main" | "Optional" | "Excluded" | "Unknown";
 
@@ -60,6 +58,7 @@ export type LLMClassifyResult = {
   modelUsed: string;
   batches: number;
   rowsSent: number;
+  timedOut: boolean;
 };
 
 export type ClassifyRowsArgs = {
@@ -74,6 +73,8 @@ export type ClassifyRowsArgs = {
   important_document_context: string;
   headings: ScopeSegmentationLLMHeading[];
   rows: ScopeSegmentationLLMRow[];
+  /** Wall-clock deadline (Date.now() + budget). Calls past this are skipped. */
+  deadlineEpochMs: number;
 };
 
 export type ClassifyReviewArgs = {
@@ -85,6 +86,7 @@ export type ClassifyReviewArgs = {
   important_document_context: string;
   headings: ScopeSegmentationLLMHeading[];
   rows: ScopeSegmentationLLMRow[];
+  deadlineEpochMs: number;
 };
 
 export async function classifyRowsLLM(
@@ -99,12 +101,18 @@ export async function classifyRowsLLM(
     modelUsed: SCOPE_SEGMENTATION_MODEL,
     batches: 0,
     rowsSent: allRows.length,
+    timedOut: false,
   };
   if (!args.openAIKey) {
     result.errors.push("missing_openai_key");
     return result;
   }
   if (allRows.length === 0) return result;
+  if (remainingBudget(args.deadlineEpochMs) <= 250) {
+    result.errors.push("deadline_exhausted_before_first_call");
+    result.timedOut = true;
+    return result;
+  }
 
   const batches: ScopeSegmentationLLMRow[][] =
     allRows.length <= SINGLE_BATCH_LIMIT
@@ -115,6 +123,12 @@ export async function classifyRowsLLM(
 
   const seen = new Set<string>();
   for (let i = 0; i < batches.length; i++) {
+    const remaining = remainingBudget(args.deadlineEpochMs);
+    if (remaining <= 250) {
+      result.errors.push(`batch_${i}:deadline_exhausted`);
+      result.timedOut = true;
+      break;
+    }
     const batch = batches[i];
     const userPrompt = buildScopeSegmentationUserPrompt({
       supplier: args.supplier,
@@ -128,15 +142,17 @@ export async function classifyRowsLLM(
       headings: args.headings,
       rows: batch,
     });
-    const call = await callLLMWithRetry({
+    const call = await callLLMOnce({
       openAIKey: args.openAIKey,
       systemPrompt: SCOPE_SEGMENTATION_SYSTEM_PROMPT,
       userPrompt,
       label: `batch ${i + 1}/${batches.length}`,
+      timeoutMs: Math.min(PER_REQUEST_BUDGET_MS, remaining),
     });
     if (call.rawResponse) result.rawResponses.push(call.rawResponse);
     if (call.error) {
       result.errors.push(`batch_${i}:${call.error}`);
+      if (call.timedOut) result.timedOut = true;
       continue;
     }
     const parsed = parseLLMPayload(call.content ?? "");
@@ -148,8 +164,6 @@ export async function classifyRowsLLM(
       seen.add(item.row_id);
       result.items.push(item);
     }
-    // Keep the first usable summary (single-batch case) — callers compute their
-    // own totals reconciliation, so multi-batch summaries are not merged.
     if (!result.summary && parsed.summary) {
       result.summary = parsed.summary;
     }
@@ -169,12 +183,19 @@ export async function classifyRowsLLMReview(
     modelUsed: SCOPE_SEGMENTATION_MODEL,
     batches: 0,
     rowsSent: args.rows.length,
+    timedOut: false,
   };
   if (!args.openAIKey) {
     result.errors.push("missing_openai_key");
     return result;
   }
   if (args.rows.length === 0) return result;
+  const remaining = remainingBudget(args.deadlineEpochMs);
+  if (remaining <= 250) {
+    result.errors.push("review:deadline_exhausted");
+    result.timedOut = true;
+    return result;
+  }
 
   const userPrompt = buildScopeSegmentationReviewPrompt({
     main_total: args.main_total,
@@ -187,15 +208,17 @@ export async function classifyRowsLLMReview(
   });
   result.batches = 1;
 
-  const call = await callLLMWithRetry({
+  const call = await callLLMOnce({
     openAIKey: args.openAIKey,
     systemPrompt: SCOPE_SEGMENTATION_SYSTEM_PROMPT,
     userPrompt,
     label: "review_pass",
+    timeoutMs: Math.min(PER_REQUEST_BUDGET_MS, remaining),
   });
   if (call.rawResponse) result.rawResponses.push(call.rawResponse);
   if (call.error) {
     result.errors.push(`review:${call.error}`);
+    if (call.timedOut) result.timedOut = true;
     return result;
   }
   const parsed = parseLLMPayload(call.content ?? "");
@@ -216,6 +239,7 @@ type CallArgs = {
   systemPrompt: string;
   userPrompt: string;
   label: string;
+  timeoutMs: number;
 };
 
 type CallResult = {
@@ -223,72 +247,78 @@ type CallResult = {
   rawResponse: string | null;
   error: string | null;
   httpStatus: number | null;
+  timedOut: boolean;
 };
 
-async function callLLMWithRetry(args: CallArgs): Promise<CallResult> {
-  let lastError: string | null = null;
-  let lastStatus: number | null = null;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), PER_REQUEST_BUDGET_MS);
-    try {
-      const res = await fetch(OPENAI_URL, {
-        method: "POST",
-        signal: ctl.signal,
-        headers: {
-          Authorization: `Bearer ${args.openAIKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: SCOPE_SEGMENTATION_MODEL,
-          response_format: { type: "json_object" },
-          max_completion_tokens: MAX_COMPLETION_TOKENS,
-          reasoning_effort: "low",
-          verbosity: "low",
-          messages: [
-            { role: "system", content: args.systemPrompt },
-            { role: "user", content: args.userPrompt },
-          ],
-        }),
-      });
-      lastStatus = res.status;
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        lastError = `http_${res.status}:${body.slice(0, 200)}`;
-        if (res.status >= 500 || res.status === 429) {
-          // transient — retry
-          await sleep(400 * (attempt + 1));
-          continue;
-        }
-        return { content: null, rawResponse: null, error: lastError, httpStatus: res.status };
-      }
-      const json = await res.json().catch(() => null) as
-        | { choices?: Array<{ message?: { content?: string } }> }
-        | null;
-      const content = json?.choices?.[0]?.message?.content ?? null;
-      if (!content || typeof content !== "string") {
-        lastError = "empty_response_content";
-        return { content: null, rawResponse: null, error: lastError, httpStatus: res.status };
-      }
+async function callLLMOnce(args: CallArgs): Promise<CallResult> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), args.timeoutMs);
+  try {
+    const res = await fetch(OPENAI_URL, {
+      method: "POST",
+      signal: ctl.signal,
+      headers: {
+        Authorization: `Bearer ${args.openAIKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: SCOPE_SEGMENTATION_MODEL,
+        response_format: { type: "json_object" },
+        max_completion_tokens: MAX_COMPLETION_TOKENS,
+        reasoning_effort: "low",
+        verbosity: "low",
+        messages: [
+          { role: "system", content: args.systemPrompt },
+          { role: "user", content: args.userPrompt },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
       return {
-        content,
-        rawResponse: content.slice(0, 20_000),
-        error: null,
+        content: null,
+        rawResponse: null,
+        error: `http_${res.status}:${body.slice(0, 200)}`,
         httpStatus: res.status,
+        timedOut: false,
       };
-    } catch (err) {
-      const isAbort = (err as Error)?.name === "AbortError";
-      lastError = isAbort
-        ? `timeout_${PER_REQUEST_BUDGET_MS}ms`
-        : `network:${(err as Error)?.message ?? String(err)}`.slice(0, 200);
-      console.warn(`[scopeSegmentationLLM] ${args.label} attempt ${attempt} failed: ${lastError}`);
-      if (isAbort) break;
-      await sleep(400 * (attempt + 1));
-    } finally {
-      clearTimeout(timer);
     }
+    const json = await res.json().catch(() => null) as
+      | { choices?: Array<{ message?: { content?: string } }> }
+      | null;
+    const content = json?.choices?.[0]?.message?.content ?? null;
+    if (!content || typeof content !== "string") {
+      return {
+        content: null,
+        rawResponse: null,
+        error: "empty_response_content",
+        httpStatus: res.status,
+        timedOut: false,
+      };
+    }
+    return {
+      content,
+      rawResponse: content.slice(0, 20_000),
+      error: null,
+      httpStatus: res.status,
+      timedOut: false,
+    };
+  } catch (err) {
+    const isAbort = (err as Error)?.name === "AbortError";
+    const errMsg = isAbort
+      ? `timeout_${args.timeoutMs}ms`
+      : `network:${(err as Error)?.message ?? String(err)}`.slice(0, 200);
+    console.warn(`[scopeSegmentationLLM] ${args.label} failed: ${errMsg}`);
+    return {
+      content: null,
+      rawResponse: null,
+      error: errMsg,
+      httpStatus: null,
+      timedOut: isAbort,
+    };
+  } finally {
+    clearTimeout(timer);
   }
-  return { content: null, rawResponse: null, error: lastError ?? "unknown_error", httpStatus: lastStatus };
 }
 
 type ParsedPayload = {
@@ -440,6 +470,6 @@ function optString(v: unknown): string | null {
   return s || null;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+function remainingBudget(deadlineEpochMs: number): number {
+  return Math.max(0, deadlineEpochMs - Date.now());
 }
