@@ -1,241 +1,182 @@
 /**
- * scopeSegmentationPrompt — LLM-primary classifier prompt for Stage 10.
+ * scopeSegmentationPrompt — Stage 10 v3 (LLM Native).
  *
- * The LLM classifies every extracted row as Main / Optional / Excluded /
- * Unknown using full document context (page text excerpts, headings,
- * authoritative totals, supplier/trade/quote_type). Returns strict JSON.
+ * The LLM is the SOLE classifier. No deterministic fallback exists.
+ * Every row must be classified into one of four categories:
+ *
+ *   Main      — priced row that contributes to the base contract scope
+ *   Optional  — priced row that is local-additional / add-to-scope /
+ *               not-shown-on-drawings / TBC / alternate / upgrade
+ *   Excluded  — explicitly out of scope (by others, not included,
+ *               rate only, no allowance, NIC, by client, etc.) OR a
+ *               zero-value reference row that wording marks excluded
+ *   Metadata  — non-priced bookkeeping (subtotals, grand totals,
+ *               GST lines, page totals, summary roll-ups). These are
+ *               NOT real cost rows and must not be summed into any
+ *               scope total.
+ *
+ * Critical reset rule: section context resets at any of these
+ * heading markers — BLOCK <id>, LOT <id>, LEVEL <id>, UNIT <id>,
+ * BUILDING <id>, AREA <id>, SECTION <id>. An "OPTIONAL SCOPE"
+ * heading earlier in the document does NOT carry forward through
+ * later block/lot/level resets — each new block starts fresh as
+ * Main unless its own local heading says otherwise.
+ *
+ * Optional is local, not global. A row is Optional only if its
+ * IMMEDIATE local heading or row wording marks it optional.
  */
 
-export const SCOPE_SEGMENTATION_SYSTEM_PROMPT =
-  `You are a senior construction quote analyst specialising in passive fire protection quotes.
+export const SCOPE_SEGMENTATION_SYSTEM_PROMPT_V3 =
+  `You are the sole scope-classification engine for a construction quote parser.
 
-Your task is to classify each extracted quote row into one of four scope categories:
+Classify every row into exactly one of:
+  Main
+  Optional
+  Excluded
+  Metadata
 
-Main
-Optional
-Excluded
-Unknown
+Rules — read carefully:
 
-You must classify based on the quote structure, not just the row description.
+1. Context is LOCAL, not global.
+   The most recent heading above a row is the strongest signal.
+   When you see any of these heading markers, RESET the section
+   context for everything that follows them:
+     BLOCK <id>, LOT <id>, LEVEL <id>, UNIT <id>,
+     BUILDING <id>, AREA <id>, SECTION <id>.
+   An "OPTIONAL SCOPE" heading earlier in the document does NOT
+   carry forward through a later "BLOCK 31" reset. Each new block
+   begins as Main unless its own local heading or wording says
+   otherwise.
 
-The same item description may appear as Main in one section and Optional in another. Therefore, always use page context, section headings, quote summary tables, page banners, block/building headings, and total reconciliation before relying on keywords.
+2. Reasoning priority (highest to lowest):
+   a. Local heading directly above the row (within the current section reset window).
+   b. Subtotal labels nearby (e.g. "Block 30 Subtotal", "Optional Total").
+   c. Same-page structural cues (column headings, table title, page banner).
+   d. Repeated patterns across blocks (B30 row structure ≈ B31 row structure → infer matching scopes).
+   e. Row wording itself (TBC, alternate, by others, no allowance).
+   f. Price behaviour (zero with "by others" → Excluded; zero alone → not automatically Excluded).
+   g. Cross-page continuity only when explicit (e.g. "continued from page 4").
 
-Classification rules:
+3. Optional is LOCAL.
+   Mark a row Optional only when:
+     - Its closest local heading says optional / add to scope / not shown
+       on drawings / items with confirmation / TBC / alternate / upgrade /
+       extra over / can be removed, OR
+     - Row wording itself contains those markers, OR
+     - It is positioned under a clearly-separated optional pricing block
+       on the same page (visible separation, not assumed).
+   If a later block-reset heading (BLOCK 31, LEVEL 2, UNIT 14, etc.)
+   appears between the optional heading and the row, the row is NOT Optional.
 
-1. MAIN
-Classify as Main when the row belongs to the base tender scope, included works, contract works, quote summary, estimate summary, items identified on drawings, penetration schedule, standard trade breakdown, building/block subtotal, or rows that make up the selected main total.
+4. Excluded means truly out of scope.
+   By others / not included / no allowance / rate only / NIC / by client /
+   by main contractor / no tested solution / reference only.
+   A zero-dollar row is NOT automatically Excluded — only if its wording
+   says so.
 
-Main indicators include:
-- Quote Summary
-- Estimate Summary
-- Items Identified on Drawings
-- Base Scope
-- Included Scope
-- Main Works
-- Contract Works
-- Sub Total
-- Building A / Building B / Block B30 base rows
-- Penetrations listed as part of the primary schedule
-- Rows contributing to the selected main total
+5. Metadata is bookkeeping only.
+   Sub Total, Subtotal, Block 30 Total, Page Total, Quote Summary line,
+   GST, Grand Total, Total Ex GST, Tender Total, Carried Forward.
+   Never include Metadata in any scope total.
 
-2. OPTIONAL
-Classify as Optional when the row belongs to optional scope, add-to-scope items, confirmation-required items, not-shown-on-drawings items, TBC items, alternate items, upgrades, extra-over items, or items that must be accepted/ticked/confirmed before inclusion.
+6. Repeated-block intelligence.
+   If you can see structurally identical row sequences under different
+   block headings (Block 30 vs Block 31), assume matching rows belong
+   to the same scope category as long as no local optional/excluded
+   heading separates them.
 
-Optional indicators include:
-- Optional Scope
-- Add to Scope
-- Items With Confirmation
-- Confirmation Required
-- Not Shown on Drawings
-- Estimate Items / Not Shown on Drawings
-- Extra Over
-- TBC Breakdown
-- Optional Extras
-- Can be removed
-- Please confirm by ticking box
-- Alternative / Alternate
-- Upgrade
-- Optional Flush Boxes
-- Fire Door Perimeter Seals optional
-- Lift Door Perimeter Seals TBC
+7. Self-check before returning.
+   - Have you reset context at every BLOCK/LOT/LEVEL/UNIT/BUILDING/AREA/SECTION marker?
+   - Have you avoided letting a single OPTIONAL heading poison later blocks?
+   - Are subtotals/grand totals Metadata, not Main?
+   - Are zero-value "by others" rows Excluded, not Optional?
+   - Are repeated block structures consistently classified?
 
-3. EXCLUDED
-Classify as Excluded when the row is explicitly not included in the price, by others, rate-only, zero-value reference only, no allowance, not part of scope, or excluded from the quoted works.
-
-Excluded indicators include:
-- By others
-- Excluded
-- Not included
-- No allowance
-- Rate only
-- No tested solution
-- NIC
-- By client
-- By main contractor
-- Reference only
-
-Important:
-A zero-dollar row is not automatically Excluded unless wording says it is by others, no allowance, excluded, rate only, or not included.
-
-4. UNKNOWN
-Use Unknown only where the quote structure does not provide enough evidence.
-
-Critical reasoning rules:
-- Do not classify row-by-row in isolation.
-- Classify rows according to the section they belong to.
-- If a heading says "QUOTE BREAKDOWN ITEMS IDENTIFIED ON DRAWINGS", rows under it are Main.
-- If a heading says "QUOTE BREAKDOWN NOT SHOWN ON DRAWINGS / ITEMS WITH CONFIRMATION / OPTIONAL SCOPE", rows under it are Optional.
-- If a heading says "OPTIONAL SCOPE" or "ADD TO SCOPE", rows under it are Optional.
-- If a heading says "Estimate items / Not shown on drawings", rows under it are Optional.
-- If a quote summary separates base subtotal from add-to-scope subtotal, base subtotal rows are Main and add-to-scope rows are Optional.
-- If rows mathematically reconcile to the selected main total, treat that as strong evidence for Main.
-- If rows mathematically reconcile to the optional total, treat that as strong evidence for Optional.
-- Do not change quantities, rates, totals, descriptions, FRR, service type, or mapped systems.
-- Only classify scope.
-
-Return strict JSON only.
-
-Required JSON shape:
+Output strict JSON only, in this exact shape:
 
 {
-  "items": [
+  "stage10_version": "llm_native_v3",
+  "status": "ok",
+  "runtime_ms": 0,
+  "rows": [
     {
-      "row_id": "string",
-      "scope_category": "Main | Optional | Excluded | Unknown",
-      "confidence": 0.0,
-      "reason": "brief evidence-based explanation",
-      "evidence": {
-        "page": 1,
-        "heading": "text if known",
-        "signal": "section_heading | page_banner | quote_summary | total_reconciliation | row_wording | fallback"
-      }
+      "row_index": 0,
+      "scope": "Main",
+      "confidence": 0.95,
+      "section_id": "BLOCK 30",
+      "group_id": "B30 base schedule",
+      "rationale_short": "under BLOCK 30 base schedule, no optional heading in scope",
+      "heading_basis": "BLOCK 30"
     }
   ],
+  "warnings": [],
   "summary": {
-    "main_sum": 0,
-    "optional_sum": 0,
-    "excluded_sum": 0,
-    "unknown_sum": 0,
-    "main_total_match": true,
-    "optional_total_match": true,
-    "overall_confidence": "HIGH | MEDIUM | LOW",
-    "notes": []
+    "main_count": 0,
+    "optional_count": 0,
+    "excluded_count": 0,
+    "metadata_count": 0,
+    "block_resets_seen": 0,
+    "overall_confidence": "HIGH"
   }
-}`;
+}
 
-export type ScopeSegmentationLLMRow = {
-  row_id: string;
+Constraints:
+- Return JSON only. No prose. No markdown fences.
+- Do not modify descriptions, prices, quantities, units. Only classify.
+- Every row in the input MUST appear exactly once in "rows" output.
+- "scope" must be one of: Main | Optional | Excluded | Metadata.
+- "confidence" is a number between 0 and 1.
+- If the document is genuinely ambiguous, prefer Main and lower confidence rather than Optional or Excluded.`;
+
+export type ScopeRowPacket = {
+  row_index: number;
+  page: number | null;
+  local_position: number | null;
   description: string;
-  quantity: number | null;
+  qty: number | null;
   unit: string | null;
   unit_price: number | null;
   total_price: number | null;
-  source_page: number | null;
-  current_scope_category: string;
-  existing_confidence: number | null;
-  parent_section: string | null;
-  nearby_heading: string | null;
+  zero_value_flag: boolean;
+  headers_above: string[];
+  headers_below: string[];
+  page_title: string | null;
+  previous_row_summary: string | null;
+  next_row_summary: string | null;
 };
 
-export type ScopeSegmentationLLMHeading = {
-  page: number | null;
-  heading: string;
-  inferred_type: "Main" | "Optional" | "Excluded" | "Unknown";
-};
-
-export type ScopeSegmentationUserPromptArgs = {
+export type ScopeUserPromptArgs = {
   supplier: string;
   trade: string;
   quote_type: string;
-  main_total: number | null;
-  optional_total: number | null;
-  grand_total: number | null;
   page_count: number;
-  important_document_context: string;
-  headings: ScopeSegmentationLLMHeading[];
-  rows: ScopeSegmentationLLMRow[];
+  rows: ScopeRowPacket[];
+  chunk_label: string;
+  is_chunked: boolean;
 };
 
-export function buildScopeSegmentationUserPrompt(
-  args: ScopeSegmentationUserPromptArgs,
-): string {
-  const headingsBlock = args.headings.length === 0
-    ? "(none detected)"
-    : args.headings
-      .map(
-        (h, i) =>
-          `${i + 1}. [page=${h.page ?? "?"}] [${h.inferred_type}] ${h.heading.slice(0, 200)}`,
-      )
-      .join("\n");
-
-  const rowsJson = JSON.stringify(args.rows, null, 0);
-
-  return [
-    "Classify the following extracted quote rows into Main, Optional, Excluded, or Unknown.",
-    "",
-    "DOCUMENT CONTEXT:",
+export function buildScopeUserPromptV3(args: ScopeUserPromptArgs): string {
+  const rowsJson = JSON.stringify(args.rows);
+  const header = [
     `Supplier: ${args.supplier || "(unknown)"}`,
     `Trade: ${args.trade || "(unknown)"}`,
     `Quote Type: ${args.quote_type || "(unknown)"}`,
-    `Selected Main Total Ex GST: ${formatNumber(args.main_total)}`,
-    `Optional Total Ex GST: ${formatNumber(args.optional_total)}`,
-    `Grand Total Ex GST: ${formatNumber(args.grand_total)}`,
     `Page Count: ${args.page_count}`,
-    "",
-    "IMPORTANT DOCUMENT TEXT:",
-    args.important_document_context || "(none)",
-    "",
-    "HEADINGS / SECTION MARKERS:",
-    headingsBlock,
-    "",
-    "ROWS TO CLASSIFY:",
-    rowsJson,
-    "",
-    "Return only JSON in the required schema.",
+    `Chunk: ${args.chunk_label}`,
+    args.is_chunked
+      ? "This input is a chunk of a larger row set. Some rows from adjacent chunks are included as context overlap — classify them too. Use the headers_above / headers_below / previous_row_summary / next_row_summary on each packet to anchor decisions; do not assume context from rows outside this chunk."
+      : "This input contains the entire row set in a single pass.",
   ].join("\n");
-}
-
-export function buildScopeSegmentationReviewPrompt(args: {
-  main_total: number | null;
-  optional_total: number | null;
-  main_sum: number;
-  optional_sum: number;
-  rows: ScopeSegmentationLLMRow[];
-  important_document_context: string;
-  headings: ScopeSegmentationLLMHeading[];
-}): string {
-  const headingsBlock = args.headings.length === 0
-    ? "(none detected)"
-    : args.headings
-      .map(
-        (h, i) =>
-          `${i + 1}. [page=${h.page ?? "?"}] [${h.inferred_type}] ${h.heading.slice(0, 200)}`,
-      )
-      .join("\n");
 
   return [
-    "The first classification did not reconcile to the known totals.",
-    "Review only the uncertain rows.",
-    "Do not change high-confidence rows.",
-    `Known Main Total: ${formatNumber(args.main_total)}`,
-    `Current Main Sum: ${formatNumber(args.main_sum)}`,
-    `Known Optional Total: ${formatNumber(args.optional_total)}`,
-    `Current Optional Sum: ${formatNumber(args.optional_sum)}`,
+    "Classify every row in this packet into Main, Optional, Excluded, or Metadata.",
     "",
-    "IMPORTANT DOCUMENT TEXT:",
-    args.important_document_context || "(none)",
+    "DOCUMENT METADATA:",
+    header,
     "",
-    "HEADINGS / SECTION MARKERS:",
-    headingsBlock,
+    "ROW PACKETS:",
+    rowsJson,
     "",
-    "UNCERTAIN ROWS:",
-    JSON.stringify(args.rows, null, 0),
-    "",
-    "Return corrected classifications for uncertain rows only, in the required schema.",
+    "Return strict JSON in the schema specified by the system prompt. Every row_index in the input MUST appear exactly once in rows[].",
   ].join("\n");
-}
-
-function formatNumber(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return "(unknown)";
-  return n.toFixed(2);
 }

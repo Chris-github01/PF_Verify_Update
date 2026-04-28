@@ -1,80 +1,70 @@
 /**
- * Scope Segmentation Engine — Parser V2 Stage 10 (deterministic-first, LLM-assist).
+ * Scope Segmentation Engine — Stage 10 v3 (LLM Native).
  *
- * Hardened against parser_v2 outer-timeout regressions: the deterministic
- * classifier always produces the baseline result. The LLM is invoked ONLY on
- * ambiguous rows under a single 8s wall-clock budget. If the LLM does not
- * complete within that window, the deterministic result is preserved in full.
+ * The LLM is the SOLE classifier. There is NO deterministic baseline,
+ * NO rule-based fallback, NO reconciliation, NO balancing rows, and NO
+ * synthetic totals patching. If the LLM fails, the failure is surfaced
+ * to the caller via the result summary; the caller decides what to do.
  *
  * Pipeline:
- *   1. Deterministic baseline classification on all rows.
- *   2. Identify ambiguous rows (Unknown, low confidence, or
- *      mismatched-anchor heuristics).
- *   3. If openAI key present and ambiguous rows > 0, call LLM with an 8s
- *      wall-clock deadline on those rows only.
- *   4. Replace ambiguous rows whose LLM confidence >= 0.70.
- *   5. Apply Excluded keyword override at conf >= 0.80.
- *   6. Reconcile sums to authoritative totals (1.5% tolerance) and report.
- *
- * Public types (`ScopeSegmentationItem`, `ScopeSegmentationResult`,
- * `ScopeSegmentationInput`) are stable — downstream is unchanged.
+ *   1. Build compact row packets from extracted_items + page text.
+ *      Each packet carries headers_above / headers_below / page_title /
+ *      previous_row_summary / next_row_summary so the model can anchor
+ *      classification on local context (BLOCK / LOT / LEVEL / UNIT /
+ *      BUILDING / AREA / SECTION resets).
+ *   2. Send packets to the LLM (single pass ≤220 rows, otherwise chunks
+ *      of 90 rows with 12-row overlap).
+ *   3. Apply the LLM's scope to every input row. Map Main → "main",
+ *      Optional → "optional", Excluded → "excluded", Metadata →
+ *      "excluded" (kept out of all scope totals; flagged for audit).
+ *   4. On failure, return items unmodified + summary status="failed"
+ *      with structured error_type and debug_hint. No fallback.
  */
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 import {
-  classifyRowsLLM,
-  PER_REQUEST_BUDGET_MS,
+  classifyRowsLLMV3,
   SCOPE_SEGMENTATION_MODEL,
-  type LLMItemResult,
+  STAGE10_VERSION,
+  STAGE_BUDGET_MS,
+  type LLMClassifyResult,
+  type LLMRowResult,
+  type LLMScope,
 } from "./scopeSegmentationLLM.ts";
-import type {
-  ScopeSegmentationLLMHeading,
-  ScopeSegmentationLLMRow,
-} from "./scopeSegmentationPrompt.ts";
+import type { ScopeRowPacket } from "./scopeSegmentationPrompt.ts";
 
 // --------------------------------------------------------------------------
-// Public types (stable)
+// Public types — kept stable for runParserV2 caller.
 // --------------------------------------------------------------------------
 
-export type ScopeLabel = "Main" | "Optional" | "Excluded" | "Unknown";
+export type ScopeLabel = "Main" | "Optional" | "Excluded" | "Metadata" | "Unknown";
 
 export type ScopeSegmentationItem = ParsedLineItemV2 & {
   scope_segmentation_label?: ScopeLabel;
   scope_confidence?: number;
   scope_reason?: string;
+  scope_section_id?: string | null;
+  scope_group_id?: string | null;
+  scope_heading_basis?: string | null;
 };
 
 export type ScopeSegmentationSummary = {
-  main_sum: number;
-  optional_sum: number;
-  excluded_sum: number;
-  unknown_sum: number;
-  matched_main_total: boolean;
-  matched_optional_total: boolean;
-  delta_main: number | null;
-  delta_optional: number | null;
-  confidence: "HIGH" | "MEDIUM" | "LOW";
-  llm_used: boolean;
-  llm_review_used: boolean;
-  llm_timed_out: boolean;
+  stage10_version: string;
+  status: "ok" | "failed";
+  runtime_ms: number;
   model_used: string | null;
-  rows_sent_to_llm: number;
   rows_classified_main: number;
   rows_classified_optional: number;
   rows_classified_excluded: number;
+  rows_classified_metadata: number;
   rows_classified_unknown: number;
-  llm_resolved_rows: number;
-  headings_detected: number;
-  layers_applied: string[];
-  fallback_used: string | null;
-  llm_errors: string[];
-  examples: Array<{
-    row_id: string;
-    description: string;
-    scope_category: ScopeLabel;
-    confidence: number;
-    reason: string;
-  }>;
+  block_resets_seen: number;
+  overall_confidence: "HIGH" | "MEDIUM" | "LOW";
+  warnings: string[];
+  error_type: string | null;
+  debug_hint: string | null;
+  chunks_used: number;
+  rows_sent: number;
   requires_scope_review: boolean;
 };
 
@@ -90,6 +80,8 @@ export type ScopeSegmentationInput = {
   quote_type: string;
   trade: string;
   supplier: string;
+  /** Authoritative totals are NOT used by v3 (LLM is sole classifier),
+   * accepted for caller compatibility only. */
   authoritative_totals: {
     main_total: number | null;
     optional_total: number | null;
@@ -97,493 +89,321 @@ export type ScopeSegmentationInput = {
   openAIKey?: string;
 };
 
-// --------------------------------------------------------------------------
-// Constants
-// --------------------------------------------------------------------------
+// Headings that trigger context reset.
+const RESET_HEADING_RE =
+  /\b(BLOCK|LOT|LEVEL|UNIT|BUILDING|AREA|SECTION)\b\s*[:#-]?\s*[A-Za-z0-9][\w.-]*/i;
 
-const TOTALS_TOLERANCE = 0.015;
-const OVERWRITE_THRESHOLD = 0.7;
-const EXCLUDED_OVERRIDE_THRESHOLD = 0.8;
-const CONTEXT_PAGE_BUDGET = 3000;
-/** Wall-clock cap for the entire LLM-assist step. */
-const LLM_STAGE_BUDGET_MS = 8_000;
-/** Rows considered "ambiguous" enough to send to the LLM. */
-const AMBIGUOUS_CONFIDENCE_THRESHOLD = 0.7;
-/** Hard cap on rows we will hand to the LLM in this stage. */
-const MAX_AMBIGUOUS_ROWS_FOR_LLM = 80;
-
-const EXCLUDED_OVERRIDE_RE =
-  /\b(by\s+others|no\s+allowance|excluded|not\s+included|rate\s+only)\b/i;
-
-const MAIN_HEADER_PATTERNS: RegExp[] = [
-  /^\s*main\s+scope\s*:?\s*$/i,
-  /^\s*included\s+scope\s*:?\s*$/i,
-  /^\s*base\s+scope\s*:?\s*$/i,
-  /^\s*contract\s+works\s*:?\s*$/i,
-  /^\s*main\s+works\s*:?\s*$/i,
-  /^\s*schedule\s+of\s+works\s*:?\s*$/i,
-  /^\s*included\s+items?\s*:?\s*$/i,
-  /^\s*items?\s+identified\s+on\s+drawings\s*:?\s*$/i,
-  /^\s*identified\s+on\s+drawings\s*:?\s*$/i,
-  /^\s*penetration\s+works\s*:?\s*$/i,
-  /^\s*quote\s+breakdown\s*:?\s*$/i,
-  /^\s*estimate\s+summary\s*:?\s*$/i,
-  /^\s*quote\s+summary\s*:?\s*$/i,
-  /^\s*tender\s+summary\s*:?\s*$/i,
-  /\bsub[\s-]?total\b/i,
-];
-
-const OPTIONAL_HEADER_PATTERNS: RegExp[] = [
-  /^\s*optional\s+scope\s*:?\s*$/i,
-  /^\s*optional\s+extras?\s*:?\s*$/i,
-  /^\s*optional\s+items?\s*:?\s*$/i,
-  /^\s*optional\s*:?\s*$/i,
-  /^\s*add\s+to\s+scope\s*:?\s*$/i,
-  /^\s*additional\s+items?\s*:?\s*$/i,
-  /^\s*confirmation\s+required\s*:?\s*$/i,
-  /^\s*items?\s+requiring\s+confirmation\s*:?\s*$/i,
-  /^\s*items?\s+not\s+shown\s+on\s+drawings\s*:?\s*$/i,
-  /^\s*not\s+shown\s+on\s+drawings\s*:?\s*$/i,
-  /^\s*estimate\s+items?\s+not\s+shown\s+on\s+drawings\s*:?\s*$/i,
-  /^\s*extras?\s+over\s*:?\s*$/i,
-  /^\s*alternates?\s*:?\s*$/i,
-  /^\s*upgrade\s+options?\s*:?\s*$/i,
-  /^\s*can\s+be\s+removed\s*:?\s*$/i,
-  /^\s*tbc\s+breakdown\s*:?\s*$/i,
-  /^\s*items?\s+for\s+confirmation\s*:?\s*$/i,
-];
-
-const EXCLUDED_HEADER_PATTERNS: RegExp[] = [
-  /^\s*exclusions?\s*:?\s*$/i,
-  /^\s*excluded\s+items?\s*:?\s*$/i,
-  /^\s*excluded\s*:?\s*$/i,
-  /^\s*not\s+included\s*:?\s*$/i,
-  /^\s*items?\s+not\s+included\s*:?\s*$/i,
-  /^\s*services?\s+not\s+part\s+of\b/i,
-  /^\s*clarifications?\s*:?\s*$/i,
-];
-
-const CONTEXT_KEYWORDS_RE =
-  /\b(quote\s+summary|estimate\s+summary|quote\s+breakdown|sub[\s-]?total|optional\s+scope|add\s+to\s+scope|not\s+shown\s+on\s+drawings|items?\s+with\s+confirmation|by\s+others|no\s+allowance|exclud|not\s+included|rate\s+only|tbc|provisional|grand\s+total|total\s+ex\s+gst|main\s+total|optional\s+total)\b/i;
-
-const DETERMINISTIC_OPTIONAL_DESC_RE =
-  /\b(optional|add\s+to\s+scope|not\s+shown\s+on\s+drawings|extra\s+over|TBC|alternate|upgrade)\b/i;
-const DETERMINISTIC_EXCLUDED_DESC_RE =
-  /\b(by\s+others|provisional\s+only|no\s+tested\s+solution|rate\s+only|not\s+included)\b/i;
+const HEADING_LINE_MAX_LEN = 160;
+const ROW_SUMMARY_MAX_LEN = 80;
+const HEADERS_ABOVE_MAX = 4;
+const HEADERS_BELOW_MAX = 2;
 
 // --------------------------------------------------------------------------
-// Public entry point
+// Public entry
 // --------------------------------------------------------------------------
 
 export async function runScopeSegmentationEngine(
   input: ScopeSegmentationInput,
 ): Promise<ScopeSegmentationResult> {
-  const layers: string[] = [];
-  const headings = extractHeadings(input.allPages ?? []);
+  const start = Date.now();
+  const items = input.extracted_items;
 
-  // Step 1 — deterministic baseline (always runs; no LLM).
-  const working = buildDeterministicBaseline(input.extracted_items, headings);
-  layers.push("deterministic_baseline");
+  if (items.length === 0) {
+    return {
+      items: [],
+      summary: emptySummary(Date.now() - start, "no_items"),
+    };
+  }
 
-  // Step 2 — pick ambiguous rows for an LLM-assist pass.
-  const ambiguous = pickAmbiguousRows(working).slice(0, MAX_AMBIGUOUS_ROWS_FOR_LLM);
+  const packets = buildRowPackets(items, input.allPages ?? []);
+  const llm: LLMClassifyResult = await classifyRowsLLMV3({
+    openAIKey: input.openAIKey ?? "",
+    supplier: input.supplier,
+    trade: input.trade,
+    quote_type: input.quote_type,
+    page_count: input.allPages?.length ?? 0,
+    rows: packets,
+  });
 
-  let llmUsed = false;
-  let llmTimedOut = false;
-  let resolvedByLLM = 0;
-  const llmErrors: string[] = [];
+  if (llm.status === "failed") {
+    // Fail loud: return items unmodified, surface error_type + debug_hint.
+    const passthrough = items.map((it, i) => ({
+      ...it,
+      scope_segmentation_label: "Unknown" as ScopeLabel,
+      scope_confidence: 0,
+      scope_reason: `stage10_failed:${llm.error_type}:${llm.debug_hint}`.slice(0, 200),
+      scope_section_id: null,
+      scope_group_id: null,
+      scope_heading_basis: null,
+      _row_index: i,
+    })) as ScopeSegmentationItem[];
+    return {
+      items: passthrough,
+      summary: {
+        stage10_version: STAGE10_VERSION,
+        status: "failed",
+        runtime_ms: llm.runtime_ms,
+        model_used: SCOPE_SEGMENTATION_MODEL,
+        rows_classified_main: 0,
+        rows_classified_optional: 0,
+        rows_classified_excluded: 0,
+        rows_classified_metadata: 0,
+        rows_classified_unknown: items.length,
+        block_resets_seen: 0,
+        overall_confidence: "LOW",
+        warnings: llm.warnings,
+        error_type: llm.error_type,
+        debug_hint: llm.debug_hint,
+        chunks_used: llm.chunks_attempted,
+        rows_sent: llm.rows_sent,
+        requires_scope_review: true,
+      },
+    };
+  }
 
-  if (ambiguous.length > 0 && input.openAIKey) {
-    const importantContext = buildDocumentContext(
-      input.allPages ?? [],
-      input.rawText,
-      input.authoritative_totals,
-    );
-    const llmRows: ScopeSegmentationLLMRow[] = ambiguous.map((w) =>
-      llmRowFor(w, headings),
-    );
-    try {
-      const deadlineEpochMs = Date.now() + LLM_STAGE_BUDGET_MS;
-      const result = await classifyRowsLLM({
-        openAIKey: input.openAIKey,
-        supplier: input.supplier,
-        trade: input.trade,
-        quote_type: input.quote_type,
-        main_total: input.authoritative_totals.main_total,
-        optional_total: input.authoritative_totals.optional_total,
-        grand_total: null,
-        page_count: input.allPages?.length ?? 0,
-        important_document_context: importantContext,
-        headings,
-        rows: llmRows,
-        deadlineEpochMs,
-      });
-      llmUsed = result.items.length > 0;
-      llmTimedOut = result.timedOut;
-      llmErrors.push(...result.errors);
-      if (result.items.length > 0) {
-        const byId = new Map(result.items.map((it) => [it.row_id, it] as const));
-        for (const w of working) {
-          const upd = byId.get(w.row_id);
-          if (!upd) continue;
-          if (applyLLMResult(w, upd)) resolvedByLLM++;
-        }
-        layers.push("llm_assist_applied");
-      } else {
-        layers.push(llmTimedOut ? "llm_assist_timed_out" : "llm_assist_no_items");
-      }
-    } catch (err) {
-      llmErrors.push(`unexpected:${(err as Error)?.message ?? String(err)}`.slice(0, 200));
-      layers.push("llm_assist_error");
+  // Apply LLM classifications to items.
+  const byIndex = new Map<number, LLMRowResult>();
+  for (const r of llm.rows) byIndex.set(r.row_index, r);
+
+  let unknownCount = 0;
+  const out: ScopeSegmentationItem[] = items.map((it, i) => {
+    const llmRow = byIndex.get(i);
+    if (!llmRow) {
+      unknownCount++;
+      return {
+        ...it,
+        scope_segmentation_label: "Unknown" as ScopeLabel,
+        scope_confidence: 0,
+        scope_reason: "stage10:row_missing_from_llm_output",
+        scope_section_id: null,
+        scope_group_id: null,
+        scope_heading_basis: null,
+      };
     }
-  } else if (ambiguous.length === 0) {
-    layers.push("llm_assist_skipped_no_ambiguous");
-  } else {
-    layers.push("llm_assist_skipped_no_key");
-  }
-
-  // Step 3 — Excluded keyword override.
-  let excludedOverrides = 0;
-  for (const w of working) {
-    if (
-      EXCLUDED_OVERRIDE_RE.test(w.item.description ?? "") &&
-      w.confidence >= EXCLUDED_OVERRIDE_THRESHOLD &&
-      w.label !== "Excluded"
-    ) {
-      w.label = "Excluded";
-      w.reason = `keyword_override:excluded:${w.reason}`.slice(0, 200);
-      excludedOverrides++;
-    }
-  }
-  if (excludedOverrides > 0) layers.push("excluded_keyword_override");
-
-  // Step 4 — totals reconciliation.
-  const sums = computeSums(working);
-  const mainTarget = input.authoritative_totals.main_total;
-  const optTarget = input.authoritative_totals.optional_total;
-  const matched_main =
-    mainTarget != null ? withinTolerance(sums.main, mainTarget) : false;
-  const matched_optional =
-    optTarget != null ? withinTolerance(sums.optional, optTarget) : false;
-  const delta_main = mainTarget != null ? round2(sums.main - mainTarget) : null;
-  const delta_optional = optTarget != null ? round2(sums.optional - optTarget) : null;
-
-  // Confidence rollup.
-  const avgConfidence =
-    working.length > 0 ? working.reduce((s, w) => s + w.confidence, 0) / working.length : 0;
-  let confidence: "HIGH" | "MEDIUM" | "LOW";
-  if (
-    (matched_main || mainTarget == null) &&
-    (matched_optional || optTarget == null) &&
-    avgConfidence >= 0.85
-  ) {
-    confidence = "HIGH";
-  } else if (avgConfidence >= 0.65) {
-    confidence = "MEDIUM";
-  } else {
-    confidence = "LOW";
-  }
-
-  const items = composeOutputItems(working);
-  const counts = countLabels(working);
-  const examples = working.slice(0, 10).map((w) => ({
-    row_id: w.row_id,
-    description: (w.item.description ?? "").slice(0, 140),
-    scope_category: w.label,
-    confidence: round3(w.confidence),
-    reason: w.reason,
-  }));
+    const downstream = mapToDownstream(llmRow.scope);
+    return {
+      ...it,
+      scope_category: downstream,
+      scope_segmentation_label: llmRow.scope as ScopeLabel,
+      scope_confidence: llmRow.confidence,
+      scope_reason: llmRow.rationale_short,
+      scope_section_id: llmRow.section_id,
+      scope_group_id: llmRow.group_id,
+      scope_heading_basis: llmRow.heading_basis,
+    };
+  });
 
   return {
-    items,
+    items: out,
     summary: {
-      main_sum: round2(sums.main),
-      optional_sum: round2(sums.optional),
-      excluded_sum: round2(sums.excluded),
-      unknown_sum: round2(sums.unknown),
-      matched_main_total: matched_main,
-      matched_optional_total: matched_optional,
-      delta_main,
-      delta_optional,
-      confidence,
-      llm_used: llmUsed,
-      llm_review_used: false,
-      llm_timed_out: llmTimedOut,
-      model_used: llmUsed ? SCOPE_SEGMENTATION_MODEL : null,
-      rows_sent_to_llm: ambiguous.length,
-      rows_classified_main: counts.Main,
-      rows_classified_optional: counts.Optional,
-      rows_classified_excluded: counts.Excluded,
-      rows_classified_unknown: counts.Unknown,
-      llm_resolved_rows: resolvedByLLM,
-      headings_detected: headings.length,
-      layers_applied: layers,
-      fallback_used: llmTimedOut || llmErrors.length > 0 ? "deterministic_baseline_preserved" : null,
-      llm_errors: llmErrors,
-      examples,
+      stage10_version: STAGE10_VERSION,
+      status: "ok",
+      runtime_ms: llm.runtime_ms,
+      model_used: SCOPE_SEGMENTATION_MODEL,
+      rows_classified_main: llm.summary.main_count,
+      rows_classified_optional: llm.summary.optional_count,
+      rows_classified_excluded: llm.summary.excluded_count,
+      rows_classified_metadata: llm.summary.metadata_count,
+      rows_classified_unknown: unknownCount,
+      block_resets_seen: llm.summary.block_resets_seen,
+      overall_confidence: llm.summary.overall_confidence,
+      warnings: llm.warnings,
+      error_type: null,
+      debug_hint: null,
+      chunks_used: llm.chunks_used,
+      rows_sent: llm.rows_sent,
       requires_scope_review:
-        confidence === "LOW" ||
-        (!matched_main && mainTarget != null) ||
-        (!matched_optional && optTarget != null) ||
-        counts.Unknown > 0,
+        llm.summary.overall_confidence === "LOW" || unknownCount > 0,
     },
   };
 }
 
 // --------------------------------------------------------------------------
-// Deterministic baseline + ambiguity selection
+// Row packet construction
 // --------------------------------------------------------------------------
 
-type WorkingRow = {
-  row_id: string;
-  index: number;
-  item: ParsedLineItemV2;
-  label: ScopeLabel;
-  confidence: number;
-  reason: string;
-  source: "preserved" | "keyword_excluded" | "keyword_optional";
+type PageHeading = {
+  page: number;
+  line_index: number;
+  text: string;
+  is_reset: boolean;
 };
 
-function buildDeterministicBaseline(
-  extracted: ParsedLineItemV2[],
-  _headings: ScopeSegmentationLLMHeading[],
-): WorkingRow[] {
-  const out: WorkingRow[] = [];
-  for (let i = 0; i < extracted.length; i++) {
-    const item = extracted[i];
-    let label: ScopeLabel = mapLabel(item.scope_category);
-    let confidence =
-      typeof item.confidence === "number" && item.confidence > 0 ? item.confidence : 0.55;
-    let reason = `preserved:${String(item.scope_category ?? "main")}`;
-    let source: WorkingRow["source"] = "preserved";
-
-    const desc = item.description ?? "";
-    if (DETERMINISTIC_EXCLUDED_DESC_RE.test(desc)) {
-      label = "Excluded";
-      confidence = Math.max(confidence, 0.7);
-      reason = "deterministic:keyword_excluded";
-      source = "keyword_excluded";
-    } else if (DETERMINISTIC_OPTIONAL_DESC_RE.test(desc) && label !== "Excluded") {
-      label = "Optional";
-      confidence = Math.max(confidence, 0.6);
-      reason = "deterministic:keyword_optional";
-      source = "keyword_optional";
-    }
-
-    out.push({
-      row_id: `r${i}`,
-      index: i,
-      item,
-      label,
-      confidence,
-      reason,
-      source,
-    });
-  }
-  return out;
-}
-
-function pickAmbiguousRows(rows: WorkingRow[]): WorkingRow[] {
-  return rows.filter(
-    (w) => w.label === "Unknown" || w.confidence < AMBIGUOUS_CONFIDENCE_THRESHOLD,
-  );
-}
-
-function applyLLMResult(target: WorkingRow, llm: LLMItemResult): boolean {
-  const newLabel = mapLabel(llm.scope_category);
-  if (llm.confidence < OVERWRITE_THRESHOLD) {
-    // Record the LLM hint for audit but do not change deterministic label.
-    target.reason =
-      `${target.reason}|llm_low_conf:${newLabel}:${(llm.reason ?? "").slice(0, 80)}`.slice(0, 200);
-    return false;
-  }
-  if (newLabel === target.label) {
-    target.confidence = Math.max(target.confidence, llm.confidence);
-    target.reason = `llm_confirms:${(llm.reason ?? "").slice(0, 120)}`;
-    return false;
-  }
-  target.label = newLabel;
-  target.confidence = llm.confidence;
-  target.reason = `llm_overwrite:${(llm.reason ?? "").slice(0, 140)}`;
-  return true;
-}
-
-function llmRowFor(
-  w: WorkingRow,
-  headings: ScopeSegmentationLLMHeading[],
-): ScopeSegmentationLLMRow {
-  return {
-    row_id: w.row_id,
-    description: w.item.description ?? "",
-    quantity: w.item.quantity ?? null,
-    unit: w.item.unit ?? null,
-    unit_price: w.item.unit_price ?? null,
-    total_price: w.item.total_price ?? null,
-    source_page: w.item.source_page ?? null,
-    current_scope_category: w.label,
-    existing_confidence: w.confidence,
-    parent_section: (w.item as { parent_section?: string | null }).parent_section ?? null,
-    nearby_heading: nearestHeadingForPage(w.item.source_page ?? null, headings),
-  };
-}
-
-function composeOutputItems(rows: WorkingRow[]): ScopeSegmentationItem[] {
-  return rows.map((w) => {
-    const downstream =
-      w.label === "Main"
-        ? "main"
-        : w.label === "Optional"
-        ? "optional"
-        : w.label === "Excluded"
-        ? "excluded"
-        : null;
-    const next: ScopeSegmentationItem = {
-      ...w.item,
-      scope_segmentation_label: w.label,
-      scope_confidence: round3(w.confidence),
-      scope_reason: w.reason,
-    };
-    if (downstream && w.confidence >= OVERWRITE_THRESHOLD) {
-      next.scope_category = downstream as ParsedLineItemV2["scope_category"];
-    }
-    return next;
-  });
-}
-
-function computeSums(rows: WorkingRow[]): {
-  main: number;
-  optional: number;
-  excluded: number;
-  unknown: number;
-} {
-  let main = 0;
-  let optional = 0;
-  let excluded = 0;
-  let unknown = 0;
-  for (const r of rows) {
-    const v = r.item.total_price ?? 0;
-    if (r.label === "Main") main += v;
-    else if (r.label === "Optional") optional += v;
-    else if (r.label === "Excluded") excluded += v;
-    else unknown += v;
-  }
-  return { main, optional, excluded, unknown };
-}
-
-function countLabels(rows: WorkingRow[]): Record<ScopeLabel, number> {
-  const out: Record<ScopeLabel, number> = { Main: 0, Optional: 0, Excluded: 0, Unknown: 0 };
-  for (const r of rows) out[r.label]++;
-  return out;
-}
-
-function withinTolerance(actual: number, target: number): boolean {
-  if (target <= 0) return Math.abs(actual) <= 0.01;
-  return Math.abs(actual - target) / Math.abs(target) <= TOTALS_TOLERANCE;
-}
-
-function mapLabel(v: unknown): ScopeLabel {
-  const s = String(v ?? "").toLowerCase();
-  if (s === "main") return "Main";
-  if (s === "optional" || s === "provisional") return "Optional";
-  if (s === "excluded" || s === "exclusion") return "Excluded";
-  if (s === "unknown") return "Unknown";
-  return "Main";
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-function round3(n: number): number {
-  return Math.round(n * 1000) / 1000;
-}
-
-// --------------------------------------------------------------------------
-// Document context builders
-// --------------------------------------------------------------------------
-
-function extractHeadings(
+function buildRowPackets(
+  items: ParsedLineItemV2[],
   pages: { pageNum: number; text: string }[],
-): ScopeSegmentationLLMHeading[] {
-  const out: ScopeSegmentationLLMHeading[] = [];
+): ScopeRowPacket[] {
+  const headings = extractAllHeadings(pages);
+  const pageTitles = new Map<number, string | null>();
+  for (const p of pages) pageTitles.set(p.pageNum, firstNonBlankLine(p.text));
+
+  // Each item gets a virtual ordering by source_page + array order.
+  const itemsWithMeta = items.map((it, i) => ({
+    item: it,
+    row_index: i,
+    page: it.source_page ?? null,
+    description: (it.description ?? "").trim(),
+  }));
+
+  // Compute per-item local position on its page (1-based ordering of items
+  // sharing the same page).
+  const localPosByPage = new Map<number, number>();
+  const localPositions: (number | null)[] = itemsWithMeta.map((m) => {
+    if (m.page == null) return null;
+    const cur = (localPosByPage.get(m.page) ?? 0) + 1;
+    localPosByPage.set(m.page, cur);
+    return cur;
+  });
+
+  const packets: ScopeRowPacket[] = itemsWithMeta.map((m, idx) => {
+    const headersAbove = pickHeadersAbove(m.page, headings, HEADERS_ABOVE_MAX);
+    const headersBelow = pickHeadersBelow(m.page, headings, HEADERS_BELOW_MAX);
+    const prevSummary =
+      idx > 0 ? summariseRow(itemsWithMeta[idx - 1].item) : null;
+    const nextSummary =
+      idx < itemsWithMeta.length - 1
+        ? summariseRow(itemsWithMeta[idx + 1].item)
+        : null;
+    const total = m.item.total_price ?? null;
+    return {
+      row_index: m.row_index,
+      page: m.page,
+      local_position: localPositions[idx],
+      description: truncate(m.description, 200),
+      qty: m.item.quantity ?? null,
+      unit: m.item.unit ?? null,
+      unit_price: m.item.unit_price ?? null,
+      total_price: total,
+      zero_value_flag: total === 0 || total == null,
+      headers_above: headersAbove,
+      headers_below: headersBelow,
+      page_title: m.page != null ? pageTitles.get(m.page) ?? null : null,
+      previous_row_summary: prevSummary,
+      next_row_summary: nextSummary,
+    };
+  });
+
+  return packets;
+}
+
+function extractAllHeadings(
+  pages: { pageNum: number; text: string }[],
+): PageHeading[] {
+  const out: PageHeading[] = [];
   for (const p of pages) {
     const lines = (p.text ?? "").split(/\r?\n/);
-    for (const raw of lines) {
-      const trimmed = raw.trim();
-      if (!trimmed || trimmed.length > 200) continue;
-      if (/\$|\d[\d,]*\.\d{2}/.test(trimmed) && !/\bsub[\s-]?total\b/i.test(trimmed)) continue;
-      let inferred: ScopeSegmentationLLMHeading["inferred_type"] | null = null;
-      if (matchesAny(trimmed, EXCLUDED_HEADER_PATTERNS)) inferred = "Excluded";
-      else if (matchesAny(trimmed, OPTIONAL_HEADER_PATTERNS)) inferred = "Optional";
-      else if (matchesAny(trimmed, MAIN_HEADER_PATTERNS)) inferred = "Main";
-      if (!inferred) continue;
-      out.push({ page: p.pageNum, heading: trimmed.slice(0, 160), inferred_type: inferred });
-      if (out.length >= 80) return out;
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i].trim();
+      if (!raw) continue;
+      if (raw.length > HEADING_LINE_MAX_LEN) continue;
+      if (!looksLikeHeading(raw)) continue;
+      out.push({
+        page: p.pageNum,
+        line_index: i,
+        text: raw.slice(0, HEADING_LINE_MAX_LEN),
+        is_reset: RESET_HEADING_RE.test(raw),
+      });
     }
   }
   return out;
 }
 
-function nearestHeadingForPage(
-  page: number | null,
-  headings: ScopeSegmentationLLMHeading[],
-): string | null {
-  if (page == null || headings.length === 0) return null;
-  let best: ScopeSegmentationLLMHeading | null = null;
-  for (const h of headings) {
-    if (h.page == null) continue;
-    if (h.page <= page && (!best || (best.page ?? 0) <= h.page)) best = h;
+function looksLikeHeading(line: string): boolean {
+  // Heading-ish heuristic: short line, not a price/numeric line, contains
+  // either a reset marker, a known scope marker, or is mostly uppercase /
+  // ends with colon.
+  if (/\$\s*\d/.test(line)) return false;
+  if (/^\s*\d[\d,]*\.\d{2}\s*$/.test(line)) return false;
+  if (RESET_HEADING_RE.test(line)) return true;
+  if (
+    /\b(optional|excluded|exclusions?|inclusions?|scope|summary|breakdown|estimate|tender|subtotal|sub[-\s]?total|grand\s+total|total\s+ex|by\s+others|not\s+included|alternates?|extras?|tbc|confirmation|drawings?|schedule)\b/i
+      .test(line)
+  ) return true;
+  // Mostly uppercase short line (5+ chars) → likely a heading.
+  const letters = line.replace(/[^A-Za-z]/g, "");
+  if (letters.length >= 5) {
+    const upper = letters.replace(/[^A-Z]/g, "").length;
+    if (upper / letters.length >= 0.8) return true;
   }
-  return best ? `[${best.inferred_type}] ${best.heading}` : null;
-}
-
-function buildDocumentContext(
-  pages: { pageNum: number; text: string }[],
-  rawText: string,
-  totals: { main_total: number | null; optional_total: number | null },
-): string {
-  if (!pages || pages.length === 0) {
-    return rawText.slice(0, CONTEXT_PAGE_BUDGET);
-  }
-  const parts: string[] = [];
-  let used = 0;
-  const pushPage = (p: { pageNum: number; text: string }, label: string) => {
-    if (used >= CONTEXT_PAGE_BUDGET) return;
-    const remaining = CONTEXT_PAGE_BUDGET - used;
-    const text = (p.text ?? "").slice(0, Math.min(700, remaining));
-    if (!text) return;
-    parts.push(`--- ${label} (page ${p.pageNum}) ---\n${text}`);
-    used += text.length + 40;
-  };
-
-  pushPage(pages[0], "PAGE 1");
-
-  for (const p of pages.slice(1)) {
-    if (used >= CONTEXT_PAGE_BUDGET) break;
-    const lower = (p.text ?? "").toLowerCase();
-    const totalHit =
-      (totals.main_total != null && lower.includes(formatTotalToken(totals.main_total))) ||
-      (totals.optional_total != null && lower.includes(formatTotalToken(totals.optional_total))) ||
-      /\b(quote\s+summary|estimate\s+summary|grand\s+total)\b/i.test(p.text ?? "");
-    if (totalHit) pushPage(p, "TOTALS PAGE");
-  }
-
-  for (const p of pages) {
-    if (used >= CONTEXT_PAGE_BUDGET) break;
-    if (CONTEXT_KEYWORDS_RE.test(p.text ?? "")) pushPage(p, "SCOPE KEYWORDS");
-  }
-
-  return parts.join("\n\n").slice(0, CONTEXT_PAGE_BUDGET);
-}
-
-function formatTotalToken(n: number): string {
-  return n.toFixed(2);
-}
-
-function matchesAny(text: string, patterns: RegExp[]): boolean {
-  for (const re of patterns) if (re.test(text)) return true;
+  if (/:\s*$/.test(line) && line.length <= 80) return true;
   return false;
 }
 
-// Stage 10 budget exposed for diagnostics/tests.
-export const SCOPE_SEGMENTATION_LLM_BUDGET_MS = LLM_STAGE_BUDGET_MS;
-export const SCOPE_SEGMENTATION_PER_REQUEST_MS = PER_REQUEST_BUDGET_MS;
+function pickHeadersAbove(
+  page: number | null,
+  headings: PageHeading[],
+  max: number,
+): string[] {
+  if (page == null) return [];
+  const candidates = headings
+    .filter((h) => h.page <= page)
+    .slice(-max * 3); // last few headings before page
+  // We want the closest N headings on or before this page, including the
+  // most recent reset (BLOCK XX, etc.) since classification depends on it.
+  const tail = candidates.slice(-max);
+  return tail.map((h) => h.text);
+}
+
+function pickHeadersBelow(
+  page: number | null,
+  headings: PageHeading[],
+  max: number,
+): string[] {
+  if (page == null) return [];
+  const after = headings.filter((h) => h.page > page);
+  return after.slice(0, max).map((h) => h.text);
+}
+
+function firstNonBlankLine(text: string): string | null {
+  if (!text) return null;
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t) return t.slice(0, HEADING_LINE_MAX_LEN);
+  }
+  return null;
+}
+
+function summariseRow(it: ParsedLineItemV2): string {
+  const desc = (it.description ?? "").trim().slice(0, ROW_SUMMARY_MAX_LEN);
+  const total = it.total_price ?? 0;
+  return `${desc} | ${total}`.slice(0, ROW_SUMMARY_MAX_LEN);
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n) : s;
+}
+
+function mapToDownstream(scope: LLMScope): ParsedLineItemV2["scope_category"] {
+  if (scope === "Main") return "main";
+  if (scope === "Optional") return "optional";
+  // Excluded and Metadata both map to "excluded" downstream so they are
+  // kept out of main/optional totals. The original LLM scope is preserved
+  // in scope_segmentation_label for audit.
+  return "excluded";
+}
+
+function emptySummary(runtime_ms: number, hint: string): ScopeSegmentationSummary {
+  return {
+    stage10_version: STAGE10_VERSION,
+    status: "ok",
+    runtime_ms,
+    model_used: null,
+    rows_classified_main: 0,
+    rows_classified_optional: 0,
+    rows_classified_excluded: 0,
+    rows_classified_metadata: 0,
+    rows_classified_unknown: 0,
+    block_resets_seen: 0,
+    overall_confidence: "HIGH",
+    warnings: [hint],
+    error_type: null,
+    debug_hint: hint,
+    chunks_used: 0,
+    rows_sent: 0,
+    requires_scope_review: false,
+  };
+}
+
+// Diagnostics exports — referenced by tests / monitoring.
+export const SCOPE_SEGMENTATION_LLM_BUDGET_MS = STAGE_BUDGET_MS;
+export { SCOPE_SEGMENTATION_MODEL };

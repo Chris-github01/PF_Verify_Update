@@ -424,53 +424,11 @@ function reconcileWithStructure(
     ...pass5Idx,
   ]);
 
-  // PASS 6 — main-scope undershoot top-up. If Prompt 2's main_scope_subtotal is
-  // materially larger than the sum of our extracted main rows (after any
-  // reclassification), the LLM collapsed per-block repeats. Insert a clearly
-  // labelled reconciliation row so the report total matches the quote's own
-  // authoritative main subtotal. This is trade-agnostic: it never invents
-  // scope — it reconciles against a number the supplier put on their own
-  // summary page.
-  const reconcileTopUp = (): ParsedLineItemV2 | null => {
-    if (mainTarget == null || mainTarget <= 0) return null;
-    if (!hasConfidence) return null;
-    const sumMainFinal = items.reduce((acc, it, idx) => {
-      if (all.has(idx)) return acc;
-      if (excludedByPage.has(idx)) return acc;
-      if (it.scope_category !== "main") return acc;
-      return acc + (it.total_price ?? 0);
-    }, 0);
-    const shortfall = mainTarget - sumMainFinal;
-    const shortfallRatio = shortfall / mainTarget;
-    if (shortfall <= 0 || shortfallRatio < 0.05) return null;
-    console.warn(
-      `[extractPassiveFire] reconcile: main undershoot detected ` +
-        `summed=$${sumMainFinal.toFixed(2)} target=$${mainTarget.toFixed(2)} ` +
-        `shortfall=$${shortfall.toFixed(2)} (${(shortfallRatio * 100).toFixed(1)}%) — inserting top-up row`,
-    );
-    return {
-      description:
-        "Reconciliation: per-block repeat scope not individually extracted (top-up to quote main subtotal)",
-      quantity: null,
-      unit: null,
-      unit_price: null,
-      total_price: Number(shortfall.toFixed(2)),
-      scope_category: "main",
-      trade: "passive_fire",
-      sub_scope: "other",
-      frr: null,
-      source: "reconciliation:main_undershoot",
-      confidence: 0.6,
-      source_section: "Reconciliation",
-      source_page: structure.authoritative_total_page ?? null,
-      section_path: null,
-      building_or_block: null,
-    } as ParsedLineItemV2;
-  };
+  // PASS 6 (removed in Stage 10 v3): synthetic main-undershoot reconciliation
+  // rows are no longer inserted. The LLM-native scope segmentation engine
+  // is the sole classifier and must not be supplied with manufactured rows.
 
   if (all.size === 0 && excludedByPage.size === 0) {
-    const topUp = reconcileTopUp();
-    if (topUp) return [...items, topUp];
     console.log(
       `[extractPassiveFire] reconcile: no rows reclassified (optional_sections=${optionalSections.length}, paged_sections=${pagedSections.length})`,
     );
@@ -500,8 +458,7 @@ function reconcileWithStructure(
     )
     .filter((_, idx) => !excludedByPage.has(idx));
 
-  const topUp = reconcileTopUp();
-  return topUp ? [...reclassified, topUp] : reclassified;
+  return reclassified;
 }
 
 const STOPWORDS = new Set([
