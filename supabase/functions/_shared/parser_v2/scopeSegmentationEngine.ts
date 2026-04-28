@@ -1,30 +1,41 @@
 /**
- * Scope Segmentation Engine — Parser V2 stage 8.
- *
- * Section-anchored classifier. Document layout (block resets + scope
- * sub-headers) is the authoritative source of truth for Main / Optional /
- * Excluded / Provisional. Item description heuristics act only as a
- * tiebreaker when no section anchor is present, and totals reconciliation
- * is a soft validator — it never invents rows.
+ * Scope Segmentation Engine — Parser V2 Stage 10 (LLM-primary).
  *
  * Pipeline:
- *   1. segmentDocument(pages) -> ordered SectionMarker[]
- *   2. For each row: anchor by globalLine -> active scope at that line
- *   3. Keyword tiebreaker for rows still Unknown
- *   4. Excluded keyword override ("by others", "not included")
- *   5. Totals reconciliation as validator (only flips Unknown/low-conf rows)
- *   6. Optional LLM resolve for residual ambiguous rows
- *   7. Confidence failsafe
+ *   1. Build compact document context (page 1 + totals pages + scope-keyword
+ *      pages) and structural heading list.
+ *   2. Send all extracted rows to the LLM in one call (<=120 rows) or in
+ *      80-row batches (>120 rows). Same context + totals per batch.
+ *   3. Apply confidence-tiered overwrite:
+ *        >= 0.70  -> overwrite scope_category
+ *        0.50-0.69 -> preserve original scope_category but record label/reason
+ *        <  0.50  -> set scope_segmentation_label = "Unknown"
+ *   4. Excluded keyword override at confidence >= 0.80 ("by others",
+ *      "no allowance", "excluded", "not included", "rate only").
+ *   5. Reconcile sums to authoritative totals (1.5% tolerance). If uncertain
+ *      rows < 60, run a second LLM review pass on uncertain rows only.
+ *   6. On any LLM failure, fall back to the deterministic section-anchored
+ *      classifier preserved at the bottom of this file.
+ *
+ * Public types (`ScopeSegmentationItem`, `ScopeSegmentationResult`,
+ * `ScopeSegmentationInput`) are stable — downstream stages and edge functions
+ * are unchanged.
  */
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 import {
-  SCOPE_SEGMENTATION_SYSTEM_PROMPT,
-  buildScopeSegmentationUserPrompt,
-} from "./prompts/scopeSegmentationPrompt.ts";
+  classifyRowsLLM,
+  classifyRowsLLMReview,
+  SCOPE_SEGMENTATION_MODEL,
+  type LLMItemResult,
+} from "./scopeSegmentationLLM.ts";
+import type {
+  ScopeSegmentationLLMHeading,
+  ScopeSegmentationLLMRow,
+} from "./scopeSegmentationPrompt.ts";
 
 // --------------------------------------------------------------------------
-// Public types
+// Public types (stable)
 // --------------------------------------------------------------------------
 
 export type ScopeLabel = "Main" | "Optional" | "Excluded" | "Unknown";
@@ -42,11 +53,30 @@ export type ScopeSegmentationSummary = {
   unknown_sum: number;
   matched_main_total: boolean;
   matched_optional_total: boolean;
+  delta_main: number | null;
+  delta_optional: number | null;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   llm_used: boolean;
+  llm_review_used: boolean;
+  model_used: string | null;
+  rows_sent_to_llm: number;
+  rows_classified_main: number;
+  rows_classified_optional: number;
+  rows_classified_excluded: number;
+  rows_classified_unknown: number;
   llm_resolved_rows: number;
   headings_detected: number;
   layers_applied: string[];
+  fallback_used: string | null;
+  llm_errors: string[];
+  examples: Array<{
+    row_id: string;
+    description: string;
+    scope_category: ScopeLabel;
+    confidence: number;
+    reason: string;
+  }>;
+  requires_scope_review: boolean;
 };
 
 export type ScopeSegmentationResult = {
@@ -69,11 +99,21 @@ export type ScopeSegmentationInput = {
 };
 
 // --------------------------------------------------------------------------
-// Section vocabulary — generic across trades and quote shapes.
-// Patterns are anchored to whole-line shape so they only match true headers,
-// not item descriptions that happen to contain the words.
+// Constants
 // --------------------------------------------------------------------------
 
+const TOTALS_TOLERANCE = 0.015;
+const REVIEW_PASS_MAX_UNCERTAIN = 60;
+const OVERWRITE_THRESHOLD = 0.7;
+const PRESERVE_THRESHOLD = 0.5;
+const EXCLUDED_OVERRIDE_THRESHOLD = 0.8;
+const CONTEXT_PAGE_BUDGET = 4500;
+
+const EXCLUDED_OVERRIDE_RE =
+  /\b(by\s+others|no\s+allowance|excluded|not\s+included|rate\s+only)\b/i;
+
+// Heading detection (used to feed structural cues to the LLM and to support
+// the deterministic fallback path).
 const MAIN_HEADER_PATTERNS: RegExp[] = [
   /^\s*main\s+scope\s*:?\s*$/i,
   /^\s*included\s+scope\s*:?\s*$/i,
@@ -122,520 +162,8 @@ const EXCLUDED_HEADER_PATTERNS: RegExp[] = [
   /^\s*clarifications?\s*:?\s*$/i,
 ];
 
-const PROVISIONAL_HEADER_PATTERNS: RegExp[] = [
-  /^\s*provisional\s+sums?\s*:?\s*$/i,
-  /^\s*provisional\s+items?\s*:?\s*$/i,
-  /^\s*provisional\s*:?\s*$/i,
-  /^\s*pc\s+sums?\s*:?\s*$/i,
-];
-
-const BLOCK_RESET_RE =
-  /^\s*(block|level|floor|building|tower|stage|area|zone|basement)\s+[A-Z0-9][\w-]*\b/i;
-
-// Description-embedded block hint, e.g. "[Block B30] ..." inserted by upstream
-// extractors so a row can be re-anchored to its source block even when the
-// extracted_items array isn't in document order.
-const BLOCK_HINT_RE =
-  /\[\s*(?:block|level|floor|building|tower|stage|area|zone)\s+([A-Za-z0-9][\w-]*)\s*\]/i;
-
-// --------------------------------------------------------------------------
-// Section markers
-// --------------------------------------------------------------------------
-
-type MarkerKind =
-  | "block"
-  | "scope_main"
-  | "scope_optional"
-  | "scope_excluded"
-  | "scope_provisional";
-
-type MarkerScope = "main" | "optional" | "excluded" | "provisional" | "reset";
-
-type SectionMarker = {
-  globalLine: number;
-  page: number | null;
-  kind: MarkerKind;
-  scope: MarkerScope;
-  confidence: number;
-  sourceText: string;
-};
-
-function matchesAny(text: string, patterns: RegExp[]): boolean {
-  for (const re of patterns) if (re.test(text)) return true;
-  return false;
-}
-
-function buildIndexedLines(
-  rawText: string,
-  pages: { pageNum: number; text: string }[],
-): Array<{ line: string; page: number | null; idx: number }> {
-  if (pages && pages.length > 0) {
-    const out: Array<{ line: string; page: number | null; idx: number }> = [];
-    let idx = 0;
-    for (const p of pages) {
-      const lines = (p.text ?? "").split(/\r?\n/);
-      for (const line of lines) {
-        out.push({ line, page: p.pageNum, idx });
-        idx++;
-      }
-    }
-    return out;
-  }
-  return rawText.split(/\r?\n/).map((line, idx) => ({ line, page: null, idx }));
-}
-
-/**
- * Single-pass document segmentation. Walks every line once and emits an
- * ordered list of SectionMarker. Generic — no trade-specific phrases. The
- * structural cues (header shape, no $ or qty/rate columns, ALL CAPS bonus)
- * gate which lines we even consider. Header vocabulary then assigns scope.
- */
-function segmentDocument(
-  rawText: string,
-  pages: { pageNum: number; text: string }[],
-): SectionMarker[] {
-  const markers: SectionMarker[] = [];
-  const lines = buildIndexedLines(rawText, pages);
-  for (const { line, page, idx } of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.length > 200) continue;
-
-    // Block resets first — they can appear with or without surrounding columns.
-    if (BLOCK_RESET_RE.test(trimmed)) {
-      markers.push({
-        globalLine: idx,
-        page,
-        kind: "block",
-        scope: "reset",
-        confidence: 0.85,
-        sourceText: trimmed.slice(0, 120),
-      });
-      continue;
-    }
-
-    const looksLikePrice = /\$|\d[\d,]*\.\d{2}/.test(trimmed);
-    const isAllCaps = trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed);
-    const isHeaderShape =
-      isAllCaps ||
-      /^[A-Z][A-Za-z\s\/\-&()]{2,80}[:]?$/.test(trimmed) ||
-      trimmed.endsWith(":");
-
-    const isSubtotalLine = /\bsub[\s-]?total\b/i.test(trimmed);
-
-    // Lines with prices are not headers, except subtotal rollups which still
-    // indicate the boundary of the preceding section.
-    if (looksLikePrice && !isSubtotalLine) continue;
-    if (!isHeaderShape && !isSubtotalLine) continue;
-
-    let scope: MarkerScope | null = null;
-    let kind: MarkerKind | null = null;
-    // ALL CAPS headers get a confidence bump because that's the strongest
-    // structural signal in printed quotes.
-    const baseConf = isAllCaps ? 0.95 : 0.82;
-
-    if (matchesAny(trimmed, EXCLUDED_HEADER_PATTERNS)) {
-      scope = "excluded";
-      kind = "scope_excluded";
-    } else if (matchesAny(trimmed, PROVISIONAL_HEADER_PATTERNS)) {
-      scope = "provisional";
-      kind = "scope_provisional";
-    } else if (matchesAny(trimmed, OPTIONAL_HEADER_PATTERNS)) {
-      scope = "optional";
-      kind = "scope_optional";
-    } else if (matchesAny(trimmed, MAIN_HEADER_PATTERNS)) {
-      scope = "main";
-      kind = "scope_main";
-    }
-
-    if (scope && kind) {
-      markers.push({
-        globalLine: idx,
-        page,
-        kind,
-        scope,
-        confidence: baseConf,
-        sourceText: trimmed.slice(0, 120),
-      });
-    }
-  }
-  return markers;
-}
-
-/**
- * Walk the marker list and find the active scope at a given globalLine.
- * Block markers reset scope inheritance — items in a new block default to
- * Main until a scope sub-header appears within that block.
- */
-function anchorRow(
-  globalLine: number | null,
-  markers: SectionMarker[],
-): {
-  scope: MarkerScope | null;
-  marker: SectionMarker | null;
-  block: SectionMarker | null;
-} {
-  if (globalLine == null) return { scope: null, marker: null, block: null };
-  let scope: MarkerScope | null = null;
-  let marker: SectionMarker | null = null;
-  let block: SectionMarker | null = null;
-  for (const m of markers) {
-    if (m.globalLine > globalLine) break;
-    if (m.kind === "block") {
-      block = m;
-      // Block reset clears any inherited scope from a previous block.
-      scope = null;
-      marker = null;
-    } else {
-      scope = m.scope;
-      marker = m;
-    }
-  }
-  return { scope, marker, block };
-}
-
-function extractBlockHint(desc: string | null | undefined): string | null {
-  if (!desc) return null;
-  const m = desc.match(BLOCK_HINT_RE);
-  if (!m) return null;
-  return normaliseBlockToken(m[1]);
-}
-
-function normaliseBlockToken(raw: string): string {
-  return raw.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
-}
-
-function indexBlocksByToken(markers: SectionMarker[]): Map<string, SectionMarker> {
-  const map = new Map<string, SectionMarker>();
-  for (const b of markers) {
-    if (b.kind !== "block") continue;
-    const m = b.sourceText.match(
-      /^\s*(?:block|level|floor|building|tower|stage|area|zone|basement)\s+([A-Za-z0-9][\w-]*)/i,
-    );
-    if (!m) continue;
-    const tokenFull = normaliseBlockToken(m[1]);
-    if (tokenFull && !map.has(tokenFull)) map.set(tokenFull, b);
-    const digits = tokenFull.replace(/^[a-z]+/, "");
-    if (digits && digits !== tokenFull && !map.has(digits)) map.set(digits, b);
-    const withB = /^[0-9]+$/.test(tokenFull) ? `b${tokenFull}` : null;
-    if (withB && !map.has(withB)) map.set(withB, b);
-  }
-  return map;
-}
-
-// --------------------------------------------------------------------------
-// Keyword tiebreaker (Layer 3 — generic only)
-// --------------------------------------------------------------------------
-
-const OPTIONAL_DESC_RE =
-  /\b(optional|add\s+to\s+scope|not\s+shown\s+on\s+drawings|extra\s+over|TBC|alternate|upgrade)\b/i;
-
-const EXCLUDED_DESC_RE =
-  /\b(by\s+others|provisional\s+only|no\s+tested\s+solution|rate\s+only|not\s+included)\b/i;
-
-const MAIN_DESC_RE =
-  /\b(identified\s+on\s+drawings|main\s+scope|sub[\s-]?total)\b/i;
-
-function keywordClassify(desc: string): { label: ScopeLabel; reason: string } | null {
-  if (!desc) return null;
-  if (EXCLUDED_DESC_RE.test(desc)) return { label: "Excluded", reason: "keyword:excluded" };
-  if (OPTIONAL_DESC_RE.test(desc)) return { label: "Optional", reason: "keyword:optional" };
-  if (MAIN_DESC_RE.test(desc)) return { label: "Main", reason: "keyword:main" };
-  return null;
-}
-
-// --------------------------------------------------------------------------
-// Row indexing
-// --------------------------------------------------------------------------
-
-type WorkingRow = {
-  row_id: string;
-  index: number;
-  item: ParsedLineItemV2;
-  globalLine: number | null;
-  label: ScopeLabel;
-  confidence: number;
-  reason: string;
-  hadAnchor: boolean;
-};
-
-type PageIndex = {
-  byPage: Map<number, { startGlobalLine: number; lowerText: string }>;
-  fullLower: string;
-};
-
-function buildPageIndex(
-  rawText: string,
-  pages: { pageNum: number; text: string }[],
-): PageIndex {
-  const byPage = new Map<number, { startGlobalLine: number; lowerText: string }>();
-  let idx = 0;
-  if (pages && pages.length > 0) {
-    for (const p of pages) {
-      const text = p.text ?? "";
-      byPage.set(p.pageNum, { startGlobalLine: idx, lowerText: text.toLowerCase() });
-      idx += text.split(/\r?\n/).length;
-    }
-  }
-  return { byPage, fullLower: rawText.toLowerCase() };
-}
-
-/**
- * Locate a row in the raw text. Critical for multi-block quotes where the
- * same description repeats per block: we MUST scope to source_page when
- * available, and consume matches in document order so the Nth occurrence
- * of a description on a page aligns with the Nth row that references it.
- */
-function findRowGlobalLine(
-  desc: string,
-  sourcePage: number | null,
-  rawText: string,
-  pageIndex: PageIndex,
-  cursors: { perPage: Map<string, number>; full: Map<string, number> },
-): number | null {
-  if (!desc) return null;
-  const cleaned = desc.replace(BLOCK_HINT_RE, "").trim();
-  const needle = cleaned.split(/\s+/).slice(0, 6).join(" ").toLowerCase();
-  if (needle.length < 6) return null;
-
-  if (sourcePage != null) {
-    const page = pageIndex.byPage.get(sourcePage);
-    if (page) {
-      const key = `${sourcePage}|${needle}`;
-      const startFrom = cursors.perPage.get(key) ?? 0;
-      const local = page.lowerText.indexOf(needle, startFrom);
-      if (local !== -1) {
-        cursors.perPage.set(key, local + needle.length);
-        const upTo = page.lowerText.slice(0, local);
-        const linesIntoPage = (upTo.match(/\n/g) ?? []).length;
-        return page.startGlobalLine + linesIntoPage;
-      }
-    }
-  }
-
-  const startFrom = cursors.full.get(needle) ?? 0;
-  const idx = pageIndex.fullLower.indexOf(needle, startFrom);
-  if (idx === -1) return null;
-  cursors.full.set(needle, idx + needle.length);
-  const upTo = rawText.slice(0, idx);
-  return (upTo.match(/\n/g) ?? []).length;
-}
-
-// --------------------------------------------------------------------------
-// Totals reconciliation — soft validator only.
-// Only flips rows that lacked a section anchor (hadAnchor === false) and have
-// confidence < 0.6. Never invents synthetic rows.
-// --------------------------------------------------------------------------
-
-const TOTALS_TOLERANCE = 0.015;
-
-function withinTolerance(actual: number, target: number): boolean {
-  if (target <= 0) return false;
-  return Math.abs(actual - target) / target <= TOTALS_TOLERANCE;
-}
-
-function sumByLabel(rows: WorkingRow[], label: ScopeLabel): number {
-  return rows
-    .filter((r) => r.label === label)
-    .reduce((s, r) => s + (r.item.total_price ?? 0), 0);
-}
-
-function reconcileTotals(
-  rows: WorkingRow[],
-  totals: { main_total: number | null; optional_total: number | null },
-): { changed: number } {
-  const mainTarget = totals.main_total ?? null;
-  const optTarget = totals.optional_total ?? null;
-  if (mainTarget == null && optTarget == null) return { changed: 0 };
-
-  let changed = 0;
-  for (let pass = 0; pass < 2; pass++) {
-    const currentMain = sumByLabel(rows, "Main");
-    const currentOpt = sumByLabel(rows, "Optional");
-
-    const overMain = mainTarget != null && currentMain > mainTarget * (1 + TOTALS_TOLERANCE);
-    const underOpt = optTarget != null && currentOpt < optTarget * (1 - TOTALS_TOLERANCE);
-    const overOpt = optTarget != null && currentOpt > optTarget * (1 + TOTALS_TOLERANCE);
-    const underMain = mainTarget != null && currentMain < mainTarget * (1 - TOTALS_TOLERANCE);
-
-    let from: ScopeLabel | null = null;
-    let to: ScopeLabel | null = null;
-    let delta = 0;
-    if (overMain && underOpt) {
-      from = "Main";
-      to = "Optional";
-      delta = currentMain - (mainTarget ?? 0);
-    } else if (overOpt && underMain) {
-      from = "Optional";
-      to = "Main";
-      delta = currentOpt - (optTarget ?? 0);
-    } else {
-      break;
-    }
-    if (delta <= 0) break;
-
-    // Only un-anchored, low-confidence rows are reassignable. This keeps the
-    // section-anchored layer authoritative and prevents the engine from
-    // fabricating moves to balance arithmetic at the cost of correctness.
-    const candidates = rows
-      .filter(
-        (r) =>
-          r.label === from &&
-          !r.hadAnchor &&
-          r.confidence < 0.6 &&
-          (r.item.total_price ?? 0) > 0,
-      )
-      .sort((a, b) => a.confidence - b.confidence);
-
-    const picked = pickSubsetByValue(candidates, delta);
-    for (const r of picked) {
-      r.label = to;
-      r.reason = `totals_validator:${from}->${to}`;
-      r.confidence = Math.max(r.confidence, 0.65);
-      changed++;
-    }
-    if (picked.length === 0) break;
-  }
-  return { changed };
-}
-
-function pickSubsetByValue(rows: WorkingRow[], target: number): WorkingRow[] {
-  if (rows.length === 0 || target <= 0) return [];
-  const sorted = [...rows].sort(
-    (a, b) => (b.item.total_price ?? 0) - (a.item.total_price ?? 0),
-  );
-  const picked: WorkingRow[] = [];
-  let total = 0;
-  for (const r of sorted) {
-    const v = r.item.total_price ?? 0;
-    if (total + v <= target * (1 + TOTALS_TOLERANCE)) {
-      picked.push(r);
-      total += v;
-      if (total >= target * (1 - TOTALS_TOLERANCE)) break;
-    }
-  }
-  return picked;
-}
-
-// --------------------------------------------------------------------------
-// Confidence helpers
-// --------------------------------------------------------------------------
-
-function bumpConfidence(row: WorkingRow, evidence: number, reason: string): void {
-  if (evidence > row.confidence) {
-    row.confidence = evidence;
-    row.reason = reason;
-  }
-}
-
-// --------------------------------------------------------------------------
-// LLM pass for ambiguous rows (confidence < 0.85)
-// --------------------------------------------------------------------------
-
-const LLM_MODEL = "gpt-4o-mini";
-const LLM_TIMEOUT_MS = 25_000;
-const LLM_MAX_ROWS = 60;
-
-async function llmResolve(
-  ambiguous: WorkingRow[],
-  markers: SectionMarker[],
-  totals: { main_total: number | null; optional_total: number | null },
-  openAIKey: string,
-): Promise<{ resolved: number }> {
-  const batch = ambiguous.slice(0, LLM_MAX_ROWS);
-  if (batch.length === 0) return { resolved: 0 };
-
-  const headingsForPrompt = markers
-    .filter((m) => m.kind !== "block")
-    .slice(0, 40)
-    .map((m) => `[${labelForMarker(m)}] ${m.sourceText}`);
-
-  const userPrompt = buildScopeSegmentationUserPrompt({
-    mainTotal: totals.main_total,
-    optionalTotal: totals.optional_total,
-    headings: headingsForPrompt,
-    rows: batch.map((r) => ({
-      row_id: r.row_id,
-      description: r.item.description,
-      total_price: r.item.total_price,
-      source_page: r.item.source_page ?? null,
-      nearest_heading: r.reason,
-      current_scope: r.label,
-    })),
-  });
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${openAIKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: SCOPE_SEGMENTATION_SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-    if (!res.ok) throw new Error(`scope_segmentation llm HTTP ${res.status}`);
-    const json = await res.json();
-    const raw = JSON.parse(json.choices[0].message.content ?? "{}");
-    const items: Array<{
-      row_id?: string;
-      scope_category?: string;
-      confidence?: number;
-      reason?: string;
-    }> = Array.isArray(raw.items) ? raw.items : [];
-    const byId = new Map(batch.map((r) => [r.row_id, r] as const));
-    let resolved = 0;
-    for (const it of items) {
-      if (!it.row_id) continue;
-      const target = byId.get(String(it.row_id));
-      if (!target) continue;
-      const label = normaliseLabel(it.scope_category);
-      if (!label) continue;
-      const conf = clamp01(Number(it.confidence ?? 0.7));
-      if (conf < 0.6) continue;
-      target.label = label;
-      target.confidence = Math.max(target.confidence, conf);
-      target.reason = `llm:${(it.reason ?? "").slice(0, 80) || "structural"}`;
-      resolved++;
-    }
-    return { resolved };
-  } catch (err) {
-    console.error("[scopeSegmentationEngine] llm pass failed", err);
-    return { resolved: 0 };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function labelForMarker(m: SectionMarker): ScopeLabel {
-  if (m.scope === "main") return "Main";
-  if (m.scope === "optional" || m.scope === "provisional") return "Optional";
-  if (m.scope === "excluded") return "Excluded";
-  return "Unknown";
-}
-
-function normaliseLabel(v: unknown): ScopeLabel | null {
-  const s = String(v ?? "").trim().toLowerCase();
-  if (s === "main") return "Main";
-  if (s === "optional") return "Optional";
-  if (s === "excluded") return "Excluded";
-  if (s === "unknown") return "Unknown";
-  return null;
-}
-
-function clamp01(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.min(1, Math.max(0, n));
-}
+const CONTEXT_KEYWORDS_RE =
+  /\b(quote\s+summary|estimate\s+summary|quote\s+breakdown|sub[\s-]?total|optional\s+scope|add\s+to\s+scope|not\s+shown\s+on\s+drawings|items?\s+with\s+confirmation|by\s+others|no\s+allowance|exclud|not\s+included|rate\s+only|tbc|provisional|grand\s+total|total\s+ex\s+gst|main\s+total|optional\s+total)\b/i;
 
 // --------------------------------------------------------------------------
 // Public entry point
@@ -645,193 +173,127 @@ export async function runScopeSegmentationEngine(
   input: ScopeSegmentationInput,
 ): Promise<ScopeSegmentationResult> {
   const layers: string[] = [];
-  const markers = segmentDocument(input.rawText, input.allPages ?? []);
-  const headingsCount = markers.filter((m) => m.kind !== "block").length;
-  const blockCount = markers.filter((m) => m.kind === "block").length;
-  layers.push("layer1_segmentation");
-  if (blockCount > 0) layers.push("layer2_blocks");
+  const headings = extractHeadings(input.allPages ?? []);
+  const importantContext = buildDocumentContext(
+    input.allPages ?? [],
+    input.rawText,
+    input.authoritative_totals,
+  );
 
-  const pageIndex = buildPageIndex(input.rawText, input.allPages ?? []);
-  const cursors = { perPage: new Map<string, number>(), full: new Map<string, number>() };
-  const blockByToken = indexBlocksByToken(markers);
+  const llmRows: ScopeSegmentationLLMRow[] = input.extracted_items.map(
+    (item, idx) => ({
+      row_id: `r${idx}`,
+      description: item.description ?? "",
+      quantity: item.quantity ?? null,
+      unit: item.unit ?? null,
+      unit_price: item.unit_price ?? null,
+      total_price: item.total_price ?? null,
+      source_page: item.source_page ?? null,
+      current_scope_category: String(item.scope_category ?? "main"),
+      existing_confidence: typeof item.confidence === "number" ? item.confidence : null,
+      parent_section: (item as { parent_section?: string | null }).parent_section ?? null,
+      nearby_heading: nearestHeadingForPage(item.source_page ?? null, headings),
+    }),
+  );
 
-  // Process in (page, original index) order so the Nth occurrence of a
-  // repeating description gets the Nth match position on its page.
-  const orderedItems = input.extracted_items
-    .map((item, idx) => ({ item, idx }))
-    .sort((a, b) => {
-      const pa = a.item.source_page ?? Number.POSITIVE_INFINITY;
-      const pb = b.item.source_page ?? Number.POSITIVE_INFINITY;
-      if (pa !== pb) return pa - pb;
-      return a.idx - b.idx;
-    });
-  const rowsByIndex = new Array<WorkingRow | null>(input.extracted_items.length).fill(null);
-  for (const { item, idx } of orderedItems) {
-    const initial: ScopeLabel =
-      item.scope_category === "main"
-        ? "Main"
-        : item.scope_category === "optional"
-        ? "Optional"
-        : item.scope_category === "excluded"
-        ? "Excluded"
-        : "Unknown";
-    let globalLine = findRowGlobalLine(
-      item.description ?? "",
-      item.source_page ?? null,
-      input.rawText,
-      pageIndex,
-      cursors,
+  // Layer 1 — LLM-primary classification.
+  const llmAttempt = await tryLLMPrimary(input, llmRows, headings, importantContext);
+
+  if (!llmAttempt.ok) {
+    layers.push("llm_failed_fallback_deterministic");
+    console.warn(
+      `[scopeSegmentationEngine] LLM-primary failed (${llmAttempt.error}) — falling back to deterministic segmentation`,
     );
-    const hint = extractBlockHint(item.description);
-    if (hint) {
-      const hinted = blockByToken.get(hint);
-      if (hinted) {
-        if (globalLine == null || globalLine < hinted.globalLine) {
-          globalLine = hinted.globalLine + 1;
+    const fallback = await runDeterministicFallback(input);
+    fallback.summary.layers_applied = ["llm_failed", ...fallback.summary.layers_applied];
+    fallback.summary.fallback_used = "deterministic_existing";
+    fallback.summary.llm_errors = llmAttempt.errors;
+    fallback.summary.model_used = SCOPE_SEGMENTATION_MODEL;
+    return fallback;
+  }
+
+  layers.push("llm_primary");
+
+  // Layer 2 — apply LLM classifications via confidence tiers.
+  const working = applyLLMResults(input.extracted_items, llmAttempt.itemsById);
+  layers.push("confidence_tier_apply");
+
+  // Layer 3 — Excluded keyword override.
+  let excludedOverrides = 0;
+  for (const w of working) {
+    if (
+      EXCLUDED_OVERRIDE_RE.test(w.item.description ?? "") &&
+      w.confidence >= EXCLUDED_OVERRIDE_THRESHOLD
+    ) {
+      if (w.label !== "Excluded") {
+        w.label = "Excluded";
+        w.reason = `keyword_override:excluded:${w.reason}`.slice(0, 200);
+        excludedOverrides++;
+      }
+    }
+  }
+  if (excludedOverrides > 0) layers.push("excluded_keyword_override");
+
+  // Layer 4 — totals reconciliation; trigger review pass only if necessary.
+  const sums = computeSums(working);
+  const mainTarget = input.authoritative_totals.main_total;
+  const optTarget = input.authoritative_totals.optional_total;
+  const matched_main = mainTarget != null ? withinTolerance(sums.main, mainTarget) : false;
+  const matched_optional = optTarget != null ? withinTolerance(sums.optional, optTarget) : false;
+  const needsReview =
+    !matched_main && (mainTarget != null) ||
+    !matched_optional && (optTarget != null);
+
+  let llmReviewUsed = false;
+  let resolvedByReview = 0;
+  if (needsReview && input.openAIKey) {
+    const uncertain = working.filter((w) => w.confidence < 0.85);
+    if (uncertain.length > 0 && uncertain.length < REVIEW_PASS_MAX_UNCERTAIN) {
+      const reviewRows = uncertain.map((w) => llmRowFor(w, headings));
+      const review = await classifyRowsLLMReview({
+        openAIKey: input.openAIKey,
+        main_total: mainTarget,
+        optional_total: optTarget,
+        main_sum: sums.main,
+        optional_sum: sums.optional,
+        important_document_context: importantContext,
+        headings,
+        rows: reviewRows,
+      });
+      llmReviewUsed = true;
+      layers.push("llm_review_pass");
+      const byId = new Map(review.items.map((it) => [it.row_id, it] as const));
+      for (const w of working) {
+        const upd = byId.get(w.row_id);
+        if (!upd) continue;
+        const newLabel = mapLabel(upd.scope_category);
+        const newConf = upd.confidence;
+        if (newConf >= OVERWRITE_THRESHOLD && newLabel !== w.label) {
+          w.label = newLabel;
+          w.confidence = Math.max(w.confidence, newConf);
+          w.reason = `review:${(upd.reason ?? "").slice(0, 80) || "structural"}`;
+          resolvedByReview++;
         }
       }
     }
-    rowsByIndex[idx] = {
-      row_id: `r${idx}`,
-      index: idx,
-      item,
-      globalLine,
-      label: initial,
-      confidence: 0.4,
-      reason: "initial:from_extractor",
-      hadAnchor: false,
-    };
-  }
-  const rows: WorkingRow[] = rowsByIndex.filter((r): r is WorkingRow => r != null);
-
-  // Layer 1+2: section anchoring — authoritative.
-  for (const r of rows) {
-    const { scope, marker, block } = anchorRow(r.globalLine, markers);
-    if (scope === "main") {
-      r.label = "Main";
-      bumpConfidence(
-        r,
-        marker?.confidence ?? 0.9,
-        `section:main:${marker?.sourceText.slice(0, 60) ?? ""}`,
-      );
-      r.hadAnchor = true;
-    } else if (scope === "optional" || scope === "provisional") {
-      r.label = "Optional";
-      bumpConfidence(
-        r,
-        marker?.confidence ?? 0.9,
-        `section:${scope}:${marker?.sourceText.slice(0, 60) ?? ""}`,
-      );
-      r.hadAnchor = true;
-    } else if (scope === "excluded") {
-      r.label = "Excluded";
-      bumpConfidence(
-        r,
-        marker?.confidence ?? 0.9,
-        `section:excluded:${marker?.sourceText.slice(0, 60) ?? ""}`,
-      );
-      r.hadAnchor = true;
-    } else if (block) {
-      // Inside a block but no scope sub-header preceding this row: default to
-      // Main per per-block default rule. Modest confidence so keyword/totals
-      // layers can still flip.
-      r.label = "Main";
-      bumpConfidence(r, 0.72, `block_default:${block.sourceText.slice(0, 60)}`);
-      r.hadAnchor = true;
-    }
   }
 
-  // Layer 3: keyword tiebreaker — only fires for rows without a strong section
-  // anchor. Generic vocabulary only; no trade-specific phrases.
-  layers.push("layer3_keyword_tiebreak");
-  for (const r of rows) {
-    if (r.confidence >= 0.8) continue;
-    const kw = keywordClassify(r.item.description ?? "");
-    if (!kw) continue;
-    r.label = kw.label;
-    bumpConfidence(r, 0.6, `tiebreak:${kw.reason}`);
-  }
+  // Recompute final sums + match flags.
+  const finalSums = computeSums(working);
+  const final_matched_main =
+    mainTarget != null ? withinTolerance(finalSums.main, mainTarget) : false;
+  const final_matched_optional =
+    optTarget != null ? withinTolerance(finalSums.optional, optTarget) : false;
+  const delta_main = mainTarget != null ? round2(finalSums.main - mainTarget) : null;
+  const delta_optional = optTarget != null ? round2(finalSums.optional - optTarget) : null;
 
-  // Decisive override: "by others" / "not included" always demote to Excluded
-  // regardless of section, because that wording is explicit on the row itself.
-  for (const r of rows) {
-    if (EXCLUDED_DESC_RE.test(r.item.description ?? "")) {
-      r.label = "Excluded";
-      bumpConfidence(r, 0.9, "row_override:excluded");
-    }
-  }
-
-  // Layer 4: totals reconciliation — soft validator (only un-anchored, low-conf rows).
-  const recon = reconcileTotals(rows, input.authoritative_totals);
-  if (recon.changed > 0) layers.push("layer4_totals_validator");
-
-  // LLM pass for any rows still ambiguous.
-  let llm_used = false;
-  let llm_resolved = 0;
-  const ambiguous = rows.filter((r) => r.confidence < 0.85);
-  if (ambiguous.length > 0 && input.openAIKey) {
-    llm_used = true;
-    layers.push("llm_resolution");
-    const out = await llmResolve(ambiguous, markers, input.authoritative_totals, input.openAIKey);
-    llm_resolved = out.resolved;
-  }
-
-  // Failsafe: any row still below 0.45 confidence reverts to Unknown.
-  layers.push("layer5_confidence");
-  for (const r of rows) {
-    if (r.confidence < 0.45) {
-      r.label = "Unknown";
-      r.reason = `failsafe:preserve_extractor_tag:${r.item.scope_category}`;
-    }
-  }
-
-  // Compose output items. Internal scope_category stays lowercase; only
-  // cross-write when confidence >= 0.7 and the engine label maps to a valid
-  // downstream value.
-  const items: ScopeSegmentationItem[] = rows.map((r) => {
-    const downstream =
-      r.label === "Main"
-        ? "main"
-        : r.label === "Optional"
-        ? "optional"
-        : r.label === "Excluded"
-        ? "excluded"
-        : null;
-    const next: ScopeSegmentationItem = {
-      ...r.item,
-      scope_segmentation_label: r.label,
-      scope_confidence: Number(r.confidence.toFixed(3)),
-      scope_reason: r.reason,
-    };
-    if (downstream && r.confidence >= 0.7) {
-      next.scope_category = downstream as ParsedLineItemV2["scope_category"];
-    }
-    return next;
-  });
-
-  const sumFor = (label: ScopeLabel) =>
-    rows
-      .filter((r) => r.label === label)
-      .reduce((s, r) => s + (r.item.total_price ?? 0), 0);
-  const main_sum = sumFor("Main");
-  const optional_sum = sumFor("Optional");
-  const excluded_sum = sumFor("Excluded");
-  const unknown_sum = sumFor("Unknown");
-
-  const matched_main_total =
-    input.authoritative_totals.main_total != null
-      ? withinTolerance(main_sum, input.authoritative_totals.main_total)
-      : false;
-  const matched_optional_total =
-    input.authoritative_totals.optional_total != null
-      ? withinTolerance(optional_sum, input.authoritative_totals.optional_total)
-      : false;
-
+  // Confidence rollup.
   const avgConfidence =
-    rows.length > 0 ? rows.reduce((s, r) => s + r.confidence, 0) / rows.length : 0;
+    working.length > 0 ? working.reduce((s, w) => s + w.confidence, 0) / working.length : 0;
   let confidence: "HIGH" | "MEDIUM" | "LOW";
   if (
-    (matched_main_total || input.authoritative_totals.main_total == null) &&
+    (final_matched_main || mainTarget == null) &&
+    (final_matched_optional || optTarget == null) &&
     avgConfidence >= 0.85
   ) {
     confidence = "HIGH";
@@ -841,24 +303,432 @@ export async function runScopeSegmentationEngine(
     confidence = "LOW";
   }
 
+  const items = composeOutputItems(working);
+  const counts = countLabels(working);
+  const examples = working.slice(0, 10).map((w) => ({
+    row_id: w.row_id,
+    description: (w.item.description ?? "").slice(0, 140),
+    scope_category: w.label,
+    confidence: round3(w.confidence),
+    reason: w.reason,
+  }));
+
   return {
     items,
     summary: {
-      main_sum: round2(main_sum),
-      optional_sum: round2(optional_sum),
-      excluded_sum: round2(excluded_sum),
-      unknown_sum: round2(unknown_sum),
-      matched_main_total,
-      matched_optional_total,
+      main_sum: round2(finalSums.main),
+      optional_sum: round2(finalSums.optional),
+      excluded_sum: round2(finalSums.excluded),
+      unknown_sum: round2(finalSums.unknown),
+      matched_main_total: final_matched_main,
+      matched_optional_total: final_matched_optional,
+      delta_main,
+      delta_optional,
       confidence,
-      llm_used,
-      llm_resolved_rows: llm_resolved,
-      headings_detected: headingsCount,
+      llm_used: true,
+      llm_review_used: llmReviewUsed,
+      model_used: SCOPE_SEGMENTATION_MODEL,
+      rows_sent_to_llm: llmAttempt.rowsSent,
+      rows_classified_main: counts.Main,
+      rows_classified_optional: counts.Optional,
+      rows_classified_excluded: counts.Excluded,
+      rows_classified_unknown: counts.Unknown,
+      llm_resolved_rows: resolvedByReview,
+      headings_detected: headings.length,
       layers_applied: layers,
+      fallback_used: null,
+      llm_errors: llmAttempt.errors,
+      examples,
+      requires_scope_review:
+        confidence === "LOW" ||
+        (!final_matched_main && mainTarget != null) ||
+        (!final_matched_optional && optTarget != null) ||
+        counts.Unknown > 0,
     },
   };
 }
 
+// --------------------------------------------------------------------------
+// LLM-primary helpers
+// --------------------------------------------------------------------------
+
+type WorkingRow = {
+  row_id: string;
+  index: number;
+  item: ParsedLineItemV2;
+  label: ScopeLabel;
+  confidence: number;
+  reason: string;
+  llmLabel: ScopeLabel | null;
+  llmConfidence: number;
+};
+
+type LLMAttempt =
+  | {
+      ok: true;
+      itemsById: Map<string, LLMItemResult>;
+      errors: string[];
+      rowsSent: number;
+    }
+  | { ok: false; error: string; errors: string[] };
+
+async function tryLLMPrimary(
+  input: ScopeSegmentationInput,
+  rows: ScopeSegmentationLLMRow[],
+  headings: ScopeSegmentationLLMHeading[],
+  importantContext: string,
+): Promise<LLMAttempt> {
+  if (!input.openAIKey) {
+    return { ok: false, error: "missing_openai_key", errors: ["missing_openai_key"] };
+  }
+  if (rows.length === 0) {
+    return { ok: true, itemsById: new Map(), errors: [], rowsSent: 0 };
+  }
+  try {
+    const result = await classifyRowsLLM({
+      openAIKey: input.openAIKey,
+      supplier: input.supplier,
+      trade: input.trade,
+      quote_type: input.quote_type,
+      main_total: input.authoritative_totals.main_total,
+      optional_total: input.authoritative_totals.optional_total,
+      grand_total: null,
+      page_count: input.allPages?.length ?? 0,
+      important_document_context: importantContext,
+      headings,
+      rows,
+    });
+    if (result.items.length === 0) {
+      return {
+        ok: false,
+        error: result.errors[0] ?? "llm_no_items",
+        errors: result.errors,
+      };
+    }
+    const itemsById = new Map<string, LLMItemResult>();
+    for (const it of result.items) itemsById.set(it.row_id, it);
+    return { ok: true, itemsById, errors: result.errors, rowsSent: rows.length };
+  } catch (err) {
+    return {
+      ok: false,
+      error: (err as Error)?.message ?? "llm_unexpected_error",
+      errors: [(err as Error)?.message ?? "llm_unexpected_error"],
+    };
+  }
+}
+
+function applyLLMResults(
+  extracted: ParsedLineItemV2[],
+  itemsById: Map<string, LLMItemResult>,
+): WorkingRow[] {
+  const out: WorkingRow[] = [];
+  for (let i = 0; i < extracted.length; i++) {
+    const item = extracted[i];
+    const row_id = `r${i}`;
+    const llm = itemsById.get(row_id) ?? null;
+    const initialLabel: ScopeLabel = mapLabel(item.scope_category);
+    let label: ScopeLabel = initialLabel;
+    let confidence = typeof item.confidence === "number" ? item.confidence : 0.5;
+    let reason = "preserved:no_llm_result";
+    let llmLabel: ScopeLabel | null = null;
+    let llmConfidence = 0;
+    if (llm) {
+      llmLabel = llm.scope_category;
+      llmConfidence = llm.confidence;
+      const llmReason = (llm.reason ?? "").slice(0, 160);
+      if (llm.confidence >= OVERWRITE_THRESHOLD) {
+        label = llm.scope_category;
+        confidence = llm.confidence;
+        reason = `llm_overwrite:${llmReason}`;
+      } else if (llm.confidence >= PRESERVE_THRESHOLD) {
+        // preserve original scope_category; record LLM label/reason for audit
+        label = initialLabel;
+        confidence = Math.max(confidence, llm.confidence);
+        reason = `llm_low_conf_preserved:${llm.scope_category.toLowerCase()}:${llmReason}`;
+      } else {
+        label = "Unknown";
+        confidence = llm.confidence;
+        reason = `llm_low_conf_unknown:${llm.scope_category.toLowerCase()}:${llmReason}`;
+      }
+    }
+    out.push({
+      row_id,
+      index: i,
+      item,
+      label,
+      confidence,
+      reason,
+      llmLabel,
+      llmConfidence,
+    });
+  }
+  return out;
+}
+
+function llmRowFor(
+  w: WorkingRow,
+  headings: ScopeSegmentationLLMHeading[],
+): ScopeSegmentationLLMRow {
+  return {
+    row_id: w.row_id,
+    description: w.item.description ?? "",
+    quantity: w.item.quantity ?? null,
+    unit: w.item.unit ?? null,
+    unit_price: w.item.unit_price ?? null,
+    total_price: w.item.total_price ?? null,
+    source_page: w.item.source_page ?? null,
+    current_scope_category: w.label,
+    existing_confidence: w.confidence,
+    parent_section: (w.item as { parent_section?: string | null }).parent_section ?? null,
+    nearby_heading: nearestHeadingForPage(w.item.source_page ?? null, headings),
+  };
+}
+
+function composeOutputItems(rows: WorkingRow[]): ScopeSegmentationItem[] {
+  return rows.map((w) => {
+    const downstream =
+      w.label === "Main"
+        ? "main"
+        : w.label === "Optional"
+        ? "optional"
+        : w.label === "Excluded"
+        ? "excluded"
+        : null;
+    const next: ScopeSegmentationItem = {
+      ...w.item,
+      scope_segmentation_label: w.label,
+      scope_confidence: round3(w.confidence),
+      scope_reason: w.reason,
+    };
+    if (downstream && w.confidence >= OVERWRITE_THRESHOLD) {
+      next.scope_category = downstream as ParsedLineItemV2["scope_category"];
+    }
+    return next;
+  });
+}
+
+function computeSums(rows: WorkingRow[]): {
+  main: number;
+  optional: number;
+  excluded: number;
+  unknown: number;
+} {
+  let main = 0;
+  let optional = 0;
+  let excluded = 0;
+  let unknown = 0;
+  for (const r of rows) {
+    const v = r.item.total_price ?? 0;
+    if (r.label === "Main") main += v;
+    else if (r.label === "Optional") optional += v;
+    else if (r.label === "Excluded") excluded += v;
+    else unknown += v;
+  }
+  return { main, optional, excluded, unknown };
+}
+
+function countLabels(rows: WorkingRow[]): Record<ScopeLabel, number> {
+  const out: Record<ScopeLabel, number> = { Main: 0, Optional: 0, Excluded: 0, Unknown: 0 };
+  for (const r of rows) out[r.label]++;
+  return out;
+}
+
+function withinTolerance(actual: number, target: number): boolean {
+  if (target <= 0) return Math.abs(actual) <= 0.01;
+  return Math.abs(actual - target) / Math.abs(target) <= TOTALS_TOLERANCE;
+}
+
+function mapLabel(v: unknown): ScopeLabel {
+  const s = String(v ?? "").toLowerCase();
+  if (s === "main") return "Main";
+  if (s === "optional" || s === "provisional") return "Optional";
+  if (s === "excluded" || s === "exclusion") return "Excluded";
+  if (s === "unknown") return "Unknown";
+  return "Main";
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+// --------------------------------------------------------------------------
+// Document context builders
+// --------------------------------------------------------------------------
+
+function extractHeadings(
+  pages: { pageNum: number; text: string }[],
+): ScopeSegmentationLLMHeading[] {
+  const out: ScopeSegmentationLLMHeading[] = [];
+  for (const p of pages) {
+    const lines = (p.text ?? "").split(/\r?\n/);
+    for (const raw of lines) {
+      const trimmed = raw.trim();
+      if (!trimmed || trimmed.length > 200) continue;
+      if (/\$|\d[\d,]*\.\d{2}/.test(trimmed) && !/\bsub[\s-]?total\b/i.test(trimmed)) continue;
+      let inferred: ScopeSegmentationLLMHeading["inferred_type"] | null = null;
+      if (matchesAny(trimmed, EXCLUDED_HEADER_PATTERNS)) inferred = "Excluded";
+      else if (matchesAny(trimmed, OPTIONAL_HEADER_PATTERNS)) inferred = "Optional";
+      else if (matchesAny(trimmed, MAIN_HEADER_PATTERNS)) inferred = "Main";
+      if (!inferred) continue;
+      out.push({ page: p.pageNum, heading: trimmed.slice(0, 160), inferred_type: inferred });
+      if (out.length >= 80) return out;
+    }
+  }
+  return out;
+}
+
+function nearestHeadingForPage(
+  page: number | null,
+  headings: ScopeSegmentationLLMHeading[],
+): string | null {
+  if (page == null || headings.length === 0) return null;
+  let best: ScopeSegmentationLLMHeading | null = null;
+  for (const h of headings) {
+    if (h.page == null) continue;
+    if (h.page <= page && (!best || (best.page ?? 0) <= h.page)) best = h;
+  }
+  return best ? `[${best.inferred_type}] ${best.heading}` : null;
+}
+
+function buildDocumentContext(
+  pages: { pageNum: number; text: string }[],
+  rawText: string,
+  totals: { main_total: number | null; optional_total: number | null },
+): string {
+  if (!pages || pages.length === 0) {
+    return rawText.slice(0, CONTEXT_PAGE_BUDGET);
+  }
+  const parts: string[] = [];
+  let used = 0;
+  const pushPage = (p: { pageNum: number; text: string }, label: string) => {
+    if (used >= CONTEXT_PAGE_BUDGET) return;
+    const remaining = CONTEXT_PAGE_BUDGET - used;
+    const text = (p.text ?? "").slice(0, Math.min(900, remaining));
+    if (!text) return;
+    parts.push(`--- ${label} (page ${p.pageNum}) ---\n${text}`);
+    used += text.length + 40;
+  };
+
+  // Page 1 is always useful (cover/summary).
+  pushPage(pages[0], "PAGE 1");
+
+  // Pages mentioning totals or "summary".
+  for (const p of pages.slice(1)) {
+    if (used >= CONTEXT_PAGE_BUDGET) break;
+    const lower = (p.text ?? "").toLowerCase();
+    const totalHit =
+      (totals.main_total != null && lower.includes(formatTotalToken(totals.main_total))) ||
+      (totals.optional_total != null && lower.includes(formatTotalToken(totals.optional_total))) ||
+      /\b(quote\s+summary|estimate\s+summary|grand\s+total)\b/i.test(p.text ?? "");
+    if (totalHit) pushPage(p, "TOTALS PAGE");
+  }
+
+  // Pages with strong scope-keyword density.
+  for (const p of pages) {
+    if (used >= CONTEXT_PAGE_BUDGET) break;
+    if (CONTEXT_KEYWORDS_RE.test(p.text ?? "")) pushPage(p, "SCOPE KEYWORDS");
+  }
+
+  return parts.join("\n\n").slice(0, CONTEXT_PAGE_BUDGET);
+}
+
+function formatTotalToken(n: number): string {
+  return n.toFixed(2);
+}
+
+function matchesAny(text: string, patterns: RegExp[]): boolean {
+  for (const re of patterns) if (re.test(text)) return true;
+  return false;
+}
+
+// --------------------------------------------------------------------------
+// Deterministic fallback (only used when LLM-primary fails)
+// --------------------------------------------------------------------------
+
+const FALLBACK_OPTIONAL_DESC_RE =
+  /\b(optional|add\s+to\s+scope|not\s+shown\s+on\s+drawings|extra\s+over|TBC|alternate|upgrade)\b/i;
+const FALLBACK_EXCLUDED_DESC_RE =
+  /\b(by\s+others|provisional\s+only|no\s+tested\s+solution|rate\s+only|not\s+included)\b/i;
+
+async function runDeterministicFallback(
+  input: ScopeSegmentationInput,
+): Promise<ScopeSegmentationResult> {
+  const layers: string[] = ["fallback_keyword_initial"];
+  const headings = extractHeadings(input.allPages ?? []);
+  const rows: WorkingRow[] = input.extracted_items.map((item, idx) => ({
+    row_id: `r${idx}`,
+    index: idx,
+    item,
+    label: mapLabel(item.scope_category),
+    confidence: typeof item.confidence === "number" ? item.confidence : 0.55,
+    reason: `fallback:preserved:${item.scope_category}`,
+    llmLabel: null,
+    llmConfidence: 0,
+  }));
+
+  // Description-based hints for rows still labelled Main/Unknown.
+  for (const r of rows) {
+    const desc = r.item.description ?? "";
+    if (FALLBACK_EXCLUDED_DESC_RE.test(desc)) {
+      r.label = "Excluded";
+      r.confidence = Math.max(r.confidence, 0.7);
+      r.reason = "fallback:keyword_excluded";
+    } else if (FALLBACK_OPTIONAL_DESC_RE.test(desc) && r.label !== "Excluded") {
+      r.label = "Optional";
+      r.confidence = Math.max(r.confidence, 0.6);
+      r.reason = "fallback:keyword_optional";
+    }
+  }
+
+  const sums = computeSums(rows);
+  const mainTarget = input.authoritative_totals.main_total;
+  const optTarget = input.authoritative_totals.optional_total;
+  const matched_main = mainTarget != null ? withinTolerance(sums.main, mainTarget) : false;
+  const matched_optional = optTarget != null ? withinTolerance(sums.optional, optTarget) : false;
+
+  const items = composeOutputItems(rows);
+  const counts = countLabels(rows);
+  const avgConf =
+    rows.length > 0 ? rows.reduce((s, r) => s + r.confidence, 0) / rows.length : 0;
+  const confidence: "HIGH" | "MEDIUM" | "LOW" =
+    avgConf >= 0.8 ? "HIGH" : avgConf >= 0.6 ? "MEDIUM" : "LOW";
+
+  return {
+    items,
+    summary: {
+      main_sum: round2(sums.main),
+      optional_sum: round2(sums.optional),
+      excluded_sum: round2(sums.excluded),
+      unknown_sum: round2(sums.unknown),
+      matched_main_total: matched_main,
+      matched_optional_total: matched_optional,
+      delta_main: mainTarget != null ? round2(sums.main - mainTarget) : null,
+      delta_optional: optTarget != null ? round2(sums.optional - optTarget) : null,
+      confidence,
+      llm_used: false,
+      llm_review_used: false,
+      model_used: null,
+      rows_sent_to_llm: 0,
+      rows_classified_main: counts.Main,
+      rows_classified_optional: counts.Optional,
+      rows_classified_excluded: counts.Excluded,
+      rows_classified_unknown: counts.Unknown,
+      llm_resolved_rows: 0,
+      headings_detected: headings.length,
+      layers_applied: layers,
+      fallback_used: "deterministic_existing",
+      llm_errors: [],
+      examples: rows.slice(0, 10).map((w) => ({
+        row_id: w.row_id,
+        description: (w.item.description ?? "").slice(0, 140),
+        scope_category: w.label,
+        confidence: round3(w.confidence),
+        reason: w.reason,
+      })),
+      requires_scope_review: true,
+    },
+  };
 }
