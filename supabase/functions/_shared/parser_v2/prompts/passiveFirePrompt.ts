@@ -166,8 +166,8 @@ until an in-block Optional/Excluded sub-header appears).
 STEP 3 — Authoritative quote total reconciliation
 Cross-check against the authoritative total excl GST (front-page summary or master roll-up). Items already rolled into the authoritative main total are "main". Items that would push the sum above the authoritative total, or sit under "add to scope" / "items with confirmation", are "optional".
 
-STEP 4 — >75% optional sanity check (mandatory post-pass)
-After classifying every row, count main vs optional. If more than 75% of priced rows are "optional", that is almost certainly a misclassification of an in-table or page-banner main scope. Re-evaluate using STEP 2 indicators and the authoritative total from STEP 3, and only keep rows as "optional" when an explicit STEP 1 label or an unambiguous OPTIONAL section header from STEP 2 supports it.
+STEP 4 — >75% optional soft signal (DO NOT REWRITE ROWS)
+After classifying every row, count main vs optional. If more than 75% of priced rows are "optional", do NOT silently flip rows back to main inside this prompt. A downstream Scope Segmentation Engine performs totals reconciliation across the document and will correct globalised optional banners using the authoritative totals. Lower the confidence on rows whose only optional signal was an inherited section header (no explicit STEP 1 label and no Prompt 2 section_role = "optional") to ≤ 0.6 so the engine can reconcile. Never silently rewrite scope here.
 
 ---
 
@@ -186,10 +186,17 @@ OUTPUT — STRICT JSON ONLY
       "trade": "passive_fire",
       "sub_scope": string|null,       // from taxonomy above
       "frr": string|null,             // preserve exact format
+      "source_page": number|null,     // 1-based page where the row was found
+      "source_section": string|null,  // nearest in-table sub-header (e.g. "Hydraulic Penetrations")
+      "section_path": string[]|null,  // ordered ancestor headers, outermost first
+      "building_or_block": string|null, // "Building A", "Block B30", "Level 3", "Basement"
       "confidence": number            // 0..1 your confidence in THIS row
     }
   ]
 }
+
+CONTEXT FIELDS — REQUIRED FOR EVERY ROW
+Always populate source_page, source_section, section_path, and building_or_block when those signals exist in the document. These feed a downstream Scope Segmentation Engine that reconciles scope using headings, block inheritance, and totals. Missing context fields cripple that reconciliation. If a signal is genuinely absent from the source, set the field to null — never invent values.
 
 ---
 

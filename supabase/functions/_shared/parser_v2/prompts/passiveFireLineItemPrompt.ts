@@ -72,7 +72,7 @@ For every priced row, decide scope_category by walking these four steps in order
     optional, add to scope, excluded, variation, extra over, provisional, TBC, alternate
   classify by that explicit label:
     - "optional" / "add to scope" / "extra over" / "provisional" / "TBC" / "alternate" / "variation" → scope_category = optional
-    - "excluded" → do NOT extract; add to ignored_rows with reason "excluded_by_label"
+    - "excluded" / "not included" / "by others" → EXTRACT the row with scope_category = "excluded" and total_price = 0 or null (whichever the source shows). Do NOT drop it into ignored_rows — a downstream Scope Segmentation Engine needs to see and report excluded rows.
   Done for that row.
 
   STEP 4b.2 — NEAREST PARENT SECTION / HEADER / PAGE BANNER
@@ -116,14 +116,8 @@ For every priced row, decide scope_category by walking these four steps in order
     - Rows that are subtotalled separately, OUTSIDE the selected main total (their subtotal feeds an "Optional", "Add-On", "Extra Over" or "Provisional" sub-total instead) ⇒ scope_category = optional
   Use Prompt 2's section.section_total values to test which rows roll into which total. If a section's section_total is part of the master roll-up that equals the selected main total, its rows are MAIN. If a section's section_total sits outside that roll-up, its rows are OPTIONAL.
 
-  STEP 4b.4 — MAJORITY-OPTIONAL SANITY CHECK (MANDATORY POST-PASS)
-  After classifying every row, count the proportion classified optional. If MORE THAN 75% of priced rows are classified optional AND the quote contains a clear main total (Prompt 4 selected_main_total_ex_gst, or Prompt 2 authoritative_total_ex_gst, is non-null and non-zero):
-    - You have almost certainly globalised an optional banner / header that only applies to a small portion of the document.
-    - Re-evaluate every "optional" row. Convert any UNRESOLVED row to MAIN unless one of these is still true after re-inspection:
-        a) The row text itself contains an explicit optional label (Step 4b.1), OR
-        b) The row's source_page falls strictly within an optional page banner's page_start..page_end range, OR
-        c) The row's source_section matches a Prompt 2 section tagged section_role = "optional".
-  This sanity check is MANDATORY. Passive Fire quotes are typically MAJORITY main scope (60–95%); a >75% optional outcome is almost always a misclassification.
+  STEP 4b.4 — MAJORITY-OPTIONAL SOFT SIGNAL (DO NOT REWRITE ROWS)
+  After classifying every row, count the proportion classified optional. If MORE THAN 75% of priced rows are classified optional AND the quote contains a clear main total, do NOT rewrite individual row classifications here. A downstream Scope Segmentation Engine performs totals reconciliation across the full document and will correct globalised optional banners using the authoritative totals. Instead, lower the confidence on rows whose only optional signal was an inherited section header (no explicit row label, no Prompt 2 section_role = "optional"), and emit them as scope_category = optional with confidence ≤ 0.6 so the engine can reconcile. Never silently flip rows to main inside this prompt.
 
 WORKED EXAMPLE (Global-style quote, 13 pages):
   - Pages 1–3: cover, summary, terms (no banner; rows here are summary totals → ignored_rows).
