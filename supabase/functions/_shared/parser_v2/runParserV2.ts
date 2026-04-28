@@ -68,6 +68,11 @@ import { mapToQuoteItems } from "./mappers/mapToQuoteItems.ts";
 import { StageTracker, ParserV2StageError, type StageRecord } from "./stageTracker.ts";
 import { installActiveTracker, clearActiveTracker } from "./telemetrySink.ts";
 
+import {
+  runScopeSegmentationEngine,
+  type ScopeSegmentationResult,
+} from "./scopeSegmentationEngine.ts";
+
 import { runPathB, type PathBResult } from "./multipath/pathB_commercialTotals.ts";
 import { runPathC, type PathCResult } from "./multipath/pathC_deterministicStructure.ts";
 import { decide, type MultiPathDecision } from "./multipath/decisionEngine.ts";
@@ -141,6 +146,7 @@ export type ParserV2Output = {
   passive_fire_sanitizer: PassiveFireSanitizerResult | null;
   passive_fire_validation: PassiveFireValidationResult | null;
   passive_fire_final: PassiveFireFinalRecord | null;
+  scope_segmentation: ScopeSegmentationResult | null;
   multipath: {
     decision: MultiPathDecision;
     pathB: PathBResult;
@@ -383,6 +389,33 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       }
       durations.fallback_extraction = Date.now() - fbStart;
       logExtractionDebug("fallback_extraction", "fallback", items.length, fallbackDebug ?? []);
+    }
+
+    let scope_segmentation: ScopeSegmentationResult | null = null;
+    if (items.length > 0) {
+      tracker.start("scope_segmentation");
+      const segStart = Date.now();
+      try {
+        scope_segmentation = await runScopeSegmentationEngine({
+          extracted_items: items,
+          rawText: effectiveRawText,
+          allPages: effectivePages,
+          quote_type: quoteType.quoteType,
+          trade: trade.trade,
+          supplier: supplier.supplierName,
+          authoritative_totals: { main_total: null, optional_total: null },
+          openAIKey: input.openAIKey,
+        });
+        items = scope_segmentation.items;
+        tracker.succeed("scope_segmentation");
+      } catch (err) {
+        console.error("[parser_v2] scope segmentation failed", err);
+        anomalies.push("scope_segmentation_failed");
+        tracker.fail("scope_segmentation", err);
+      }
+      durations.scope_segmentation = Date.now() - segStart;
+    } else {
+      tracker.skip("scope_segmentation", "no items extracted");
     }
 
     let passive_fire_authoritative_total: PassiveFireAuthoritativeTotal | null = null;
@@ -688,6 +721,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       passive_fire_sanitizer,
       passive_fire_validation,
       passive_fire_final,
+      scope_segmentation,
       multipath: multipathResult,
       dbPayload: { quote, items: dbItems },
       debug: {

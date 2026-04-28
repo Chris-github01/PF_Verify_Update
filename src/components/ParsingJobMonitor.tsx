@@ -189,6 +189,7 @@ const STAGE_DISPLAY_NAMES: Record<string, string> = {
   pf_structure: 'Structure (Passive Fire)',
   extraction: 'Extract Line Items',
   fallback_extraction: 'Fallback Extraction',
+  scope_segmentation: 'Scope Segmentation Engine',
   pf_authoritative_total: 'Select Authoritative Total',
   pf_intent: 'Intent Detection',
   pf_validation: 'Passive Fire Validation',
