@@ -1,39 +1,29 @@
 /**
- * Stage 10 v5 — Deterministic Scope Marker Detection Engine.
+ * Stage 10 v6 — Deterministic Scope Marker Detection Engine
+ * (text-stream edition, 2026-04-28).
  *
- * Replaces the LLM-driven scope segmentation engine with a pure
- * rule-based scan over document structure. No semantic reasoning, no
- * reconciliation rows, no total-based inference, no confidence guessing.
+ * Why v6: v5 keyed off per-item `source_page` values. When extractors
+ * don't populate pages for every row, the page cursor never advances
+ * and state becomes sticky across the whole document (Block N Optional
+ * banner bleeds into Block N+1 Main items).
  *
- * Business logic:
- *   If an Optional marker appears in any of:
- *     - the row description itself
- *     - the nearest table/section heading above the row
- *     - the page heading/banner for the row's page
- *   -> row = optional
- *   Else if an Excluded marker appears in the same places
- *   -> row = excluded
- *   Else
- *   -> row = main
+ * v6 scans the whole `rawText` once into an ordered array of classified
+ * lines. For each parsed item we locate its description inside that
+ * stream (stripping `[Block X]` and similar enrichment prefixes added by
+ * extractors) and read back the active (label, evidence, source)
+ * computed at that line position. No per-page state. No LLM. No
+ * semantic reasoning.
  *
- * Priority order (first match wins):
- *   1. Row description markers
- *   2. Nearest table heading above row
- *   3. Page heading/banner
- *   4. Excluded wording anywhere above
- *   5. Default: main
- *
- * Rows inherit section heading until the next heading is seen. Once an
- * Optional banner is active, every subsequent row on that page inherits
- * optional until a non-optional heading appears.
- *
- * Runs BEFORE totals calculation so the authoritative total selector
- * sees correctly-classified rows.
+ * Priority order (first match wins) per row:
+ *   1. Row description markers (rowOpt/rowExc)
+ *   2. Active section state (optional / excluded from the most recent
+ *      marker line above the row)
+ *   3. Default: main
  */
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 
-export const SCOPE_MARKER_DETECTION_VERSION = "v5-deterministic-2026-04-28";
+export const SCOPE_MARKER_DETECTION_VERSION = "v6-text-stream-2026-04-28";
 console.log(
   `[scopeMarkerDetection] MODULE_LOAD version=${SCOPE_MARKER_DETECTION_VERSION}`,
 );
@@ -42,9 +32,7 @@ export type ScopeMarkerLabel = "main" | "optional" | "excluded";
 
 export type ScopeMarkerSource =
   | "row_description"
-  | "table_heading"
-  | "page_heading"
-  | "section_inherit"
+  | "section_heading"
   | "default_main";
 
 export type ScopeMarkerItem = ParsedLineItemV2 & {
@@ -62,6 +50,7 @@ export type ScopeMarkerSummary = {
   optional_total: number;
   excluded_total: number;
   source_counts: Record<ScopeMarkerSource, number>;
+  unlocated_rows: number;
   runtime_ms: number;
 };
 
@@ -72,16 +61,17 @@ export type ScopeMarkerResult = {
 
 export type ScopeMarkerInput = {
   items: ParsedLineItemV2[];
-  pages: { pageNum: number; text: string }[];
+  rawText: string;
+  pages?: { pageNum: number; text: string }[];
 };
 
 // --------------------------------------------------------------------------
-// Marker vocabularies. All patterns use word boundaries and are
-// case-insensitive.
+// Marker vocabularies.
 // --------------------------------------------------------------------------
 
 const OPTIONAL_MARKERS = [
   /\boptional\s+scope\b/i,
+  /\boptional\s+items?\b/i,
   /\boptional\b(?!\s*extras?\s+included)/i,
   /\bitems?\s+with\s+confirmation\b/i,
   /\badd\s+to\s+scope\b/i,
@@ -100,6 +90,8 @@ const OPTIONAL_MARKERS = [
 ];
 
 const EXCLUDED_MARKERS = [
+  /\bservices?\s+identified\s+not\s+part\s+of\s+passive\s+fire\s+schedule\b/i,
+  /\bnot\s+part\s+of\s+(?:passive\s+fire\s+)?schedule\b/i,
   /\bby\s+others\b/i,
   /\bby\s+main\s+contractor\b/i,
   /\bby\s+client\b/i,
@@ -111,23 +103,31 @@ const EXCLUDED_MARKERS = [
   /\bnot\s+included\b/i,
 ];
 
+// Reset markers re-anchor section state back to "main". These are
+// typically new block/section headings that appear between optional or
+// excluded regions and subsequent main work.
 const RESET_MARKERS = [
-  /\b(?:BLOCK|BUILDING|LEVEL|UNIT|AREA|SECTION|LOT)\b\s*[:#-]?\s*[A-Za-z0-9][\w.-]*/i,
+  /\b(?:BLOCK|BUILDING|LEVEL|UNIT|AREA|LOT)\b\s*[:#-]?\s*[A-Za-z0-9][\w.-]*/,
   /\b(?:main\s+scope|base\s+scope|included\s+scope|included\s+items)\b/i,
   /\bpassive\s+fire\s+schedule\b/i,
+  /\bfire\s*stopping\s+schedule\b/i,
+  /\bscope\s+of\s+works?\b/i,
 ];
 
 const SUBTOTAL_RE =
   /\b(sub\s*total|subtotal|section\s+total|block\s+total|building\s+total|page\s+total|grand\s+total|tender\s+total|total\s+ex|optional\s+total|estimate\s+subtotal|carried\s+forward)\b/i;
 
-const HEADING_MAX_LEN = 160;
+const HEADING_MAX_LEN = 200;
 
-type LineKind = "reset" | "optional" | "excluded" | "plain_heading" | "row" | "noise";
+type LineKind = "reset" | "optional" | "excluded" | "row" | "noise";
 
 type ClassifiedLine = {
+  idx: number;
   kind: LineKind;
   text: string;
   matched_marker: string | null;
+  label_at_line: ScopeMarkerLabel;
+  evidence_at_line: string | null;
 };
 
 // --------------------------------------------------------------------------
@@ -138,117 +138,70 @@ export function runScopeMarkerDetection(
   input: ScopeMarkerInput,
 ): ScopeMarkerResult {
   const start = Date.now();
-  const { items, pages } = input;
+  const { items } = input;
 
   if (items.length === 0) {
-    return {
-      items: [],
-      summary: emptySummary(Date.now() - start),
-    };
+    return { items: [], summary: emptySummary(Date.now() - start) };
   }
 
-  // Build per-page classified lines and a page-level optional banner flag.
-  const pageClassified = new Map<number, ClassifiedLine[]>();
-  const pageBanner = new Map<number, { label: ScopeMarkerLabel; evidence: string } | null>();
-  for (const p of pages) {
-    const lines = (p.text ?? "").split(/\r?\n/).map((l) => l.trim());
-    const classified = lines.map(classifyLine);
-    pageClassified.set(p.pageNum, classified);
-    pageBanner.set(p.pageNum, detectPageBanner(classified));
-  }
+  const rawText = input.rawText && input.rawText.trim().length > 0
+    ? input.rawText
+    : (input.pages ?? []).map((p) => p.text ?? "").join("\n");
 
-  // Walk rows in input order, maintaining state across pages.
-  let activeSectionLabel: ScopeMarkerLabel = "main";
-  let activeSectionEvidence: string | null = null;
-  let activeSectionSource: ScopeMarkerSource = "default_main";
-  let lastPage: number | null = null;
-  // Cursor for locating each row inside its page's line array.
-  const pageCursor = new Map<number, number>();
+  const classified = classifyTextStream(rawText);
+  const lowerLines = classified.map((c) => c.text.toLowerCase());
 
-  const out: ScopeMarkerItem[] = [];
   const sourceCounts: Record<ScopeMarkerSource, number> = {
     row_description: 0,
-    table_heading: 0,
-    page_heading: 0,
-    section_inherit: 0,
+    section_heading: 0,
     default_main: 0,
   };
 
+  let searchStart = 0;
+  let unlocatedRows = 0;
+  const out: ScopeMarkerItem[] = [];
+
   for (const it of items) {
-    const page = it.source_page ?? null;
+    const desc = (it.description ?? "").trim();
 
-    // New page: reset cursor and apply page banner if any.
-    if (page != null && page !== lastPage) {
-      pageCursor.set(page, 0);
-      const banner = pageBanner.get(page);
-      if (banner) {
-        activeSectionLabel = banner.label;
-        activeSectionEvidence = banner.evidence;
-        activeSectionSource = "page_heading";
-      }
-      lastPage = page;
-    }
-
-    // Advance section state by scanning unread lines up to (and
-    // including) this row's description line.
-    if (page != null) {
-      const classified = pageClassified.get(page) ?? [];
-      const cursor = pageCursor.get(page) ?? 0;
-      const rowLineIdx = locateRowLine(classified, it.description ?? "", cursor);
-      const upTo = rowLineIdx >= 0 ? rowLineIdx : classified.length;
-      for (let i = cursor; i < upTo; i++) {
-        const cl = classified[i];
-        if (cl.kind === "reset") {
-          activeSectionLabel = "main";
-          activeSectionEvidence = cl.text;
-          activeSectionSource = "table_heading";
-        } else if (cl.kind === "optional") {
-          activeSectionLabel = "optional";
-          activeSectionEvidence = cl.matched_marker ?? cl.text;
-          activeSectionSource = "table_heading";
-        } else if (cl.kind === "excluded") {
-          activeSectionLabel = "excluded";
-          activeSectionEvidence = cl.matched_marker ?? cl.text;
-          activeSectionSource = "table_heading";
-        } else if (cl.kind === "plain_heading") {
-          // Plain heading doesn't change scope but can cancel an
-          // inherited optional banner if it matches a reset pattern
-          // loosely (new named block / section).
-          // We keep current state otherwise.
-        }
-      }
-      pageCursor.set(
-        page,
-        rowLineIdx >= 0 ? rowLineIdx + 1 : Math.min(classified.length, cursor + 1),
-      );
-    }
-
-    // Priority 1: row description markers win over everything.
-    const desc = it.description ?? "";
+    // Priority 1: marker directly in row description.
     const rowOpt = matchMarker(desc, OPTIONAL_MARKERS);
     const rowExc = matchMarker(desc, EXCLUDED_MARKERS);
+
     let label: ScopeMarkerLabel;
     let source: ScopeMarkerSource;
     let evidence: string | null;
-    if (rowOpt) {
-      label = "optional";
-      source = "row_description";
-      evidence = rowOpt;
-    } else if (rowExc) {
+
+    if (rowExc) {
       label = "excluded";
       source = "row_description";
       evidence = rowExc;
+    } else if (rowOpt) {
+      label = "optional";
+      source = "row_description";
+      evidence = rowOpt;
     } else {
-      // Priority 2/3/4: use the active section/page state.
-      label = activeSectionLabel;
-      source = activeSectionLabel === "main" && activeSectionSource === "default_main"
-        ? "default_main"
-        : activeSectionSource === "page_heading"
-          ? "page_heading"
-          : activeSectionLabel === "main"
-            ? "default_main"
-            : "section_inherit";
-      evidence = activeSectionEvidence;
+      // Priority 2: locate the row in the stream and inherit the
+      // section state that's active at (or just before) that line.
+      const located = locateRow(lowerLines, desc, searchStart);
+      if (located >= 0) {
+        searchStart = located + 1;
+        const line = classified[located];
+        label = line.label_at_line;
+        evidence = line.evidence_at_line;
+        source = label === "main" && evidence == null
+          ? "default_main"
+          : "section_heading";
+      } else {
+        // Fall back to the most recent known state without advancing.
+        unlocatedRows++;
+        const anchor = searchStart > 0 ? classified[searchStart - 1] : null;
+        label = anchor?.label_at_line ?? "main";
+        evidence = anchor?.evidence_at_line ?? null;
+        source = label === "main" && evidence == null
+          ? "default_main"
+          : "section_heading";
+      }
     }
 
     sourceCounts[source]++;
@@ -261,58 +214,73 @@ export function runScopeMarkerDetection(
     });
   }
 
-  const summary = summarise(out, Date.now() - start, sourceCounts);
+  const summary = summarise(out, Date.now() - start, sourceCounts, unlocatedRows);
   console.log(
     `[scopeMarkerDetection] done items=${out.length} main=${summary.main_count} ` +
       `optional=${summary.optional_count} excluded=${summary.excluded_count} ` +
       `main_total=${summary.main_total} optional_total=${summary.optional_total} ` +
+      `excluded_total=${summary.excluded_total} unlocated=${summary.unlocated_rows} ` +
       `runtime_ms=${summary.runtime_ms}`,
   );
   return { items: out, summary };
 }
 
 // --------------------------------------------------------------------------
-// Line classification
+// Text stream classification
 // --------------------------------------------------------------------------
 
-function classifyLine(raw: string): ClassifiedLine {
-  if (!raw) return { kind: "noise", text: raw, matched_marker: null };
-  if (raw.length > HEADING_MAX_LEN) return { kind: "row", text: raw, matched_marker: null };
+function classifyTextStream(rawText: string): ClassifiedLine[] {
+  const lines = (rawText ?? "").split(/\r?\n/).map((l) => l.trim());
+  const out: ClassifiedLine[] = [];
 
-  // Subtotal lines are metadata — treat as noise so they don't
-  // propagate optional state.
-  if (SUBTOTAL_RE.test(raw)) {
-    return { kind: "noise", text: raw, matched_marker: null };
-  }
+  let activeLabel: ScopeMarkerLabel = "main";
+  let activeEvidence: string | null = null;
 
-  // Reset markers first — they re-anchor section state to main.
-  const resetMatch = matchMarker(raw, RESET_MARKERS);
-  if (resetMatch) return { kind: "reset", text: raw, matched_marker: resetMatch };
+  lines.forEach((text, idx) => {
+    const kind = classifyLineKind(text);
+    const matched = kind === "reset"
+      ? matchMarker(text, RESET_MARKERS)
+      : kind === "optional"
+        ? matchMarker(text, OPTIONAL_MARKERS)
+        : kind === "excluded"
+          ? matchMarker(text, EXCLUDED_MARKERS)
+          : null;
 
-  const optMatch = matchMarker(raw, OPTIONAL_MARKERS);
-  if (optMatch) return { kind: "optional", text: raw, matched_marker: optMatch };
+    // Update state BEFORE stamping the line, so the heading line itself
+    // carries the new label (useful when a row sits on the same line).
+    if (kind === "reset") {
+      activeLabel = "main";
+      activeEvidence = null;
+    } else if (kind === "optional") {
+      activeLabel = "optional";
+      activeEvidence = matched;
+    } else if (kind === "excluded") {
+      activeLabel = "excluded";
+      activeEvidence = matched;
+    }
 
-  const excMatch = matchMarker(raw, EXCLUDED_MARKERS);
-  if (excMatch) return { kind: "excluded", text: raw, matched_marker: excMatch };
+    out.push({
+      idx,
+      kind,
+      text,
+      matched_marker: matched,
+      label_at_line: activeLabel,
+      evidence_at_line: activeEvidence,
+    });
+  });
 
-  // Heading-ish: short, title-case, no currency.
-  if (looksLikePlainHeading(raw)) {
-    return { kind: "plain_heading", text: raw, matched_marker: null };
-  }
-
-  return { kind: "row", text: raw, matched_marker: null };
+  return out;
 }
 
-function looksLikePlainHeading(line: string): boolean {
-  if (/\$\s*\d/.test(line)) return false;
-  if (/^\s*\d[\d,]*\.\d{2}\s*$/.test(line)) return false;
-  const letters = line.replace(/[^A-Za-z]/g, "");
-  if (letters.length >= 5) {
-    const upper = letters.replace(/[^A-Z]/g, "").length;
-    if (upper / letters.length >= 0.75) return true;
-  }
-  if (/:\s*$/.test(line) && line.length <= 80) return true;
-  return false;
+function classifyLineKind(raw: string): LineKind {
+  if (!raw) return "noise";
+  if (raw.length > HEADING_MAX_LEN) return "row";
+  if (SUBTOTAL_RE.test(raw)) return "noise";
+
+  if (matchMarker(raw, RESET_MARKERS)) return "reset";
+  if (matchMarker(raw, OPTIONAL_MARKERS)) return "optional";
+  if (matchMarker(raw, EXCLUDED_MARKERS)) return "excluded";
+  return "row";
 }
 
 function matchMarker(text: string, patterns: RegExp[]): string | null {
@@ -324,54 +292,38 @@ function matchMarker(text: string, patterns: RegExp[]): string | null {
 }
 
 // --------------------------------------------------------------------------
-// Page banner detection — if the top of a page contains an Optional or
-// Excluded marker (e.g. "OPTIONAL SCOPE" centred as a page title), every
-// row on that page inherits it until a reset heading appears.
+// Row locator — finds the classified-line index for a row's description.
+// Strips extractor enrichment prefixes like "[Block 30] " so we match
+// against the text as it appears in the source document.
 // --------------------------------------------------------------------------
 
-function detectPageBanner(
-  lines: ClassifiedLine[],
-): { label: ScopeMarkerLabel; evidence: string } | null {
-  // Look at the first 6 non-noise lines.
-  const head: ClassifiedLine[] = [];
-  for (const l of lines) {
-    if (head.length >= 6) break;
-    if (l.kind === "noise") continue;
-    if (!l.text) continue;
-    head.push(l);
-  }
-  for (const l of head) {
-    if (l.kind === "optional") return { label: "optional", evidence: l.matched_marker ?? l.text };
-    if (l.kind === "excluded") return { label: "excluded", evidence: l.matched_marker ?? l.text };
-    if (l.kind === "reset") return null;
-  }
-  return null;
-}
-
-// --------------------------------------------------------------------------
-// Row-to-line anchoring — locate the line that contains the row's
-// description so the section walker knows how far to advance.
-// --------------------------------------------------------------------------
-
-function locateRowLine(
-  lines: ClassifiedLine[],
+function locateRow(
+  lowerLines: string[],
   description: string,
-  start: number,
+  fromIdx: number,
 ): number {
   if (!description) return -1;
-  // Strip common enrichment prefixes added by extractors (e.g. "[Block 10] ")
   const stripped = description.replace(/^\s*\[[^\]]+\]\s*/, "").trim();
-  const candidate = stripped.length >= 4 ? stripped : description;
-  const needle40 = candidate.slice(0, 40).toLowerCase();
-  if (needle40.length >= 6) {
-    for (let i = start; i < lines.length; i++) {
-      if (lines[i].text.toLowerCase().includes(needle40)) return i;
+  const candidate = (stripped.length >= 4 ? stripped : description).toLowerCase();
+
+  const n40 = candidate.slice(0, 40);
+  if (n40.length >= 8) {
+    for (let i = fromIdx; i < lowerLines.length; i++) {
+      if (lowerLines[i].includes(n40)) return i;
     }
   }
-  const needle20 = candidate.slice(0, 20).toLowerCase();
-  if (needle20.length >= 5) {
-    for (let i = start; i < lines.length; i++) {
-      if (lines[i].text.toLowerCase().includes(needle20)) return i;
+  const n24 = candidate.slice(0, 24);
+  if (n24.length >= 6) {
+    for (let i = fromIdx; i < lowerLines.length; i++) {
+      if (lowerLines[i].includes(n24)) return i;
+    }
+  }
+  // Secondary global search (wrap back) for items that appeared out of
+  // extractor order.
+  const n40global = candidate.slice(0, 40);
+  if (n40global.length >= 8) {
+    for (let i = 0; i < lowerLines.length; i++) {
+      if (lowerLines[i].includes(n40global)) return i;
     }
   }
   return -1;
@@ -385,6 +337,7 @@ function summarise(
   items: ScopeMarkerItem[],
   runtime_ms: number,
   source_counts: Record<ScopeMarkerSource, number>,
+  unlocated_rows: number,
 ): ScopeMarkerSummary {
   let main_count = 0;
   let optional_count = 0;
@@ -414,6 +367,7 @@ function summarise(
     optional_total: round2(optional_total),
     excluded_total: round2(excluded_total),
     source_counts,
+    unlocated_rows,
     runtime_ms,
   };
 }
@@ -429,11 +383,10 @@ function emptySummary(runtime_ms: number): ScopeMarkerSummary {
     excluded_total: 0,
     source_counts: {
       row_description: 0,
-      table_heading: 0,
-      page_heading: 0,
-      section_inherit: 0,
+      section_heading: 0,
       default_main: 0,
     },
+    unlocated_rows: 0,
     runtime_ms,
   };
 }

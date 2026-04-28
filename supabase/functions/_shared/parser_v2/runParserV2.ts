@@ -452,6 +452,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       try {
         scope_marker_detection = runScopeMarkerDetection({
           items,
+          rawText: effectiveRawText,
           pages: effectivePages,
         });
         items = scope_marker_detection.items;
