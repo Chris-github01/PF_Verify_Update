@@ -99,6 +99,21 @@ If the row itself contains an explicit label, use it directly:
 STEP 2 — Nearest parent section / header (SECTION STACK — STICKY UNTIL EXPLICITLY ENDED)
 Walk UP the page from the row to find the closest governing header (in-table header, page banner, or section title). Inherit role from that header.
 
+PER-BLOCK DEFAULT (CRITICAL):
+A "block reset" header is any line of the shape "BLOCK XX", "LEVEL X",
+"FLOOR X", "BUILDING X", "TOWER X", "STAGE X", "AREA X", or "ZONE X". When
+a block reset header appears, every subsequent priced row in that block
+defaults to scope_category = "main" UNTIL one of the following overrides
+fires:
+  (a) An explicit STEP 1 row label sets a different role.
+  (b) An in-block sub-header from the OPTIONAL or EXCLUDED indicator lists
+      below appears — from that sub-header onward, rows are optional /
+      excluded per the sticky rule.
+  (c) The next block reset (which restarts the default at "main").
+This default applies even when no explicit "MAIN SCOPE" / "BREAKDOWN"
+sub-header is printed inside the block. A bare "BLOCK 32" header followed
+directly by priced rows means those rows are MAIN.
+
 MAIN indicators (any of these → scope_category = "main"):
   - "breakdown", "identified on drawings", "included works", "base scope",
     "tender scope", "building breakdown", "level breakdown", "floor breakdown",
@@ -141,6 +156,12 @@ treat that as the currently active sticky section header carried forward
 from the previous chunk. Apply its role to every row in this chunk UNTIL
 a new in-chunk header overrides it per the rules above. Do NOT emit the
 ACTIVE SECTION CONTEXT line as an item.
+
+If the chunk's first non-banner line is a block reset header (BLOCK / LEVEL
+/ FLOOR / BUILDING / TOWER / STAGE / AREA / ZONE), IGNORE the
+ACTIVE SECTION CONTEXT line. Block resets always restart the section stack,
+so rows in the new block follow the PER-BLOCK DEFAULT rule (default = main
+until an in-block Optional/Excluded sub-header appears).
 
 STEP 3 — Authoritative quote total reconciliation
 Cross-check against the authoritative total excl GST (front-page summary or master roll-up). Items already rolled into the authoritative main total are "main". Items that would push the sum above the authoritative total, or sit under "add to scope" / "items with confirmation", are "optional".

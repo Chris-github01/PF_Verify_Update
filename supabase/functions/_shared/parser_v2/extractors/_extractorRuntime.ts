@@ -701,6 +701,17 @@ const EXCLUDED_HEADER_RE = /\b(exclusions?|not\s+included|clarifications?)\b/i;
 const BLOCK_RESET_RE =
   /^\s*(block|level|floor|building|tower|stage|area|zone)\s+[A-Z0-9][\w-]*\b/i;
 
+function chunkStartsWithBlockReset(body: string): boolean {
+  const lines = body.split(/\r?\n/);
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (/^\[Page\s+\d+\]/i.test(line)) continue;
+    return BLOCK_RESET_RE.test(line);
+  }
+  return false;
+}
+
 function scanLastSectionHeader(text: string): ActiveSection {
   const lines = text.split(/\r?\n/);
   let last: ActiveSection = null;
@@ -770,11 +781,13 @@ function buildChunks(
   for (const r of raw) {
     const parts: string[] = [];
     if (bannerPreamble) parts.push(bannerPreamble);
-    if (carry) {
+    const dropCarry = carry != null && chunkStartsWithBlockReset(r.body);
+    if (carry && !dropCarry) {
       parts.push(
         `ACTIVE SECTION CONTEXT: ${carry.header} [role=${carry.role}]`,
       );
     }
+    if (dropCarry) carry = null;
     parts.push(r.body);
     chunks.push({
       text: parts.join("\n\n"),
