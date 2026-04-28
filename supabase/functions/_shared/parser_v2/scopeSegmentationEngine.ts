@@ -335,9 +335,9 @@ function extractAllHeadings(
 }
 
 function looksLikeHeading(line: string): boolean {
+  if (RESET_HEADING_RE.test(line)) return true;
   if (/\$\s*\d/.test(line) && !looksLikeSubtotal(line)) return false;
   if (/^\s*\d[\d,]*\.\d{2}\s*$/.test(line)) return false;
-  if (RESET_HEADING_RE.test(line)) return true;
   if (
     /\b(optional|excluded|exclusions?|inclusions?|scope|summary|breakdown|estimate|tender|subtotal|sub[-\s]?total|grand\s+total|total\s+ex|by\s+others|not\s+included|alternates?|extras?|tbc|confirmation|drawings?|schedule|provisional|allowance|nic|by\s+main|by\s+client|reference\s+only|rate\s+only|add\s+to\s+scope|items\s+with\s+confirmation|carried\s+forward)\b/i
       .test(line)
