@@ -123,7 +123,60 @@ interface ParsingJob {
       review_reason?: string | null;
       quote_total_ex_gst?: number | null;
     } | null;
+    extraction_debug?: {
+      chunks?: ExtractorChunkDebug[];
+    } | null;
   } | null;
+}
+
+interface ExtractorChunkDebug {
+  chunk_index?: number;
+  page_range?: string;
+  rows_received?: number;
+  rows_after_normalize?: number;
+  rows_after_validation?: number;
+  empty_reason?: string | null;
+  parse_error?: string | null;
+  schema_error?: string | null;
+  http_status?: number | null;
+  error_message?: string | null;
+  salvaged?: boolean;
+  root_alias_used?: string | null;
+}
+
+const FAILURE_REASONS = new Set([
+  'quota_exceeded',
+  'rate_limited',
+  'auth_failed',
+  'bad_request',
+  'server_error',
+  'network_error',
+  'request_timeout',
+  'stage_budget_exceeded',
+  'chunk_timeout_or_failure',
+  'parse_failed',
+  'schema_failed',
+  'all_rows_invalid',
+  'no_items_key',
+  'mapper_rejected',
+  'empty_response_content',
+  'skipped_no_budget',
+]);
+
+function isChunkFailure(c: ExtractorChunkDebug): boolean {
+  if (c.empty_reason && FAILURE_REASONS.has(c.empty_reason)) return true;
+  if ((c.rows_after_validation ?? 0) === 0 && (c.rows_received ?? 0) === 0) return true;
+  return false;
+}
+
+function reasonColor(reason: string | null | undefined): string {
+  if (!reason) return 'text-slate-400';
+  if (reason === 'quota_exceeded' || reason === 'auth_failed') return 'text-red-400';
+  if (reason === 'rate_limited' || reason === 'request_timeout' || reason === 'stage_budget_exceeded')
+    return 'text-amber-400';
+  if (reason === 'server_error' || reason === 'network_error' || reason === 'bad_request')
+    return 'text-orange-400';
+  return 'text-slate-300';
 }
 
 const STAGE_DISPLAY_NAMES: Record<string, string> = {
@@ -400,6 +453,81 @@ function ParserV2ReportPanel({ v2, job }: { v2: NonNullable<ParsingJob['parser_v
           ) : (
             <div className="text-slate-500">No V2 output recorded.</div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChunkDiagnosticsPanel({ chunks }: { chunks: ExtractorChunkDebug[] }) {
+  const [open, setOpen] = useState(false);
+  if (!chunks || chunks.length === 0) return null;
+
+  const failed = chunks.filter(isChunkFailure);
+  if (failed.length === 0) return null;
+
+  const reasonCounts = new Map<string, number>();
+  for (const c of failed) {
+    const r = c.empty_reason ?? 'unknown';
+    reasonCounts.set(r, (reasonCounts.get(r) ?? 0) + 1);
+  }
+  const summary = Array.from(reasonCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([r, n]) => `${r}×${n}`)
+    .join(', ');
+
+  return (
+    <div className="mt-2 ml-7">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+      >
+        <AlertTriangle size={12} className="text-amber-400" />
+        Chunk diagnostics
+        <span className="text-slate-500">
+          [<span className="text-red-400">{failed.length} failed</span> / {chunks.length} total]
+        </span>
+        <span className="text-amber-400">— {summary}</span>
+        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {open && (
+        <div className="mt-1.5 font-mono text-xs bg-slate-900/60 border border-slate-700 rounded overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-700/60 text-slate-500">
+                <th className="px-2 py-1 font-normal">#</th>
+                <th className="px-2 py-1 font-normal">pages</th>
+                <th className="px-2 py-1 font-normal text-right">rows</th>
+                <th className="px-2 py-1 font-normal">empty_reason</th>
+                <th className="px-2 py-1 font-normal text-right">http</th>
+                <th className="px-2 py-1 font-normal">error_message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chunks.map((c, i) => {
+                const fail = isChunkFailure(c);
+                return (
+                  <tr
+                    key={i}
+                    className={`border-b border-slate-800/60 last:border-0 ${fail ? 'bg-red-950/20' : ''}`}
+                  >
+                    <td className="px-2 py-1 text-slate-500">{c.chunk_index ?? i}</td>
+                    <td className="px-2 py-1 text-slate-300">{c.page_range ?? '—'}</td>
+                    <td className="px-2 py-1 text-right text-slate-300">
+                      {c.rows_after_validation ?? c.rows_received ?? 0}
+                    </td>
+                    <td className={`px-2 py-1 ${reasonColor(c.empty_reason)}`}>
+                      {c.empty_reason ?? '—'}
+                    </td>
+                    <td className="px-2 py-1 text-right text-slate-400">{c.http_status ?? '—'}</td>
+                    <td className="px-2 py-1 text-slate-400 break-all max-w-[420px]">
+                      {c.error_message ?? c.parse_error ?? c.schema_error ?? '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -944,6 +1072,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                   )}
                   {trace && <TraceReportPanel trace={trace} job={job} />}
                   {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} job={job} />}
+                  {job.parser_v2_output?.extraction_debug?.chunks && <ChunkDiagnosticsPanel chunks={job.parser_v2_output.extraction_debug.chunks} />}
                 </div>
               );
             })}
@@ -984,6 +1113,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                           )}
                           {trace && <TraceReportPanel trace={trace} job={job} />}
                           {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} job={job} />}
+                  {job.parser_v2_output?.extraction_debug?.chunks && <ChunkDiagnosticsPanel chunks={job.parser_v2_output.extraction_debug.chunks} />}
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
@@ -1066,6 +1196,7 @@ export default function ParsingJobMonitor({ projectId, onJobCompleted, dashboard
                           )}
                           {trace && <TraceReportPanel trace={trace} job={job} />}
                           {job.parser_v2_output && <ParserV2ReportPanel v2={job.parser_v2_output} job={job} />}
+                  {job.parser_v2_output?.extraction_debug?.chunks && <ChunkDiagnosticsPanel chunks={job.parser_v2_output.extraction_debug.chunks} />}
                         </div>
                         <button
                           onClick={() => handleResumeJob(job.id)}
