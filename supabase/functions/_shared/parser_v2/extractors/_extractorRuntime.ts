@@ -688,6 +688,49 @@ function parsePageRange(pageRange: string): { first: number; last: number } | nu
   return { first, last };
 }
 
+type ActiveSection = { header: string; role: "main" | "optional" | "excluded" } | null;
+
+const MAIN_HEADER_RE =
+  /\b(quote\s+breakdown|scope\s+breakdown|price\s+breakdown|pricing\s+summary|tender\s+breakdown|breakdown|identified\s+on\s+drawings|included\s+works|included\s+scope|base\s+scope|tender\s+scope|main\s+scope|schedule\s+of\s+works|building\s+breakdown|level\s+breakdown|floor\s+breakdown|services\s+identified\s+not\s+part\s+of\s+passive\s+fire\s+(schedule|scope)|services\s+not\s+in\s+passive\s+fire\s+scope)\b/i;
+
+const OPTIONAL_HEADER_RE =
+  /\b(optional\s+scope|optional\s+extras?|not\s+shown\s+on\s+drawings|add[\s-]?to[\s-]?scope|items?\s+with\s+confirmation|items?\s+requiring\s+confirmation|extra\s+over|variation\s+items?|provisional\s+scope|provisional\s+items?|tbc\s+items?|tbc\s+scope|alternate\s+scope|additional\s+items?|architectural\s*\/?\s*structural\s+details?|structural\s+details?)\b/i;
+
+const EXCLUDED_HEADER_RE = /\b(exclusions?|not\s+included|clarifications?)\b/i;
+
+const BLOCK_RESET_RE =
+  /^\s*(block|level|floor|building|tower|stage|area|zone)\s+[A-Z0-9][\w-]*\b/i;
+
+function scanLastSectionHeader(text: string): ActiveSection {
+  const lines = text.split(/\r?\n/);
+  let last: ActiveSection = null;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.length > 200) continue;
+    if (BLOCK_RESET_RE.test(line) && !OPTIONAL_HEADER_RE.test(line) && !MAIN_HEADER_RE.test(line)) {
+      last = null;
+      continue;
+    }
+    const isHeaderShape =
+      line === line.toUpperCase() ||
+      /^[A-Z][A-Za-z\s\/\-&()]{2,80}[:]?$/.test(line) ||
+      line.endsWith(":");
+    if (!isHeaderShape) continue;
+    const hasDigits = /\d/.test(line);
+    const looksLikePrice = /\$|\d[\d,]*\.\d{2}/.test(line);
+    if (looksLikePrice) continue;
+    if (hasDigits && !/\b(level|floor|stage)\b/i.test(line)) continue;
+    if (OPTIONAL_HEADER_RE.test(line)) {
+      last = { header: line.slice(0, 120), role: "optional" };
+    } else if (EXCLUDED_HEADER_RE.test(line)) {
+      last = { header: line.slice(0, 120), role: "excluded" };
+    } else if (MAIN_HEADER_RE.test(line)) {
+      last = { header: line.slice(0, 120), role: "main" };
+    }
+  }
+  return last;
+}
+
 function buildChunks(
   pages: { pageNum: number; text: string }[],
   rawText: string,
@@ -699,15 +742,14 @@ function buildChunks(
     }));
   }
   const bannerPreamble = buildBannerPreamble(pages);
-  const chunks: Chunk[] = [];
+  const raw: { body: string; firstPage: number; lastPage: number }[] = [];
   let buffer = "";
   let firstPage = pages[0].pageNum;
   let lastPage = pages[0].pageNum;
 
   const flush = () => {
     if (!buffer.trim()) return;
-    const text = bannerPreamble ? `${bannerPreamble}\n\n${buffer}` : buffer;
-    chunks.push({ text, pageRange: `p${firstPage}-p${lastPage}` });
+    raw.push({ body: buffer, firstPage, lastPage });
     buffer = "";
   };
 
@@ -722,6 +764,25 @@ function buildChunks(
     buffer += block;
   }
   flush();
+
+  const chunks: Chunk[] = [];
+  let carry: ActiveSection = null;
+  for (const r of raw) {
+    const parts: string[] = [];
+    if (bannerPreamble) parts.push(bannerPreamble);
+    if (carry) {
+      parts.push(
+        `ACTIVE SECTION CONTEXT: ${carry.header} [role=${carry.role}]`,
+      );
+    }
+    parts.push(r.body);
+    chunks.push({
+      text: parts.join("\n\n"),
+      pageRange: `p${r.firstPage}-p${r.lastPage}`,
+    });
+    const found = scanLastSectionHeader(r.body);
+    if (found) carry = found;
+  }
   return chunks;
 }
 

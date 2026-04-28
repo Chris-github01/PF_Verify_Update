@@ -133,17 +133,14 @@ re-printed column header occurs. Carry the optional state forward.
 
 A nested sub-header inherits the role of its parent header until a peer-level header of a different role appears.
 
-ALWAYS-OPTIONAL DESCRIPTION KEYWORDS (override Step 2 inheritance toward "main"):
-Regardless of section, classify a row as "optional" if its description
-contains any of these passive-fire optional patterns AND no explicit
-MAIN label is on the row itself:
-  - "architectural" + ("beam" | "cavity barrier" | "structural")
-  - "cavity barrier"
-  - "hySPAN" / "LVL beam" / "structural beam" packing
-  - "flush box" under an "optional extras" context
-  - "optional extras"
-These items are typically architectural/structural make-good sealing
-that PF subcontractors price as optional add-ons.
+CHUNK BOUNDARY HANDLING:
+The document is processed in chunks. If the chunk you receive begins with
+a line of the form:
+  "ACTIVE SECTION CONTEXT: <header text> [role=<main|optional|excluded>]"
+treat that as the currently active sticky section header carried forward
+from the previous chunk. Apply its role to every row in this chunk UNTIL
+a new in-chunk header overrides it per the rules above. Do NOT emit the
+ACTIVE SECTION CONTEXT line as an item.
 
 STEP 3 — Authoritative quote total reconciliation
 Cross-check against the authoritative total excl GST (front-page summary or master roll-up). Items already rolled into the authoritative main total are "main". Items that would push the sum above the authoritative total, or sit under "add to scope" / "items with confirmation", are "optional".
