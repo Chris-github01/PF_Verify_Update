@@ -45,6 +45,14 @@ export type ExtractorEmptyReason =
   | "mapper_rejected"
   | "empty_response_content"
   | "chunk_timeout_or_failure"
+  | "request_timeout"
+  | "stage_budget_exceeded"
+  | "quota_exceeded"
+  | "rate_limited"
+  | "auth_failed"
+  | "bad_request"
+  | "server_error"
+  | "network_error"
   | "skipped_no_budget"
   | null;
 
@@ -62,6 +70,8 @@ export type ExtractorChunkDebug = {
   empty_reason: ExtractorEmptyReason;
   salvaged: boolean;
   root_alias_used: string | null;
+  http_status: number | null;
+  error_message: string | null;
 };
 
 export type ExtractorResult = {
@@ -113,6 +123,8 @@ export async function runExtractorLLMWithTelemetry(
     empty_reason: null,
     salvaged: false,
     root_alias_used: null,
+    http_status: null,
+    error_message: null,
   });
 
   const runChunk = async (
@@ -149,8 +161,9 @@ export async function runExtractorLLMWithTelemetry(
       `chunk ${i}`,
     );
     if (result == null) {
-      d.empty_reason = "chunk_timeout_or_failure";
-      d.parse_error = "chunk_timeout_or_failure";
+      d.empty_reason = "stage_budget_exceeded";
+      d.parse_error = "stage_budget_exceeded";
+      d.error_message = `chunk ${i} exceeded chunk budget ${budget}ms`;
       return { rows: null, debug: d };
     }
     d.raw_response_text = result.rawResponseText;
@@ -162,6 +175,8 @@ export async function runExtractorLLMWithTelemetry(
     d.empty_reason = result.emptyReason;
     d.salvaged = result.salvaged;
     d.root_alias_used = result.rootAliasUsed;
+    d.http_status = result.httpStatus;
+    d.error_message = result.errorMessage;
     return { rows: result.rows, debug: d };
   };
 
@@ -238,6 +253,8 @@ type ChunkCallResult = {
   emptyReason: ExtractorEmptyReason;
   salvaged: boolean;
   rootAliasUsed: string | null;
+  httpStatus: number | null;
+  errorMessage: string | null;
 };
 
 async function callOpenAIWithRetry(args: {
@@ -246,8 +263,11 @@ async function callOpenAIWithRetry(args: {
   userPayload: Record<string, unknown>;
   trade: string;
   chunkIndex: number;
-}): Promise<ChunkCallResult | null> {
+}): Promise<ChunkCallResult> {
   let lastErr: unknown = null;
+  let lastReason: ExtractorEmptyReason = "chunk_timeout_or_failure";
+  let lastHttpStatus: number | null = null;
+  let lastErrorBody: string | null = null;
   const userJson = JSON.stringify(args.userPayload);
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const abortCtl = new AbortController();
@@ -276,12 +296,34 @@ async function callOpenAIWithRetry(args: {
           ],
         }),
       });
-      if (res.status === 429 || res.status >= 500) {
-        throw new Error(`transient HTTP ${res.status}`);
+      if (res.status === 429) {
+        const bodyTxt = await res.text().catch(() => "");
+        const isQuota = /insufficient_quota|exceeded.*quota|hard limit|spending.*limit/i.test(bodyTxt);
+        lastHttpStatus = 429;
+        lastErrorBody = bodyTxt.slice(0, 500);
+        lastReason = isQuota ? "quota_exceeded" : "rate_limited";
+        throw new Error(`HTTP 429 ${isQuota ? "quota_exceeded" : "rate_limited"}: ${bodyTxt.slice(0, 200)}`);
+      }
+      if (res.status >= 500) {
+        const bodyTxt = await res.text().catch(() => "");
+        lastHttpStatus = res.status;
+        lastErrorBody = bodyTxt.slice(0, 500);
+        lastReason = "server_error";
+        throw new Error(`HTTP ${res.status} server_error: ${bodyTxt.slice(0, 200)}`);
+      }
+      if (res.status === 401 || res.status === 403) {
+        const bodyTxt = await res.text().catch(() => "");
+        lastHttpStatus = res.status;
+        lastErrorBody = bodyTxt.slice(0, 500);
+        lastReason = "auth_failed";
+        throw new Error(`HTTP ${res.status} auth_failed: ${bodyTxt.slice(0, 200)}`);
       }
       if (!res.ok) {
         const bodyTxt = await res.text().catch(() => "");
-        throw new Error(`fatal HTTP ${res.status}: ${bodyTxt.slice(0, 200)}`);
+        lastHttpStatus = res.status;
+        lastErrorBody = bodyTxt.slice(0, 500);
+        lastReason = "bad_request";
+        throw new Error(`HTTP ${res.status} bad_request: ${bodyTxt.slice(0, 200)}`);
       }
       const json = await res.json();
       markLlmCallDuration(Date.now() - reqStart, EXTRACTOR_MODEL);
@@ -298,6 +340,8 @@ async function callOpenAIWithRetry(args: {
           emptyReason: "empty_response_content",
           salvaged: false,
           rootAliasUsed: null,
+          httpStatus: res.status,
+          errorMessage: null,
         };
       }
       const rawResponseText = content.slice(0, MAX_RAW_RESPONSE_PERSIST);
@@ -327,6 +371,8 @@ async function callOpenAIWithRetry(args: {
             emptyReason: picked.rows.length === 0 ? "empty_array" : null,
             salvaged: false,
             rootAliasUsed: picked.alias,
+            httpStatus: res.status,
+            errorMessage: null,
           };
         }
         console.warn(
@@ -342,6 +388,8 @@ async function callOpenAIWithRetry(args: {
           emptyReason: "no_items_key",
           salvaged: false,
           rootAliasUsed: null,
+          httpStatus: res.status,
+          errorMessage: null,
         };
       }
 
@@ -361,6 +409,8 @@ async function callOpenAIWithRetry(args: {
           emptyReason: null,
           salvaged: true,
           rootAliasUsed: "salvage",
+          httpStatus: res.status,
+          errorMessage: null,
         };
       }
       return {
@@ -373,15 +423,23 @@ async function callOpenAIWithRetry(args: {
         emptyReason: "parse_failed",
         salvaged: false,
         rootAliasUsed: null,
+        httpStatus: res.status,
+        errorMessage: parseError,
       };
     } catch (err) {
       lastErr = err;
       const isAbort = (err as Error)?.name === "AbortError";
       if (isAbort) {
+        lastReason = "request_timeout";
+        lastErrorBody = `aborted after ${PER_REQUEST_BUDGET_MS}ms`;
         console.warn(
           `[extractor:${args.trade}] chunk ${args.chunkIndex} attempt ${attempt} aborted after ${PER_REQUEST_BUDGET_MS}ms`,
         );
         break;
+      }
+      if (lastHttpStatus == null) {
+        lastReason = "network_error";
+        lastErrorBody = ((err as Error)?.message ?? String(err)).slice(0, 500);
       }
       const backoff = 300 * Math.pow(2, attempt);
       await new Promise((r) => setTimeout(r, backoff));
@@ -390,10 +448,22 @@ async function callOpenAIWithRetry(args: {
     }
   }
   console.error(
-    `[extractor:${args.trade}] chunk ${args.chunkIndex} failed after ${MAX_RETRIES} attempts`,
+    `[extractor:${args.trade}] chunk ${args.chunkIndex} failed (${lastReason}) after ${MAX_RETRIES} attempts`,
     lastErr,
   );
-  return null;
+  return {
+    rows: null,
+    rawResponseText: null,
+    parsedJson: null,
+    topLevelKeys: [],
+    parseError: lastReason,
+    schemaError: null,
+    emptyReason: lastReason,
+    salvaged: false,
+    rootAliasUsed: null,
+    httpStatus: lastHttpStatus,
+    errorMessage: lastErrorBody,
+  };
 }
 
 function stripJsonFences(s: string): string {
