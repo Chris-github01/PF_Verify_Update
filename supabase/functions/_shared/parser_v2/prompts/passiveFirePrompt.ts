@@ -96,21 +96,54 @@ If the row itself contains an explicit label, use it directly:
   - "excluded" / "not included" → scope_category = "excluded"
   - Otherwise continue to STEP 2.
 
-STEP 2 — Nearest parent section / header
+STEP 2 — Nearest parent section / header (SECTION STACK — STICKY UNTIL EXPLICITLY ENDED)
 Walk UP the page from the row to find the closest governing header (in-table header, page banner, or section title). Inherit role from that header.
 
 MAIN indicators (any of these → scope_category = "main"):
   - "breakdown", "identified on drawings", "included works", "base scope",
     "tender scope", "building breakdown", "level breakdown", "floor breakdown",
-    "schedule of works", "quote breakdown", "main scope"
+    "schedule of works", "quote breakdown", "main scope",
+    "services identified not part of passive fire schedule",
+    "services not in passive fire scope"
 
 OPTIONAL indicators (any of these → scope_category = "optional"):
-  - "optional scope", "not shown on drawings", "add to scope",
+  - "optional scope", "optional scope (confirmation required)",
+    "not shown on drawings", "add to scope",
     "items with confirmation", "extra over", "variation items",
     "provisional", "TBC items", "items requiring confirmation",
-    "additional items", "alternate scope"
+    "additional items", "alternate scope",
+    "architectural / structural details", "architectural/structural details",
+    "structural details", "optional extras"
+
+CRITICAL — STICKY OPTIONAL SUB-HEADERS WITHIN A BLOCK / LEVEL TABLE:
+When a per-block table (e.g. "BLOCK 30", "BLOCK 32", "LEVEL 1", "BUILDING B")
+contains an in-table sub-header such as "OPTIONAL SCOPE", "OPTIONAL SCOPE
+(CONFIRMATION REQUIRED)", "ARCHITECTURAL / STRUCTURAL DETAILS", or
+"OPTIONAL EXTRAS", that sub-header is STICKY. EVERY subsequent row in that
+block — across multiple pages if needed — is scope_category = "optional"
+UNTIL one of the following ends the optional sub-section:
+  (a) a NEW block / level / building header appears (e.g. "BLOCK 33"), OR
+  (b) an explicit MAIN-indicator sub-header appears (e.g. "BREAKDOWN",
+      "SCHEDULE OF WORKS", "SERVICES IDENTIFIED NOT PART OF PASSIVE
+      FIRE SCHEDULE" — note the latter is MAIN, not optional), OR
+  (c) the document ends.
+
+Do NOT reset to "main" just because a page break, table border, or
+re-printed column header occurs. Carry the optional state forward.
 
 A nested sub-header inherits the role of its parent header until a peer-level header of a different role appears.
+
+ALWAYS-OPTIONAL DESCRIPTION KEYWORDS (override Step 2 inheritance toward "main"):
+Regardless of section, classify a row as "optional" if its description
+contains any of these passive-fire optional patterns AND no explicit
+MAIN label is on the row itself:
+  - "architectural" + ("beam" | "cavity barrier" | "structural")
+  - "cavity barrier"
+  - "hySPAN" / "LVL beam" / "structural beam" packing
+  - "flush box" under an "optional extras" context
+  - "optional extras"
+These items are typically architectural/structural make-good sealing
+that PF subcontractors price as optional add-ons.
 
 STEP 3 — Authoritative quote total reconciliation
 Cross-check against the authoritative total excl GST (front-page summary or master roll-up). Items already rolled into the authoritative main total are "main". Items that would push the sum above the authoritative total, or sit under "add to scope" / "items with confirmation", are "optional".
