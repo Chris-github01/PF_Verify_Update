@@ -1,20 +1,20 @@
 /**
  * Scope Segmentation Engine — Parser V2 stage 8.
  *
- * Inserted after `extraction` and before `pf_authoritative_total`. Re-tags
- * each extracted row with one of Main / Optional / Excluded / Unknown based
- * on structural evidence rather than row-by-row guesses.
+ * Section-anchored classifier. Document layout (block resets + scope
+ * sub-headers) is the authoritative source of truth for Main / Optional /
+ * Excluded / Provisional. Item description heuristics act only as a
+ * tiebreaker when no section anchor is present, and totals reconciliation
+ * is a soft validator — it never invents rows.
  *
- * Layer order:
- *   1. Explicit label detection (rawText scan + heading map)
- *   2. Page / block inheritance (Block / Building / Level / Tower / Stage)
- *   3. Description keyword classifier
- *   4. Total reconciliation solver (greedy + small subset, +/- 1.5%)
- *   5. Confidence scoring
- *
- * The engine NEVER mutates totals. It only updates `scope_category`,
- * `scope_confidence`, and `scope_reason` on items. When deterministic
- * confidence < 0.85 for any row, an LLM pass is run for that batch only.
+ * Pipeline:
+ *   1. segmentDocument(pages) -> ordered SectionMarker[]
+ *   2. For each row: anchor by globalLine -> active scope at that line
+ *   3. Keyword tiebreaker for rows still Unknown
+ *   4. Excluded keyword override ("by others", "not included")
+ *   5. Totals reconciliation as validator (only flips Unknown/low-conf rows)
+ *   6. Optional LLM resolve for residual ambiguous rows
+ *   7. Confidence failsafe
  */
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
@@ -69,49 +69,64 @@ export type ScopeSegmentationInput = {
 };
 
 // --------------------------------------------------------------------------
-// Heading detection (Layer 1)
+// Section vocabulary — generic across trades and quote shapes.
+// Patterns are anchored to whole-line shape so they only match true headers,
+// not item descriptions that happen to contain the words.
 // --------------------------------------------------------------------------
 
-const MAIN_LABEL_PATTERNS: RegExp[] = [
-  /\bincluded\s+scope\b/i,
-  /\bquote\s+summary\b/i,
+const MAIN_HEADER_PATTERNS: RegExp[] = [
+  /^\s*main\s+scope\s*:?\s*$/i,
+  /^\s*included\s+scope\s*:?\s*$/i,
+  /^\s*base\s+scope\s*:?\s*$/i,
+  /^\s*contract\s+works\s*:?\s*$/i,
+  /^\s*main\s+works\s*:?\s*$/i,
+  /^\s*schedule\s+of\s+works\s*:?\s*$/i,
+  /^\s*included\s+items?\s*:?\s*$/i,
+  /^\s*items?\s+identified\s+on\s+drawings\s*:?\s*$/i,
+  /^\s*identified\s+on\s+drawings\s*:?\s*$/i,
+  /^\s*penetration\s+works\s*:?\s*$/i,
+  /^\s*quote\s+breakdown\s*:?\s*$/i,
+  /^\s*estimate\s+summary\s*:?\s*$/i,
+  /^\s*quote\s+summary\s*:?\s*$/i,
+  /^\s*tender\s+summary\s*:?\s*$/i,
   /\bsub[\s-]?total\b/i,
-  /\bbase\s+scope\b/i,
-  /\bcontract\s+works\b/i,
-  /\bmain\s+works\b/i,
-  /\bschedule\s+of\s+works\b/i,
-  /\bincluded\s+items\b/i,
-  /\bitems?\s+identified\s+on\s+drawings\b/i,
-  /\bidentified\s+on\s+drawings\b/i,
-  /\bpenetration\s+works\b/i,
-  /\bestimate\s+summary\b/i,
-  /\bquote\s+breakdown\b/i,
-  /\bmain\s+scope\b/i,
 ];
 
-const OPTIONAL_LABEL_PATTERNS: RegExp[] = [
-  /\boptional\s+scope\b/i,
-  /\boptional\s+extras?\b/i,
-  /\badd\s+to\s+scope\b/i,
-  /\bconfirmation\s+required\b/i,
-  /\bnot\s+shown\s+on\s+drawings\b/i,
-  /\bextra\s+over\b/i,
-  /\bTBC\s+breakdown\b/i,
-  /\bitems?\s+with\s+confirmation\b/i,
-  /\bitems?\s+requiring\s+confirmation\b/i,
-  /\bcan\s+be\s+removed\b/i,
-  /\bestimate\s+items\s+not\s+shown\s+on\s+drawings\b/i,
-  /\boptional\b/i,
-  /\barchitectural\s*\/?\s*structural\s+details?\b/i,
+const OPTIONAL_HEADER_PATTERNS: RegExp[] = [
+  /^\s*optional\s+scope\s*:?\s*$/i,
+  /^\s*optional\s+extras?\s*:?\s*$/i,
+  /^\s*optional\s+items?\s*:?\s*$/i,
+  /^\s*optional\s*:?\s*$/i,
+  /^\s*add\s+to\s+scope\s*:?\s*$/i,
+  /^\s*additional\s+items?\s*:?\s*$/i,
+  /^\s*confirmation\s+required\s*:?\s*$/i,
+  /^\s*items?\s+requiring\s+confirmation\s*:?\s*$/i,
+  /^\s*items?\s+not\s+shown\s+on\s+drawings\s*:?\s*$/i,
+  /^\s*not\s+shown\s+on\s+drawings\s*:?\s*$/i,
+  /^\s*estimate\s+items?\s+not\s+shown\s+on\s+drawings\s*:?\s*$/i,
+  /^\s*extras?\s+over\s*:?\s*$/i,
+  /^\s*alternates?\s*:?\s*$/i,
+  /^\s*upgrade\s+options?\s*:?\s*$/i,
+  /^\s*can\s+be\s+removed\s*:?\s*$/i,
+  /^\s*tbc\s+breakdown\s*:?\s*$/i,
+  /^\s*items?\s+for\s+confirmation\s*:?\s*$/i,
 ];
 
-const EXCLUDED_LABEL_PATTERNS: RegExp[] = [
-  /\bexclusions?\b/i,
-  /\bexcluded\b/i,
-  /\bby\s+others\b/i,
-  /\bno\s+allowance\b/i,
-  /\bnot\s+included\b/i,
-  /\bclarifications?\b/i,
+const EXCLUDED_HEADER_PATTERNS: RegExp[] = [
+  /^\s*exclusions?\s*:?\s*$/i,
+  /^\s*excluded\s+items?\s*:?\s*$/i,
+  /^\s*excluded\s*:?\s*$/i,
+  /^\s*not\s+included\s*:?\s*$/i,
+  /^\s*items?\s+not\s+included\s*:?\s*$/i,
+  /^\s*services?\s+not\s+part\s+of\b/i,
+  /^\s*clarifications?\s*:?\s*$/i,
+];
+
+const PROVISIONAL_HEADER_PATTERNS: RegExp[] = [
+  /^\s*provisional\s+sums?\s*:?\s*$/i,
+  /^\s*provisional\s+items?\s*:?\s*$/i,
+  /^\s*provisional\s*:?\s*$/i,
+  /^\s*pc\s+sums?\s*:?\s*$/i,
 ];
 
 const BLOCK_RESET_RE =
@@ -120,79 +135,30 @@ const BLOCK_RESET_RE =
 // Description-embedded block hint, e.g. "[Block B30] ..." inserted by upstream
 // extractors so a row can be re-anchored to its source block even when the
 // extracted_items array isn't in document order.
-const BLOCK_HINT_RE = /\[\s*(?:block|level|floor|building|tower|stage|area|zone)\s+([A-Za-z0-9][\w-]*)\s*\]/i;
+const BLOCK_HINT_RE =
+  /\[\s*(?:block|level|floor|building|tower|stage|area|zone)\s+([A-Za-z0-9][\w-]*)\s*\]/i;
 
-function extractBlockHint(desc: string | null | undefined): string | null {
-  if (!desc) return null;
-  const m = desc.match(BLOCK_HINT_RE);
-  if (!m) return null;
-  return normaliseBlockToken(m[1]);
-}
+// --------------------------------------------------------------------------
+// Section markers
+// --------------------------------------------------------------------------
 
-function normaliseBlockToken(raw: string): string {
-  return raw.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
-}
+type MarkerKind =
+  | "block"
+  | "scope_main"
+  | "scope_optional"
+  | "scope_excluded"
+  | "scope_provisional";
 
-function indexBlocksByToken(blocks: BlockMarker[]): Map<string, BlockMarker> {
-  const map = new Map<string, BlockMarker>();
-  for (const b of blocks) {
-    const m = b.text.match(/^\s*(?:block|level|floor|building|tower|stage|area|zone|basement)\s+([A-Za-z0-9][\w-]*)/i);
-    if (!m) continue;
-    const tokenFull = normaliseBlockToken(m[1]);
-    if (tokenFull && !map.has(tokenFull)) map.set(tokenFull, b);
-    // Also index a stripped numeric/letter-suffix variant: B30 -> 30, 30 -> b30
-    const digits = tokenFull.replace(/^[a-z]+/, "");
-    if (digits && digits !== tokenFull && !map.has(digits)) map.set(digits, b);
-    const withB = /^[0-9]+$/.test(tokenFull) ? `b${tokenFull}` : null;
-    if (withB && !map.has(withB)) map.set(withB, b);
-  }
-  return map;
-}
+type MarkerScope = "main" | "optional" | "excluded" | "provisional" | "reset";
 
-type Heading = {
-  text: string;
-  type: ScopeLabel; // Main | Optional | Excluded
-  page: number | null;
+type SectionMarker = {
   globalLine: number;
-};
-
-type BlockMarker = {
-  text: string;
   page: number | null;
-  globalLine: number;
+  kind: MarkerKind;
+  scope: MarkerScope;
+  confidence: number;
+  sourceText: string;
 };
-
-function detectHeadings(
-  rawText: string,
-  pages: { pageNum: number; text: string }[],
-): { headings: Heading[]; blocks: BlockMarker[] } {
-  const headings: Heading[] = [];
-  const blocks: BlockMarker[] = [];
-  const lines = buildIndexedLines(rawText, pages);
-  for (const { line, page, idx } of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.length > 200) continue;
-    if (BLOCK_RESET_RE.test(trimmed)) {
-      blocks.push({ text: trimmed.slice(0, 120), page, globalLine: idx });
-      continue;
-    }
-    const isHeaderShape =
-      trimmed === trimmed.toUpperCase() ||
-      /^[A-Z][A-Za-z\s\/\-&()]{2,80}[:]?$/.test(trimmed) ||
-      trimmed.endsWith(":");
-    const looksLikePrice = /\$|\d[\d,]*\.\d{2}/.test(trimmed);
-    if (looksLikePrice && !/\bsub[\s-]?total\b/i.test(trimmed)) continue;
-    if (!isHeaderShape && !/sub[\s-]?total/i.test(trimmed)) continue;
-    if (matchesAny(trimmed, EXCLUDED_LABEL_PATTERNS)) {
-      headings.push({ text: trimmed.slice(0, 120), type: "Excluded", page, globalLine: idx });
-    } else if (matchesAny(trimmed, OPTIONAL_LABEL_PATTERNS)) {
-      headings.push({ text: trimmed.slice(0, 120), type: "Optional", page, globalLine: idx });
-    } else if (matchesAny(trimmed, MAIN_LABEL_PATTERNS)) {
-      headings.push({ text: trimmed.slice(0, 120), type: "Main", page, globalLine: idx });
-    }
-  }
-  return { headings, blocks };
-}
 
 function matchesAny(text: string, patterns: RegExp[]): boolean {
   for (const re of patterns) if (re.test(text)) return true;
@@ -218,52 +184,156 @@ function buildIndexedLines(
   return rawText.split(/\r?\n/).map((line, idx) => ({ line, page: null, idx }));
 }
 
-function nearestHeading(
-  page: number | null,
-  headings: Heading[],
-  blocks: BlockMarker[],
-  rowGlobalLine: number | null,
-): { heading: Heading | null; block: BlockMarker | null } {
-  let heading: Heading | null = null;
-  let block: BlockMarker | null = null;
-  for (const h of headings) {
-    if (rowGlobalLine != null) {
-      if (h.globalLine <= rowGlobalLine) heading = h;
-      else break;
-    } else if (page != null && h.page != null && h.page <= page) {
-      heading = h;
+/**
+ * Single-pass document segmentation. Walks every line once and emits an
+ * ordered list of SectionMarker. Generic — no trade-specific phrases. The
+ * structural cues (header shape, no $ or qty/rate columns, ALL CAPS bonus)
+ * gate which lines we even consider. Header vocabulary then assigns scope.
+ */
+function segmentDocument(
+  rawText: string,
+  pages: { pageNum: number; text: string }[],
+): SectionMarker[] {
+  const markers: SectionMarker[] = [];
+  const lines = buildIndexedLines(rawText, pages);
+  for (const { line, page, idx } of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.length > 200) continue;
+
+    // Block resets first — they can appear with or without surrounding columns.
+    if (BLOCK_RESET_RE.test(trimmed)) {
+      markers.push({
+        globalLine: idx,
+        page,
+        kind: "block",
+        scope: "reset",
+        confidence: 0.85,
+        sourceText: trimmed.slice(0, 120),
+      });
+      continue;
+    }
+
+    const looksLikePrice = /\$|\d[\d,]*\.\d{2}/.test(trimmed);
+    const isAllCaps = trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed);
+    const isHeaderShape =
+      isAllCaps ||
+      /^[A-Z][A-Za-z\s\/\-&()]{2,80}[:]?$/.test(trimmed) ||
+      trimmed.endsWith(":");
+
+    const isSubtotalLine = /\bsub[\s-]?total\b/i.test(trimmed);
+
+    // Lines with prices are not headers, except subtotal rollups which still
+    // indicate the boundary of the preceding section.
+    if (looksLikePrice && !isSubtotalLine) continue;
+    if (!isHeaderShape && !isSubtotalLine) continue;
+
+    let scope: MarkerScope | null = null;
+    let kind: MarkerKind | null = null;
+    // ALL CAPS headers get a confidence bump because that's the strongest
+    // structural signal in printed quotes.
+    const baseConf = isAllCaps ? 0.95 : 0.82;
+
+    if (matchesAny(trimmed, EXCLUDED_HEADER_PATTERNS)) {
+      scope = "excluded";
+      kind = "scope_excluded";
+    } else if (matchesAny(trimmed, PROVISIONAL_HEADER_PATTERNS)) {
+      scope = "provisional";
+      kind = "scope_provisional";
+    } else if (matchesAny(trimmed, OPTIONAL_HEADER_PATTERNS)) {
+      scope = "optional";
+      kind = "scope_optional";
+    } else if (matchesAny(trimmed, MAIN_HEADER_PATTERNS)) {
+      scope = "main";
+      kind = "scope_main";
+    }
+
+    if (scope && kind) {
+      markers.push({
+        globalLine: idx,
+        page,
+        kind,
+        scope,
+        confidence: baseConf,
+        sourceText: trimmed.slice(0, 120),
+      });
     }
   }
-  for (const b of blocks) {
-    if (rowGlobalLine != null) {
-      if (b.globalLine <= rowGlobalLine) block = b;
-      else break;
-    } else if (page != null && b.page != null && b.page <= page) {
-      block = b;
+  return markers;
+}
+
+/**
+ * Walk the marker list and find the active scope at a given globalLine.
+ * Block markers reset scope inheritance — items in a new block default to
+ * Main until a scope sub-header appears within that block.
+ */
+function anchorRow(
+  globalLine: number | null,
+  markers: SectionMarker[],
+): {
+  scope: MarkerScope | null;
+  marker: SectionMarker | null;
+  block: SectionMarker | null;
+} {
+  if (globalLine == null) return { scope: null, marker: null, block: null };
+  let scope: MarkerScope | null = null;
+  let marker: SectionMarker | null = null;
+  let block: SectionMarker | null = null;
+  for (const m of markers) {
+    if (m.globalLine > globalLine) break;
+    if (m.kind === "block") {
+      block = m;
+      // Block reset clears any inherited scope from a previous block.
+      scope = null;
+      marker = null;
+    } else {
+      scope = m.scope;
+      marker = m;
     }
   }
-  // A block reset that came AFTER the last heading clears optional/excluded
-  // inheritance and resets to default (Main per PER-BLOCK DEFAULT).
-  if (heading && block && block.globalLine > heading.globalLine) {
-    if (heading.type === "Optional" || heading.type === "Excluded") {
-      heading = null;
-    }
+  return { scope, marker, block };
+}
+
+function extractBlockHint(desc: string | null | undefined): string | null {
+  if (!desc) return null;
+  const m = desc.match(BLOCK_HINT_RE);
+  if (!m) return null;
+  return normaliseBlockToken(m[1]);
+}
+
+function normaliseBlockToken(raw: string): string {
+  return raw.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+}
+
+function indexBlocksByToken(markers: SectionMarker[]): Map<string, SectionMarker> {
+  const map = new Map<string, SectionMarker>();
+  for (const b of markers) {
+    if (b.kind !== "block") continue;
+    const m = b.sourceText.match(
+      /^\s*(?:block|level|floor|building|tower|stage|area|zone|basement)\s+([A-Za-z0-9][\w-]*)/i,
+    );
+    if (!m) continue;
+    const tokenFull = normaliseBlockToken(m[1]);
+    if (tokenFull && !map.has(tokenFull)) map.set(tokenFull, b);
+    const digits = tokenFull.replace(/^[a-z]+/, "");
+    if (digits && digits !== tokenFull && !map.has(digits)) map.set(digits, b);
+    const withB = /^[0-9]+$/.test(tokenFull) ? `b${tokenFull}` : null;
+    if (withB && !map.has(withB)) map.set(withB, b);
   }
-  return { heading, block };
+  return map;
 }
 
 // --------------------------------------------------------------------------
-// Layer 3 — keyword classifier
+// Keyword tiebreaker (Layer 3 — generic only)
 // --------------------------------------------------------------------------
 
 const OPTIONAL_DESC_RE =
-  /\b(optional|add\s+to\s+scope|flush\s*box|not\s+shown\s+on\s+drawings|extra\s+over|TBC|perimeter\s+seal|lift\s+door\s+seal|upgrade|alternate|provisional|architectural\s*\/?\s*structural|optional\s+extras?|cavity\s+barrier|beam\s+encasement|passive\s+fire\s*\(\s*general)\b/i;
+  /\b(optional|add\s+to\s+scope|not\s+shown\s+on\s+drawings|extra\s+over|TBC|alternate|upgrade)\b/i;
 
 const EXCLUDED_DESC_RE =
   /\b(by\s+others|provisional\s+only|no\s+tested\s+solution|rate\s+only|not\s+included)\b/i;
 
 const MAIN_DESC_RE =
-  /\b(identified\s+on\s+drawings|standard\s+penetration|main\s+scope|sub[\s-]?total)\b/i;
+  /\b(identified\s+on\s+drawings|main\s+scope|sub[\s-]?total)\b/i;
 
 function keywordClassify(desc: string): { label: ScopeLabel; reason: string } | null {
   if (!desc) return null;
@@ -285,6 +355,7 @@ type WorkingRow = {
   label: ScopeLabel;
   confidence: number;
   reason: string;
+  hadAnchor: boolean;
 };
 
 type PageIndex = {
@@ -322,7 +393,8 @@ function findRowGlobalLine(
   cursors: { perPage: Map<string, number>; full: Map<string, number> },
 ): number | null {
   if (!desc) return null;
-  const needle = desc.split(/\s+/).slice(0, 6).join(" ").toLowerCase();
+  const cleaned = desc.replace(BLOCK_HINT_RE, "").trim();
+  const needle = cleaned.split(/\s+/).slice(0, 6).join(" ").toLowerCase();
   if (needle.length < 6) return null;
 
   if (sourcePage != null) {
@@ -340,7 +412,6 @@ function findRowGlobalLine(
     }
   }
 
-  // Fallback: search whole document with a consume cursor.
   const startFrom = cursors.full.get(needle) ?? 0;
   const idx = pageIndex.fullLower.indexOf(needle, startFrom);
   if (idx === -1) return null;
@@ -350,10 +421,12 @@ function findRowGlobalLine(
 }
 
 // --------------------------------------------------------------------------
-// Layer 4 — totals reconciliation
+// Totals reconciliation — soft validator only.
+// Only flips rows that lacked a section anchor (hadAnchor === false) and have
+// confidence < 0.6. Never invents synthetic rows.
 // --------------------------------------------------------------------------
 
-const TOTALS_TOLERANCE = 0.015; // 1.5%
+const TOTALS_TOLERANCE = 0.015;
 
 function withinTolerance(actual: number, target: number): boolean {
   if (target <= 0) return false;
@@ -366,15 +439,6 @@ function sumByLabel(rows: WorkingRow[], label: ScopeLabel): number {
     .reduce((s, r) => s + (r.item.total_price ?? 0), 0);
 }
 
-/**
- * If the current Main sum is materially over the authoritative Main target
- * but the Optional sum is materially under the authoritative Optional, find
- * the smallest set of low-confidence Main rows whose values would fix both
- * sums when reassigned to Optional. Same logic in reverse.
- *
- * Greedy small-subset search bounded to top 12 candidates by confidence (asc)
- * to stay O(n^2) at worst.
- */
 function reconcileTotals(
   rows: WorkingRow[],
   totals: { main_total: number | null; optional_total: number | null },
@@ -384,7 +448,6 @@ function reconcileTotals(
   if (mainTarget == null && optTarget == null) return { changed: 0 };
 
   let changed = 0;
-
   for (let pass = 0; pass < 2; pass++) {
     const currentMain = sumByLabel(rows, "Main");
     const currentOpt = sumByLabel(rows, "Optional");
@@ -410,16 +473,24 @@ function reconcileTotals(
     }
     if (delta <= 0) break;
 
+    // Only un-anchored, low-confidence rows are reassignable. This keeps the
+    // section-anchored layer authoritative and prevents the engine from
+    // fabricating moves to balance arithmetic at the cost of correctness.
     const candidates = rows
-      .filter((r) => r.label === from && r.confidence < 0.9 && (r.item.total_price ?? 0) > 0)
-      .sort((a, b) => a.confidence - b.confidence)
-      .slice(0, 80);
+      .filter(
+        (r) =>
+          r.label === from &&
+          !r.hadAnchor &&
+          r.confidence < 0.6 &&
+          (r.item.total_price ?? 0) > 0,
+      )
+      .sort((a, b) => a.confidence - b.confidence);
 
     const picked = pickSubsetByValue(candidates, delta);
     for (const r of picked) {
       r.label = to;
-      r.reason = `totals_reconciliation:${from}->${to}`;
-      r.confidence = Math.max(r.confidence, 0.7);
+      r.reason = `totals_validator:${from}->${to}`;
+      r.confidence = Math.max(r.confidence, 0.65);
       changed++;
     }
     if (picked.length === 0) break;
@@ -429,7 +500,6 @@ function reconcileTotals(
 
 function pickSubsetByValue(rows: WorkingRow[], target: number): WorkingRow[] {
   if (rows.length === 0 || target <= 0) return [];
-  // Greedy: take rows largest-first, stop when the sum is within tolerance of target.
   const sorted = [...rows].sort(
     (a, b) => (b.item.total_price ?? 0) - (a.item.total_price ?? 0),
   );
@@ -447,7 +517,7 @@ function pickSubsetByValue(rows: WorkingRow[], target: number): WorkingRow[] {
 }
 
 // --------------------------------------------------------------------------
-// Layer 5 — confidence aggregation
+// Confidence helpers
 // --------------------------------------------------------------------------
 
 function bumpConfidence(row: WorkingRow, evidence: number, reason: string): void {
@@ -467,17 +537,22 @@ const LLM_MAX_ROWS = 60;
 
 async function llmResolve(
   ambiguous: WorkingRow[],
-  headings: Heading[],
+  markers: SectionMarker[],
   totals: { main_total: number | null; optional_total: number | null },
   openAIKey: string,
 ): Promise<{ resolved: number }> {
   const batch = ambiguous.slice(0, LLM_MAX_ROWS);
   if (batch.length === 0) return { resolved: 0 };
 
+  const headingsForPrompt = markers
+    .filter((m) => m.kind !== "block")
+    .slice(0, 40)
+    .map((m) => `[${labelForMarker(m)}] ${m.sourceText}`);
+
   const userPrompt = buildScopeSegmentationUserPrompt({
     mainTotal: totals.main_total,
     optionalTotal: totals.optional_total,
-    headings: headings.slice(0, 40).map((h) => `[${h.type}] ${h.text}`),
+    headings: headingsForPrompt,
     rows: batch.map((r) => ({
       row_id: r.row_id,
       description: r.item.description,
@@ -541,6 +616,13 @@ async function llmResolve(
   }
 }
 
+function labelForMarker(m: SectionMarker): ScopeLabel {
+  if (m.scope === "main") return "Main";
+  if (m.scope === "optional" || m.scope === "provisional") return "Optional";
+  if (m.scope === "excluded") return "Excluded";
+  return "Unknown";
+}
+
 function normaliseLabel(v: unknown): ScopeLabel | null {
   const s = String(v ?? "").trim().toLowerCase();
   if (s === "main") return "Main";
@@ -563,14 +645,16 @@ export async function runScopeSegmentationEngine(
   input: ScopeSegmentationInput,
 ): Promise<ScopeSegmentationResult> {
   const layers: string[] = [];
-  const { headings, blocks } = detectHeadings(input.rawText, input.allPages ?? []);
-  layers.push("layer1_headings");
-  if (blocks.length > 0) layers.push("layer2_blocks");
+  const markers = segmentDocument(input.rawText, input.allPages ?? []);
+  const headingsCount = markers.filter((m) => m.kind !== "block").length;
+  const blockCount = markers.filter((m) => m.kind === "block").length;
+  layers.push("layer1_segmentation");
+  if (blockCount > 0) layers.push("layer2_blocks");
 
-  // Build working rows. Map existing lowercase scope_category to capitalized label.
   const pageIndex = buildPageIndex(input.rawText, input.allPages ?? []);
   const cursors = { perPage: new Map<string, number>(), full: new Map<string, number>() };
-  const blockByToken = indexBlocksByToken(blocks);
+  const blockByToken = indexBlocksByToken(markers);
+
   // Process in (page, original index) order so the Nth occurrence of a
   // repeating description gets the Nth match position on its page.
   const orderedItems = input.extracted_items
@@ -602,8 +686,6 @@ export async function runScopeSegmentationEngine(
     if (hint) {
       const hinted = blockByToken.get(hint);
       if (hinted) {
-        // Anchor row immediately after the block marker so nearestHeading
-        // resolves to this block regardless of extraction order.
         if (globalLine == null || globalLine < hinted.globalLine) {
           globalLine = hinted.globalLine + 1;
         }
@@ -615,70 +697,86 @@ export async function runScopeSegmentationEngine(
       item,
       globalLine,
       label: initial,
-      confidence: 0.4, // base prior — existing tag is only weak evidence
+      confidence: 0.4,
       reason: "initial:from_extractor",
+      hadAnchor: false,
     };
   }
   const rows: WorkingRow[] = rowsByIndex.filter((r): r is WorkingRow => r != null);
 
-  // Layer 1 + 2: heading + block inheritance
+  // Layer 1+2: section anchoring — authoritative.
   for (const r of rows) {
-    const { heading, block } = nearestHeading(
-      r.item.source_page ?? null,
-      headings,
-      blocks,
-      r.globalLine,
-    );
-    if (heading) {
-      r.label = heading.type;
-      bumpConfidence(r, 0.92, `heading:${heading.type}:${heading.text.slice(0, 60)}`);
-    } else if (block) {
-      // Block reset with no overriding heading => default Main per PER-BLOCK
-      // DEFAULT rule. Keep confidence modest; the keyword/totals layers may
-      // still flip individual rows.
+    const { scope, marker, block } = anchorRow(r.globalLine, markers);
+    if (scope === "main") {
       r.label = "Main";
-      bumpConfidence(r, 0.75, `block_default:${block.text.slice(0, 60)}`);
+      bumpConfidence(
+        r,
+        marker?.confidence ?? 0.9,
+        `section:main:${marker?.sourceText.slice(0, 60) ?? ""}`,
+      );
+      r.hadAnchor = true;
+    } else if (scope === "optional" || scope === "provisional") {
+      r.label = "Optional";
+      bumpConfidence(
+        r,
+        marker?.confidence ?? 0.9,
+        `section:${scope}:${marker?.sourceText.slice(0, 60) ?? ""}`,
+      );
+      r.hadAnchor = true;
+    } else if (scope === "excluded") {
+      r.label = "Excluded";
+      bumpConfidence(
+        r,
+        marker?.confidence ?? 0.9,
+        `section:excluded:${marker?.sourceText.slice(0, 60) ?? ""}`,
+      );
+      r.hadAnchor = true;
+    } else if (block) {
+      // Inside a block but no scope sub-header preceding this row: default to
+      // Main per per-block default rule. Modest confidence so keyword/totals
+      // layers can still flip.
+      r.label = "Main";
+      bumpConfidence(r, 0.72, `block_default:${block.sourceText.slice(0, 60)}`);
+      r.hadAnchor = true;
     }
   }
 
-  // Layer 3: keyword classifier — only acts when current confidence is low or
-  // the keyword evidence is stronger than what we have.
-  layers.push("layer3_keywords");
+  // Layer 3: keyword tiebreaker — only fires for rows without a strong section
+  // anchor. Generic vocabulary only; no trade-specific phrases.
+  layers.push("layer3_keyword_tiebreak");
   for (const r of rows) {
+    if (r.confidence >= 0.8) continue;
     const kw = keywordClassify(r.item.description ?? "");
     if (!kw) continue;
-    if (r.confidence < 0.85) {
-      r.label = kw.label;
-      bumpConfidence(r, 0.82, kw.reason);
-    } else if (r.label !== kw.label && kw.label === "Excluded") {
-      // Excluded keyword is decisive — "by others" overrides any heading.
+    r.label = kw.label;
+    bumpConfidence(r, 0.6, `tiebreak:${kw.reason}`);
+  }
+
+  // Decisive override: "by others" / "not included" always demote to Excluded
+  // regardless of section, because that wording is explicit on the row itself.
+  for (const r of rows) {
+    if (EXCLUDED_DESC_RE.test(r.item.description ?? "")) {
       r.label = "Excluded";
-      bumpConfidence(r, 0.9, kw.reason);
+      bumpConfidence(r, 0.9, "row_override:excluded");
     }
   }
 
-  // Layer 4: totals reconciliation
+  // Layer 4: totals reconciliation — soft validator (only un-anchored, low-conf rows).
   const recon = reconcileTotals(rows, input.authoritative_totals);
-  if (recon.changed > 0) layers.push("layer4_totals_reconciliation");
+  if (recon.changed > 0) layers.push("layer4_totals_validator");
 
-  // LLM pass for any rows still ambiguous (confidence < 0.85)
+  // LLM pass for any rows still ambiguous.
   let llm_used = false;
   let llm_resolved = 0;
   const ambiguous = rows.filter((r) => r.confidence < 0.85);
   if (ambiguous.length > 0 && input.openAIKey) {
     llm_used = true;
     layers.push("llm_resolution");
-    const out = await llmResolve(
-      ambiguous,
-      headings,
-      input.authoritative_totals,
-      input.openAIKey,
-    );
+    const out = await llmResolve(ambiguous, markers, input.authoritative_totals, input.openAIKey);
     llm_resolved = out.resolved;
   }
 
-  // Failsafe: any row still below 0.45 confidence reverts to its original
-  // extractor tag and is marked Unknown for the engine summary view.
+  // Failsafe: any row still below 0.45 confidence reverts to Unknown.
   layers.push("layer5_confidence");
   for (const r of rows) {
     if (r.confidence < 0.45) {
@@ -687,11 +785,9 @@ export async function runScopeSegmentationEngine(
     }
   }
 
-  // Compose output items. Internal scope_category stays lowercase to avoid
-  // breaking downstream stages; we only cross-write when the engine has
-  // strong evidence (>= 0.7) AND the engine label maps to a downstream-
-  // valid value (main / optional / excluded). "Unknown" preserves the
-  // existing tag exactly.
+  // Compose output items. Internal scope_category stays lowercase; only
+  // cross-write when confidence >= 0.7 and the engine label maps to a valid
+  // downstream value.
   const items: ScopeSegmentationItem[] = rows.map((r) => {
     const downstream =
       r.label === "Main"
@@ -713,7 +809,6 @@ export async function runScopeSegmentationEngine(
     return next;
   });
 
-  // Summary
   const sumFor = (label: ScopeLabel) =>
     rows
       .filter((r) => r.label === label)
@@ -758,7 +853,7 @@ export async function runScopeSegmentationEngine(
       confidence,
       llm_used,
       llm_resolved_rows: llm_resolved,
-      headings_detected: headings.length,
+      headings_detected: headingsCount,
       layers_applied: layers,
     },
   };
