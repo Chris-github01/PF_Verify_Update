@@ -117,6 +117,38 @@ const EXCLUDED_LABEL_PATTERNS: RegExp[] = [
 const BLOCK_RESET_RE =
   /^\s*(block|level|floor|building|tower|stage|area|zone|basement)\s+[A-Z0-9][\w-]*\b/i;
 
+// Description-embedded block hint, e.g. "[Block B30] ..." inserted by upstream
+// extractors so a row can be re-anchored to its source block even when the
+// extracted_items array isn't in document order.
+const BLOCK_HINT_RE = /\[\s*(?:block|level|floor|building|tower|stage|area|zone)\s+([A-Za-z0-9][\w-]*)\s*\]/i;
+
+function extractBlockHint(desc: string | null | undefined): string | null {
+  if (!desc) return null;
+  const m = desc.match(BLOCK_HINT_RE);
+  if (!m) return null;
+  return normaliseBlockToken(m[1]);
+}
+
+function normaliseBlockToken(raw: string): string {
+  return raw.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+}
+
+function indexBlocksByToken(blocks: BlockMarker[]): Map<string, BlockMarker> {
+  const map = new Map<string, BlockMarker>();
+  for (const b of blocks) {
+    const m = b.text.match(/^\s*(?:block|level|floor|building|tower|stage|area|zone|basement)\s+([A-Za-z0-9][\w-]*)/i);
+    if (!m) continue;
+    const tokenFull = normaliseBlockToken(m[1]);
+    if (tokenFull && !map.has(tokenFull)) map.set(tokenFull, b);
+    // Also index a stripped numeric/letter-suffix variant: B30 -> 30, 30 -> b30
+    const digits = tokenFull.replace(/^[a-z]+/, "");
+    if (digits && digits !== tokenFull && !map.has(digits)) map.set(digits, b);
+    const withB = /^[0-9]+$/.test(tokenFull) ? `b${tokenFull}` : null;
+    if (withB && !map.has(withB)) map.set(withB, b);
+  }
+  return map;
+}
+
 type Heading = {
   text: string;
   type: ScopeLabel; // Main | Optional | Excluded
@@ -225,7 +257,7 @@ function nearestHeading(
 // --------------------------------------------------------------------------
 
 const OPTIONAL_DESC_RE =
-  /\b(optional|add\s+to\s+scope|flush\s*box|not\s+shown\s+on\s+drawings|extra\s+over|TBC|perimeter\s+seal|lift\s+door\s+seal|upgrade|alternate|provisional)\b/i;
+  /\b(optional|add\s+to\s+scope|flush\s*box|not\s+shown\s+on\s+drawings|extra\s+over|TBC|perimeter\s+seal|lift\s+door\s+seal|upgrade|alternate|provisional|architectural\s*\/?\s*structural\s+details?|optional\s+extras?|cavity\s+barrier)\b/i;
 
 const EXCLUDED_DESC_RE =
   /\b(by\s+others|provisional\s+only|no\s+tested\s+solution|rate\s+only|not\s+included)\b/i;
@@ -538,6 +570,7 @@ export async function runScopeSegmentationEngine(
   // Build working rows. Map existing lowercase scope_category to capitalized label.
   const pageIndex = buildPageIndex(input.rawText, input.allPages ?? []);
   const cursors = { perPage: new Map<string, number>(), full: new Map<string, number>() };
+  const blockByToken = indexBlocksByToken(blocks);
   // Process in (page, original index) order so the Nth occurrence of a
   // repeating description gets the Nth match position on its page.
   const orderedItems = input.extracted_items
@@ -558,13 +591,24 @@ export async function runScopeSegmentationEngine(
         : item.scope_category === "excluded"
         ? "Excluded"
         : "Unknown";
-    const globalLine = findRowGlobalLine(
+    let globalLine = findRowGlobalLine(
       item.description ?? "",
       item.source_page ?? null,
       input.rawText,
       pageIndex,
       cursors,
     );
+    const hint = extractBlockHint(item.description);
+    if (hint) {
+      const hinted = blockByToken.get(hint);
+      if (hinted) {
+        // Anchor row immediately after the block marker so nearestHeading
+        // resolves to this block regardless of extraction order.
+        if (globalLine == null || globalLine < hinted.globalLine) {
+          globalLine = hinted.globalLine + 1;
+        }
+      }
+    }
     rowsByIndex[idx] = {
       row_id: `r${idx}`,
       index: idx,
