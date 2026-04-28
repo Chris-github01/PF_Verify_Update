@@ -21,7 +21,7 @@ const MAX_RETRIES = 2;
 const EXTRACTION_STAGE_BUDGET_MS = 240_000;
 const PER_CHUNK_BUDGET_MS = 90_000;
 const PER_REQUEST_BUDGET_MS = 85_000;
-const LLM_MAX_TOKENS = 6000;
+const LLM_MAX_TOKENS = 12000;
 const MAX_RAW_RESPONSE_PERSIST = 20_000;
 
 export type ExtractorContext = {
@@ -289,6 +289,8 @@ async function callOpenAIWithRetry(args: {
           model: EXTRACTOR_MODEL,
           response_format: { type: "json_object" },
           max_completion_tokens: LLM_MAX_TOKENS,
+          reasoning_effort: "low",
+          verbosity: "low",
           messages: [
             { role: "system", content: args.systemPrompt },
             { role: "user", content: userJson },
