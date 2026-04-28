@@ -257,7 +257,7 @@ function nearestHeading(
 // --------------------------------------------------------------------------
 
 const OPTIONAL_DESC_RE =
-  /\b(optional|add\s+to\s+scope|flush\s*box|not\s+shown\s+on\s+drawings|extra\s+over|TBC|perimeter\s+seal|lift\s+door\s+seal|upgrade|alternate|provisional|architectural\s*\/?\s*structural\s+details?|optional\s+extras?|cavity\s+barrier)\b/i;
+  /\b(optional|add\s+to\s+scope|flush\s*box|not\s+shown\s+on\s+drawings|extra\s+over|TBC|perimeter\s+seal|lift\s+door\s+seal|upgrade|alternate|provisional|architectural\s*\/?\s*structural|optional\s+extras?|cavity\s+barrier|beam\s+encasement|passive\s+fire\s*\(\s*general)\b/i;
 
 const EXCLUDED_DESC_RE =
   /\b(by\s+others|provisional\s+only|no\s+tested\s+solution|rate\s+only|not\s+included)\b/i;
