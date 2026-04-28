@@ -15,12 +15,12 @@ import { markLlmCallDuration, markRequestSent, markResponseReceived } from "../t
 const EXTRACTOR_MODEL = "gpt-5.4-mini";
 const CHUNK_CHAR_BUDGET = 9000;
 const MAX_CHUNKS = 20;
-const CHUNK_CONCURRENCY = 6;
+const CHUNK_CONCURRENCY = 20;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_RETRIES = 1;
 const EXTRACTION_STAGE_BUDGET_MS = 80_000;
-const PER_CHUNK_BUDGET_MS = 35_000;
-const PER_REQUEST_BUDGET_MS = 30_000;
+const PER_CHUNK_BUDGET_MS = 70_000;
+const PER_REQUEST_BUDGET_MS = 65_000;
 const LLM_MAX_TOKENS = 12000;
 const MAX_RAW_RESPONSE_PERSIST = 20_000;
 
