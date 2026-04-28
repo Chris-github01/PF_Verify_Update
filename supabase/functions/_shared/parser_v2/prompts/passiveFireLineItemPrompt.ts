@@ -134,6 +134,35 @@ A row "Cable Bundle 20mm — TPS — concrete floor — -/30/30" on page 5 is MA
 
 If a quote has NO page banners (Optimal-style), Step 4b.2 falls back to in-table sub-headers and Prompt 2 section roles, then Step 4b.3 reconciles against the authoritative total.
 
+WORKED EXAMPLE 2 (Optimal-style per-block schedule, no page banners):
+A common Optimal Fire / Optimal-style passive-fire schedule layout repeats per block, e.g.:
+
+  BLOCK 30                                       <-- yellow block banner (LOCATION label only — NOT a scope banner; do NOT reset to main)
+    Electrical | Cable Bundle | 100mm | ...      <-- MAIN (above any optional sub-header)
+    Hydraulics | Pex Pipe | 25mm | ...           <-- MAIN
+    ... more priced rows ...
+    SERVICES IDENTIFIED NOT PART OF PASSIVE FIRE SCHEDULE   <-- still MAIN (these flow into the block sub-total)
+    Electrical | Cable Bundle | 30mm | ...       <-- MAIN
+    Mechanical | HVAC Bundle 1 set | 65mm | ...  <-- MAIN
+    OPTIONAL SCOPE                               <-- OPTIONAL sub-header (CRITICAL — flips scope to optional for ALL subsequent rows in this block)
+    Architectural/Structural Details | Beam | 200UB30 | Ryanlite 50mm  <-- OPTIONAL (under OPTIONAL SCOPE sub-header)
+    Architectural/Structural Details | Cavity barrier | 25mm gap       <-- OPTIONAL
+    Architectural/Structural Details | Cavity Barrier to CLT Floor     <-- OPTIONAL
+    Optional Extras | Intumescent Flush Box | 95x55x50mm               <-- OPTIONAL
+  BLOCK 31                                       <-- next block banner: scope stack RESETS; rows below are MAIN again until the next OPTIONAL SCOPE sub-header
+    ...
+
+CRITICAL OPTIMAL-STYLE RULES:
+  1. The "OPTIONAL SCOPE" sub-header inside a block flips scope_category to "optional" for EVERY priced row from that sub-header until the NEXT block banner ("BLOCK 31", "BLOCK 32", ...) — it does NOT matter what the in-table service column says (Architectural/Structural Details, Optional Extras, Electrical, Hydraulics, Mechanical).
+  2. Beam encasement / "Architectural/Structural Details Beam <profile>" rows priced with Ryanlite (or similar board/spray system) that sit UNDER an "OPTIONAL SCOPE" sub-header are ALWAYS optional. Do not reclassify them to main just because beam encasement is structural passive-fire work.
+  3. Cavity barrier rows ("Cavity barrier", "Cavity Barrier to CLT Floor", Ryanmesh, Siderise CW/FS) under "OPTIONAL SCOPE" are ALWAYS optional.
+  4. Intumescent Flush Box rows under "OPTIONAL SCOPE" or "Optional Extras" are ALWAYS optional.
+  5. The yellow BLOCK XX banner is a LOCATION marker (building_or_block) — it does NOT carry a main/optional verdict. Treat it like a block label, not a scope banner.
+  6. The "SERVICES IDENTIFIED NOT PART OF PASSIVE FIRE SCHEDULE" sub-header is MAIN (its rows roll up into the block main sub-total alongside the schedule rows). Do NOT classify these as optional.
+  7. When you see ANY row whose section_path includes both a BLOCK XX label AND an "OPTIONAL SCOPE" sub-header, scope_category MUST be optional regardless of any other signal. Set section_path to capture both, e.g. ["BLOCK 30", "OPTIONAL SCOPE", "Architectural/Structural Details"].
+
+If you cannot decide between main and optional for a row in a per-block schedule, look at the per-block sub-total (e.g. "Block B30 $10,969.75"). Rows above the OPTIONAL SCOPE sub-header sum to that block sub-total; rows below the OPTIONAL SCOPE sub-header sum to the separately stated "OPTIONAL SCOPE / ADD TO SCOPE" total on the cover page (e.g. $185,521.65).
+
 STEP 7 — DEDUPLICATION RULES (CRITICAL — DO NOT OVER-DEDUPE)
 Only remove duplicates caused by OCR repeats of the SAME physical line (same page, same section, same building_or_block). Two rows are duplicates ONLY when ALL of the following match:
   - description (close match)
