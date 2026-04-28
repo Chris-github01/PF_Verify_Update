@@ -255,17 +255,64 @@ type WorkingRow = {
   reason: string;
 };
 
+type PageIndex = {
+  byPage: Map<number, { startGlobalLine: number; lowerText: string }>;
+  fullLower: string;
+};
+
+function buildPageIndex(
+  rawText: string,
+  pages: { pageNum: number; text: string }[],
+): PageIndex {
+  const byPage = new Map<number, { startGlobalLine: number; lowerText: string }>();
+  let idx = 0;
+  if (pages && pages.length > 0) {
+    for (const p of pages) {
+      const text = p.text ?? "";
+      byPage.set(p.pageNum, { startGlobalLine: idx, lowerText: text.toLowerCase() });
+      idx += text.split(/\r?\n/).length;
+    }
+  }
+  return { byPage, fullLower: rawText.toLowerCase() };
+}
+
+/**
+ * Locate a row in the raw text. Critical for multi-block quotes where the
+ * same description repeats per block: we MUST scope to source_page when
+ * available, and consume matches in document order so the Nth occurrence
+ * of a description on a page aligns with the Nth row that references it.
+ */
 function findRowGlobalLine(
   desc: string,
+  sourcePage: number | null,
   rawText: string,
+  pageIndex: PageIndex,
+  cursors: { perPage: Map<string, number>; full: Map<string, number> },
 ): number | null {
   if (!desc) return null;
   const needle = desc.split(/\s+/).slice(0, 6).join(" ").toLowerCase();
   if (needle.length < 6) return null;
-  const lower = rawText.toLowerCase();
-  const idx = lower.indexOf(needle);
+
+  if (sourcePage != null) {
+    const page = pageIndex.byPage.get(sourcePage);
+    if (page) {
+      const key = `${sourcePage}|${needle}`;
+      const startFrom = cursors.perPage.get(key) ?? 0;
+      const local = page.lowerText.indexOf(needle, startFrom);
+      if (local !== -1) {
+        cursors.perPage.set(key, local + needle.length);
+        const upTo = page.lowerText.slice(0, local);
+        const linesIntoPage = (upTo.match(/\n/g) ?? []).length;
+        return page.startGlobalLine + linesIntoPage;
+      }
+    }
+  }
+
+  // Fallback: search whole document with a consume cursor.
+  const startFrom = cursors.full.get(needle) ?? 0;
+  const idx = pageIndex.fullLower.indexOf(needle, startFrom);
   if (idx === -1) return null;
-  // Convert char index → line index
+  cursors.full.set(needle, idx + needle.length);
   const upTo = rawText.slice(0, idx);
   return (upTo.match(/\n/g) ?? []).length;
 }
@@ -334,7 +381,7 @@ function reconcileTotals(
     const candidates = rows
       .filter((r) => r.label === from && r.confidence < 0.9 && (r.item.total_price ?? 0) > 0)
       .sort((a, b) => a.confidence - b.confidence)
-      .slice(0, 12);
+      .slice(0, 80);
 
     const picked = pickSubsetByValue(candidates, delta);
     for (const r of picked) {
@@ -489,7 +536,20 @@ export async function runScopeSegmentationEngine(
   if (blocks.length > 0) layers.push("layer2_blocks");
 
   // Build working rows. Map existing lowercase scope_category to capitalized label.
-  const rows: WorkingRow[] = input.extracted_items.map((item, idx) => {
+  const pageIndex = buildPageIndex(input.rawText, input.allPages ?? []);
+  const cursors = { perPage: new Map<string, number>(), full: new Map<string, number>() };
+  // Process in (page, original index) order so the Nth occurrence of a
+  // repeating description gets the Nth match position on its page.
+  const orderedItems = input.extracted_items
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => {
+      const pa = a.item.source_page ?? Number.POSITIVE_INFINITY;
+      const pb = b.item.source_page ?? Number.POSITIVE_INFINITY;
+      if (pa !== pb) return pa - pb;
+      return a.idx - b.idx;
+    });
+  const rowsByIndex = new Array<WorkingRow | null>(input.extracted_items.length).fill(null);
+  for (const { item, idx } of orderedItems) {
     const initial: ScopeLabel =
       item.scope_category === "main"
         ? "Main"
@@ -498,8 +558,14 @@ export async function runScopeSegmentationEngine(
         : item.scope_category === "excluded"
         ? "Excluded"
         : "Unknown";
-    const globalLine = findRowGlobalLine(item.description ?? "", input.rawText);
-    return {
+    const globalLine = findRowGlobalLine(
+      item.description ?? "",
+      item.source_page ?? null,
+      input.rawText,
+      pageIndex,
+      cursors,
+    );
+    rowsByIndex[idx] = {
       row_id: `r${idx}`,
       index: idx,
       item,
@@ -508,7 +574,8 @@ export async function runScopeSegmentationEngine(
       confidence: 0.4, // base prior — existing tag is only weak evidence
       reason: "initial:from_extractor",
     };
-  });
+  }
+  const rows: WorkingRow[] = rowsByIndex.filter((r): r is WorkingRow => r != null);
 
   // Layer 1 + 2: heading + block inheritance
   for (const r of rows) {
@@ -526,7 +593,7 @@ export async function runScopeSegmentationEngine(
       // DEFAULT rule. Keep confidence modest; the keyword/totals layers may
       // still flip individual rows.
       r.label = "Main";
-      bumpConfidence(r, 0.7, `block_default:${block.text.slice(0, 60)}`);
+      bumpConfidence(r, 0.75, `block_default:${block.text.slice(0, 60)}`);
     }
   }
 
