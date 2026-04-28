@@ -760,6 +760,11 @@ Deno.serve(async (req: Request) => {
       rows_insert_successful,
       extraction_debug: extractionDbg ?? null,
       fallback_extraction_debug: fallbackDbg ?? null,
+      scope_segmentation: (v2 as any).scope_segmentation
+        ? {
+            summary: (v2 as any).scope_segmentation.summary ?? null,
+          }
+        : null,
     };
 
     const combinedStages = [
@@ -1020,6 +1025,9 @@ async function persistFailure(
         passive_fire_final: v2.passive_fire_final,
         multipath: (v2 as any).multipath ?? null,
         extraction_diagnostics: (v2 as any).extraction_diagnostics ?? null,
+        scope_segmentation: (v2 as any).scope_segmentation
+          ? { summary: (v2 as any).scope_segmentation.summary ?? null }
+          : null,
       }
     : {
         failed: true,
