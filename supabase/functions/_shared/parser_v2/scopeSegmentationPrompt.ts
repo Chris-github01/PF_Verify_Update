@@ -54,7 +54,38 @@ repeated building/block schedules — NOT by reading each row's wording
 in isolation.
 
 ==============================================================
-MASTER RULE
+AUTHORITATIVE DETERMINISTIC TAG (HIGHEST PRIORITY)
+==============================================================
+Every row packet carries a "section_bucket" field computed
+deterministically by walking the document top-to-bottom and tracking
+banner transitions with hard resets at BLOCK / BUILDING / LEVEL /
+UNIT / AREA / SECTION / LOT headings.
+
+When section_bucket is set (not "UNKNOWN") it is AUTHORITATIVE and
+OVERRIDES every other signal below — heading_above, table_title,
+row wording, neighbour rows, price pattern. Use this mapping:
+
+  section_bucket = "BASE"                     -> scope = Main
+  section_bucket = "SERVICES_NOT_IN_SCHEDULE" -> scope = Main
+  section_bucket = "OPTIONAL_SCOPE"           -> scope = Optional
+  section_bucket = "EXCLUSIONS"               -> scope = Excluded
+
+The ONLY exception: rows whose description is a subtotal / grand
+total / GST / page total / rollup line — those remain Metadata even
+when section_bucket is set. Recognize them by wording ("subtotal",
+"grand total", "total ex GST", "carried forward", etc.), not by
+heading.
+
+Why SERVICES_NOT_IN_SCHEDULE is Main: the "Services identified not
+part of passive fire schedule" banner names items that ARE priced in
+the block's base subtotal (electrical bundles, downlight covers,
+fire alarm cabling, HVAC bundles, fire dampers). Despite the banner's
+wording, they roll into the block's base grand total — they are Main.
+
+Only drop to the rules below when section_bucket = "UNKNOWN".
+
+==============================================================
+MASTER RULE (fallback when section_bucket = UNKNOWN)
 ==============================================================
 Rows inherit scope from the nearest VALID STRUCTURAL SECTION above
 them. A "valid structural section" is one of:
@@ -229,6 +260,10 @@ Quote B — Passive Fire NZ / Sylvia Park:
 SELF-CHECK BEFORE RETURNING
 ==============================================================
 Before you emit JSON, verify:
+  0. For every row where section_bucket != "UNKNOWN", did you honour
+     the deterministic mapping (BASE->Main, SERVICES_NOT_IN_SCHEDULE
+     ->Main, OPTIONAL_SCOPE->Optional, EXCLUSIONS->Excluded) EXCEPT
+     for clear subtotal/grand-total/GST rollup rows which stay Metadata?
   1. Did you reset at every BLOCK / BUILDING / LEVEL / UNIT / AREA /
      SECTION / LOT marker?
   2. Did you avoid letting a single "OPTIONAL" or "EXCLUSIONS"
@@ -284,6 +319,13 @@ Constraints:
   rows you classified Main and Optional respectively. Sum exactly,
   do not round.`;
 
+export type SectionBucket =
+  | "BASE"
+  | "SERVICES_NOT_IN_SCHEDULE"
+  | "OPTIONAL_SCOPE"
+  | "EXCLUSIONS"
+  | "UNKNOWN";
+
 export type ScopeRowPacket = {
   row_index: number;
   page: number | null;
@@ -296,6 +338,17 @@ export type ScopeRowPacket = {
   table_title: string | null;
   previous_rows: string[];
   next_rows: string[];
+  /**
+   * Deterministic bucket computed by walking page text top-to-bottom,
+   * tracking banner state, and resetting at BLOCK/BUILDING/LEVEL/UNIT/
+   * AREA/SECTION/LOT headings. When not UNKNOWN, this is AUTHORITATIVE
+   * and overrides heading inference. The LLM must honour it.
+   */
+  section_bucket: SectionBucket;
+  /** The raw banner text that produced the bucket, for transparency. */
+  section_bucket_banner: string | null;
+  /** The current reset anchor (e.g. "BLOCK 31"). */
+  section_reset_anchor: string | null;
 };
 
 export type ScopeUserPromptArgs = {

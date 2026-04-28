@@ -37,7 +37,7 @@ import {
   type LLMRowResult,
   type LLMScope,
 } from "./scopeSegmentationLLM.ts";
-import type { ScopeRowPacket } from "./scopeSegmentationPrompt.ts";
+import type { ScopeRowPacket, SectionBucket } from "./scopeSegmentationPrompt.ts";
 
 // --------------------------------------------------------------------------
 // Public types — kept stable for runParserV2 caller.
@@ -259,6 +259,8 @@ function buildRowPackets(
   const pageTitles = new Map<number, string | null>();
   for (const p of pages) pageTitles.set(p.pageNum, firstNonBlankLine(p.text));
 
+  const bucketByRow = computeSectionBucketsPerRow(items, pages);
+
   const itemsWithMeta = items.map((it, i) => ({
     item: it,
     row_index: i,
@@ -280,6 +282,11 @@ function buildRowPackets(
     const tableTitle = pickTableTitle(m.page, headings);
     const prevRows = collectNeighbourRows(itemsWithMeta, idx, -1, PREV_ROWS_MAX);
     const nextRows = collectNeighbourRows(itemsWithMeta, idx, 1, NEXT_ROWS_MAX);
+    const bucketInfo = bucketByRow.get(m.row_index) ?? {
+      bucket: "UNKNOWN" as SectionBucket,
+      banner: null,
+      anchor: null,
+    };
     return {
       row_index: m.row_index,
       page: m.page,
@@ -292,10 +299,184 @@ function buildRowPackets(
       table_title: tableTitle,
       previous_rows: prevRows,
       next_rows: nextRows,
+      section_bucket: bucketInfo.bucket,
+      section_bucket_banner: bucketInfo.banner,
+      section_reset_anchor: bucketInfo.anchor,
     };
   });
 
   return packets;
+}
+
+// --------------------------------------------------------------------------
+// Deterministic section-bucket walker
+// --------------------------------------------------------------------------
+
+type BucketInfo = {
+  bucket: SectionBucket;
+  banner: string | null;
+  anchor: string | null;
+};
+
+const SERVICES_NOT_SCHED_RE =
+  /services?\s+identified\s+not\s+part\s+of\s+(?:passive\s+fire\s+)?schedule/i;
+const OPTIONAL_BANNER_RE =
+  /\b(?:optional\s+scope|items?\s+with\s+confirmation|add\s+to\s+scope|estimate\s+items?(?:\s*\/\s*not\s+shown\s+on\s+drawings?)?|not\s+shown\s+on\s+drawings?|alternate\s+pricing|upgrade\s+options?|extra\s+over|can\s+be\s+removed|provisional\s+items?|provisional\s+sums?)\b/i;
+const EXCLUSIONS_BANNER_RE =
+  /\b(?:exclusions?|excluded\s+items?|by\s+others|by\s+main\s+contractor|by\s+client|not\s+included|no\s+allowance|reference\s+only|for\s+info(?:rmation)?)\b/i;
+const BANNER_MAX_LEN = 160;
+
+function computeSectionBucketsPerRow(
+  items: ParsedLineItemV2[],
+  pages: { pageNum: number; text: string }[],
+): Map<number, BucketInfo> {
+  const out = new Map<number, BucketInfo>();
+  if (items.length === 0) return out;
+
+  // Group rows by page in their incoming order.
+  const rowsByPage = new Map<number, { index: number; desc: string }[]>();
+  for (let i = 0; i < items.length; i++) {
+    const p = items[i].source_page;
+    if (p == null) continue;
+    const list = rowsByPage.get(p) ?? [];
+    list.push({ index: i, desc: (items[i].description ?? "").trim() });
+    rowsByPage.set(p, list);
+  }
+
+  // Sort pages ascending so state carries forward across page breaks.
+  const sortedPages = [...pages].sort((a, b) => a.pageNum - b.pageNum);
+
+  let state: SectionBucket = "UNKNOWN";
+  let banner: string | null = null;
+  let anchor: string | null = null;
+
+  for (const pg of sortedPages) {
+    const pageRows = rowsByPage.get(pg.pageNum) ?? [];
+    if (pageRows.length === 0) {
+      // Still walk the page so state updates (banners on header-only pages).
+      advanceStateThroughText(pg.text, {
+        setState: (s, b, a) => {
+          state = s;
+          banner = b;
+          if (a !== undefined) anchor = a;
+        },
+        getAnchor: () => anchor,
+      });
+      continue;
+    }
+
+    const lines = (pg.text ?? "").split(/\r?\n/);
+    const lineTrim = lines.map((l) => l.trim());
+
+    // Cursor tracks how far through the page we've consumed.
+    let cursor = 0;
+    let unmatchedRowCursor = 0;
+
+    for (const row of pageRows) {
+      // Advance through lines up to (and including) the row's description,
+      // applying banner transitions as we go.
+      const matchIdx = findLineIndex(lineTrim, row.desc, cursor);
+      const upTo = matchIdx >= 0 ? matchIdx : lineTrim.length;
+      for (let i = cursor; i < upTo; i++) {
+        const line = lineTrim[i];
+        const t = classifyLine(line);
+        if (t) {
+          state = t.state;
+          banner = t.banner;
+          if (t.anchor !== undefined) anchor = t.anchor;
+        }
+      }
+      out.set(row.index, { bucket: state, banner, anchor });
+      if (matchIdx >= 0) {
+        cursor = matchIdx + 1;
+      } else {
+        // If we can't locate the row by description, advance cursor by
+        // approximate lines-per-row so subsequent rows still progress.
+        const approx = Math.max(
+          1,
+          Math.floor(lineTrim.length / Math.max(1, pageRows.length)),
+        );
+        cursor = Math.min(lineTrim.length, cursor + approx);
+        unmatchedRowCursor++;
+      }
+    }
+
+    // Process any tail lines after the last row so banner state flips
+    // before the next page.
+    for (let i = cursor; i < lineTrim.length; i++) {
+      const t = classifyLine(lineTrim[i]);
+      if (t) {
+        state = t.state;
+        banner = t.banner;
+        if (t.anchor !== undefined) anchor = t.anchor;
+      }
+    }
+  }
+
+  return out;
+}
+
+function classifyLine(line: string): {
+  state: SectionBucket;
+  banner: string | null;
+  anchor?: string | null;
+} | null {
+  if (!line || line.length > BANNER_MAX_LEN) return null;
+
+  // RESET first — BLOCK / BUILDING / LEVEL / UNIT / AREA / SECTION / LOT.
+  // On reset, state returns to BASE within the new anchor regardless of
+  // prior OPTIONAL / SERVICES_NOT_IN_SCHEDULE / EXCLUSIONS state.
+  if (RESET_HEADING_RE.test(line)) {
+    const m = line.match(RESET_HEADING_RE);
+    const newAnchor = m ? m[0].trim().slice(0, 80) : line.slice(0, 80);
+    return { state: "BASE", banner: line.slice(0, BANNER_MAX_LEN), anchor: newAnchor };
+  }
+
+  if (SERVICES_NOT_SCHED_RE.test(line)) {
+    return { state: "SERVICES_NOT_IN_SCHEDULE", banner: line.slice(0, BANNER_MAX_LEN) };
+  }
+
+  if (OPTIONAL_BANNER_RE.test(line) && !looksLikeSubtotal(line)) {
+    // Skip if this is a subtotal like "Optional Subtotal" — that's a
+    // metadata rollup, not a new section.
+    return { state: "OPTIONAL_SCOPE", banner: line.slice(0, BANNER_MAX_LEN) };
+  }
+
+  if (EXCLUSIONS_BANNER_RE.test(line) && !looksLikeSubtotal(line)) {
+    return { state: "EXCLUSIONS", banner: line.slice(0, BANNER_MAX_LEN) };
+  }
+
+  return null;
+}
+
+function advanceStateThroughText(
+  text: string,
+  api: {
+    setState: (s: SectionBucket, b: string | null, a?: string | null) => void;
+    getAnchor: () => string | null;
+  },
+): void {
+  const lines = (text ?? "").split(/\r?\n/);
+  for (const raw of lines) {
+    const t = classifyLine(raw.trim());
+    if (t) api.setState(t.state, t.banner, t.anchor);
+  }
+}
+
+function findLineIndex(lines: string[], desc: string, start: number): number {
+  if (!desc) return -1;
+  const needle = desc.slice(0, 40).toLowerCase();
+  if (needle.length < 4) return -1;
+  for (let i = start; i < lines.length; i++) {
+    if (lines[i].toLowerCase().includes(needle)) return i;
+  }
+  // Secondary pass with shorter prefix.
+  const short = desc.slice(0, 20).toLowerCase();
+  if (short.length < 4) return -1;
+  for (let i = start; i < lines.length; i++) {
+    if (lines[i].toLowerCase().includes(short)) return i;
+  }
+  return -1;
 }
 
 function collectPageSequence(
