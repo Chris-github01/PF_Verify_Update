@@ -249,6 +249,8 @@ type PageHeading = {
   is_subtotal: boolean;
 };
 
+export { buildRowPackets as buildRowPacketsForConsensus };
+
 function buildRowPackets(
   items: ParsedLineItemV2[],
   pages: { pageNum: number; text: string }[],

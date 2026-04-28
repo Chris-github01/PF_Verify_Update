@@ -73,6 +73,10 @@ import {
   type ScopeSegmentationResult,
 } from "./scopeSegmentationEngine.ts";
 import {
+  runScopeConsensusEngine,
+  consensusToSegmentationResult,
+} from "./scopeConsensusEngine.ts";
+import {
   extractAuthoritativeTotalsFromText,
   type AuthoritativeTotals,
 } from "./extractAuthoritativeTotalsFromText.ts";
@@ -458,7 +462,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
         authoritative_totals?.optional_total ??
         null;
       try {
-        scope_segmentation = await runScopeSegmentationEngine({
+        const consensus = await runScopeConsensusEngine({
           extracted_items: items,
           rawText: effectiveRawText,
           allPages: effectivePages,
@@ -468,6 +472,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           authoritative_totals: { main_total, optional_total },
           openAIKey: input.openAIKey,
         });
+        scope_segmentation = consensusToSegmentationResult(consensus);
         items = scope_segmentation.items;
         tracker.succeed("scope_segmentation");
       } catch (err) {

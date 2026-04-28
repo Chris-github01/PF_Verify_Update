@@ -105,6 +105,12 @@ export type ClassifyArgs = {
   /** Map of row_index → total_price, used to compute main_total/optional_total
    * locally so the engine doesn't depend on the LLM's arithmetic. */
   totals_by_row?: Map<number, number | null>;
+  /** Optional system prompt override. Consensus engine passes its own
+   * structural / semantic / commercial prompt here. When omitted the
+   * stock v4 master prompt is used. */
+  systemPromptOverride?: string;
+  /** Optional tag used only for log labels. */
+  variantTag?: string;
 };
 
 export async function classifyRowsLLMV4(
@@ -182,7 +188,8 @@ export async function classifyRowsLLMV4(
         rows_sent: allRows.length,
       };
     }
-    const label = `chunk_${i + 1}_of_${chunks.length}`;
+    const tag = args.variantTag ? `${args.variantTag}:` : "";
+    const label = `${tag}chunk_${i + 1}_of_${chunks.length}`;
     const userPrompt = buildScopeUserPromptV4({
       supplier: args.supplier,
       trade: args.trade,
@@ -195,7 +202,7 @@ export async function classifyRowsLLMV4(
     const timeoutMs = Math.min(PER_CALL_TIMEOUT_MS, remaining);
     const call = await callLLMOnce({
       openAIKey: args.openAIKey,
-      systemPrompt: SCOPE_SEGMENTATION_SYSTEM_PROMPT_V4,
+      systemPrompt: args.systemPromptOverride ?? SCOPE_SEGMENTATION_SYSTEM_PROMPT_V4,
       userPrompt,
       label,
       timeoutMs,
