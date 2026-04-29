@@ -23,7 +23,7 @@
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 
 export const SCOPE_MARKER_DETECTION_VERSION =
-  "v12-schedule-pages-only-2026-04-29";
+  "v13-case-sensitive-block-banner-2026-04-29";
 console.log(
   `[scopeMarkerDetection] MODULE_LOAD version=${SCOPE_MARKER_DETECTION_VERSION}`,
 );
@@ -83,7 +83,7 @@ const MAIN_HEADING_PATTERNS: RegExp[] = [
   /items?\s+identified\s+on\s+drawings?/i,
   /passive\s+fire\s+schedule/i,
   /fire\s+rated\s+penetrations?/i,
-  /^\s*block\s+[a-z0-9]+\s*$/i,
+  /^\s*BLOCK\s+[A-Z0-9]+\s*$/,
   /main\s+scope/i,
 ];
 
@@ -278,7 +278,7 @@ function buildFlatDocument(
 
   // Only include schedule pages (pages that contain a BLOCK <n> banner).
   // This keeps summary/cover/T&Cs pages out of the heading scanner.
-  const blockRegex = /(?:^|\n)\s*block\s+[a-z0-9]+\b/i;
+  const blockRegex = /(?:^|\n)\s*BLOCK\s+[A-Z0-9]+\s*(?:\n|$)/;
   const filtered = ordered.filter((p) => blockRegex.test(p.text ?? ""));
 
   // If no page matches (edge case — degenerate input), fall back to
