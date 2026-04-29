@@ -28,7 +28,7 @@
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 
-export const SCOPE_MARKER_DETECTION_VERSION = "v8-three-tier-2026-04-29";
+export const SCOPE_MARKER_DETECTION_VERSION = "v9-material-markers-2026-04-29";
 console.log(
   `[scopeMarkerDetection] MODULE_LOAD version=${SCOPE_MARKER_DETECTION_VERSION}`,
 );
@@ -81,7 +81,7 @@ export type ScopeMarkerInput = {
  * Optional directly.
  */
 const OPTIONAL_ROW_MARKERS: RegExp[] = [
-  /\barchitectural[\s\/\-]*structural\s+details?\b/i,
+  /\barchitectural[\s\/\-]*structural\b/i,
   /\boptional\s+extras?\b/i,
   /\boptional\s+scope\b/i,
   /\boptional\s+flush\s+box(?:es)?\b/i,
@@ -98,6 +98,15 @@ const OPTIONAL_ROW_MARKERS: RegExp[] = [
   /\bupgrade\s+options?\b/i,
   /\bcan\s+be\s+removed\b/i,
   /\boptional\b/i, // catch-all for "optional" appearing anywhere in description
+  // Material-based markers. These products appear ONLY in Optional
+  // Scope sections of Optimal Fire schedules, so they are invariant
+  // to LLM normalization drift that drops the "Details" / "Optional
+  // Extras" tokens in lower chunks.
+  /\bryanlite\b/i,
+  /\bsiderise\s+cw\/?fs\b/i,
+  /\bryanmesh\s*60\/?25\b/i,
+  /\b(?:ryanfire\s+)?acoustic\s+putty\s+pad\b/i,
+  /\bintumescent\s+flush\s+box(?:es)?\b/i,
 ];
 
 /**
