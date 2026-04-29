@@ -43,25 +43,20 @@ const OPTIONAL_MARKERS = [
   "OPTIONAL EXTRAS",
   "ADD TO SCOPE",
   "CONFIRMATION REQUIRED",
-  "PROVISIONAL OPTIONAL",
 ];
 
 const MAIN_RESET_MARKERS = [
   "FIRE STOPPING PENETRATION SCHEDULE",
-  "SERVICES IDENTIFIED NOT PART OF PASSIVE FIRE SCHEDULE",
   "MAIN SCOPE",
   "BASE SCOPE",
   "INCLUDED SCOPE",
-  "SCOPE OF WORKS",
 ];
 
 const EXCLUSION_MARKERS = [
   "EXCLUDED",
-  "EXCLUSIONS",
   "BY OTHERS",
   "NOT INCLUDED",
   "NO ALLOWANCE",
-  "N.I.C",
   "NIC",
 ];
 
@@ -93,110 +88,48 @@ function hasAny(text: string, markers: string[]): string | null {
   return markers.find((m) => text.includes(m)) ?? null;
 }
 
-/**
- * Replacement for Stage 10: Scope Marker Detection.
- *
- * Purpose:
- * - Classify every extracted line item as main / optional / excluded / unknown.
- * - Uses document section markers, not only item wording.
- * - Critical rule:
- *   Once OPTIONAL SCOPE appears inside a block/table, all following rows remain optional
- *   until a new block/table/main reset marker appears.
- */
 export function detectScopeMarkersV2(params: {
   items: ScopeMarkerInputItem[];
-  rawText?: string;
-  pageTexts?: Array<{ page: number; text: string }>;
 }): ScopeMarkerDetectionResult {
   const { items } = params;
 
-  const warnings: string[] = [];
-  const markers_found: string[] = [];
-
   let activeScope: ScopeClassification = "main";
-  let activeSection = "Default Main Scope";
   let activeBlock = "";
-
-  const sortedItems = [...items].sort((a, b) => {
-    const ap = Number(a.page ?? 0);
-    const bp = Number(b.page ?? 0);
-    const al = Number(a.line_id ?? a.lineNumber ?? 0);
-    const bl = Number(b.line_id ?? b.lineNumber ?? 0);
-    return ap - bp || al - bl;
-  });
 
   const output: ScopeMarkerOutputItem[] = [];
 
-  for (const item of sortedItems) {
+  for (const item of items) {
     const text = itemText(item);
-    const sectionTitle = normaliseText(item.section_title);
     const desc = normaliseText(item.description);
-    const service = normaliseText(item.service);
     const block = normaliseText(item.block);
 
     if (block && block !== activeBlock) {
       activeBlock = block;
       activeScope = "main";
-      activeSection = `${block} Main Scope`;
-      markers_found.push(`BLOCK_RESET:${block}`);
     }
 
-    const optionalMarker =
-      hasAny(sectionTitle, OPTIONAL_MARKERS) ||
-      hasAny(text, OPTIONAL_MARKERS);
-
-    const mainResetMarker =
-      hasAny(sectionTitle, MAIN_RESET_MARKERS) ||
-      hasAny(text, MAIN_RESET_MARKERS);
-
-    const exclusionMarker =
-      hasAny(sectionTitle, EXCLUSION_MARKERS) ||
-      hasAny(desc, EXCLUSION_MARKERS) ||
-      hasAny(service, EXCLUSION_MARKERS);
-
-    if (mainResetMarker && !optionalMarker) {
-      activeScope = "main";
-      activeSection = mainResetMarker;
-      markers_found.push(mainResetMarker);
-    }
-
-    if (optionalMarker) {
+    if (hasAny(text, OPTIONAL_MARKERS)) {
       activeScope = "optional";
-      activeSection = optionalMarker;
-      markers_found.push(optionalMarker);
+    }
+
+    if (hasAny(text, MAIN_RESET_MARKERS)) {
+      activeScope = "main";
     }
 
     let scope: ScopeClassification = activeScope;
-    let reason = `Inherited from active section: ${activeSection}`;
-    let confidence = 0.82;
-    let scope_marker = activeSection;
+    let confidence = 0.85;
+    let reason = `Inherited from section`;
 
-    if (exclusionMarker) {
+    if (hasAny(desc, EXCLUSION_MARKERS)) {
       scope = "excluded";
-      reason = `Exclusion marker found: ${exclusionMarker}`;
       confidence = 0.95;
-      scope_marker = exclusionMarker;
+      reason = "Exclusion marker detected";
     }
 
-    if (
-      text.includes("OPTIONAL EXTRAS") ||
-      desc.includes("FLUSH BOX") ||
-      service.includes("OPTIONAL")
-    ) {
+    if (desc.includes("FLUSH BOX")) {
       scope = "optional";
-      reason = "Line item contains optional wording or belongs to optional extras section.";
-      confidence = 0.96;
-      scope_marker = "OPTIONAL LINE WORDING";
-    }
-
-    if (
-      service.includes("ARCHITECTURAL/STRUCTURAL") &&
-      activeScope === "optional"
-    ) {
-      scope = "optional";
-      reason = "Architectural/Structural item appears under OPTIONAL SCOPE section.";
-      confidence = 0.96;
-      scope_marker = "OPTIONAL SCOPE";
+      confidence = 0.95;
+      reason = "Optional flush box detected";
     }
 
     output.push({
@@ -204,8 +137,7 @@ export function detectScopeMarkersV2(params: {
       scope,
       scope_reason: reason,
       scope_confidence: confidence,
-      scope_marker,
-      scope_section: activeSection,
+      scope_section: activeScope,
     });
   }
 
@@ -217,14 +149,6 @@ export function detectScopeMarkersV2(params: {
     .filter((i) => i.scope === "optional")
     .reduce((sum, i) => sum + moneyValue(i), 0);
 
-  const excluded_total = output
-    .filter((i) => i.scope === "excluded")
-    .reduce((sum, i) => sum + moneyValue(i), 0);
-
-  if (!output.some((i) => i.scope === "optional")) {
-    warnings.push("No optional line items detected.");
-  }
-
   return {
     items: output,
     summary: {
@@ -232,11 +156,11 @@ export function detectScopeMarkersV2(params: {
       optional_count: output.filter((i) => i.scope === "optional").length,
       excluded_count: output.filter((i) => i.scope === "excluded").length,
       unknown_count: output.filter((i) => i.scope === "unknown").length,
-      main_total: Number(main_total.toFixed(2)),
-      optional_total: Number(optional_total.toFixed(2)),
-      excluded_total: Number(excluded_total.toFixed(2)),
+      main_total,
+      optional_total,
+      excluded_total: 0,
     },
-    markers_found: [...new Set(markers_found)],
-    warnings,
+    markers_found: [],
+    warnings: [],
   };
 }

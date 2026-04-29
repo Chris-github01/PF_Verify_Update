@@ -1,11 +1,10 @@
 /**
  * Stage 10 — Scope Marker Detection.
  *
- * Thin adapter that delegates to detectScopeMarkersV2 (shared module).
- * The V2 function classifies every extracted line item as main / optional /
- * excluded / unknown using document section markers, with the critical rule
- * that once OPTIONAL SCOPE appears inside a block/table, all following rows
- * remain optional until a new block or main-reset marker appears.
+ * Thin adapter that delegates to detectScopeMarkersV2. V2 receives the
+ * structured line items only (no raw OCR re-scans), classifies each row
+ * as main / optional / excluded / unknown using section markers, and
+ * returns summary totals + counts for debug output.
  */
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
@@ -15,7 +14,7 @@ import {
   type ScopeMarkerOutputItem,
 } from "../scopeMarkerDetectionV2.ts";
 
-export const SCOPE_MARKER_DETECTION_VERSION = "v17-detectScopeMarkersV2-2026-04-29";
+export const SCOPE_MARKER_DETECTION_VERSION = "v18-detectScopeMarkersV2-stable-2026-04-29";
 console.log(
   `[scopeMarkerDetection] MODULE_LOAD version=${SCOPE_MARKER_DETECTION_VERSION}`,
 );
@@ -28,7 +27,6 @@ export type ScopeMarkerItem = ParsedLineItemV2 & {
   scope_marker_evidence?: string | null;
   scope_reason?: string;
   scope_confidence?: number;
-  scope_marker?: string;
   scope_section?: string;
 };
 
@@ -41,15 +39,6 @@ export type ScopeMarkerSummary = {
   main_total: number;
   optional_total: number;
   excluded_total: number;
-  markers_found: string[];
-  warnings: string[];
-  first_10_items: Array<{
-    description: string;
-    scope: ScopeClassification;
-    scope_section: string | undefined;
-    scope_marker: string | undefined;
-    value: number;
-  }>;
   runtime_ms: number;
 };
 
@@ -72,7 +61,7 @@ function toOutputLabel(scope: ScopeClassification): ScopeMarkerLabel {
 
 export function runScopeMarkerDetection(input: ScopeMarkerInput): ScopeMarkerResult {
   const start = Date.now();
-  const { items, rawText, pages } = input;
+  const { items } = input;
 
   if (items.length === 0) {
     return {
@@ -86,9 +75,6 @@ export function runScopeMarkerDetection(input: ScopeMarkerInput): ScopeMarkerRes
         main_total: 0,
         optional_total: 0,
         excluded_total: 0,
-        markers_found: [],
-        warnings: [],
-        first_10_items: [],
         runtime_ms: Date.now() - start,
       },
     };
@@ -97,7 +83,6 @@ export function runScopeMarkerDetection(input: ScopeMarkerInput): ScopeMarkerRes
   const mapped = items.map((it, idx) => ({
     ...it,
     line_id: idx + 1,
-    page: it.source_page ?? undefined,
     section_title: it.source_section ?? undefined,
     block: it.building_or_block ?? undefined,
     service: it.sub_scope ?? undefined,
@@ -105,11 +90,7 @@ export function runScopeMarkerDetection(input: ScopeMarkerInput): ScopeMarkerRes
     value: it.total_price ?? 0,
   }));
 
-  const result = detectScopeMarkersV2({
-    items: mapped,
-    rawText,
-    pageTexts: pages?.map((p) => ({ page: p.pageNum, text: p.text })),
-  });
+  const result = detectScopeMarkersV2({ items: mapped });
 
   const outItems: ScopeMarkerItem[] = result.items.map((r: ScopeMarkerOutputItem) => {
     const label = toOutputLabel(r.scope);
@@ -118,11 +99,10 @@ export function runScopeMarkerDetection(input: ScopeMarkerInput): ScopeMarkerRes
       ...(original as ParsedLineItemV2),
       scope_category: label,
       scope_marker_label: label,
-      scope_marker_source: r.scope_marker,
+      scope_marker_source: r.scope_section,
       scope_marker_evidence: r.scope_reason ?? null,
       scope_reason: r.scope_reason,
       scope_confidence: r.scope_confidence,
-      scope_marker: r.scope_marker,
       scope_section: r.scope_section,
     };
   });
@@ -133,27 +113,17 @@ export function runScopeMarkerDetection(input: ScopeMarkerInput): ScopeMarkerRes
     optional_count: result.summary.optional_count,
     excluded_count: result.summary.excluded_count,
     unknown_count: result.summary.unknown_count,
-    main_total: result.summary.main_total,
-    optional_total: result.summary.optional_total,
-    excluded_total: result.summary.excluded_total,
-    markers_found: result.markers_found,
-    warnings: result.warnings,
-    first_10_items: result.items.slice(0, 10).map((r) => ({
-      description: String(r.description ?? "").slice(0, 160),
-      scope: r.scope,
-      scope_section: r.scope_section,
-      scope_marker: r.scope_marker,
-      value: Number(r.value ?? r.total ?? 0),
-    })),
+    main_total: Number(result.summary.main_total.toFixed(2)),
+    optional_total: Number(result.summary.optional_total.toFixed(2)),
+    excluded_total: Number(result.summary.excluded_total.toFixed(2)),
     runtime_ms: Date.now() - start,
   };
 
   console.log(
-    `[scopeMarkerDetection] v17 done items=${outItems.length} ` +
+    `[scopeMarkerDetection] v18 stable items=${outItems.length} ` +
       `main=${summary.main_count} optional=${summary.optional_count} ` +
       `excluded=${summary.excluded_count} main_total=${summary.main_total} ` +
-      `optional_total=${summary.optional_total} ` +
-      `markers=${summary.markers_found.join("|")} runtime_ms=${summary.runtime_ms}`,
+      `optional_total=${summary.optional_total} runtime_ms=${summary.runtime_ms}`,
   );
 
   return { items: outItems, summary };
