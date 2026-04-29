@@ -454,6 +454,7 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
           items,
           rawText: effectiveRawText,
           pages: effectivePages,
+          authoritativeTotals: authoritative_totals,
         });
         items = scope_marker_detection.items;
         tracker.succeed("scope_marker_detection");
