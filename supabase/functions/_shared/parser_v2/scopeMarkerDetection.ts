@@ -1,29 +1,31 @@
 /**
- * Stage 10 v12 — Sequential Heading Scope Classifier (2026-04-29).
+ * Stage 10 v14 — Per-Page Banner Scope Classifier (2026-04-29).
  *
- * Algorithm:
+ * Generic, structural algorithm. No material-name heuristics. No
+ * quote-tailored regexes.
  *
- *   1. Build a linear document from ONLY the schedule pages (pages that
- *      contain a "BLOCK <n>" banner). Cover pages, summary/total pages
- *      and T&Cs are excluded so their "OPTIONAL SCOPE" text can't
- *      pollute the scanner.
- *   2. Scan that text top-to-bottom for HEADING lines. A heading is a
- *      short dominant line (<=120 chars) matching one of the known
- *      Optional or Main phrases.
- *   3. Walk the parsed items in order. Resolve each item to a document
- *      offset (robust to LLM word-duplication prefixes) and apply the
- *      most recent heading at or before that offset. Optional keeps
- *      Optional until a Main heading is hit; Main keeps Main until an
- *      Optional heading is hit.
- *   4. Items whose position precedes the first heading default to Main.
- *   5. Excluded is a separate dimension handled only at the row level
- *      via explicit "by others" / "not included" / "excluded" text.
+ * Per page:
+ *   1. Starting state is Main.
+ *   2. Scan the page text for banner lines: "OPTIONAL SCOPE",
+ *      "OPTIONAL EXTRAS", "OPTIONAL ITEMS", "MAIN SCOPE",
+ *      "ITEMS IDENTIFIED ON DRAWINGS". Each banner flips state at its
+ *      offset within the page.
+ *   3. Classify each item anchored to that page by its in-page offset
+ *      relative to those banner events.
+ *
+ * Rules:
+ *   - State does NOT carry across page boundaries. Every page starts
+ *     Main unless it opens with an Optional banner before any item.
+ *   - Items with an explicit row-level exclusion marker ("by others",
+ *     "not included", "excluded", "nic") are Excluded regardless of
+ *     banner state.
+ *   - Items without a resolvable source_page default to Main.
  */
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 
 export const SCOPE_MARKER_DETECTION_VERSION =
-  "v13-case-sensitive-block-banner-2026-04-29";
+  "v14-per-page-banner-2026-04-29";
 console.log(
   `[scopeMarkerDetection] MODULE_LOAD version=${SCOPE_MARKER_DETECTION_VERSION}`,
 );
@@ -51,7 +53,7 @@ export type ScopeMarkerSummary = {
   optional_total: number;
   excluded_total: number;
   source_counts: Record<ScopeMarkerSource, number>;
-  heading_events: { offset: number; type: "optional" | "main"; text: string }[];
+  heading_events: { page: number; offset: number; type: "optional" | "main"; text: string }[];
   scanned_pages: number[];
   runtime_ms: number;
 };
@@ -68,23 +70,18 @@ export type ScopeMarkerInput = {
 };
 
 // --------------------------------------------------------------------------
-// Heading vocabulary. Case-insensitive.
+// Generic banner vocabulary. Applied per line within each page.
 // --------------------------------------------------------------------------
 
-const OPTIONAL_HEADING_PATTERNS: RegExp[] = [
-  /optional\s+scope/i,
-  /optional\s+extras?/i,
-  /items?\s+with\s+confirmation/i,
-  /not\s+shown\s+on\s+drawings?/i,
-  /optional\s+items?/i,
+const OPTIONAL_BANNER_PATTERNS: RegExp[] = [
+  /\boptional\s+scope\b/i,
+  /\boptional\s+extras?\b/i,
+  /\boptional\s+items?\b/i,
 ];
 
-const MAIN_HEADING_PATTERNS: RegExp[] = [
-  /items?\s+identified\s+on\s+drawings?/i,
-  /passive\s+fire\s+schedule/i,
-  /fire\s+rated\s+penetrations?/i,
-  /^\s*BLOCK\s+[A-Z0-9]+\s*$/,
-  /main\s+scope/i,
+const MAIN_BANNER_PATTERNS: RegExp[] = [
+  /\bmain\s+scope\b/i,
+  /\bitems?\s+identified\s+on\s+drawings?\b/i,
 ];
 
 const EXCLUDED_ROW_MARKERS: RegExp[] = [
@@ -99,28 +96,7 @@ const EXCLUDED_ROW_MARKERS: RegExp[] = [
   /\bnot\s+included\b/i,
 ];
 
-// LLM normalization frequently prepends a category token (or two) before
-// the canonical description. Strip these before searching raw text.
-const LLM_PREFIX_TOKENS: RegExp[] = [
-  /^\[block\s+[a-z0-9]+\]\s+/i,
-  /^hvac\s+bundle\s+one\s+way\s+/i,
-  /^hvac\s+bundle\s+/i,
-  /^cable\s+bundle\s+/i,
-  /^fire[_\s]protection\s+fire\s+alarm\s+cable\s+/i,
-  /^pvc\s+pipe\s+/i,
-  /^pex\s+pipe\s+/i,
-  /^copper\s+pipe\s+/i,
-  /^brass\s+wingback\s+/i,
-  /^downlight\s+cover\s+/i,
-  /^beam\s+encasement\s+/i,
-  /^cavity\s+barrier\s+/i,
-  /^architectural\s+flush\s+box\s+/i,
-  /^flush\s+box\s+/i,
-  /^pipe\s+wall\s+/i,
-  /^acoustic\s+putty\s+pad\s+/i,
-];
-
-type HeadingEvent = {
+type BannerEvent = {
   offset: number;
   type: "optional" | "main";
   text: string;
@@ -134,20 +110,25 @@ export function runScopeMarkerDetection(
   input: ScopeMarkerInput,
 ): ScopeMarkerResult {
   const start = Date.now();
-  const { items, pages, rawText } = input;
+  const { items, pages } = input;
 
   if (items.length === 0) {
     return { items: [], summary: emptySummary(Date.now() - start) };
   }
 
-  // Build one linear document string from only schedule pages.
-  const { flat, pageStarts, scannedPages } = buildFlatDocument(
-    pages ?? [],
-    rawText ?? "",
-  );
+  // Per-page banner events.
+  const pageBanners = new Map<number, BannerEvent[]>();
+  const scannedPages: number[] = [];
+  const allHeadings: { page: number; offset: number; type: "optional" | "main"; text: string }[] = [];
 
-  // Extract all heading events in reading order.
-  const headings = extractHeadings(flat);
+  for (const p of pages ?? []) {
+    const banners = extractBanners(p.text ?? "");
+    pageBanners.set(p.pageNum, banners);
+    scannedPages.push(p.pageNum);
+    for (const b of banners) {
+      allHeadings.push({ page: p.pageNum, offset: b.offset, type: b.type, text: b.text });
+    }
+  }
 
   const sourceCounts: Record<ScopeMarkerSource, number> = {
     row_description_excluded: 0,
@@ -156,18 +137,16 @@ export function runScopeMarkerDetection(
     default_main: 0,
   };
 
-  // Walk items in order, resolving each to a document offset and then
-  // picking up the state from the most recent heading at or before that
-  // offset.
-  let searchCursor = 0;
-  let carriedState: "main" | "optional" = "main";
+  // Track a per-page in-page cursor so that multiple items on the same
+  // page advance monotonically through the page text.
+  const pageCursors = new Map<number, number>();
 
   const out: ScopeMarkerItem[] = items.map((it) => {
     const desc = (it.description ?? "").trim();
     const subScope = (it.sub_scope ?? "").trim();
     const haystack = `${desc} ${subScope}`;
 
-    // Excluded is independent of headings.
+    // Row-level exclusion overrides everything.
     const excMatch = matchMarker(haystack, EXCLUDED_ROW_MARKERS);
     if (excMatch) {
       sourceCounts.row_description_excluded++;
@@ -180,37 +159,40 @@ export function runScopeMarkerDetection(
       };
     }
 
-    const { offset, probeLength } = locateItemOffset(
-      it,
-      flat,
-      pageStarts,
-      desc,
-      searchCursor,
-    );
+    const page = (it as { source_page?: number | null }).source_page ?? null;
+    const pageText = page !== null
+      ? (pages ?? []).find((p) => p.pageNum === page)?.text ?? ""
+      : "";
+    const banners = page !== null ? pageBanners.get(page) ?? [] : [];
 
-    let state = carriedState;
+    const cursor = page !== null ? pageCursors.get(page) ?? 0 : 0;
+    const { offset, probeLength } = locateInPage(desc, pageText, cursor);
+
+    let state: "main" | "optional" = "main";
     let evidence: string | null = null;
-    let resolvedByOffset = false;
+    let resolved = false;
 
     if (offset >= 0) {
-      // Always advance the cursor past the resolved position so later
-      // items can cross in-page Optional/Main banners correctly.
-      const advance = offset + Math.max(probeLength, 1);
-      if (advance > searchCursor) searchCursor = advance;
-      const h = mostRecentHeading(headings, offset);
-      if (h) {
-        state = h.type;
-        evidence = h.text;
-        resolvedByOffset = true;
-      } else {
-        state = "main";
-        evidence = null;
-        resolvedByOffset = true;
+      const banner = mostRecentBanner(banners, offset);
+      if (banner) {
+        state = banner.type;
+        evidence = banner.text;
       }
-      carriedState = state;
-    } else {
-      // Description not found in raw text. Inherit the carried state.
-      evidence = state === "optional" ? "carried_optional" : null;
+      resolved = true;
+      if (page !== null) {
+        pageCursors.set(page, offset + Math.max(probeLength, 1));
+      }
+    } else if (banners.length > 0) {
+      // Item not found in page text but page has banners. Fall back to
+      // position-free heuristic: if page has only Optional banners and no
+      // Main banner, treat as optional. Otherwise default to main.
+      const hasOptional = banners.some((b) => b.type === "optional");
+      const hasMain = banners.some((b) => b.type === "main");
+      if (hasOptional && !hasMain) {
+        state = "optional";
+        evidence = banners.find((b) => b.type === "optional")?.text ?? null;
+        resolved = true;
+      }
     }
 
     if (state === "optional") {
@@ -224,7 +206,7 @@ export function runScopeMarkerDetection(
       };
     }
 
-    if (evidence && resolvedByOffset) {
+    if (resolved && evidence) {
       sourceCounts.heading_main++;
     } else {
       sourceCounts.default_main++;
@@ -234,7 +216,7 @@ export function runScopeMarkerDetection(
       scope_category: "main" as const,
       scope_marker_label: "main" as const,
       scope_marker_source:
-        evidence && resolvedByOffset
+        resolved && evidence
           ? ("heading_main" as const)
           : ("default_main" as const),
       scope_marker_evidence: evidence,
@@ -245,7 +227,7 @@ export function runScopeMarkerDetection(
     out,
     Date.now() - start,
     sourceCounts,
-    headings,
+    allHeadings,
     scannedPages,
   );
   console.log(
@@ -253,7 +235,7 @@ export function runScopeMarkerDetection(
       `optional=${summary.optional_count} excluded=${summary.excluded_count} ` +
       `main_total=${summary.main_total} optional_total=${summary.optional_total} ` +
       `excluded_total=${summary.excluded_total} ` +
-      `headings=${headings.length} scanned_pages=${scannedPages.join(",")} ` +
+      `banners=${allHeadings.length} scanned_pages=${scannedPages.join(",")} ` +
       `runtime_ms=${summary.runtime_ms}`,
   );
   return { items: out, summary };
@@ -263,56 +245,22 @@ export function runScopeMarkerDetection(
 // Helpers
 // --------------------------------------------------------------------------
 
-function buildFlatDocument(
-  pages: { pageNum: number; text: string }[],
-  rawText: string,
-): { flat: string; pageStarts: Map<number, number>; scannedPages: number[] } {
-  const pageStarts = new Map<number, number>();
-  const scannedPages: number[] = [];
-
-  if (pages.length === 0) {
-    return { flat: rawText, pageStarts, scannedPages };
-  }
-
-  const ordered = [...pages].sort((a, b) => a.pageNum - b.pageNum);
-
-  // Only include schedule pages (pages that contain a BLOCK <n> banner).
-  // This keeps summary/cover/T&Cs pages out of the heading scanner.
-  const blockRegex = /(?:^|\n)\s*BLOCK\s+[A-Z0-9]+\s*(?:\n|$)/;
-  const filtered = ordered.filter((p) => blockRegex.test(p.text ?? ""));
-
-  // If no page matches (edge case — degenerate input), fall back to
-  // including all pages so we still classify something.
-  const included = filtered.length > 0 ? filtered : ordered;
-
-  const parts: string[] = [];
-  let offset = 0;
-  for (const p of included) {
-    pageStarts.set(p.pageNum, offset);
-    scannedPages.push(p.pageNum);
-    const t = p.text ?? "";
-    parts.push(t);
-    offset += t.length + 2;
-    parts.push("\n\n");
-  }
-  return { flat: parts.join(""), pageStarts, scannedPages };
-}
-
-function extractHeadings(flat: string): HeadingEvent[] {
-  const events: HeadingEvent[] = [];
-  if (!flat) return events;
+function extractBanners(pageText: string): BannerEvent[] {
+  const events: BannerEvent[] = [];
+  if (!pageText) return events;
   const lineRegex = /[^\n]*/g;
   let m: RegExpExecArray | null;
-  while ((m = lineRegex.exec(flat)) !== null) {
+  while ((m = lineRegex.exec(pageText)) !== null) {
     const line = m[0];
     const trimmed = line.trim();
     if (!trimmed) {
       if (m.index === lineRegex.lastIndex) lineRegex.lastIndex++;
       continue;
     }
+    // Banners are short dominant lines.
     if (trimmed.length <= 120) {
-      const optMatch = matchMarker(trimmed, OPTIONAL_HEADING_PATTERNS);
-      const mainMatch = matchMarker(trimmed, MAIN_HEADING_PATTERNS);
+      const optMatch = matchMarker(trimmed, OPTIONAL_BANNER_PATTERNS);
+      const mainMatch = matchMarker(trimmed, MAIN_BANNER_PATTERNS);
       if (optMatch && !mainMatch) {
         events.push({ offset: m.index, type: "optional", text: trimmed });
       } else if (mainMatch && !optMatch) {
@@ -324,85 +272,51 @@ function extractHeadings(flat: string): HeadingEvent[] {
   return events;
 }
 
-function mostRecentHeading(
-  headings: HeadingEvent[],
+function mostRecentBanner(
+  banners: BannerEvent[],
   offset: number,
-): HeadingEvent | null {
-  let found: HeadingEvent | null = null;
-  for (const h of headings) {
-    if (h.offset <= offset) found = h;
+): BannerEvent | null {
+  let found: BannerEvent | null = null;
+  for (const b of banners) {
+    if (b.offset <= offset) found = b;
     else break;
   }
   return found;
 }
 
-function stripLlmPrefixes(desc: string): string {
-  let out = desc;
-  // Apply repeatedly; prefixes may stack ("[Block B30] cable bundle ...").
-  for (let i = 0; i < 4; i++) {
-    let changed = false;
-    for (const re of LLM_PREFIX_TOKENS) {
-      const next = out.replace(re, "");
-      if (next !== out) {
-        out = next;
-        changed = true;
-      }
-    }
-    if (!changed) break;
-  }
-  return out.trim();
-}
-
-function locateItemOffset(
-  item: ParsedLineItemV2,
-  flat: string,
-  pageStarts: Map<number, number>,
+function locateInPage(
   desc: string,
-  searchCursor: number,
+  pageText: string,
+  cursor: number,
 ): { offset: number; probeLength: number } {
-  if (!flat || !desc) return { offset: -1, probeLength: 0 };
+  if (!desc || !pageText) return { offset: -1, probeLength: 0 };
 
-  const page = (item as { source_page?: number | null }).source_page ?? null;
-  const pageStart = page !== null ? (pageStarts.get(page) ?? -1) : -1;
-
-  const lowerFlat = flat.toLowerCase();
-  const startCursor =
-    pageStart >= 0 ? Math.max(pageStart, searchCursor) : searchCursor;
-
-  // Candidate 1: full description as-is.
-  // Candidate 2: LLM-prefix-stripped canonical portion.
-  const candidates: string[] = [];
+  const lowerText = pageText.toLowerCase();
   const lowerDesc = desc.toLowerCase();
-  candidates.push(lowerDesc);
 
-  const stripped = stripLlmPrefixes(desc).toLowerCase();
-  if (stripped && stripped !== lowerDesc) candidates.push(stripped);
-
-  // Candidate 3: relaxed probe — first 3 meaningful tokens of the stripped
-  // description (drops trailing units/qty/noise and matches PDF text).
-  const probeBase = stripped || lowerDesc;
-  const tokens = probeBase
+  // Tokenise the description into meaningful words and try progressively
+  // shorter probes. No material-specific prefix stripping.
+  const tokens = lowerDesc
     .replace(/[^a-z0-9\s\/\-]/g, " ")
     .split(/\s+/)
     .filter((t) => t.length >= 3);
-  const probe = tokens.slice(0, 3).join(" ");
-  if (probe && !candidates.includes(probe)) candidates.push(probe);
 
-  // Candidate 4: two-token probe as last resort.
-  const probe2 = tokens.slice(0, 2).join(" ");
-  if (probe2 && probe2.length >= 6 && !candidates.includes(probe2)) {
-    candidates.push(probe2);
+  const candidates: string[] = [];
+  if (lowerDesc.length >= 6) candidates.push(lowerDesc);
+  for (const n of [5, 4, 3, 2]) {
+    const probe = tokens.slice(0, n).join(" ");
+    if (probe.length >= 6 && !candidates.includes(probe)) {
+      candidates.push(probe);
+    }
   }
 
   for (const needle of candidates) {
-    let idx = lowerFlat.indexOf(needle, startCursor);
-    if (idx === -1 && pageStart >= 0) {
-      idx = lowerFlat.indexOf(needle, pageStart);
-    }
+    let idx = lowerText.indexOf(needle, cursor);
+    if (idx === -1 && cursor > 0) idx = lowerText.indexOf(needle);
     if (idx !== -1) return { offset: idx, probeLength: needle.length };
   }
 
-  return { offset: pageStart, probeLength: 0 };
+  return { offset: -1, probeLength: 0 };
 }
 
 function matchMarker(text: string, patterns: RegExp[]): string | null {
@@ -417,7 +331,7 @@ function summarise(
   items: ScopeMarkerItem[],
   runtime_ms: number,
   source_counts: Record<ScopeMarkerSource, number>,
-  headings: HeadingEvent[],
+  headings: { page: number; offset: number; type: "optional" | "main"; text: string }[],
   scannedPages: number[],
 ): ScopeMarkerSummary {
   let main_count = 0;
@@ -449,6 +363,7 @@ function summarise(
     excluded_total: round2(excluded_total),
     source_counts,
     heading_events: headings.map((h) => ({
+      page: h.page,
       offset: h.offset,
       type: h.type,
       text: h.text.slice(0, 120),
