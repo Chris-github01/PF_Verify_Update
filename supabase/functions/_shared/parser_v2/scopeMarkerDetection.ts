@@ -1,28 +1,32 @@
 /**
- * Stage 10 v15 — Trust-LLM Pass-Through Scope Classifier (2026-04-29).
+ * Stage 10 v16 — LLM + Row-Text Override (2026-04-29).
  *
- * The upstream LLM extractor (extractPassiveFire.ts) is already prompted to
- * emit a per-row scope_category using the quote's own page banners, block
- * headers and "By others" markers. Re-deriving that downstream from raw
- * page text produced brittle results tailored to individual quotes.
+ * Problem: the upstream LLM extractor produces correct scope_category for
+ * early chunks but drifts in later chunks, marking ordinary Main-scope
+ * service rows as Optional. Pure pass-through propagates that drift.
  *
- * This module is now a generic pass-through:
+ * Solution: the LLM's Optional label is only trusted when the row text
+ * carries a universal optional scope marker ("optional extras", "optional
+ * scope", "architectural/structural details", "cavity barrier",
+ * "intumescent flush box"). Without such a marker, an Optional label is
+ * downgraded to Main. This relies entirely on text embedded in the row,
+ * not on page banners, line numbers, or material-specific vocabulary.
  *
- *   1. If the row text contains a universal exclusion marker
- *      ("by others", "not included", "excluded", "nic", "no allowance",
- *      "by main contractor", "by client"), classify as Excluded.
- *   2. Otherwise, normalise the LLM-provided scope_category verbatim:
- *        "optional"  -> optional
- *        "excluded"  -> excluded
- *        anything else / missing -> main
- *
- * No banner scanning, no page offsets, no material vocabulary.
+ * Decision order per row:
+ *   1. Row text contains an excluded marker → Excluded.
+ *   2. Row text contains an optional marker → Optional.
+ *   3. LLM label is "excluded" → Excluded.
+ *   4. LLM label is "optional":
+ *        - If row text has an optional marker → Optional.
+ *        - Otherwise downgrade to Main (drift correction).
+ *   5. LLM label is "main" → Main.
+ *   6. Default → Main.
  */
 
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 
 export const SCOPE_MARKER_DETECTION_VERSION =
-  "v15-trust-llm-passthrough-2026-04-29";
+  "v16-llm-row-override-2026-04-29";
 console.log(
   `[scopeMarkerDetection] MODULE_LOAD version=${SCOPE_MARKER_DETECTION_VERSION}`,
 );
@@ -31,7 +35,9 @@ export type ScopeMarkerLabel = "main" | "optional" | "excluded";
 
 export type ScopeMarkerSource =
   | "row_description_excluded"
-  | "llm_optional"
+  | "row_description_optional"
+  | "llm_optional_confirmed"
+  | "llm_optional_downgraded"
   | "llm_excluded"
   | "llm_main"
   | "default_main";
@@ -77,6 +83,14 @@ const EXCLUDED_ROW_MARKERS: RegExp[] = [
   /(?:^|[^a-z])nic(?:[^a-z]|$)/i,
 ];
 
+const OPTIONAL_ROW_MARKERS: RegExp[] = [
+  /\boptional\s+extras?\b/i,
+  /\boptional\s+scope\b/i,
+  /\barchitectural\s*\/?\s*structural\s+details?\b/i,
+  /\bcavity\s+barrier\b/i,
+  /\bintumescent\s+flush\s+box\b/i,
+];
+
 export function runScopeMarkerDetection(
   input: ScopeMarkerInput,
 ): ScopeMarkerResult {
@@ -85,7 +99,9 @@ export function runScopeMarkerDetection(
 
   const sourceCounts: Record<ScopeMarkerSource, number> = {
     row_description_excluded: 0,
-    llm_optional: 0,
+    row_description_optional: 0,
+    llm_optional_confirmed: 0,
+    llm_optional_downgraded: 0,
     llm_excluded: 0,
     llm_main: 0,
     default_main: 0,
@@ -106,60 +122,42 @@ export function runScopeMarkerDetection(
     const excMatch = matchMarker(haystack, EXCLUDED_ROW_MARKERS);
     if (excMatch) {
       sourceCounts.row_description_excluded++;
-      return {
-        ...it,
-        scope_category: "excluded" as const,
-        scope_marker_label: "excluded" as const,
-        scope_marker_source: "row_description_excluded" as const,
-        scope_marker_evidence: excMatch,
-      };
+      return emit(it, "excluded", "row_description_excluded", excMatch);
     }
 
+    const optMatch = matchMarker(haystack, OPTIONAL_ROW_MARKERS);
     const llm = normaliseLlmLabel(
       (it as { scope_category?: string | null }).scope_category,
     );
 
-    if (llm === "optional") {
-      sourceCounts.llm_optional++;
-      return {
-        ...it,
-        scope_category: "optional" as const,
-        scope_marker_label: "optional" as const,
-        scope_marker_source: "llm_optional" as const,
-        scope_marker_evidence: null,
-      };
+    if (optMatch) {
+      if (llm === "optional") sourceCounts.llm_optional_confirmed++;
+      else sourceCounts.row_description_optional++;
+      return emit(
+        it,
+        "optional",
+        llm === "optional" ? "llm_optional_confirmed" : "row_description_optional",
+        optMatch,
+      );
     }
 
     if (llm === "excluded") {
       sourceCounts.llm_excluded++;
-      return {
-        ...it,
-        scope_category: "excluded" as const,
-        scope_marker_label: "excluded" as const,
-        scope_marker_source: "llm_excluded" as const,
-        scope_marker_evidence: null,
-      };
+      return emit(it, "excluded", "llm_excluded", null);
+    }
+
+    if (llm === "optional") {
+      sourceCounts.llm_optional_downgraded++;
+      return emit(it, "main", "llm_optional_downgraded", null);
     }
 
     if (llm === "main") {
       sourceCounts.llm_main++;
-      return {
-        ...it,
-        scope_category: "main" as const,
-        scope_marker_label: "main" as const,
-        scope_marker_source: "llm_main" as const,
-        scope_marker_evidence: null,
-      };
+      return emit(it, "main", "llm_main", null);
     }
 
     sourceCounts.default_main++;
-    return {
-      ...it,
-      scope_category: "main" as const,
-      scope_marker_label: "main" as const,
-      scope_marker_source: "default_main" as const,
-      scope_marker_evidence: null,
-    };
+    return emit(it, "main", "default_main", null);
   });
 
   const summary = buildSummary(out, Date.now() - start, sourceCounts);
@@ -167,9 +165,26 @@ export function runScopeMarkerDetection(
     `[scopeMarkerDetection] done items=${out.length} main=${summary.main_count} ` +
       `optional=${summary.optional_count} excluded=${summary.excluded_count} ` +
       `main_total=${summary.main_total} optional_total=${summary.optional_total} ` +
-      `excluded_total=${summary.excluded_total} runtime_ms=${summary.runtime_ms}`,
+      `excluded_total=${summary.excluded_total} ` +
+      `downgraded=${sourceCounts.llm_optional_downgraded} ` +
+      `runtime_ms=${summary.runtime_ms}`,
   );
   return { items: out, summary };
+}
+
+function emit(
+  it: ParsedLineItemV2,
+  label: ScopeMarkerLabel,
+  source: ScopeMarkerSource,
+  evidence: string | null,
+): ScopeMarkerItem {
+  return {
+    ...it,
+    scope_category: label,
+    scope_marker_label: label,
+    scope_marker_source: source,
+    scope_marker_evidence: evidence,
+  };
 }
 
 function normaliseLlmLabel(
