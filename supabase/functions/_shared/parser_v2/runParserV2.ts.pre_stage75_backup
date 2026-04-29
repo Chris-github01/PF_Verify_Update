@@ -72,7 +72,6 @@ import {
   runScopeMarkerDetection,
   type ScopeMarkerResult,
 } from "./scopeMarkerDetection.ts";
-import { recoverLineItemsIfNeeded } from "../lineItemRecovery.ts";
 import {
   extractAuthoritativeTotalsFromText,
   type AuthoritativeTotals,
@@ -363,26 +362,6 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
     durations.extraction = Date.now() - extractStart;
 
     logExtractionDebug("extraction", extractorName, items.length, extractionDebug);
-
-    // ---- Stage 7.5: Line Item Recovery Engine (hidden fallback).
-    // Only activates when Stage 7 returned zero or unusably low-quality rows.
-    // Fully reversible via ENABLE_STAGE_75_RECOVERY=false.
-    try {
-      const recovery = await recoverLineItemsIfNeeded({
-        extractedLineItems: items as unknown as Parameters<typeof recoverLineItemsIfNeeded>[0]["extractedLineItems"],
-        rawText: effectiveRawText,
-        structuredData: effectivePages,
-        documentClass: quoteType.quoteType,
-        debug: true,
-      });
-      if (recovery.debug.activated && recovery.items.length > 0) {
-        items = recovery.items as unknown as ParsedLineItemV2[];
-        anomalies.push(`stage_7_5_activated:${recovery.debug.reason}`);
-      }
-    } catch (err) {
-      console.error("[parser_v2] stage 7.5 recovery failed", err);
-      anomalies.push("stage_7_5_recovery_failed");
-    }
 
     if (items.length === 0 && extractor !== extractFallback) {
       anomalies.push("primary_extractor_zero_rows");
