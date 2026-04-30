@@ -65,48 +65,26 @@ export interface ScopeDetectionV5Result {
 
 const HARD_EXCLUDE_TERMS = [
   "rate only",
-  "rates only",
   "schedule of rates",
-  "rates schedule",
-  "unit rate",
   "for reference only",
-  "budget rate",
-  "indicative rate",
 ];
 
 const EXPLICIT_OPTIONAL_TERMS = [
-  "optional",
+  "optional scope",
+  "optional extras",
+  "optional item",
   "add to scope",
-  "client to confirm",
   "confirmation required",
-  "tick box",
-  "if required",
-  "by others (optional context)",
 ];
 
 const HIDDEN_OPTIONAL_TERMS = [
   "not shown on drawings",
   "estimate items",
-  "items not shown",
-  "tbc",
-  "to be confirmed",
-  "provisional",
-  "assumed",
-  "allowance only",
-  "subject to",
 ];
 
-const OPTIONAL_SECTION_TERMS = [
-  "optional scope",
-  "items with confirmation",
-  "add to scope",
-  "confirmation",
-];
-
-const EXCLUDE_SECTION_TERMS = [
-  "rates",
-  "schedule",
-  "rate only",
+const FORCE_MAIN_TERMS = [
+  "not part of passive fire schedule",
+  "services identified not part",
 ];
 
 function includesAny(text: string, keywords: string[]): string | null {
@@ -117,17 +95,25 @@ function includesAny(text: string, keywords: string[]): string | null {
 }
 
 export function classifyScopeItem(item: LineItem): ClassificationResult {
-  const desc = (item.description ?? "").toLowerCase();
-  const section = (item.section ?? "").toLowerCase();
-  const pageContext = (item.pageContext ?? "").toLowerCase();
-  const text = `${desc} ${section} ${pageContext}`;
+  const text = `${item.description ?? ""} ${item.section ?? ""} ${item.pageContext ?? ""}`
+    .toLowerCase()
+    .trim();
+
+  const forceMain = includesAny(text, FORCE_MAIN_TERMS);
+  if (forceMain) {
+    return {
+      type: "MAIN",
+      confidence: 0.9,
+      reason: `non_passive_but_included:${forceMain}`,
+    };
+  }
 
   const hardExclude = includesAny(text, HARD_EXCLUDE_TERMS);
   if (hardExclude) {
     return {
       type: "EXCLUDE",
-      confidence: 0.98,
-      reason: `hard_exclude:${hardExclude}`,
+      confidence: 0.95,
+      reason: `explicit_rate_or_reference:${hardExclude}`,
     };
   }
 
@@ -136,7 +122,7 @@ export function classifyScopeItem(item: LineItem): ClassificationResult {
     return {
       type: "OPTIONAL",
       confidence: 0.95,
-      reason: `explicit_optional:${explicit}`,
+      reason: `explicit_optional_section:${explicit}`,
     };
   }
 
@@ -144,35 +130,15 @@ export function classifyScopeItem(item: LineItem): ClassificationResult {
   if (hidden) {
     return {
       type: "OPTIONAL",
-      confidence: 0.92,
-      reason: `hidden_optional:${hidden}`,
+      confidence: 0.85,
+      reason: `hidden_optional_scope:${hidden}`,
     };
-  }
-
-  if (section) {
-    const optSection = includesAny(section, OPTIONAL_SECTION_TERMS);
-    if (optSection) {
-      return {
-        type: "OPTIONAL",
-        confidence: 0.9,
-        reason: `section_optional:${optSection}`,
-      };
-    }
-
-    const excSection = includesAny(section, EXCLUDE_SECTION_TERMS);
-    if (excSection) {
-      return {
-        type: "EXCLUDE",
-        confidence: 0.9,
-        reason: `section_exclude:${excSection}`,
-      };
-    }
   }
 
   return {
     type: "MAIN",
-    confidence: 0.85,
-    reason: "default_main",
+    confidence: 0.8,
+    reason: "default_main_safe",
   };
 }
 
