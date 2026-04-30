@@ -11,12 +11,12 @@
 import type { ParsedLineItemV2 } from "./runParserV2.ts";
 import type { AuthoritativeTotals } from "./extractAuthoritativeTotalsFromText.ts";
 import {
-  detectScopeMarkersV3,
+  detectScopeMarkersV4,
   type ScopeCategory,
   type ScopeItem,
-} from "../scopeMarkerDetectionV3.ts";
+} from "../scopeMarkerDetectionV4.ts";
 
-export const SCOPE_MARKER_DETECTION_VERSION = "v19-detectScopeMarkersV3-2026-04-29";
+export const SCOPE_MARKER_DETECTION_VERSION = "v20-detectScopeMarkersV4-2026-04-30";
 console.log(
   `[scopeMarkerDetection] MODULE_LOAD version=${SCOPE_MARKER_DETECTION_VERSION}`,
 );
@@ -108,7 +108,7 @@ export function runScopeMarkerDetection(input: ScopeMarkerInput): ScopeMarkerRes
     total_price: it.total_price ?? 0,
   }));
 
-  const result = detectScopeMarkersV3({
+  const result = detectScopeMarkersV4({
     items: v3Items,
     rawText,
     authoritativeTotals: authoritativeTotals
