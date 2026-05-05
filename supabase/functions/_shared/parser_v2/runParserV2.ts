@@ -72,6 +72,7 @@ import {
   runScopeMarkerDetection,
   type ScopeMarkerResult,
 } from "./scopeMarkerDetection.ts";
+import { classifyScopeWithLLM } from "../scopeClassifierLLM.ts";
 import {
   extractAuthoritativeTotalsFromText,
   type AuthoritativeTotals,
@@ -450,18 +451,19 @@ export async function runParserV2(input: ParserV2Input): Promise<ParserV2Output>
       tracker.start("scope_marker_detection");
       const segStart = Date.now();
       try {
-        scope_marker_detection = runScopeMarkerDetection({
-          items,
-          rawText: effectiveRawText,
-          pages: effectivePages,
-          authoritativeTotals: authoritative_totals,
-        });
-        items = scope_marker_detection.items;
+        const scopedLineItems = await classifyScopeWithLLM(items);
+        items = scopedLineItems as typeof items;
         tracker.succeed("scope_marker_detection");
-      } catch (err) {
-        console.error("[parser_v2] scope marker detection failed", err);
-        anomalies.push("scope_marker_detection_failed");
-        tracker.fail("scope_marker_detection", err);
+      } catch (e) {
+        console.log("[stage_10_llm] fallback triggered", e);
+        anomalies.push("stage_10_llm_fallback");
+        items = items.map((row) => ({
+          ...row,
+          scope_category: "main" as const,
+          scope_confidence: 0.5,
+          scope_reason: "llm_failed_fallback",
+        })) as typeof items;
+        tracker.fail("scope_marker_detection", e);
       }
       durations.scope_marker_detection = Date.now() - segStart;
     } else {
