@@ -1,9 +1,3 @@
-import OpenAI from "npm:openai@4.73.1";
-
-const openai = new OpenAI({
-  apiKey: Deno.env.get("OPENAI_API_KEY"),
-});
-
 const SYSTEM_PROMPT = `
 You are an expert construction estimator.
 
@@ -24,12 +18,16 @@ Examples:
 - "By others" -> EXCLUDED
 - Fire stopping services -> MAIN unless under Optional
 
-Return strict JSON only.
+Return strict JSON only in the form: { "results": [ { "scope": "main|optional|excluded", "confidence": 0-1, "reason": "short" } ] }
 `;
+
+const CHUNK_SIZE = 40;
+const CHUNK_TIMEOUT_MS = 20_000;
+const MAX_PARALLEL = 4;
 
 function buildPrompt(chunk: any[]) {
   return `
-Classify the following rows.
+Classify the following rows. Return one result per input row, in order.
 
 Each row includes:
 - description
@@ -41,65 +39,85 @@ INPUT:
 ${JSON.stringify(chunk, null, 2)}
 
 OUTPUT FORMAT:
-[
-  { "scope": "main | optional | excluded", "confidence": 0-1, "reason": "short" }
-]
+{ "results": [ { "scope": "main | optional | excluded", "confidence": 0-1, "reason": "short" } ] }
 `;
 }
 
-export async function classifyScopeWithLLM(rows: any[]) {
-  const enriched = rows.map((row, i) => {
-    const prev = rows
-      .slice(Math.max(0, i - 3), i)
-      .map((r) => r.description)
-      .join(" ");
-    const next = rows
-      .slice(i + 1, i + 4)
-      .map((r) => r.description)
-      .join(" ");
-
-    return {
-      description: row.description,
-      context: {
-        previous: prev,
-        next: next,
+async function classifyChunk(chunk: any[], apiKey: string): Promise<any[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CHUNK_TIMEOUT_MS);
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
       },
-    };
-  });
-
-  const chunkSize = 25;
-  const results: any[] = [];
-
-  for (let i = 0; i < enriched.length; i += chunkSize) {
-    const chunk = enriched.slice(i, i + chunkSize);
-    const prompt = buildPrompt(chunk);
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: prompt },
-      ],
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: buildPrompt(chunk) },
+        ],
+      }),
     });
-
-    const content = response.choices[0].message.content ?? "[]";
-    const parsed = parseClassifications(content);
-    for (let j = 0; j < chunk.length; j++) {
-      results.push(parsed[j] ?? null);
+    if (!res.ok) {
+      throw new Error(`openai_${res.status}`);
     }
+    const json = await res.json();
+    const content = json?.choices?.[0]?.message?.content ?? "";
+    return parseClassifications(content);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function classifyScopeWithLLM(rows: any[]) {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY missing");
+  if (!Array.isArray(rows) || rows.length === 0) return rows;
+
+  const enriched = rows.map((row, i) => ({
+    description: row.description,
+    context: {
+      previous: rows.slice(Math.max(0, i - 3), i).map((r) => r.description).join(" "),
+      next: rows.slice(i + 1, i + 4).map((r) => r.description).join(" "),
+    },
+  }));
+
+  const chunks: any[][] = [];
+  for (let i = 0; i < enriched.length; i += CHUNK_SIZE) {
+    chunks.push(enriched.slice(i, i + CHUNK_SIZE));
   }
 
+  const chunkResults: any[][] = new Array(chunks.length);
+  for (let i = 0; i < chunks.length; i += MAX_PARALLEL) {
+    const batch = chunks.slice(i, i + MAX_PARALLEL);
+    const settled = await Promise.allSettled(
+      batch.map((c) => classifyChunk(c, apiKey)),
+    );
+    settled.forEach((r, j) => {
+      chunkResults[i + j] = r.status === "fulfilled" ? r.value : [];
+    });
+  }
+
+  const flat: any[] = [];
+  chunkResults.forEach((arr, i) => {
+    const expected = chunks[i].length;
+    for (let j = 0; j < expected; j++) flat.push(arr[j] ?? null);
+  });
+
   return rows.map((row, i) => {
-    const r = results[i];
+    const r = flat[i];
     const scope = normaliseScope(r?.scope);
     return {
       ...row,
-      scope,
       scope_category: scope,
       scope_confidence: typeof r?.confidence === "number" ? r.confidence : 0.7,
-      scope_reason: typeof r?.reason === "string" ? r.reason : "fallback",
+      scope_reason: typeof r?.reason === "string" ? r.reason : (r ? "llm" : "fallback"),
     };
   });
 }
